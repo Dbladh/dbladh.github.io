@@ -146,6 +146,37 @@ function box(w, h, d, material, x = 0, y = 0, z = 0) {
   return m;
 }
 
+// ---------------------------------------------------------------- low-poly geometry
+
+/** Pushes each vertex in or out by a hash of its position, so shapes get an irregular, crystalline outline. */
+function jitter(geo, amount, seed = 0) {
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const k = 1 + (hash(v.x * 12.9 + v.z * 4.1 + seed, v.y * 78.2 + v.z * 0.8 + seed * 1.7) - 0.5) * amount;
+    pos.setXYZ(i, v.x * k, v.y * k, v.z * k);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Bakes a soft top-light into vertex colours: darker underneath, brighter on top (multiplies the instance colour). */
+function shade(geo, lo = 0.7, hi = 1.08) {
+  const pos = geo.attributes.position;
+  let y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < pos.count; i++) { y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i)); }
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const k = lerp(lo, hi, (pos.getY(i) - y0) / Math.max(1e-6, y1 - y0));
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+
+const lathe = (pts, seg) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+
 // ---------------------------------------------------------------- house materials
 
 let _tileTex = null;
@@ -872,16 +903,24 @@ export function buildWorld(scene, sections, opts = {}) {
     return mesh;
   }
   const white = (extra = {}) => new THREE.MeshLambertMaterial({ color: 0xffffff, ...extra });
-  const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 1, 7);
-  instanced(trunkGeo, white(), items.trunk, { defaultColor: BARK });
-  instanced(new THREE.ConeGeometry(0.75, 1, 7), white(), items.flare, { defaultColor: BARK });
-  instanced(new THREE.SphereGeometry(1, 14, 10), white(), items.lobe);
-  instanced(new THREE.SphereGeometry(1, 8, 6), white(), items.leaf, { shadow: false });
-  instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.fruit, { shadow: false });
-  instanced(new THREE.SphereGeometry(1, 12, 14), white(), items.cypress);
-  instanced(new THREE.ConeGeometry(1, 1, 10), white(), items.pine);
-  instanced(new THREE.SphereGeometry(1, 10, 8), white(), items.bush);
-  instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.berry, { shadow: false });
+  // Faceted, flat-shaded low-poly forms (not smooth spheres): jittered icosahedra for foliage,
+  // a lathed flame for cypress, stepped tiers for pines. Vertex colours add a baked top-light.
+  const flat = (extra = {}) => white({ flatShading: true, vertexColors: true, ...extra });
+  const blobGeos = [0, 1, 2].map((i) => shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.38, i * 7.3), 0.7, 1.1));
+  const lobeLists = [[], [], []];
+  items.lobe.forEach((it, i) => lobeLists[i % 3].push(it));
+  const trunkGeo = shade(jitter(new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 2), 0.18, 5), 0.75, 1.05);
+  instanced(trunkGeo, flat(), items.trunk, { defaultColor: BARK });
+  instanced(shade(new THREE.ConeGeometry(0.75, 1, 6), 0.7, 1.0), flat(), items.flare, { defaultColor: BARK });
+  lobeLists.forEach((list, i) => instanced(blobGeos[i], flat(), list));
+  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.35, 3), 0.8, 1.12), flat(), items.leaf, { shadow: false });
+  instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.fruit, { shadow: false });
+  // cypress: a faceted flame, widest a little below the middle
+  instanced(shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1), flat(), items.cypress);
+  // pine: stepped skirts, like layered branches
+  instanced(shade(lathe([[0, 0.5], [0.42, 0.18], [0.28, 0.16], [0.72, -0.16], [0.52, -0.18], [1, -0.5], [0, -0.5]], 8), 0.65, 1.1), flat(), items.pine);
+  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), flat(), items.bush);
+  instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.berry, { shadow: false });
   instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
   instanced(new THREE.ConeGeometry(0.1, 1, 4).translate(0, 0.5, 0), white(), items.grass, { shadow: false });
   instanced(new THREE.CylinderGeometry(0.014, 0.02, 1, 4), white(), items.stem, { shadow: false });
