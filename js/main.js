@@ -286,6 +286,10 @@ function start() {
     if (!dofSized) { dof?.resize(); dofSized = true; }
     else { clearTimeout(dofTimer); dofTimer = setTimeout(() => dof?.resize(), 120); }
     slow.t = 0; slow.n = 0; slow.strikes = 0; slow.hold = performance.now() + 2000; // resizing is not "slow"
+    // Portrait: tilt the overview camera down a little so the signs ride higher, under the name.
+    HOME.look.y = 17 - 8 * (1 - THREE.MathUtils.smoothstep(camera.aspect, 0.55, 1.0));
+    if (!tween && active === 'home') cur.look.copy(HOME.look);
+    world.placeBoards(camera.aspect, camera.fov, HOME.pos); // slide/stagger the signs for this screen shape
     layoutStops();
     if (!simple && active !== 'home' && !tween) { // keep a zoomed-in sign filling the screen
       cur.pos.copy(stops[active].pos); cur.look.copy(stops[active].look);
@@ -488,5 +492,5 @@ function start() {
     }
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { scene, skyScene, camera, renderer, world, dof, slow, get focus() { return focus; }, cur };
+  window.__portfolio = { scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }

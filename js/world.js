@@ -4,12 +4,19 @@
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
 
-// Where each billboard hill sits. `scale` shrinks the sign (the About sign is a small roadside one).
+// Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
+// hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
+// `hill.x`) and, in portrait, steps to its `stagger` depth so the three signs zig-zag instead of overlapping.
+// `scale` shrinks the sign (the About sign is a small roadside one).
 export const STOPS = {
-  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8', paper: '#ffffff', yaw: 0.28 },
-  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff', paper: '#ffffff', yaw: -0.18 },
-  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a', paper: '#ffffff', yaw: -0.30 },
-  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c', paper: '#ffffff', yaw: 0.22 },
+  creativity:  { desk: { x: -38, z: -58 }, stagger: { z: -46 }, hill: { x: -13, z: -54, rx: 26, rz: 18, h: 9 },
+                 scale: 1, accent: '#ff9db8', paper: '#ffffff', yaw: 0.28 },
+  ai:          { desk: { x: 0, z: -78 },   stagger: { z: -76 }, hill: { x: 0, z: -80, rx: 30, rz: 16, h: 12 },
+                 scale: 1, accent: '#8ec5ff', paper: '#ffffff', yaw: -0.18 },
+  engineering: { desk: { x: 38, z: -58 },  stagger: { z: -58 }, hill: { x: 13, z: -60, rx: 26, rz: 18, h: 9 },
+                 scale: 1, accent: '#ffd36a', paper: '#ffffff', yaw: -0.30 },
+  about:       { desk: { x: -10, z: -14 }, stagger: { z: -14 }, hill: { x: -4, z: -14, rx: 9, rz: 7, h: 2.2 },
+                 scale: 0.45, accent: '#9fdc8c', paper: '#ffffff', yaw: 0.22 },
 };
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
@@ -72,8 +79,9 @@ function rawHeight(x, z) {
   h += Math.max(0, -z - 10) * 0.05;
   h += smooth(-95, -170, z) * (10 + fbm(x * 0.03 + 20, z * 0.03) * 22); // distant ridges
   for (const s of Object.values(STOPS)) {
-    const dx = x - s.x, dz = z - s.z, sig = s.hillR / 1.8;
-    h += s.hillH * Math.exp(-(dx * dx + dz * dz) / (2 * sig * sig));
+    const { x: hx, z: hz, rx, rz, h: hh } = s.hill;
+    const dx = (x - hx) / (rx / 1.8), dz = (z - hz) / (rz / 1.8);
+    h += hh * Math.exp(-0.5 * (dx * dx + dz * dz));
   }
   h -= 0.35 * (1 - smooth(0, 4, Math.abs(x - pathX(z)))); // path sits in a shallow trough
   return h;
@@ -636,7 +644,13 @@ export function buildWorld(scene, sections, opts = {}) {
   const boards = [];
 
   // ---- House sites: all along the path, alternating sides, on flattened plots ----
-  const nearSign = (x, z, pad = 0) => Object.values(STOPS).some((s) => Math.hypot(x - s.x, z - s.z) < 9 * Math.max(s.scale, 0.8) + pad);
+  // Keep plants and houses off every spot a sign can occupy (crest to desktop spot, desktop to stagger depth).
+  const signSpots = Object.values(STOPS).map((s) => {
+    const pts = [];
+    for (const px of [s.hill.x, (s.hill.x + s.desk.x) / 2, s.desk.x]) for (const pz of [s.desk.z, s.stagger.z]) pts.push([px, pz]);
+    return { pts, r: 9.5 * Math.max(s.scale, 0.8) };
+  });
+  const nearSign = (x, z, pad = 0) => signSpots.some((sp) => sp.pts.some(([px, pz]) => Math.hypot(x - px, z - pz) < sp.r + pad));
   const nearPond = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r * 1.3 + pad;
   PADS.length = 0;
   const sites = [];
@@ -1264,10 +1278,7 @@ export function buildWorld(scene, sections, opts = {}) {
     const sec = sections[id];
     if (!sec) continue;
     const g = new THREE.Group();
-    g.position.set(s.x, heightAt(s.x, s.z), s.z);
-    const theta = Math.atan2(startCam.x - s.x, startCam.z - s.z) + (s.yaw || 0); // turned a little off-square
-    g.rotation.y = theta;
-    g.scale.setScalar(s.scale);
+    g.scale.setScalar(s.scale);              // position and bearing are set by board.place() below
 
     const cy = BOARD_BOTTOM + BOARD_H / 2;
     const T = 0.5, DEPTH = 0.9, LIP = 0.16;
@@ -1452,17 +1463,44 @@ export function buildWorld(scene, sections, opts = {}) {
     g.updateMatrixWorld(true);
 
     // soft contact shadow where each post meets the hill
-    for (const px of postXs) {
-      const wp = new THREE.Vector3(px, 0, -0.55).applyMatrix4(g.matrixWorld);
+    const blobs = postXs.map((px) => {
       const blob = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4).rotateX(-Math.PI / 2), blobMat);
-      blob.position.set(px, (heightAt(wp.x, wp.z) - g.position.y) / s.scale + 0.08, -0.55);
       blob.renderOrder = 1;
       blob.layers.set(1);              // layer 1 only: it is a ground decal, not a shadow caster
       g.add(blob);
-    }
-    g.updateMatrixWorld(true);
-    board.center = face.getWorldPosition(new THREE.Vector3());
-    board.normal = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
+      return blob;
+    });
+
+    /**
+     * Stand the sign at ground position (x, z), `lift` units up on longer posts. Aims it at the
+     * start camera (plus its own yaw), lengthens each post to reach the ground under it, and moves
+     * the contact shadows to match. Also refreshes `center`/`normal` used by the camera stops.
+     */
+    const POST_TOP = BOARD_BOTTOM + 0.61;
+    const tmp = new THREE.Vector3();
+    board.place = (x, z, lift = 0) => {
+      g.position.set(x, heightAt(x, z) + lift, z);
+      const theta = Math.atan2(startCam.x - x, startCam.z - z) + (s.yaw || 0); // turned a little off-square
+      g.rotation.y = theta;
+      g.updateMatrixWorld(true);
+      postXs.forEach((px, i) => {
+        tmp.set(px, 0, -0.55).applyMatrix4(g.matrixWorld);
+        const ground = (heightAt(tmp.x, tmp.z) - g.position.y) / s.scale;   // local height of the ground here
+        const bottom = Math.min(ground - 0.6, -1.0);                          // sink the post into the hill
+        posts[i].scale.y = POST_TOP - bottom;
+        posts[i].position.y = (POST_TOP + bottom) / 2;
+        blobs[i].position.set(px, ground + 0.08, -0.55);
+      });
+      board.center.set(0, cy, 0.31).applyMatrix4(g.matrixWorld);             // default-size face centre
+      board.normal.set(Math.sin(theta), 0, Math.cos(theta));
+      board.pos.set(x, z);
+      board.lift = lift;
+    };
+    board.pos = new THREE.Vector2(s.desk.x, s.desk.z);
+    board.lift = 0;
+    board.center = new THREE.Vector3();
+    board.normal = new THREE.Vector3();
+    board.place(s.desk.x, s.desk.z, 0);
     boards.push(board);
   }
 
@@ -1472,6 +1510,47 @@ export function buildWorld(scene, sections, opts = {}) {
   const glow = glowKit();
   return {
     boards,
+    /**
+     * Seat every sign for the current screen shape. Each slides inward along its hill until it fits the
+     * visible width (never past the hill's crest), steps to its zig-zag depth as the screen gets narrow,
+     * and is lifted on posts if the terrain in front would hide its lower edge.
+     * @param {number} aspect   viewport width / height
+     * @param {number} fov      vertical field of view in degrees
+     * @param {THREE.Vector3} cam  the overview camera position
+     */
+    placeBoards(aspect, fov, cam) {
+      const tanHalf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+      const t = smooth(1.1, 0.65, aspect);                                   // 0 on wide screens, 1 in portrait
+      for (const b of boards) {
+        const s = STOPS[b.id];
+        const z = lerp(s.desk.z, s.stagger.z, t);
+        const hw = tanHalf * Math.max(1, cam.z - z) * aspect;               // half the visible width at its depth
+        const fit = hw - (BOARD_W / 2) * s.scale - 2.2;                     // leave room for the frame and parallax
+        const xMag = Math.max(Math.abs(s.hill.x), Math.min(Math.abs(s.desk.x), fit));
+        const x = (s.desk.x < 0 ? -1 : 1) * xMag;
+        // lift so the face's lower edge clears the terrain between the camera and the sign
+        // (checked for the bottom-left, bottom-centre and bottom-right points of the face)
+        const theta = Math.atan2(startCam.x - x, startCam.z - z) + (s.yaw || 0);
+        const rx = Math.cos(theta), rz = -Math.sin(theta);                    // the sign's local +x in world
+        const half = (BOARD_W / 2) * s.scale;
+        const ground = heightAt(x, z);
+        const bottomAt0 = ground + BOARD_BOTTOM * s.scale;                  // world y of the face bottom with no lift
+        let lift = 0;
+        for (const off of [-1, 0, 1]) {
+          const tx = x + rx * half * off, tz = z + rz * half * off;
+          const tBottom = heightAt(x, z) + BOARD_BOTTOM * s.scale;
+          for (let k = 1; k <= 60; k++) {
+            const u = k / 61;                                                // fraction of the way from camera to target
+            const px = lerp(cam.x, tx, u), pz = lerp(cam.z, tz, u);
+            if (Math.hypot(px - tx, pz - tz) < 1.2) continue;               // right under the face
+            const need = (heightAt(px, pz) + 0.6 - cam.y) / u - (tBottom - cam.y);
+            lift = Math.max(lift, need);
+          }
+        }
+        void bottomAt0;
+        b.place(x, z, Math.min(Math.max(0, lift), 9));
+      }
+    },
     /** Every sign material, so depth of field can render them only in its sharp pass. */
     signMats,
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
