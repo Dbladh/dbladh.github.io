@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { buildWorld } from './world.js';
 import { createSky } from './sky.js';
+import { createDOF } from './dof.js';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -42,11 +43,18 @@ function start() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x000000, 0); // transparent: CSS sky + title show through
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // Weaker machines get fewer real lights (each one costs every pixel).
+  const lowEnd = (navigator.hardwareConcurrency || 4) <= 4 || matchMedia('(max-width: 700px)').matches;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
   const sky = createSky(scene);
-  const world = buildWorld(scene, sections);
+  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14 });
+  const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
+  let focus = 60;
 
   // ---- Camera stops ----
   const HOME = { pos: new THREE.Vector3(0, 7, 22), look: new THREE.Vector3(0, 17, -40) };
@@ -113,6 +121,7 @@ function start() {
     // Keep the view wide enough on portrait phones.
     camera.fov = w / h < 0.8 ? 70 : 55;
     camera.updateProjectionMatrix();
+    dof?.resize();
   }
   window.addEventListener('resize', onResize);
 
@@ -236,8 +245,28 @@ function start() {
     camera.lookAt(look);
 
     if (!reduceMotion) world.update(dt);
-    renderer.render(scene, camera);
+
+    // Depth of field: focus on whatever the camera is looking at, easing between stops.
+    if (dof && dof.enabled) {
+      const want = camera.position.distanceTo(cur.look);
+      focus += (want - focus) * Math.min(1, dt * 4);
+      dof.render(scene, camera, focus);
+    } else {
+      renderer.render(scene, camera);
+    }
+
+    // If the machine struggles, drop soft focus first, then resolution.
+    slow.t += dt; slow.n++;
+    if (slow.t > 3) {
+      const fps = slow.n / slow.t;
+      if (fps < 26) {
+        if (dof?.enabled) dof.enabled = false;
+        else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); onResize(); }
+      }
+      slow.t = 0; slow.n = 0;
+    }
   }
+  const slow = { t: 0, n: 0 };
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
   window.__portfolio = { scene, camera, renderer, world };
 }

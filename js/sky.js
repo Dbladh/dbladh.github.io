@@ -36,10 +36,21 @@ export function createSky(scene) {
   const fog = new THREE.Fog(0xcfe9fb, 60, 230);
   scene.fog = fog;
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x6a8f5a, 0.8);
+  // Sky-tinted fill from above, warm grass bounce from below.
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x8aa860, 0.8);
   const sunLight = new THREE.DirectionalLight(0xffffff, 1);
   const moonLight = new THREE.DirectionalLight(0x9fb4ff, 0);
   scene.add(hemi, sunLight, sunLight.target, moonLight, moonLight.target);
+
+  // The sun casts soft shadows over the area in front of the camera.
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  const sc = sunLight.shadow.camera;
+  sc.left = -80; sc.right = 80; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400;
+  sunLight.shadow.bias = -0.0004;
+  sunLight.shadow.normalBias = 0.06;
+  sunLight.shadow.radius = 3;
+  sunLight.target.position.set(0, 0, -25);
 
   const sunMesh = new THREE.Mesh(
     new THREE.SphereGeometry(5, 24, 16),
@@ -81,7 +92,9 @@ export function createSky(scene) {
     const sx = Math.cos(a) * 70, sy = Math.sin(a) * 60, sz = -95;
     sunMesh.position.set(sx, sy, sz);
     moonMesh.position.set(-sx, -sy, sz);
-    sunLight.position.set(sx, Math.max(sy, 6), sz);
+    // Light comes from the sun's direction, but never lower than ~12 degrees (keeps shadows sane).
+    const dir = new THREE.Vector3(sx, Math.max(sy, 22), sz + 25).normalize();
+    sunLight.position.copy(sunLight.target.position).addScaledVector(dir, 180);
     moonLight.position.set(-sx, Math.max(-sy, 6), sz);
 
     const night = THREE.MathUtils.clamp(1 - (sy + 8) / 18, 0, 1);
@@ -89,7 +102,7 @@ export function createSky(scene) {
     sunLight.intensity = s.sunI * 1.3;
     moonLight.intensity = 0.35 * night;
     hemi.intensity = s.hemi * 1.9; // bright, soft, storybook lighting
-    hemi.color.copy(s.bot).lerp(new THREE.Color(0xffffff), 0.5);
+    hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
     fog.color.copy(s.bot);
     stars.material.opacity = night * night;
     sunMesh.visible = sy > -6;
