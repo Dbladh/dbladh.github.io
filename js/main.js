@@ -47,7 +47,7 @@ try {
 if (renderer) start(); // otherwise the plain HTML page is all there is
 
 function start() {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // Pixels drawn are capped (see pixelRatioFor): a big window on a 2x display would otherwise be 8+ megapixels.
   renderer.setClearColor(0x000000, 0); // transparent: CSS sky + title show through
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
@@ -279,10 +279,19 @@ function start() {
   }
 
   // ---- Sizing ----
+  const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
+  const quality = { scale: 1 };                     // the watchdog lowers this before it ever drops depth of field
+  function pixelRatioFor(w, h) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const budget = Math.sqrt(PIXEL_BUDGET / (w * h));
+    return Math.max(0.6, Math.min(dpr, budget) * quality.scale);
+  }
   function onResize() {
     const w = window.innerWidth, h = window.innerHeight;
+    const ratio = pixelRatioFor(w, h);
+    renderer.setPixelRatio(ratio);
     renderer.setSize(w, h, false);
-    skyRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    skyRenderer.setPixelRatio(Math.min(ratio, 1));  // the sky is soft clouds and glows: full res buys nothing
     skyRenderer.setSize(w, h, false);
     camera.aspect = w / h;
     // Keep the view wide enough on portrait phones.
@@ -518,13 +527,15 @@ function start() {
       const now = performance.now();
       if (slow.strikes >= 3) { // genuinely slow for ~9s in a row
         slow.strikes = 0;
-        if (dof?.enabled) {
-          dof.enabled = false;                        // drop soft focus first...
-          // ...but only for a while. If this is the second drop shortly after a retry, wait longer (up to 5 min).
+        if (quality.scale > 0.71) {                   // 1) draw fewer pixels first (1 -> 0.85 -> 0.7)...
+          quality.scale = Math.max(0.7, quality.scale - 0.15);
+          onResize();
+        } else if (dof?.enabled) {                    // 2) ...then drop soft focus, but only for a while.
+          dof.enabled = false;
           slow.backoff = now - slow.retryAt < 20000 ? Math.min(slow.backoff * 2, 300000) : 30000;
           slow.retryAt = now + slow.backoff;
-        } else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); onResize(); }
-      } else if (fps >= 40 && dof && !dof.enabled && now >= slow.retryAt) {
+        }
+      } else if (fps >= 30 && dof && !dof.enabled && now >= slow.retryAt) {
         dof.enabled = true;                           // the slow patch passed: bring depth of field back
         slow.retryAt = now;                           // marks the moment of the retry (see the back-off above)
       }
