@@ -369,8 +369,9 @@ function start() {
     return `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${ap}`;
   }
   function setTime(h) {
-    const { night } = sky.set(h);
+    const { night, horizon } = sky.set(h);
     world.setNight(night);
+    world.setClouds(night, horizon);
     const label = fmt(h);
     timeLabel.textContent = 'Time: ' + label;
     timeInput.setAttribute('aria-valuetext', label);

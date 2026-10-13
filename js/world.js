@@ -139,7 +139,7 @@ function wrapText(ctx, text, x, y, maxW, lineH) {
 
 // The sign face while closed: just the section title, set as large as it will go to fill the board.
 const FACE_FONT = '"Outfit", "Helvetica Neue", Arial, sans-serif';
-function paintBoard(canvas, title, accent) {
+function paintBoard(canvas, title, accent, forceSize = null) {
   const W = canvas.width, H = canvas.height, g = canvas.getContext('2d');
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
   g.fillStyle = accent; g.fillRect(0, 0, W, 40);
@@ -157,22 +157,13 @@ function paintBoard(canvas, title, accent) {
   };
   let size = 250, lines = wrap(size);
   while (size > 40 && (!lines || lines.length * size * 1.0 > areaH)) { size -= 4; lines = wrap(size); }
+  const fitted = size;                                      // the largest size this title fits at
+  if (forceSize && forceSize < fitted) { size = forceSize; lines = wrap(size) || lines; }
   g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
   g.font = `800 ${size}px ${FACE_FONT}`;
   const lh = size * 1.0, total = lines.length * lh, top = areaY + (areaH - total) / 2;
   lines.forEach((ln, i) => g.fillText(ln, padX, top + i * lh + size * 0.8));
-}
-
-function drawBoard(title, teaser, accent) {
-  const c = document.createElement('canvas');
-  c.width = 1024; c.height = 576;
-  paintBoard(c, title, accent);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  // Re-set the title once the web font is ready, so it is never drawn in a fallback face.
-  document.fonts?.load(`800 100px ${FACE_FONT}`).then(() => { paintBoard(c, title, accent); tex.needsUpdate = true; }).catch(() => {});
-  return tex;
+  return fitted;
 }
 
 // ---------------------------------------------------------------- materials
@@ -533,6 +524,40 @@ function blobTexture() {              // soft radial falloff, used for contact s
 }
 const CONTACT_MAT = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x14200c, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
 const EAVE_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false });
+
+const _cloudTex = [];
+/**
+ * A wispy cloud sprite: domain-warped, horizontally stretched fractal noise under an elliptical envelope,
+ * soft-thresholded so the edges feather out into streaks instead of ending in a hard blob.
+ */
+function cloudTexture(variant) {
+  if (_cloudTex[variant]) return _cloudTex[variant];
+  const W = 384, H = 192, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d'), img = g.createImageData(W, H);
+  const seed = 11 + variant * 17.3;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const nx = x / W, ny = y / H;
+      const warp = fbm(nx * 2.2 + seed, ny * 3.0 + seed * 0.6) - 0.5;                  // slow swirl
+      const base = fbm(nx * 3.4 + warp * 1.3 + seed, ny * 8.5 + warp * 0.9 + seed * 2); // streaky, wide features
+      const fine = fbm(nx * 9 + seed * 3, ny * 22 + seed) - 0.5;                       // fine wisps
+      const dx = (nx - 0.5) * 2, dy = (ny - 0.52) * 2;
+      const env = Math.max(0, 1 - (dx * dx * 0.85 + dy * dy * 1.35));                   // ellipse: wide but with real body
+      const d = (base + fine * 0.3) * (0.3 + 0.95 * Math.pow(env, 0.7)) * 1.75;
+      const a = smooth(0.3, 0.72, d);
+      const shade = 0.78 + 0.22 * (1 - ny);                                            // underside a touch darker
+      const i = (y * W + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * shade);
+      img.data[i + 3] = Math.round(255 * a * a * (3 - 2 * a));                          // an extra ease: softer fringe
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  _cloudTex[variant] = t;
+  return t;
+}
 
 let _wash = null;
 /** Light from four lamps along the top edge: bright pools just under each, fading down the face. */
@@ -1363,23 +1388,34 @@ export function buildWorld(scene, sections, opts = {}) {
     butterflies.push(grp);
   }
 
-  // ---- Clouds: soft clumps that drift sideways ----
-  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xe8eeff, emissiveIntensity: 0.55 });
-  for (let i = 0; i < 9; i++) {
+  // ---- Clouds: layered, feathered sprites that drift, swell and shear against each other ----
+  const cloudSprites = [];
+  for (let i = 0; i < (low ? 6 : 8); i++) {
     const g = new THREE.Group();
+    const span = 34 + rand() * 36;                                  // how wide this cloud bank is
     const n = 4 + Math.floor(rand() * 3);
     for (let j = 0; j < n; j++) {
-      const s = 3 + rand() * 3.2;
-      const b = new THREE.Mesh(new THREE.SphereGeometry(s, 12, 8), cloudMat);
-      b.position.set(j * 4 - n * 2, rand() * 1.5, (rand() - 0.5) * 3);
-      b.scale.y = 0.55;
-      g.add(b);
+      const tex = cloudTexture(Math.floor(rand() * 4));
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.6 });
+      const sp = new THREE.Sprite(mat);
+      const w = 48 + rand() * 56, h = w * (0.42 + rand() * 0.2);
+      const u = (j / (n - 1)) - 0.5;
+      sp.userData = {
+        w, h, bx: u * span + (rand() - 0.5) * 10, by: (rand() - 0.5) * 7 + (1 - Math.abs(u) * 1.4) * 2.5,
+        ph: rand() * 6.28, sp: 0.04 + rand() * 0.09, amp: 3 + rand() * 6, base: 0.42 + rand() * 0.36,
+        high: rand(),                                               // 0 = low/shaded layer, 1 = high/bright layer
+      };
+      sp.position.set(sp.userData.bx, sp.userData.by, (rand() - 0.5) * 6);
+      sp.scale.set(w, h, 1);
+      g.add(sp);
+      cloudSprites.push(sp);
     }
-    g.position.set((rand() - 0.5) * 320, 40 + rand() * 26, -75 - rand() * 60);
-    g.userData.speed = 0.5 + rand() * 0.8;
+    g.position.set((rand() - 0.5) * 360, 34 + rand() * 40, -80 - rand() * 70);
+    g.userData.speed = 0.35 + rand() * 0.7;
     skyScene.add(g);
     clouds.push(g);
   }
+  const cloudLook = { night: 0, tint: new THREE.Color(1, 1, 1) };
 
   // ---- Fireflies: spread through the whole depth of the scene ----
   // Near ones sit right in front of the camera (big, soft bokeh), far ones twinkle on the hills.
@@ -1482,6 +1518,7 @@ export function buildWorld(scene, sections, opts = {}) {
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
+  const faces = [];                    // closed-sign faces, painted together so every title shares one size
 
   /** Unit box / cylinder with a vertical vertex-colour ramp: darker underneath, lighter on top. */
   const rampBox = (() => {
@@ -1549,7 +1586,12 @@ export function buildWorld(scene, sections, opts = {}) {
       return m;
     });
 
-    const teaserTex = drawBoard(sec.title, sec.teaser, s.accent);
+    const faceCanvas = document.createElement('canvas');
+    faceCanvas.width = 1024; faceCanvas.height = 576;
+    const teaserTex = new THREE.CanvasTexture(faceCanvas);
+    teaserTex.colorSpace = THREE.SRGBColorSpace;
+    teaserTex.anisotropy = 4;
+    faces.push({ canvas: faceCanvas, tex: teaserTex, title: sec.title, accent: s.accent, scale: s.scale });
     const openTex = drawOpenBoard(s.paper, s.accent);
     faceMat.map = teaserTex;
     const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceMat);
@@ -1734,6 +1776,18 @@ export function buildWorld(scene, sections, opts = {}) {
     boards.push(board);
   }
 
+  // Paint the sign faces. Each title is fitted to its board, then every board is set to the SMALLEST of
+  // those sizes, so all four titles share one type size (the About sign is smaller but nearer, so equal
+  // painted sizes also look equal on screen).
+  const layoutFaces = () => {
+    if (!faces.length) return;
+    const fits = faces.map((f) => paintBoard(f.canvas, f.title, f.accent));
+    const common = Math.min(...fits);
+    faces.forEach((f) => { paintBoard(f.canvas, f.title, f.accent, common); f.tex.needsUpdate = true; });
+  };
+  layoutFaces();
+  document.fonts?.load(`800 100px ${FACE_FONT}`).then(layoutFaces).catch(() => {});   // redo once the web font is ready
+
   // ---- per-frame + day/night ----
   let time = 0, night = 0;
   const HOUSE_I = 26, FF_I = 9;
@@ -1793,7 +1847,17 @@ export function buildWorld(scene, sections, opts = {}) {
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       for (const cl of clouds) {
         cl.position.x += cl.userData.speed * dt;
-        if (cl.position.x > 190) cl.position.x = -190;
+        if (cl.position.x > 230) cl.position.x = -230;
+      }
+      // within a bank every wisp slides, swells and shears at its own slow rate, so the cloud keeps changing shape
+      const dayTint = cloudLook.tint, nt = cloudLook.night;
+      for (const sp of cloudSprites) {
+        const u = sp.userData, t = time * u.sp + u.ph;
+        sp.position.x = u.bx + Math.sin(t) * u.amp;
+        sp.position.y = u.by + Math.sin(t * 0.7 + 1.3) * u.amp * 0.18;
+        sp.scale.set(u.w * (1 + 0.07 * Math.sin(t * 0.8 + 2)), u.h * (1 + 0.14 * Math.cos(t * 0.6)), 1);
+        sp.material.rotation = 0.05 * Math.sin(t * 0.5 + u.ph);
+        sp.material.opacity = (u.base + 0.12 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt);
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       for (const bf of butterflies) {
@@ -1823,6 +1887,14 @@ export function buildWorld(scene, sections, opts = {}) {
         fl.pool.position.set(pos.x, heightAt(pos.x, pos.z) + 0.08, pos.z);
         fl.pool.material.opacity = night * 0.5 * flick;
       });
+    },
+    /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
+    setClouds(night, horizon) {
+      cloudLook.night = night;
+      const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.55);
+      const dark = new THREE.Color(0.42, 0.46, 0.72);
+      cloudLook.tint.copy(day).lerp(dark, night);
+      for (const sp of cloudSprites) sp.material.color.copy(cloudLook.tint).multiplyScalar(0.82 + 0.18 * sp.userData.high);
     },
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {

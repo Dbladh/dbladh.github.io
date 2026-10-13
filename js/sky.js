@@ -60,14 +60,32 @@ export function createSky(scene, skyScene, renderer) {
   sunLight.shadow.radius = 3;
   sunLight.target.position.set(0, 0, -38);
 
+  // Bigger sun and moon, each with a soft additive halo.
+  const glowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.55)');
+    gr.addColorStop(0.5, 'rgba(255,255,255,0.14)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  })();
+  const halo = (color, scale, opacity) => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+    sp.scale.setScalar(scale);
+    return sp;
+  };
   const sunMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(5, 24, 16),
+    new THREE.SphereGeometry(10, 28, 18),
     new THREE.MeshBasicMaterial({ color: 0xfff1b8, fog: false }),
   );
+  sunMesh.add(halo(0xffd890, 64, 0.6));
   const moonMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(3.4, 24, 16),
+    new THREE.SphereGeometry(7, 28, 18),
     new THREE.MeshBasicMaterial({ color: 0xe8eeff, fog: false }),
   );
+  moonMesh.add(halo(0xaec4ff, 42, 0.4));
   skyScene.add(sunMesh, moonMesh);
 
   // Stars: points on a big upper hemisphere, faded in at night.
@@ -208,7 +226,7 @@ export function createSky(scene, skyScene, renderer) {
 
     root.style.setProperty('--sky-top', '#' + s.top.getHexString());
     root.style.setProperty('--sky-bot', '#' + s.bot.getHexString());
-    return { night };
+    return { night, horizon: s.bot.clone() };
   }
 
   return { set };
