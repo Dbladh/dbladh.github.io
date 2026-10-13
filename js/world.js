@@ -177,6 +177,49 @@ function shade(geo, lo = 0.7, hi = 1.08) {
 
 const lathe = (pts, seg) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
 
+/**
+ * A low-poly pine: stacked, overlapping skirts that droop to a jagged, scalloped hem, narrowing
+ * to a point at the top. Unit size: radius up to 1, height from y = -0.5 to 0.5.
+ * Vertex colours darken toward each hem, so the tiers read as separate layers.
+ */
+function pineGeometry(tiers = 5, teeth = 9) {
+  const pos = [], col = [];
+  const n = teeth * 2;
+  const rad = (i) => 1.0 - i * 0.17;                 // tier radii, bottom to top
+  const step = 0.9 / tiers;                           // vertical spacing between tier hems
+  const tri = (a, b, c, shades) => {
+    for (const [v, k] of [[a, shades[0]], [b, shades[1]], [c, shades[2]]]) { pos.push(v[0], v[1], v[2]); col.push(k, k, k); }
+  };
+  for (let i = 0; i < tiers; i++) {
+    const R = rad(i), yb = -0.5 + i * step, last = i === tiers - 1;
+    const yt = last ? 0.5 : yb + step * 2.0;          // each tier reaches up behind the next
+    const rt = last ? 0 : R * 0.3;
+    const hem = [], neck = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      const tooth = k % 2 === 0;
+      const j = 0.9 + hash(i * 7.7 + k, k * 1.3 + i) * 0.2;       // each tooth a little different
+      const r = R * (tooth ? 1.0 * j : 0.68);
+      hem.push([Math.cos(a) * r, yb + (tooth ? -0.035 : 0.03) * (1 + R), Math.sin(a) * r]);
+      neck.push([Math.cos(a) * rt, yt, Math.sin(a) * rt]);
+    }
+    for (let k = 0; k < n; k++) {
+      const k2 = (k + 1) % n;
+      const lo = 0.55, hi = 1.05; // hem darker, neck lighter
+      tri(hem[k], hem[k2], neck[k], [lo, lo, hi]);
+      if (!last) tri(hem[k2], neck[k2], neck[k], [lo, hi, hi]);
+    }
+    // underside: a dark flat skirt so the hem has thickness
+    const c = [0, yb + 0.02, 0];
+    for (let k = 0; k < n; k++) tri(c, hem[(k + 1) % n], hem[k], [0.35, 0.5, 0.5]);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
 // ---------------------------------------------------------------- house materials
 
 let _tileTex = null;
@@ -684,13 +727,10 @@ export function buildWorld(scene, sections, opts = {}) {
       const hgt = (3 + rand() * 2.2) * s;
       items.cypress.push({ p: [x, y + hgt * 0.9, z], s: [(0.8 + rand() * 0.35) * s, hgt, (0.8 + rand() * 0.35) * s], c: pick(DARK) });
       if (rand() < 0.4) items.cypress.push({ p: [x + 1.0 * s, heightAt(x + s, z) + hgt * 0.35, z + 0.4 * s], s: [0.55 * s, hgt * 0.5, 0.55 * s], c: pick(DARK) });
-    } else if (kind < 0.84) { // layered pine, four tiers
+    } else if (kind < 0.84) { // layered pine: one jagged, drooping, multi-tier shape
       items.trunk.push({ p: [x, y + 0.7 * s, z], s: [0.3 * s, 1.4 * s, 0.3 * s] });
-      const col = pick(DARK);
-      for (let k = 0; k < 4; k++) {
-        const r = (2.1 - k * 0.5) * s;
-        items.pine.push({ p: [x, y + (1.5 + k * 1.0) * s, z], s: [r, 1.7 * s, r], ry: rand() * 6.28, c: col.clone().offsetHSL(0, 0, k * 0.02) });
-      }
+      const H = (4.6 + rand() * 1.4) * s, R = (1.55 + rand() * 0.4) * s;
+      items.pine.push({ p: [x, y + 0.9 * s + H / 2, z], s: [R, H, R], ry: rand() * 6.28, c: pick(DARK).clone().offsetHSL(0, 0.02, 0.02) });
     } else { // slender birch with a bright canopy and a couple of branches
       items.trunk.push({ p: [x, y + 1.5 * s, z], s: [0.2 * s, 3.0 * s, 0.2 * s], c: BIRCH });
       branch(x, y + 2.4 * s, z, s, 0.8);
@@ -917,8 +957,8 @@ export function buildWorld(scene, sections, opts = {}) {
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.fruit, { shadow: false });
   // cypress: a faceted flame, widest a little below the middle
   instanced(shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1), flat(), items.cypress);
-  // pine: stepped skirts, like layered branches
-  instanced(shade(lathe([[0, 0.5], [0.42, 0.18], [0.28, 0.16], [0.72, -0.16], [0.52, -0.18], [1, -0.5], [0, -0.5]], 8), 0.65, 1.1), flat(), items.pine);
+  // pine: drooping jagged tiers, two-sided so it never turns see-through
+  instanced(pineGeometry(5, 9), flat({ side: THREE.DoubleSide }), items.pine);
   instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), flat(), items.bush);
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.berry, { shadow: false });
   instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
