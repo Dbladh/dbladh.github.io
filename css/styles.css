@@ -317,22 +317,25 @@ html:has(body.scene-mode) {
 }
 
 
-/* ---------- Edge strips: what mobile Safari samples to tint its status bar and toolbar ---------- */
+/* ---------- Edge strips: what mobile Safari samples to tint its status bar and toolbar ----------
+   Solid, opaque, full width, touching the edge, and not click-through (Safari ignores elements with
+   pointer-events: none). 16px tall: tall enough to count, short enough to read as part of the scene. */
 body.scene-mode .edge {
-  display: block; position: fixed; left: 0; right: 0; z-index: 3; pointer-events: none;
+  display: block; position: fixed; left: 0; right: 0; z-index: 3; width: 100%;
+  opacity: 1; visibility: visible;
 }
 body.scene-mode .edge-top {
-  top: 0; height: 4px; background-color: var(--sky-top);
+  top: 0; height: 16px; background-color: var(--sky-top);
 }
 body.scene-mode .edge-top::after {          /* a soft fade so the strip never reads as a band */
-  content: ""; position: absolute; left: 0; right: 0; top: 4px; height: 56px;
+  content: ""; position: absolute; left: 0; right: 0; top: 16px; height: 56px; pointer-events: none;
   background: linear-gradient(to bottom, var(--sky-top), transparent);
 }
 body.scene-mode .edge-bottom {
-  bottom: 0; height: 4px; background-color: var(--ground, #4f7f45);
+  bottom: 0; height: 16px; background-color: var(--ground, #4f7f45);
 }
 body.scene-mode .edge-bottom::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 4px; height: 70px;
+  content: ""; position: absolute; left: 0; right: 0; bottom: 16px; height: 70px; pointer-events: none;
   background: linear-gradient(to top, var(--ground, #4f7f45), transparent);
 }
 html:has(body.scene-mode) { background-color: var(--sky-top); }

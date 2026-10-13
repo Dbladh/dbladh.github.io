@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261013091856';
-import { createSky } from './sky.js?v=20261013091856';
-import { createDOF } from './dof.js?v=20261013091856';
+import { buildWorld } from './world.js?v=20261013092129';
+import { createSky } from './sky.js?v=20261013092129';
+import { createDOF } from './dof.js?v=20261013092129';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
