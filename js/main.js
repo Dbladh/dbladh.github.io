@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261013092129';
-import { createSky } from './sky.js?v=20261013092129';
-import { createDOF } from './dof.js?v=20261013092129';
+import { buildWorld } from './world.js?v=20261013092538';
+import { createSky } from './sky.js?v=20261013092538';
+import { createDOF } from './dof.js?v=20261013092538';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -151,7 +151,7 @@ function start() {
     const back = el.querySelector('.back');
     if (back) {
       back.style.position = 'fixed';
-      back.style.left = (x0 + w * 0.042) + 'px';
+      back.style.left = (x0 + Math.max(10, w * 0.025)) + 'px';
       back.style.top = (y0 + barPx / 2) + 'px';
       back.style.transform = 'translateY(-50%)';
       back.style.margin = '0';
@@ -173,8 +173,9 @@ function start() {
     // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
     const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
     const x0 = m, x1 = vw - m;
-    const y0 = Math.max(m, topEdge + (compact ? 0 : 8));
-    const y1 = navHidden ? safeH - m : Math.min(safeH - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
+    const EDGE = 18;                                   // the solid edge strips (see CSS) take the top and bottom 16px
+    const y0 = Math.max(m, EDGE, topEdge + (compact ? 0 : 8));
+    const y1 = navHidden ? safeH - Math.max(m, EDGE) : Math.min(safeH - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
@@ -182,7 +183,7 @@ function start() {
     const MAX = 4.5;                                                                // cap extreme stretches
     const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
     const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);
-    const barPx = Math.min(56, Math.max(34, (h / upp) * 0.0694)); // always tall enough to hold the back link
+    const barPx = Math.min(64, Math.max(54, (h / upp) * 0.0694)); // tall enough to hold a 44px back button with air
     return {
       w, h,
       ox: ((x0 + x1) / 2 - vw / 2) * upp,

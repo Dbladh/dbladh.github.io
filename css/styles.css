@@ -213,7 +213,15 @@ body.scene-mode .stop.is-open.is-shown { opacity: 1; }
 body.scene-mode .stop.is-open h2 { font-size: 2.3em; }
 body.scene-mode .stop.is-open h3 { font-size: 1.05em; }
 body.scene-mode .stop.is-open .lede { font-size: 1.1em; }
-body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family: var(--mono); font-weight: 700; text-transform: uppercase; font-size: 0.7em; }
+/* The back link is a real button: 44px+ tall touch target, with a pill background so it reads as tappable. */
+body.scene-mode .back {
+  display: inline-flex; align-items: center; gap: 0.5em; min-height: 44px; padding: 0 16px 0 14px;
+  margin-bottom: 0.6em; border-radius: 999px; border: 2px solid var(--ink);
+  background: rgba(255, 255, 255, 0.6); color: var(--ink); text-decoration: none;
+  font-family: var(--mono); font-weight: 700; text-transform: uppercase; font-size: max(13px, 0.85em); line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+body.scene-mode .back:active { background: var(--ink); color: #fff; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
@@ -339,3 +347,7 @@ body.scene-mode .edge-bottom::after {
   background: linear-gradient(to top, var(--ground, #4f7f45), transparent);
 }
 html:has(body.scene-mode) { background-color: var(--sky-top); }
+
+/* With a sign open the soft fades go away so they never tint the sign's colour bar. */
+body.scene-mode.sign-open .edge-top::after,
+body.scene-mode.sign-open .edge-bottom::after { display: none; }
