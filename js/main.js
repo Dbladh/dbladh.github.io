@@ -152,13 +152,14 @@ function start() {
     // edge to edge; the back link in the sign's bar, Esc and the arrow keys still navigate.
     // "Tight" = a short screen or a phone-width one: nav out of the way, sign edge to edge, rim may bleed off.
     const compact = matchMedia('(max-height: 600px), (max-width: 600px)').matches;
+    const navHidden = matchMedia('(max-height: 600px) and (pointer: fine)').matches; // matches the CSS that hides it
     const m = compact ? 2 : 12;
     const nr = nav.getBoundingClientRect();
     // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
     const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
     const x0 = m, x1 = vw - m;
     const y0 = Math.max(m, topEdge + (compact ? 0 : 8));
-    const y1 = compact ? vh - m : Math.min(vh - m, nr.top - 8);
+    const y1 = navHidden ? vh - m : Math.min(vh - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px

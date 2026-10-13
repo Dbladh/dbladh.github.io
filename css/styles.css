@@ -249,9 +249,9 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
 }
 
 
-/* With a sign open on a short or phone-width screen, the bottom nav steps aside too, so the sign can run
-   edge to edge. (Back link in the sign's bar, Esc and the arrow keys still navigate.) */
-@media (max-height: 600px), (max-width: 600px) {
+/* With a sign open on a short mouse-and-keyboard window, the bottom nav steps aside so the sign can run
+   edge to edge. Touch devices keep the nav: it is the quick way to jump between sections. */
+@media (max-height: 600px) and (pointer: fine) {
   body.scene-mode #stopnav { transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s; }
   body.scene-mode.sign-open #stopnav {
     opacity: 0; transform: translate(-50%, 16px); visibility: hidden; pointer-events: none;
