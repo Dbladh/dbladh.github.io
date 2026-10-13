@@ -139,11 +139,14 @@ function wrapText(ctx, text, x, y, maxW, lineH) {
 
 // The sign face while closed: just the section title, set as large as it will go to fill the board.
 const FACE_FONT = '"Outfit", "Helvetica Neue", Arial, sans-serif';
-function paintBoard(canvas, title, accent, forceSize = null) {
+function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
   const W = canvas.width, H = canvas.height, g = canvas.getContext('2d');
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
   g.fillStyle = accent; g.fillRect(0, 0, W, 40);
-  const padX = 50, areaY = 40 + 22, areaH = H - areaY - 26, maxW = W - padX * 2;
+  const padX = 50, areaY = 40 + 22, areaH = H - areaY - 26;
+  // With a photo, the picture takes the right-hand side (a rounded square) and the title keeps the left.
+  const pic = photo && photo.complete && photo.naturalWidth ? Math.min(areaH, W * 0.33) : 0;
+  const maxW = W - padX * 2 - (pic ? pic + 22 : 0);
   const wrap = (size) => {                                  // greedy word wrap at this font size
     g.font = `800 ${size}px ${FACE_FONT}`;
     const lines = []; let line = '';
@@ -163,6 +166,18 @@ function paintBoard(canvas, title, accent, forceSize = null) {
   g.font = `800 ${size}px ${FACE_FONT}`;
   const lh = size * 1.0, total = lines.length * lh, top = areaY + (areaH - total) / 2;
   lines.forEach((ln, i) => g.fillText(ln, padX, top + i * lh + size * 0.8));
+  if (pic) {
+    const x = W - padX - pic, y = areaY + (areaH - pic) / 2, r = 30;
+    g.save();
+    g.beginPath(); g.roundRect(x, y, pic, pic, r); g.clip();
+    // "cover" crop, leaning toward the top so the face stays in frame
+    const iw = photo.naturalWidth, ih = photo.naturalHeight, side = Math.min(iw, ih);
+    const sx = (iw - side) / 2, sy = (ih - side) * 0.28;
+    g.drawImage(photo, sx, sy, side, side, x, y, pic, pic);
+    g.restore();
+    g.lineWidth = 6; g.strokeStyle = '#111';
+    g.beginPath(); g.roundRect(x, y, pic, pic, r); g.stroke();
+  }
   return fitted;
 }
 
@@ -1526,6 +1541,8 @@ export function buildWorld(scene, sections, opts = {}) {
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
+  const aboutPhoto = new Image();      // painted onto the About sign's face once it has loaded
+  aboutPhoto.src = 'images/about_me_image.jpg';
 
   /** Unit box / cylinder with a vertical vertex-colour ramp: darker underneath, lighter on top. */
   const rampBox = (() => {
@@ -1598,7 +1615,7 @@ export function buildWorld(scene, sections, opts = {}) {
     const teaserTex = new THREE.CanvasTexture(faceCanvas);
     teaserTex.colorSpace = THREE.SRGBColorSpace;
     teaserTex.anisotropy = 4;
-    faces.push({ canvas: faceCanvas, tex: teaserTex, title: sec.title, accent: s.accent, scale: s.scale });
+    faces.push({ canvas: faceCanvas, tex: teaserTex, title: sec.title, accent: s.accent, scale: s.scale, photo: id === 'about' ? aboutPhoto : null });
     const openTex = drawOpenBoard(s.paper, s.accent);
     faceMat.map = teaserTex;
     const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceMat);
@@ -1788,11 +1805,12 @@ export function buildWorld(scene, sections, opts = {}) {
   // painted sizes also look equal on screen).
   const layoutFaces = () => {
     if (!faces.length) return;
-    const fits = faces.map((f) => paintBoard(f.canvas, f.title, f.accent));
+    const fits = faces.map((f) => paintBoard(f.canvas, f.title, f.accent, null, f.photo));
     const common = Math.min(...fits);
-    faces.forEach((f) => { paintBoard(f.canvas, f.title, f.accent, common); f.tex.needsUpdate = true; });
+    faces.forEach((f) => { paintBoard(f.canvas, f.title, f.accent, common, f.photo); f.tex.needsUpdate = true; });
   };
   layoutFaces();
+  aboutPhoto.onload = layoutFaces;     // repaint with the photo as soon as it arrives
   document.fonts?.load(`800 100px ${FACE_FONT}`).then(layoutFaces).catch(() => {});   // redo once the web font is ready
 
   // ---- per-frame + day/night ----
