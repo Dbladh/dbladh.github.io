@@ -543,8 +543,10 @@ function cloudTexture(variant) {
       const base = fbm(nx * 3.4 + warp * 1.3 + seed, ny * 8.5 + warp * 0.9 + seed * 2); // streaky, wide features
       const fine = fbm(nx * 9 + seed * 3, ny * 22 + seed) - 0.5;                       // fine wisps
       const dx = (nx - 0.5) * 2, dy = (ny - 0.52) * 2;
-      const env = Math.max(0, 1 - (dx * dx * 0.85 + dy * dy * 1.35));                   // ellipse: wide but with real body
-      const d = (base + fine * 0.3) * (0.3 + 0.95 * Math.pow(env, 0.7)) * 1.75;
+      const env = Math.max(0, 1 - (dx * dx * 1.25 + dy * dy * 1.35));                   // ellipse: wide, with body, zero before the edge
+      // Hard guarantee that nothing touches the image border (that would show as a straight cut):
+      const edge = Math.min(smooth(0, 0.22, nx), smooth(0, 0.22, 1 - nx), smooth(0, 0.2, ny), smooth(0, 0.2, 1 - ny));
+      const d = (base + fine * 0.3) * (0.3 + 0.95 * Math.pow(env, 0.7)) * 1.75 * edge;
       const a = smooth(0.3, 0.72, d);
       const shade = 0.95 + 0.05 * (1 - ny);                                            // nearly white; barely shaded underneath
       const i = (y * W + x) * 4;
