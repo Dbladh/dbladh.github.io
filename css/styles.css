@@ -14,6 +14,7 @@
   --sky-bot: #cfe6f7;
   --radius: 18px;
   --display: "Helvetica Neue", "Arial Black", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --name-font: "Outfit", "Helvetica Neue", "Arial Black", system-ui, sans-serif; /* the big "Danny Bladh" */
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
 }
@@ -50,8 +51,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
 
 .hero { padding: 40px 20px 8px; max-width: 900px; margin: 0 auto; }
 .hero h1 {
-  margin: 0; font-family: var(--display); font-weight: 900;
-  font-size: clamp(3rem, 12vw, 6.5rem); line-height: 0.95; letter-spacing: -0.04em;
+  margin: 0; font-family: var(--name-font); font-weight: 700;
+  font-size: clamp(3rem, 12vw, 6.5rem); line-height: 0.95; letter-spacing: -0.035em;
 }
 .tagline { margin: 12px 0 0; font-size: 1.2rem; }
 
@@ -143,14 +144,9 @@ body.scene-mode .tagline {
   text-shadow: 0 2px 14px rgba(20, 20, 60, 0.55);
   pointer-events: none; transition: opacity 0.35s;
 }
-body.scene-mode .tagline.fade { opacity: 0; }
-/* The name and tagline are hidden whenever we are not on the overview. JS adds .hero-visible the
-   moment the camera starts pulling back to the overview, so they fade in during the zoom-out. */
-body.scene-mode:not(.hero-visible) .hero h1,
-body.scene-mode:not(.hero-visible) .tagline { opacity: 0; transition: opacity 0.3s ease; }
-body.scene-mode.hero-visible .hero h1 { animation: heroIn 1.5s ease 0.2s backwards; }
-body.scene-mode.hero-visible .tagline { animation: heroIn 1.5s ease 0.6s backwards; }
-@keyframes heroIn { from { opacity: 0; } to { opacity: 1; } }
+/* Name and tagline opacity is set from JS every frame, tied to the camera (see main.js). */
+.tagline .phrase { display: inline-block; transition: opacity 0.35s ease; }
+.tagline .phrase.fade { opacity: 0; }
 
 body.scene-mode #stopnav {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
@@ -216,5 +212,5 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   body.scene-mode .stop.is-open { transition: none; }
-  body.scene-mode .hero h1, body.scene-mode .tagline { transition: none; animation: none !important; }
+  body.scene-mode .hero h1, body.scene-mode .tagline, .tagline .phrase { transition: none; }
 }

@@ -95,6 +95,8 @@ function start() {
   let active = 'home';
   const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
   let parallax = 1; // 1 on the overview, 0 when zoomed in
+  let heroName = 0, heroTag = 0; // current opacity of the big name and the tagline
+  const heroEl = document.querySelector('.hero h1');
 
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -219,7 +221,6 @@ function start() {
     // The top controls leave as soon as we start heading to a sign (the zoom), and return when
     // we head back to the overview. The open sign then gets the full height.
     body.classList.toggle('sign-open', id !== 'home');
-    if (id !== 'home') body.classList.remove('hero-visible'); // name and tagline leave when heading to a sign
     nav.querySelectorAll('a').forEach((a) => {
       if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -240,8 +241,7 @@ function start() {
       if (hadFocus) nav.querySelector(`a[href="#${id}"]`)?.focus();
     }
 
-    // 2. Fly the camera. Heading home, the name and tagline start fading in as the camera pulls back.
-    if (id === 'home') body.classList.add('hero-visible');
+    // 2. Fly the camera. (The name and tagline fade with this flight; see the frame loop.)
     await flyTo(stops[id], quick);
     if (token !== navToken) return;
 
@@ -266,6 +266,7 @@ function start() {
     store.set('simple', on ? '1' : '0');
     Object.values(sections).forEach((s) => s.el.classList.remove('is-open', 'is-shown'));
     body.classList.remove('sign-open');
+    if (on) { heroEl.style.opacity = ''; tagline.style.opacity = ''; }
     if (openId) { const b = boardOf(openId); b.setLayout({ w: b.width, h: b.height, ox: 0, oy: 0 }); b.setOpen(false); openId = null; }
     if (!on) { onResize(); goTo(active, { instant: true, silent: true, record: false }); }
   }
@@ -367,16 +368,22 @@ function start() {
   simpleBtn.addEventListener('click', () => setSimple(!simple));
 
   // ---- Rotating tagline (static when reduced motion is on) ----
+  // The phrase lives in an inner span so its fade does not fight the tagline's own
+  // opacity, which follows the camera (see the frame loop).
   const phrases = (tagline.dataset.phrases || '').split('|').filter(Boolean);
   if (phrases.length && !reduceMotion) {
+    const span = document.createElement('span');
+    span.className = 'phrase';
+    span.textContent = phrases[0];
+    tagline.textContent = '';
+    tagline.appendChild(span);
     let i = 0;
-    tagline.textContent = phrases[0];
     setInterval(() => {
-      tagline.classList.add('fade');
+      span.classList.add('fade');
       setTimeout(() => {
         i = (i + 1) % phrases.length;
-        tagline.textContent = phrases[i];
-        tagline.classList.remove('fade');
+        span.textContent = phrases[i];
+        span.classList.remove('fade');
       }, 380);
     }, 3200);
   }
@@ -447,6 +454,22 @@ function start() {
     camera.lookAt(look);
 
     if (!reduceMotion) world.update(dt);
+
+    // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back
+    // to the overview they fade in with its progress (the name first, the tagline a little after).
+    let wantName, wantTag, direct = false;
+    if (active !== 'home' || openId) { wantName = wantTag = 0; }
+    else if (tween && tween.to === stops.home) {
+      const u = Math.min(tween.t, 1);
+      wantName = THREE.MathUtils.smoothstep(u, 0.05, 0.65);
+      wantTag = THREE.MathUtils.smoothstep(u, 0.3, 0.95);
+      direct = true;
+    } else { wantName = wantTag = 1; }
+    const k = Math.min(1, dt * (wantName < heroName ? 9 : 3));
+    heroName = direct ? wantName : heroName + (wantName - heroName) * k;
+    heroTag = direct ? wantTag : heroTag + (wantTag - heroTag) * k;
+    heroEl.style.opacity = heroName.toFixed(3);
+    tagline.style.opacity = heroTag.toFixed(3);
 
     draw(dt);
 
