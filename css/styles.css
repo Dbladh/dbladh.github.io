@@ -144,8 +144,13 @@ body.scene-mode .tagline {
   pointer-events: none; transition: opacity 0.35s;
 }
 body.scene-mode .tagline.fade { opacity: 0; }
-body.scene-mode:not([data-stop="home"]) .hero h1,
-body.scene-mode:not([data-stop="home"]) .tagline { opacity: 0; }
+/* The name and tagline are hidden whenever we are not on the overview. JS adds .hero-visible the
+   moment the camera starts pulling back to the overview, so they fade in during the zoom-out. */
+body.scene-mode:not(.hero-visible) .hero h1,
+body.scene-mode:not(.hero-visible) .tagline { opacity: 0; transition: opacity 0.3s ease; }
+body.scene-mode.hero-visible .hero h1 { animation: heroIn 1.5s ease 0.2s backwards; }
+body.scene-mode.hero-visible .tagline { animation: heroIn 1.5s ease 0.6s backwards; }
+@keyframes heroIn { from { opacity: 0; } to { opacity: 1; } }
 
 body.scene-mode #stopnav {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
@@ -211,5 +216,5 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   body.scene-mode .stop.is-open { transition: none; }
-  body.scene-mode .hero h1, body.scene-mode .tagline { transition: none; }
+  body.scene-mode .hero h1, body.scene-mode .tagline { transition: none; animation: none !important; }
 }

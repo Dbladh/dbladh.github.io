@@ -219,6 +219,7 @@ function start() {
     // The top controls leave as soon as we start heading to a sign (the zoom), and return when
     // we head back to the overview. The open sign then gets the full height.
     body.classList.toggle('sign-open', id !== 'home');
+    if (id !== 'home') body.classList.remove('hero-visible'); // name and tagline leave when heading to a sign
     nav.querySelectorAll('a').forEach((a) => {
       if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -239,7 +240,8 @@ function start() {
       if (hadFocus) nav.querySelector(`a[href="#${id}"]`)?.focus();
     }
 
-    // 2. Fly the camera.
+    // 2. Fly the camera. Heading home, the name and tagline start fading in as the camera pulls back.
+    if (id === 'home') body.classList.add('hero-visible');
     await flyTo(stops[id], quick);
     if (token !== navToken) return;
 
