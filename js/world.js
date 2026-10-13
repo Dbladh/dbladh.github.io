@@ -25,6 +25,7 @@ const FLANKS = [
   { x: -52, z: -20, rx: 24, rz: 22, h: 7 },  { x: 54, z: -14, rx: 24, rz: 22, h: 6.5 },
   { x: -34, z: 6, rx: 16, rz: 13, h: 2.4 },  { x: 36, z: 8, rx: 16, rz: 13, h: 2.2 },
   { x: -82, z: -42, rx: 34, rz: 30, h: 15 }, { x: 84, z: -40, rx: 34, rz: 30, h: 14 },
+  { x: -24, z: -93, rx: 16, rz: 13, h: 14 },   // the windmill's own hilltop, behind and between the signs
 ];
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
@@ -749,10 +750,20 @@ export function buildWorld(scene, sections, opts = {}) {
   });
   { // windmill at the end of the left path (on the flank hill), barn at the end of the right path
     const wb = branches[0][branches[0].length - 1], bb = branches[1][branches[1].length - 1];
-    const wy = rawHeight(wb[0] - 2, wb[1] - 1), by = rawHeight(bb[0] + 2, bb[1] - 1);
-    farm.push({ kind: 'windmill', x: wb[0] - 2, z: wb[1] - 1, y: wy });
+    const by = rawHeight(bb[0] + 2, bb[1] - 1);
+    // Windmill: on the slope behind and between the creativity and AI signs, so it never covers a billboard.
+    const WMX = -23, WMZ = -92, wy = rawHeight(WMX, WMZ);
+    farm.push({ kind: 'windmill', x: WMX, z: WMZ, y: wy });
+    PADS.push({ x: WMX, z: WMZ, r: 5, y: wy });
+    // The left path now ends at one more cottage, facing back down the path.
+    { const [tx, tz] = tangent(branches[0], branches[0].length - 3);
+      const hx = wb[0] - tx * 1.5 + tz * 4.5, hz = wb[1] - tz * 1.5 - tx * 4.5;
+      if (!nearPond(hx, hz, 3) && !nearSign(hx, hz)) {
+        const site = { x: hx, z: hz, fx: tz * -1 + 0, fz: tx * 1, perp: 4.5, y: rawHeight(hx, hz), hamlet: true };
+        sites.push(site); PADS.push({ x: hx, z: hz, r: 6, y: site.y });
+      } }
     farm.push({ kind: 'barn', x: bb[0] + 2.5, z: bb[1] - 1, y: by, rot: Math.atan2(-(bb[0] + 2.5), 22 - (bb[1] - 1)) + 0.5 });
-    PADS.push({ x: wb[0] - 2, z: wb[1] - 1, r: 4, y: wy }, { x: bb[0] + 2.5, z: bb[1] - 1, r: 5.5, y: by });
+    PADS.push({ x: bb[0] + 2.5, z: bb[1] - 1, r: 5.5, y: by });
   }
   const distToPolyline = (x, z, pts) => {                   // for painting the branch paths on the ground
     let best = 1e9;
@@ -888,11 +899,12 @@ export function buildWorld(scene, sections, opts = {}) {
       }
     } else {
       const wm = buildWindmill();
-      wm.group.position.set(f.x, f.y, f.z);
-      wm.group.rotation.y = Math.atan2(-f.x, 22 - f.z) - 0.5;            // face roughly toward the viewer
+      wm.group.position.set(f.x, f.y - 0.5, f.z);
+      wm.group.scale.setScalar(1.8);                                      // far away, so bigger than a village building
+      wm.group.rotation.y = Math.atan2(-f.x, 22 - f.z) - 0.25;           // face roughly toward the viewer
       scene.add(wm.group);
       windmills.push(wm.rotor);
-      houses.push({ x: f.x, z: f.z, r: wm.radius, w: 3.2, d: 3.2, rot: 0 });
+      houses.push({ x: f.x, z: f.z, r: wm.radius * 1.8, w: 3.2, d: 3.2, rot: 0 });
     }
   }
 

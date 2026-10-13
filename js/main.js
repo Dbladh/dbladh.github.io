@@ -287,7 +287,8 @@ function start() {
     else { clearTimeout(dofTimer); dofTimer = setTimeout(() => dof?.resize(), 120); }
     slow.t = 0; slow.n = 0; slow.strikes = 0; slow.hold = performance.now() + 2000; // resizing is not "slow"
     // Portrait: tilt the overview camera down a little so the signs ride higher, under the name.
-    HOME.look.y = 17 - 8 * (1 - THREE.MathUtils.smoothstep(camera.aspect, 0.55, 1.0));
+    const compact = matchMedia('(max-height: 600px)').matches;   // short screen: the name moves into the top row
+    HOME.look.y = 17 - 8 * (1 - THREE.MathUtils.smoothstep(camera.aspect, 0.55, 1.0)) - (compact ? 13 : 0);
     if (!tween && active === 'home') cur.look.copy(HOME.look);
     world.placeBoards(camera.aspect, camera.fov, HOME.pos); // slide/stagger the signs for this screen shape
     layoutStops();
