@@ -6,10 +6,10 @@ import * as THREE from 'three';
 
 // Where each billboard hill sits. `scale` shrinks the sign (the About sign is a small roadside one).
 export const STOPS = {
-  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8', paper: '#fdd0dc' },
-  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff', paper: '#d9e8f2' },
-  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a', paper: '#fcf6e8' },
-  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c', paper: '#dcf0d6' },
+  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8', paper: '#ffffff' },
+  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff', paper: '#ffffff' },
+  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a', paper: '#ffffff' },
+  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c', paper: '#ffffff' },
 };
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
@@ -103,7 +103,7 @@ function drawBoard(title, teaser, accent) {
   const c = document.createElement('canvas');
   c.width = 1024; c.height = 576;
   const g = c.getContext('2d');
-  g.fillStyle = '#fcf6e8'; g.fillRect(0, 0, 1024, 576);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 1024, 576);
   g.fillStyle = accent; g.fillRect(0, 0, 1024, 40);
   g.fillStyle = '#111';
   g.textBaseline = 'top';
@@ -418,10 +418,10 @@ function buildHouse(rand) {
 // (The readable text itself is real HTML laid exactly over the face by main.js.)
 function drawOpenBoard(paper, accent) {
   const c = document.createElement('canvas');
-  c.width = 64; c.height = 36;
+  c.width = 1024; c.height = 576; // same size as the teaser face, so the stripe stays crisp
   const g = c.getContext('2d');
-  g.fillStyle = paper; g.fillRect(0, 0, 64, 36);
-  g.fillStyle = accent; g.fillRect(0, 0, 64, 2.5);
+  g.fillStyle = paper; g.fillRect(0, 0, 1024, 576);
+  g.fillStyle = accent; g.fillRect(0, 0, 1024, 40);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -768,7 +768,7 @@ export function buildWorld(scene, sections, opts = {}) {
 
     const cy = BOARD_BOTTOM + BOARD_H / 2;
     const T = 0.4;                      // frame thickness: constant, however far the sign stretches
-    const fMat = frameMat.clone();      // own material, so "open" can switch off depth-testing per sign
+    const fMat = new THREE.MeshBasicMaterial({ color: 0xece7da }); // unlit like the face, own material per sign
     const parts = [0, 1, 2, 3, 4].map(() => {   // top, bottom, left, right, backing
       const m = new THREE.Mesh(UNIT_BOX, fMat);
       m.castShadow = true;
@@ -800,10 +800,12 @@ export function buildWorld(scene, sections, opts = {}) {
         board.layout = { ...L };
       },
       /** Swap the face between the teaser and the plain "content is open" surface.
-       *  Open signs draw over the terrain, since a stretched sign can dip below the hill. */
+       *  Open signs draw over the terrain (a stretched sign can dip below the hill). The depth
+       *  test must stay ON with an always-pass function: with it off, WebGL writes no depth and
+       *  the depth-of-field pass would treat the sign as far-away sky and blur it. */
       setOpen(on) {
         face.material.map = on ? openTex : teaserTex;
-        face.material.depthTest = fMat.depthTest = !on;
+        face.material.depthFunc = fMat.depthFunc = on ? THREE.AlwaysDepth : THREE.LessEqualDepth;
         face.renderOrder = on ? 11 : 0;
         parts.forEach((m) => { m.renderOrder = on ? 10 : 0; });
       },

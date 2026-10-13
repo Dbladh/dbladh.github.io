@@ -435,5 +435,5 @@ function start() {
     }
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { scene, skyScene, camera, renderer, world, dof, slow };
+  window.__portfolio = { scene, skyScene, camera, renderer, world, dof, slow, get focus() { return focus; }, cur };
 }

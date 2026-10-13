@@ -46,8 +46,9 @@ const FRAG = /* glsl */ `
         float r = sqrt(fi / 28.0) * coc;
         float a = fi * 2.399963;
         vec2 uv = vUv + vec2(cos(a), sin(a)) * r * texel;
-        // Don't let much-sharper neighbours smear over a blurred pixel.
-        float w = 1.0;
+        // A neighbour only contributes if its own blur reaches this far. That stops a sharp,
+        // in-focus object (like an open billboard) from bleeding a halo into the blurred background.
+        float w = clamp(cocAt(uv) / max(r, 0.75), 0.0, 1.0);
         sum += texture2D(tColor, uv) * w;
         wsum += w;
       }
