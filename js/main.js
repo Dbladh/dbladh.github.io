@@ -368,15 +368,28 @@ function start() {
     const ap = hh >= 12 ? 'pm' : 'am';
     return `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${ap}`;
   }
+  // The clock: starts at the visitor's real time and then runs on its own, a whole day in DAY_SECONDS.
+  // Dragging the slider sets the time; the clock carries on from there (and waits while you drag).
+  const DAY_SECONDS = 120;
+  let hour = 12, shownMinute = -1, dragging = false;
   function setTime(h) {
-    const { night, horizon } = sky.set(h);
+    hour = ((h % 24) + 24) % 24;
+    const { night, horizon } = sky.set(hour);
     world.setNight(night);
     world.setClouds(night, horizon);
-    const label = fmt(h);
-    timeLabel.textContent = 'Time: ' + label;
-    timeInput.setAttribute('aria-valuetext', label);
+    const minute = Math.floor(hour * 60);
+    if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes
+      shownMinute = minute;
+      const label = fmt(hour);
+      timeLabel.textContent = 'Time: ' + label;
+      timeInput.setAttribute('aria-valuetext', label);
+    }
   }
+  timeInput.step = 'any';                               // smooth slider while the clock runs
   timeInput.addEventListener('input', () => setTime(parseFloat(timeInput.value)));
+  timeInput.addEventListener('pointerdown', () => { dragging = true; });
+  window.addEventListener('pointerup', () => { dragging = false; });
+  timeInput.addEventListener('keydown', () => { dragging = true; setTimeout(() => { dragging = false; }, 1200); });
 
   simpleBtn.addEventListener('click', () => setSimple(!simple));
 
@@ -405,7 +418,7 @@ function start() {
   controls.hidden = false;
   // Start at the visitor's actual local time (rounded to the slider's quarter-hour steps).
   const nowD = new Date();
-  const nowHour = Math.round((nowD.getHours() + nowD.getMinutes() / 60) * 4) / 4;
+  const nowHour = nowD.getHours() + nowD.getMinutes() / 60 + nowD.getSeconds() / 3600;
   timeInput.value = nowHour;
   setTime(nowHour);
   onResize();
@@ -437,6 +450,12 @@ function start() {
     requestAnimationFrame(frame);
     if (simple || document.hidden) { clock.getDelta(); return; }
     const dt = Math.min(clock.getDelta(), 0.1);
+
+    // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
+    if (!reduceMotion && !dragging) {
+      setTime(hour + (dt * 24) / DAY_SECONDS);
+      timeInput.value = hour;
+    }
 
     if (tween) {
       tween.t += dt / tween.dur;

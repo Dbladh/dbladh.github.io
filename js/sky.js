@@ -176,7 +176,8 @@ export function createSky(scene, skyScene, renderer) {
   const _c = new THREE.Color();
 
   function updateEnv(hour, s, sunPos, night) {
-    if (Math.abs(hour - envHour) < 0.5 && envTarget) return;
+    const dh = ((hour - envHour + 36) % 24) - 12;                          // signed hour difference, midnight-safe
+    if (Math.abs(dh) < 0.8 && envTarget) return;                           // close enough: reuse the reflection map
     envHour = hour;
     const pos = envGeo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
