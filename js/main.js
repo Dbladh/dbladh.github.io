@@ -251,7 +251,11 @@ function start() {
     // Keep the view wide enough on portrait phones.
     camera.fov = w / h < 0.8 ? 70 : 55;
     camera.updateProjectionMatrix();
-    dof?.resize();
+    // Reallocating the depth-of-field target is the expensive part: do it once resizing settles
+    // (the pass just stretches the old target meanwhile), but immediately on the first call.
+    if (!dofSized) { dof?.resize(); dofSized = true; }
+    else { clearTimeout(dofTimer); dofTimer = setTimeout(() => dof?.resize(), 120); }
+    slow.t = 0; slow.n = 0; slow.strikes = 0; slow.hold = performance.now() + 2000; // resizing is not "slow"
     layoutStops();
     if (!simple && active !== 'home' && !tween) { // keep a zoomed-in sign filling the screen
       cur.pos.copy(stops[active].pos); cur.look.copy(stops[active].look);
@@ -261,7 +265,12 @@ function start() {
         if (sections[openId].el.classList.contains('is-open')) placeOnBoard(openId);
       }
     }
+    // Setting the canvas size clears it. Repaint right now, in the same task, so the browser
+    // never gets to show an empty or stretched frame in between.
+    if (!simple) draw(0);
   }
+  let dofSized = false, dofTimer = 0;
+  const slow = { t: 0, n: 0, strikes: 0, hold: 0 }; // frame-rate watch (see end of frame())
   window.addEventListener('resize', onResize);
 
   // ---- Input ----
@@ -359,6 +368,21 @@ function start() {
   // ---- Render loop ----
   const clock = new THREE.Clock();
   const look = new THREE.Vector3();
+  /** Render both layers. `dt` only drives the focus easing, so 0 means "repaint as is". */
+  function draw(dt) {
+    skyRenderer.render(skyScene, camera);
+    if (dof && dof.enabled) {
+      // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
+      const want = active === 'home' ? 54 : camera.position.distanceTo(cur.look);
+      focus += (want - focus) * Math.min(1, dt * 4);
+      world.setView({ ...dof.params, focus });
+      dof.render(scene, camera, focus);
+    } else {
+      world.setView({ height: canvas.height, focus, aperture: 0, maxBlur: 0 });
+      renderer.render(scene, camera);
+    }
+  }
+
   function frame() {
     requestAnimationFrame(frame);
     if (simple || document.hidden) { clock.getDelta(); return; }
@@ -394,31 +418,22 @@ function start() {
 
     if (!reduceMotion) world.update(dt);
 
-    // Depth of field: focus on whatever the camera is looking at, easing between stops.
-    skyRenderer.render(skyScene, camera);
-    if (dof && dof.enabled) {
-      // On the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
-      const want = active === 'home' ? 54 : camera.position.distanceTo(cur.look);
-      focus += (want - focus) * Math.min(1, dt * 4);
-      world.setView({ ...dof.params, focus });
-      dof.render(scene, camera, focus);
-    } else {
-      world.setView({ height: canvas.height, focus, aperture: 0, maxBlur: 0 });
-      renderer.render(scene, camera);
-    }
+    draw(dt);
 
     // If the machine struggles, drop soft focus first, then resolution.
+    if (performance.now() < slow.hold || tween || morph) { slow.t = 0; slow.n = 0; return; } // transitions and resizes don't count
     slow.t += dt; slow.n++;
     if (slow.t > 3) {
       const fps = slow.n / slow.t;
-      if (fps < 26) {
+      slow.strikes = fps < 26 ? slow.strikes + 1 : 0;
+      if (slow.strikes >= 2) { // genuinely slow for ~6s in a row
+        slow.strikes = 0;
         if (dof?.enabled) dof.enabled = false;
         else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); onResize(); }
       }
       slow.t = 0; slow.n = 0;
     }
   }
-  const slow = { t: 0, n: 0 };
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { scene, skyScene, camera, renderer, world };
+  window.__portfolio = { scene, skyScene, camera, renderer, world, dof, slow };
 }
