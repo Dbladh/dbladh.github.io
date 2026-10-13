@@ -1445,6 +1445,7 @@ export function buildWorld(scene, sections, opts = {}) {
         solids.forEach(({ m, order }) => { m.renderOrder = on ? order : 0; });
         // The catwalk, railing and ladder stand in front of the face, so they would cut across the text.
         walkway.forEach((m) => { m.visible = !on; });
+        blobs.forEach((m) => { m.visible = !on; }); // ground decals would paint over the face (it ignores depth while open)
         sty.open = on; applyLight();
         lightFx.forEach((m) => { m.renderOrder = on ? 14 : 0; });
       },
