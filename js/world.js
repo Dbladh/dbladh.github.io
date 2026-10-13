@@ -488,6 +488,31 @@ function blobTexture() {              // soft radial falloff, used for contact s
 const CONTACT_MAT = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x14200c, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
 const EAVE_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false });
 
+let _wash = null;
+/** Light from four lamps along the top edge: bright pools just under each, fading down the face. */
+function lampWashTexture() {
+  if (_wash) return _wash;
+  const W = 512, H = 256, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'lighter';
+  const vg = g.createLinearGradient(0, 0, 0, H);                       // general brightening toward the top
+  vg.addColorStop(0, 'rgba(255,255,255,0.32)'); vg.addColorStop(0.55, 'rgba(255,255,255,0.05)'); vg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 4; i++) {                                        // lamp positions: x = 0.5 + (i - 1.5) * 0.26
+    const cx = W * (0.5 + (i - 1.5) * 0.26);
+    const rg = g.createRadialGradient(cx, 0, 4, cx, 0, W * 0.3);
+    rg.addColorStop(0, 'rgba(255,255,255,0.95)'); rg.addColorStop(0.35, 'rgba(255,255,255,0.4)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.save(); g.translate(0, 0); g.scale(1, 0.9);
+    g.fillStyle = rg; g.fillRect(cx - W * 0.3, 0, W * 0.6, H / 0.9);
+    g.restore();
+  }
+  _wash = new THREE.CanvasTexture(c);
+  _wash.colorSpace = THREE.SRGBColorSpace;
+  return _wash;
+}
+
 function buildHouse(rand) {
   const g = new THREE.Group();
   const pick = (a) => a[Math.floor(rand() * a.length)];
@@ -1252,7 +1277,10 @@ export function buildWorld(scene, sections, opts = {}) {
     const faceMat = new THREE.MeshBasicMaterial({ map: null });
     const barMat = new THREE.MeshBasicMaterial({ color: s.accent });
     const blobMat = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x10190a, transparent: true, opacity: 0.5, depthWrite: false });
-    const mine = [metal, lipMat, lampMat, faceMat, barMat, blobMat];
+    const washMat = new THREE.MeshBasicMaterial({ map: lampWashTexture(), color: 0xffd49a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xffc476, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const haloMat = new THREE.SpriteMaterial({ map: blobTexture(), color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const mine = [metal, lipMat, lampMat, faceMat, barMat, blobMat, washMat, beamMat, haloMat];
     signMats.push(...mine);
 
     const solids = [];                 // { m, order } meshes whose draw order is fixed while open
@@ -1299,6 +1327,38 @@ export function buildWorld(scene, sections, opts = {}) {
     bar.visible = false;
     g.add(bar);
 
+    // Light thrown by the lamps: a wash over the face (bright pools under each lamp), a soft cone
+    // from every bulb, and a halo around each bulb. All additive, all fade in with the night.
+    const wash = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), washMat);
+    wash.renderOrder = 0; g.add(wash);
+    const CONE_SEG = 12;
+    const cones = Array.from({ length: 4 }, () => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((CONE_SEG + 2) * 3), 3));
+      const col = new Float32Array((CONE_SEG + 2) * 3);
+      for (let i = 0; i < 3; i++) col[i] = 0.9;                       // apex (at the bulb) bright, rim black
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const idx = [];
+      for (let i = 0; i < CONE_SEG; i++) idx.push(0, 1 + i, 1 + ((i + 1) % CONE_SEG));
+      geo.setIndex(idx);
+      const m = new THREE.Mesh(geo, beamMat);
+      m.frustumCulled = false; g.add(m);
+      return m;
+    });
+    const halos = Array.from({ length: 4 }, () => { const sp = new THREE.Sprite(haloMat); g.add(sp); return sp; });
+    const lightFx = [wash, ...cones, ...halos];
+
+    const sty = { night: 0, open: false };
+    const applyLight = () => {
+      const k = sty.open ? 0 : sty.night;                              // an open sign is lit evenly for reading
+      const dim = 1 - 0.58 * k;                                        // the face is dim after dark...
+      faceMat.color.setRGB(dim, dim * 0.98, dim * 0.94);
+      washMat.opacity = k * 0.9;                                       // ...and the lamps' pools light it up
+      beamMat.opacity = k * 0.13;
+      haloMat.opacity = sty.open ? sty.night * 0.4 : sty.night * 0.85;
+      lipMat.emissive.setRGB(0.5 * sty.night, 0.34 * sty.night, 0.12 * sty.night); // rim catches the glow
+    };
+
     const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
     const board = {
       id, face, scale: s.scale, layout: null,
@@ -1341,7 +1401,20 @@ export function buildWorld(scene, sections, opts = {}) {
           set(arms[i], 0.08, 0.08, 1.15, lx2, top2 + 0.55, 0.48);
           set(hoods[i], 0.55, 0.13, 0.42, lx2, top2 + 0.5, 1.02);
           set(bulbs[i], 0.3, 0.07, 0.24, lx2, top2 + 0.42, 1.02);
+          halos[i].position.set(lx2, top2 + 0.36, 1.02);
+          halos[i].scale.setScalar(1.9);
+          // cone: apex at the bulb, base a wide ellipse on the face
+          const pos = cones[i].geometry.attributes.position;
+          pos.setXYZ(0, lx2, top2 + 0.4, 1.02);
+          const by = top - lh * 0.5, rx = lw * 0.17, ry = lh * 0.22;
+          for (let k = 0; k < CONE_SEG; k++) {
+            const a = (k / CONE_SEG) * Math.PI * 2;
+            pos.setXYZ(1 + k, lx2 + Math.cos(a) * rx, by + Math.sin(a) * ry, 0.33);
+          }
+          pos.needsUpdate = true;
         }
+        wash.scale.set(lw, lh, 1);
+        wash.position.set(x, y, 0.325);
         const barH = L.bar ?? 0.0694 * L.h;     // default = the teaser's stripe proportion
         bar.scale.set(lw, barH / s.scale, 1);
         bar.position.set(x, y + lh / 2 - barH / s.scale / 2, 0.315);
@@ -1361,9 +1434,14 @@ export function buildWorld(scene, sections, opts = {}) {
         solids.forEach(({ m, order }) => { m.renderOrder = on ? order : 0; });
         // The catwalk, railing and ladder stand in front of the face, so they would cut across the text.
         walkway.forEach((m) => { m.visible = !on; });
+        sty.open = on; applyLight();
+        lightFx.forEach((m) => { m.renderOrder = on ? 14 : 0; });
       },
       /** Lamps glow after dark. */
-      setNight(n) { lampMat.color.setRGB(0.55 + 0.45 * n, 0.52 + 0.4 * n, 0.45 + 0.1 * n); },
+      setNight(n) {
+        lampMat.color.setRGB(0.55 + 0.45 * n, 0.52 + 0.4 * n, 0.45 + 0.1 * n);
+        sty.night = n; applyLight();
+      },
     };
     board.setLayout({ w: board.width, h: board.height, ox: 0, oy: 0 });
     board.setNight(0);
