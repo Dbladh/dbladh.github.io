@@ -6,10 +6,10 @@ import * as THREE from 'three';
 
 // Where each billboard hill sits. `scale` shrinks the sign (the About sign is a small roadside one).
 export const STOPS = {
-  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8' },
-  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff' },
-  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a' },
-  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c' },
+  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8', paper: '#fdd0dc' },
+  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff', paper: '#d9e8f2' },
+  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a', paper: '#fcf6e8' },
+  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c', paper: '#dcf0d6' },
 };
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
@@ -414,6 +414,19 @@ function buildHouse(rand) {
  * @param {{maxLights?: number, skyScene?: THREE.Scene}} [opts] maxLights caps real point lights
  *   (for weaker GPUs); skyScene is where clouds go (behind the title)
  */
+// The sign face while its content is open: the section's colour with the accent stripe.
+// (The readable text itself is real HTML laid exactly over the face by main.js.)
+function drawOpenBoard(paper, accent) {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 36;
+  const g = c.getContext('2d');
+  g.fillStyle = paper; g.fillRect(0, 0, 64, 36);
+  g.fillStyle = accent; g.fillRect(0, 0, 64, 2.5);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function buildWorld(scene, sections, opts = {}) {
   const maxLights = opts.maxLights ?? 14;
   const skyScene = opts.skyScene ?? scene; // clouds live on the layer behind the title text
@@ -756,9 +769,11 @@ export function buildWorld(scene, sections, opts = {}) {
     const cy = BOARD_BOTTOM + BOARD_H / 2;
     const frame = box(BOARD_W + 0.8, BOARD_H + 0.8, 0.5, frameMat, 0, cy, 0);
     frame.castShadow = true;
+    const teaserTex = drawBoard(sec.title, sec.teaser, s.accent);
+    const openTex = drawOpenBoard(s.paper, s.accent);
     const face = new THREE.Mesh(
       new THREE.PlaneGeometry(BOARD_W, BOARD_H),
-      new THREE.MeshBasicMaterial({ map: drawBoard(sec.title, sec.teaser, s.accent) }),
+      new THREE.MeshBasicMaterial({ map: teaserTex }),
     );
     face.position.set(0, cy, 0.27);
     face.userData.stopId = id;
@@ -774,6 +789,9 @@ export function buildWorld(scene, sections, opts = {}) {
     g.updateMatrixWorld(true);
     boards.push({
       id, face, scale: s.scale,
+      width: BOARD_W * s.scale, height: BOARD_H * s.scale,
+      /** Swap the face between the teaser and the plain "content is open" surface. */
+      setOpen(on) { face.material.map = on ? openTex : teaserTex; },
       center: face.getWorldPosition(new THREE.Vector3()),
       normal: new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta)),
     });

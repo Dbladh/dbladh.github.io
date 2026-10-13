@@ -67,12 +67,19 @@ function start() {
   // ---- Camera stops ----
   const HOME = { pos: new THREE.Vector3(0, 7, 22), look: new THREE.Vector3(0, 17, -40) };
   const stops = { home: HOME };
-  for (const b of world.boards) {
-    const dist = 13 * b.scale;
-    stops[b.id] = {
-      pos: b.center.clone().addScaledVector(b.normal, dist).add(new THREE.Vector3(0, 0.6 * b.scale, 0)),
-      look: b.center.clone(),
-    };
+  const tmpCam = new THREE.PerspectiveCamera();
+
+  /** Park each stop's camera square-on, close enough that the sign fills the screen. */
+  function layoutStops() {
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    for (const b of world.boards) {
+      const distV = (b.height / 2) / (tanHalf * 0.8);                  // sign takes ~80% of the height
+      const distH = (b.width / 2) / (tanHalf * camera.aspect * 0.95);  // or ~95% of the width
+      stops[b.id] = {
+        pos: b.center.clone().addScaledVector(b.normal, Math.max(distV, distH)),
+        look: b.center.clone(),
+      };
+    }
   }
 
   const cur = { pos: HOME.pos.clone(), look: HOME.look.clone() };
@@ -83,9 +90,42 @@ function start() {
 
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
+  /** Lay a section's text exactly over the sign face (found by projecting its corners). */
+  function placeOnBoard(id) {
+    const b = world.boards.find((x) => x.id === id), st = stops[id], el = sections[id].el;
+    if (!b || !st) return;
+    tmpCam.fov = camera.fov; tmpCam.aspect = camera.aspect; tmpCam.near = camera.near; tmpCam.far = camera.far;
+    tmpCam.position.copy(st.pos); tmpCam.lookAt(st.look);
+    tmpCam.updateProjectionMatrix(); tmpCam.updateMatrixWorld(true);
+    const right = new THREE.Vector3(b.normal.z, 0, -b.normal.x);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const v = b.center.clone().addScaledVector(right, sx * b.width / 2);
+      v.y += sy * b.height / 2;
+      v.project(tmpCam);
+      const px = (v.x * 0.5 + 0.5) * window.innerWidth, py = (-v.y * 0.5 + 0.5) * window.innerHeight;
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    const w = x1 - x0;
+    el.style.left = x0 + 'px'; el.style.top = y0 + 'px';
+    el.style.width = w + 'px'; el.style.height = (y1 - y0) + 'px';
+    el.style.fontSize = Math.max(15, w / 46) + 'px';
+  }
+
   function openPanel(id) {
     Object.entries(sections).forEach(([k, s]) => s.el.classList.toggle('is-open', k === id));
-    if (sections[id]) sections[id].el.querySelector('h2')?.focus({ preventScroll: true });
+    world.boards.forEach((b) => b.setOpen(false));
+    const sec = sections[id];
+    if (!sec) { body.classList.remove('board-fill'); return; }
+    sec.el.removeAttribute('style');
+    // Wide screens: the content sits right on the zoomed-in sign. Portrait phones keep a full-screen sheet.
+    const onBoard = camera.aspect >= 1.15;
+    body.classList.toggle('board-fill', onBoard);
+    if (onBoard) {
+      world.boards.find((b) => b.id === id)?.setOpen(true);
+      placeOnBoard(id);
+    }
+    sec.el.querySelector('h2')?.focus({ preventScroll: true });
   }
 
   function goTo(id, { instant = false, silent = false } = {}) {
@@ -97,6 +137,8 @@ function start() {
       else a.removeAttribute('aria-current');
     });
     Object.values(sections).forEach((s) => s.el.classList.remove('is-open'));
+    body.classList.remove('board-fill');
+    world.boards.forEach((b) => b.setOpen(false));
 
     const target = stops[id];
     const finish = () => { if (active === id) openPanel(id); };
@@ -119,6 +161,7 @@ function start() {
     simpleBtn.textContent = on ? 'Back to the landscape' : 'Simple view';
     store.set('simple', on ? '1' : '0');
     Object.values(sections).forEach((s) => s.el.classList.remove('is-open'));
+    body.classList.remove('board-fill');
     if (!on) { onResize(); goTo(active, { instant: true, silent: true }); }
   }
 
@@ -133,6 +176,11 @@ function start() {
     camera.fov = w / h < 0.8 ? 70 : 55;
     camera.updateProjectionMatrix();
     dof?.resize();
+    layoutStops();
+    if (active !== 'home' && !tween && !simple) { // keep a zoomed-in sign filling the screen
+      cur.pos.copy(stops[active].pos); cur.look.copy(stops[active].look);
+      if (sections[active]?.el.classList.contains('is-open')) openPanel(active);
+    }
   }
   window.addEventListener('resize', onResize);
 

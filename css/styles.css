@@ -181,6 +181,18 @@ body.scene-mode .stop.is-open {
   font-size: clamp(1.05rem, 1.6vw, 1.3rem);
 }
 body.scene-mode .stop.is-open h2 { font-size: clamp(2.2rem, 6.5vw, 5rem); }
+
+/* Wide screens: no modal. The text is laid directly over the zoomed-in sign (JS sets
+   left/top/width/height/font-size from the sign's projected corners; the 3D face supplies the colour). */
+body.scene-mode.board-fill .stop.is-open {
+  inset: auto; border: 0; border-radius: 0; box-shadow: none; animation: none;
+  background: transparent; padding: 3.4% 4.2% 3%;
+  scrollbar-width: thin;
+}
+body.scene-mode.board-fill .stop.is-open h2 { font-size: 2.3em; }
+body.scene-mode.board-fill .stop.is-open h3 { font-size: 1.05em; }
+body.scene-mode.board-fill .stop.is-open .lede { font-size: 1.1em; }
+body.scene-mode.board-fill .back { font-size: 0.7em; }
 body.scene-mode .back {
   display: inline-block; margin-bottom: 12px; color: var(--ink);
   font-family: var(--mono); font-weight: 700; font-size: 0.85rem; text-transform: uppercase;
