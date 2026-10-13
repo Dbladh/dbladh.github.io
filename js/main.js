@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261013010859';
-import { createSky } from './sky.js?v=20261013010859';
-import { createDOF } from './dof.js?v=20261013010859';
+import { buildWorld } from './world.js?v=20261013012438';
+import { createSky } from './sky.js?v=20261013012438';
+import { createDOF } from './dof.js?v=20261013012438';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -302,6 +302,31 @@ function start() {
   document.body.appendChild(probe);
   const VW = () => probe.offsetWidth || window.innerWidth;
   const VH = () => probe.offsetHeight || window.innerHeight;
+  // ?debug=1 shows a small readout of the viewport numbers (for diagnosing mobile browser toolbars).
+  if (new URLSearchParams(location.search).has('debug')) {
+    const mk = (u) => { const d = document.createElement('div'); d.style.cssText = `position:fixed;left:0;top:0;width:1px;height:100${u};visibility:hidden;pointer-events:none`; document.body.appendChild(d); return d; };
+    const probes = { svh: mk('svh'), dvh: mk('dvh'), lvh: mk('lvh'), vh: mk('vh') };
+    const out = document.createElement('pre');
+    out.style.cssText = 'position:fixed;left:6px;top:150px;z-index:9999;margin:0;padding:8px;background:rgba(0,0,0,.78);color:#7CFC9A;font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;pointer-events:none;white-space:pre-wrap;max-width:92vw';
+    document.body.appendChild(out);
+    const css = [...document.styleSheets].map((x) => (x.href || '').split('/').pop()).filter(Boolean).join(',');
+    const tick = () => {
+      const cv = canvas.getBoundingClientRect(), sk = skyCanvas.getBoundingClientRect(), nv = nav.getBoundingClientRect();
+      const vv = window.visualViewport;
+      out.textContent = [
+        `inner ${innerWidth}x${innerHeight}  screen ${screen.width}x${screen.height}  dpr ${devicePixelRatio}`,
+        `visualViewport ${vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' top ' + Math.round(vv.offsetTop) : 'n/a'}`,
+        `svh ${probes.svh.offsetHeight}  dvh ${probes.dvh.offsetHeight}  lvh ${probes.lvh.offsetHeight}  vh ${probes.vh.offsetHeight}`,
+        `probe(VH) ${VH()}  buffer ${canvas.width}x${canvas.height}`,
+        `scene css ${Math.round(cv.top)}..${Math.round(cv.bottom)}  sky ${Math.round(sk.top)}..${Math.round(sk.bottom)}`,
+        `nav ${Math.round(nv.top)}..${Math.round(nv.bottom)}`,
+        `html ${document.documentElement.clientHeight}  body ${document.body.clientHeight}  scrollY ${Math.round(scrollY)}`,
+        `css ${css}`,
+        `ua ${navigator.userAgent.replace(/^Mozilla\/5.0 /, '').slice(0, 70)}`,
+      ].join('\n');
+    };
+    setInterval(tick, 500); tick();
+  }
   const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
   const quality = { scale: 1 };                     // the watchdog lowers this before it ever drops depth of field
   function pixelRatioFor(w, h) {
