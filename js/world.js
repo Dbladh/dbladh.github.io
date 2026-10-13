@@ -29,6 +29,7 @@ const FLANKS = [
 ];
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
+const SIGN_BIG = 1.4; // billboard size multiplier on wide screens (1.0 on portrait phones)
 const SIGN_GREY = 0xc8c6bd; // frame + posts: the billboard's steel/concrete grey
 
 // ---------------------------------------------------------------- helpers
@@ -136,26 +137,41 @@ function wrapText(ctx, text, x, y, maxW, lineH) {
   return y;
 }
 
-// The sign face, drawn on a canvas: cream card, chunky title, mono call-to-action.
+// The sign face while closed: just the section title, set as large as it will go to fill the board.
+const FACE_FONT = '"Outfit", "Helvetica Neue", Arial, sans-serif';
+function paintBoard(canvas, title, accent) {
+  const W = canvas.width, H = canvas.height, g = canvas.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  g.fillStyle = accent; g.fillRect(0, 0, W, 40);
+  const padX = 50, areaY = 40 + 22, areaH = H - areaY - 26, maxW = W - padX * 2;
+  const wrap = (size) => {                                  // greedy word wrap at this font size
+    g.font = `800 ${size}px ${FACE_FONT}`;
+    const lines = []; let line = '';
+    for (const w of title.split(' ')) {
+      if (g.measureText(w).width > maxW) return null;       // a single word too wide: this size doesn't fit
+      const t = line ? line + ' ' + w : w;
+      if (g.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t;
+    }
+    lines.push(line);
+    return lines;
+  };
+  let size = 250, lines = wrap(size);
+  while (size > 40 && (!lines || lines.length * size * 1.0 > areaH)) { size -= 4; lines = wrap(size); }
+  g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
+  g.font = `800 ${size}px ${FACE_FONT}`;
+  const lh = size * 1.0, total = lines.length * lh, top = areaY + (areaH - total) / 2;
+  lines.forEach((ln, i) => g.fillText(ln, padX, top + i * lh + size * 0.8));
+}
+
 function drawBoard(title, teaser, accent) {
   const c = document.createElement('canvas');
   c.width = 1024; c.height = 576;
-  const g = c.getContext('2d');
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 1024, 576);
-  g.fillStyle = accent; g.fillRect(0, 0, 1024, 40);
-  g.fillStyle = '#111';
-  g.textBaseline = 'top';
-  g.font = '900 92px "Helvetica Neue", Arial, sans-serif';
-  const y = wrapText(g, title, 56, 80, 910, 98);
-  g.font = '500 40px system-ui, Arial, sans-serif';
-  g.fillStyle = '#333';
-  wrapText(g, teaser, 56, y + 14, 910, 52);
-  g.fillStyle = '#111';
-  g.font = '700 38px ui-monospace, Menlo, monospace';
-  g.fillText('CLICK TO EXPLORE  →', 56, 508);
+  paintBoard(c, title, accent);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
+  // Re-set the title once the web font is ready, so it is never drawn in a fallback face.
+  document.fonts?.load(`800 100px ${FACE_FONT}`).then(() => { paintBoard(c, title, accent); tex.needsUpdate = true; }).catch(() => {});
   return tex;
 }
 
@@ -720,7 +736,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const signSpots = Object.values(STOPS).map((s) => {
     const pts = [];
     for (const px of [s.hill.x, (s.hill.x + s.desk.x) / 2, s.desk.x]) for (const pz of [s.desk.z, s.stagger.z]) pts.push([px, pz]);
-    return { pts, r: 9.5 * Math.max(s.scale, 0.8) };
+    return { pts, r: 9.5 * Math.max(s.scale * 1.25, 0.8) };
   });
   const nearSign = (x, z, pad = 0) => signSpots.some((sp) => sp.pts.some(([px, pz]) => Math.hypot(x - px, z - pz) < sp.r + pad));
   const nearPond = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r * 1.3 + pad;
@@ -1577,16 +1593,17 @@ export function buildWorld(scene, sections, opts = {}) {
       lipMat.emissive.setRGB(0.26 * sty.night, 0.18 * sty.night, 0.07 * sty.night); // rim catches the glow
     };
 
+    let sc = s.scale;                 // current scale of this sign (bigger on large screens, see placeBoards)
     const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
     const board = {
       id, face, scale: s.scale, layout: null,
-      width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // original size (world units)
+      width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // default size at the current scale (world units)
       /**
        * Resize and shift the sign face. `w`/`h` are world units; `ox`/`oy` move it within the
        * sign's plane. Rim, lip and fittings keep a constant thickness and follow the face.
        */
       setLayout(L) {
-        const lw = L.w / s.scale, lh = L.h / s.scale, x = L.ox / s.scale, y = cy + L.oy / s.scale;
+        const lw = L.w / sc, lh = L.h / sc, x = L.ox / sc, y = cy + L.oy / sc;
         face.scale.set(lw, lh, 1);
         face.position.set(x, y, 0.31);
         const top = y + lh / 2, bot = y - lh / 2;
@@ -1634,8 +1651,8 @@ export function buildWorld(scene, sections, opts = {}) {
         wash.scale.set(lw, lh, 1);
         wash.position.set(x, y, 0.325);
         const barH = L.bar ?? 0.0694 * L.h;     // default = the teaser's stripe proportion
-        bar.scale.set(lw, barH / s.scale, 1);
-        bar.position.set(x, y + lh / 2 - barH / s.scale / 2, 0.315);
+        bar.scale.set(lw, barH / sc, 1);
+        bar.position.set(x, y + lh / 2 - barH / sc / 2, 0.315);
         board.layout = { ...L, bar: barH };
       },
       /** Swap the face between the teaser and the plain "content is open" surface.
@@ -1686,14 +1703,19 @@ export function buildWorld(scene, sections, opts = {}) {
      */
     const POST_TOP = BOARD_BOTTOM + 0.61;
     const tmp = new THREE.Vector3();
-    board.place = (x, z, lift = 0) => {
+    board.place = (x, z, lift = 0, mult = 1) => {
+      const wasDefault = !board.layout || Math.abs(board.layout.w - board.width) < 1e-3;  // not stretched open
+      sc = s.scale * mult;
+      g.scale.setScalar(sc);
+      board.scale = sc; board.width = BOARD_W * sc; board.height = BOARD_H * sc;
+      if (wasDefault && board.layout) board.setLayout({ w: board.width, h: board.height, ox: 0, oy: 0 });
       g.position.set(x, heightAt(x, z) + lift, z);
       const theta = Math.atan2(startCam.x - x, startCam.z - z) + (s.yaw || 0); // turned a little off-square
       g.rotation.y = theta;
       g.updateMatrixWorld(true);
       postXs.forEach((px, i) => {
         tmp.set(px, 0, -0.55).applyMatrix4(g.matrixWorld);
-        const ground = (heightAt(tmp.x, tmp.z) - g.position.y) / s.scale;   // local height of the ground here
+        const ground = (heightAt(tmp.x, tmp.z) - g.position.y) / sc;   // local height of the ground here
         const bottom = Math.min(ground - 0.6, -1.0);                          // sink the post into the hill
         posts[i].scale.y = POST_TOP - bottom;
         posts[i].position.y = (POST_TOP + bottom) / 2;
@@ -1729,24 +1751,26 @@ export function buildWorld(scene, sections, opts = {}) {
     placeBoards(aspect, fov, cam) {
       const tanHalf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
       const t = smooth(1.1, 0.65, aspect);                                   // 0 on wide screens, 1 in portrait
+      const mult = lerp(SIGN_BIG, 1, t);                                     // signs are larger on big screens, easier to read from afar
       for (const b of boards) {
         const s = STOPS[b.id];
+        const sc = s.scale * mult;
         const z = lerp(s.desk.z, s.stagger.z, t);
         const hw = tanHalf * Math.max(1, cam.z - z) * aspect;               // half the visible width at its depth
-        const fit = hw - (BOARD_W / 2) * s.scale - 2.2;                     // leave room for the frame and parallax
+        const fit = hw - (BOARD_W / 2) * sc - 2.2;                     // leave room for the frame and parallax
         const xMag = Math.max(Math.abs(s.hill.x), Math.min(Math.abs(s.desk.x), fit));
         const x = (s.desk.x < 0 ? -1 : 1) * xMag;
         // lift so the face's lower edge clears the terrain between the camera and the sign
         // (checked for the bottom-left, bottom-centre and bottom-right points of the face)
         const theta = Math.atan2(startCam.x - x, startCam.z - z) + (s.yaw || 0);
         const rx = Math.cos(theta), rz = -Math.sin(theta);                    // the sign's local +x in world
-        const half = (BOARD_W / 2) * s.scale;
+        const half = (BOARD_W / 2) * sc;
         const ground = heightAt(x, z);
-        const bottomAt0 = ground + BOARD_BOTTOM * s.scale;                  // world y of the face bottom with no lift
+        const bottomAt0 = ground + BOARD_BOTTOM * sc;                  // world y of the face bottom with no lift
         let lift = 0;
         for (const off of [-1, 0, 1]) {
           const tx = x + rx * half * off, tz = z + rz * half * off;
-          const tBottom = heightAt(x, z) + BOARD_BOTTOM * s.scale;
+          const tBottom = heightAt(x, z) + BOARD_BOTTOM * sc;
           for (let k = 1; k <= 60; k++) {
             const u = k / 61;                                                // fraction of the way from camera to target
             const px = lerp(cam.x, tx, u), pz = lerp(cam.z, tz, u);
@@ -1757,7 +1781,7 @@ export function buildWorld(scene, sections, opts = {}) {
         }
         void bottomAt0;
         // In portrait some signs stand on taller stilts so neighbours that share screen width don't overlap.
-        b.place(x, z, Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t);
+        b.place(x, z, Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t, mult);
       }
     },
     /** Every sign material, so depth of field can render them only in its sharp pass. */
