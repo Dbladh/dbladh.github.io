@@ -46,16 +46,19 @@ export function createSky(scene, skyScene, renderer) {
   const sunLight = new THREE.DirectionalLight(0xffffff, 1);
   const moonLight = new THREE.DirectionalLight(0x9fb4ff, 0);
   scene.add(hemi, sunLight, sunLight.target, moonLight, moonLight.target);
+  // Lights must be on layer 1 as well: the sharp billboard pass renders only layer 1, and lights
+  // that are not visible to the camera's layers would leave the (lit) signs black.
+  [hemi, sunLight, moonLight].forEach((l) => l.layers.enable(1));
 
   // The sun casts soft shadows over the area in front of the camera.
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(2048, 2048);
   const sc = sunLight.shadow.camera;
-  sc.left = -80; sc.right = 80; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400;
+  sc.left = -100; sc.right = 100; sc.top = 100; sc.bottom = -100; sc.near = 1; sc.far = 420;
   sunLight.shadow.bias = -0.0004;
   sunLight.shadow.normalBias = 0.06;
   sunLight.shadow.radius = 3;
-  sunLight.target.position.set(0, 0, -25);
+  sunLight.target.position.set(0, 0, -38);
 
   const sunMesh = new THREE.Mesh(
     new THREE.SphereGeometry(5, 24, 16),

@@ -146,15 +146,20 @@ export function createDOF(renderer) {
     },
 
     /** Render `scene` with `focus` (world units from the camera) in sharp focus. */
-    render(scene, camera, focus) {
+    render(scene, camera, focus, ghosts = []) {
       material.uniforms.cameraNear.value = camera.near;
       material.uniforms.cameraFar.value = camera.far;
       material.uniforms.focus.value = Math.max(focus, 1);
       // Layer 0 = the world (blurred by depth of field); layer 1 = billboards (kept sharp).
       camera.layers.set(0);
+      // Signs live on both layers so they cast shadows, but must not be drawn (or write depth) in the
+      // blurred pass: they are drawn once, sharp, below.
+      const saved = ghosts.map((m) => [m.colorWrite, m.depthWrite]);
+      ghosts.forEach((m) => { m.colorWrite = false; m.depthWrite = false; });
       renderer.setRenderTarget(target);
       renderer.clear();
       renderer.render(scene, camera);
+      ghosts.forEach((m, i) => { m.colorWrite = saved[i][0]; m.depthWrite = saved[i][1]; });
       renderer.setRenderTarget(null);
       renderer.clear();
       renderer.render(quadScene, quadCam);

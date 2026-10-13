@@ -156,7 +156,7 @@ function start() {
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
-    const frame = (0.4 * b.scale) / upp + 4;                                        // keep the frame on screen
+    const frame = (0.7 * b.scale) / upp + 4;                                        // keep the frame on screen
     const MAX = 4.5;                                                                // cap extreme stretches
     const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
     const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);
@@ -413,7 +413,7 @@ function start() {
       const want = active === 'home' ? 54 : camera.position.distanceTo(cur.look);
       focus += (want - focus) * Math.min(1, dt * 4);
       world.setView({ ...dof.params, focus });
-      dof.render(scene, camera, focus);
+      dof.render(scene, camera, focus, world.signMats);
     } else {
       world.setView({ height: canvas.height, focus, aperture: 0, maxBlur: 0 });
       renderer.render(scene, camera);

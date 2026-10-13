@@ -6,14 +6,14 @@ import * as THREE from 'three';
 
 // Where each billboard hill sits. `scale` shrinks the sign (the About sign is a small roadside one).
 export const STOPS = {
-  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8', paper: '#ffffff' },
-  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff', paper: '#ffffff' },
-  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a', paper: '#ffffff' },
-  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c', paper: '#ffffff' },
+  creativity:  { x: -34, z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ff9db8', paper: '#ffffff', yaw: 0.28 },
+  ai:          { x: 0,   z: -64, scale: 1,    hillR: 16, hillH: 9,   accent: '#8ec5ff', paper: '#ffffff', yaw: -0.18 },
+  engineering: { x: 34,  z: -46, scale: 1,    hillR: 15, hillH: 7,   accent: '#ffd36a', paper: '#ffffff', yaw: -0.30 },
+  about:       { x: -10, z: -14, scale: 0.45, hillR: 7,  hillH: 2.2, accent: '#9fdc8c', paper: '#ffffff', yaw: 0.22 },
 };
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
-const SIGN_GREY = 0x9a9890; // frame + posts: the billboard's steel/concrete grey
+const SIGN_GREY = 0xc8c6bd; // frame + posts: the billboard's steel/concrete grey
 
 // ---------------------------------------------------------------- helpers
 
@@ -1213,60 +1213,138 @@ export function buildWorld(scene, sections, opts = {}) {
   });
 
   // ---- Billboards ----
+  // A real sign structure: a deep rim with a light inner lip, a backing box and rear beam, steel posts
+  // with ground shadows, a front catwalk with railing and a ladder, and lamps on arms above.
+  // Frame parts are *lit* (darker underneath, lit from the sun) while the face stays unlit so text is crisp.
   const boardGroup = new THREE.Group();
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
-  const frameMat = mat('#f2efe6');
-  const postMat = new THREE.MeshBasicMaterial({ color: SIGN_GREY }); // same grey as the frame, so they read as one sign
+  const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
+
+  /** Unit box / cylinder with a vertical vertex-colour ramp: darker underneath, lighter on top. */
+  const rampBox = (() => {
+    const g = new THREE.BoxGeometry(1, 1, 1), p = g.attributes.position, c = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const k = 0.58 + 0.42 * (p.getY(i) + 0.5); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    return g;
+  })();
+  const rampPost = (() => {
+    const g = new THREE.CylinderGeometry(0.4, 0.5, 1, 10), p = g.attributes.position, c = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const k = 0.55 + 0.45 * (p.getY(i) + 0.5); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    return g;
+  })();
 
   for (const [id, s] of Object.entries(STOPS)) {
     const sec = sections[id];
     if (!sec) continue;
     const g = new THREE.Group();
     g.position.set(s.x, heightAt(s.x, s.z), s.z);
-    const theta = Math.atan2(startCam.x - s.x, startCam.z - s.z);
+    const theta = Math.atan2(startCam.x - s.x, startCam.z - s.z) + (s.yaw || 0); // turned a little off-square
     g.rotation.y = theta;
     g.scale.setScalar(s.scale);
 
     const cy = BOARD_BOTTOM + BOARD_H / 2;
-    const T = 0.4;                      // frame thickness: constant, however far the sign stretches
-    const fMat = new THREE.MeshBasicMaterial({ color: SIGN_GREY }); // unlit like the face, own material per sign
-    const parts = [0, 1, 2, 3, 4].map(() => {   // top, bottom, left, right, backing
-      const m = new THREE.Mesh(UNIT_BOX, fMat);
-      m.castShadow = true;
-      g.add(m);
+    const T = 0.5, DEPTH = 0.9, LIP = 0.16;
+    const metal = new THREE.MeshLambertMaterial({ color: SIGN_GREY, vertexColors: true });
+    const lipMat = new THREE.MeshLambertMaterial({ color: 0xe4e1d8 });
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0x8c8672 });
+    const faceMat = new THREE.MeshBasicMaterial({ map: null });
+    const barMat = new THREE.MeshBasicMaterial({ color: s.accent });
+    const blobMat = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x10190a, transparent: true, opacity: 0.5, depthWrite: false });
+    const mine = [metal, lipMat, lampMat, faceMat, barMat, blobMat];
+    signMats.push(...mine);
+
+    const solids = [];                 // { m, order } meshes whose draw order is fixed while open
+    const mk = (geo, material, order, shadow = true) => {
+      const m = new THREE.Mesh(geo, material);
+      m.castShadow = shadow; m.receiveShadow = shadow;
+      g.add(m); solids.push({ m, order });
+      return m;
+    };
+    const rim = [0, 1, 2, 3].map(() => mk(rampBox, metal, 9));     // top, bottom, left, right
+    const back = mk(rampBox, metal, 9);
+    const lip = [0, 1, 2, 3].map(() => mk(rampBox, lipMat, 13));
+    const catwalk = mk(rampBox, metal, 13);
+    const railTop = mk(rampBox, metal, 13), railMid = mk(rampBox, metal, 13);
+    const railPosts = Array.from({ length: 9 }, () => mk(rampBox, metal, 13));
+    const ladderRails = [mk(rampBox, metal, 13), mk(rampBox, metal, 13)];
+    const rungs = Array.from({ length: 9 }, () => mk(rampBox, metal, 13));
+    const beam = mk(rampBox, metal, 9);                            // rear cross-beam behind the face
+    const stems = Array.from({ length: 4 }, () => mk(rampBox, metal, 13));
+    const arms = Array.from({ length: 4 }, () => mk(rampBox, metal, 13));
+    const hoods = Array.from({ length: 4 }, () => mk(rampBox, metal, 13));
+    const bulbs = Array.from({ length: 4 }, () => mk(rampBox, lampMat, 13, false));
+    const walkway = [catwalk, railTop, railMid, ...railPosts, ...ladderRails, ...rungs];
+    const postXs = [-BOARD_W / 2 + 2.2, BOARD_W / 2 - 2.2];
+    const POST_H = BOARD_BOTTOM + 3;
+    const posts = postXs.map((px) => {
+      const m = new THREE.Mesh(rampPost, metal);
+      m.scale.set(1, POST_H, 1);
+      m.position.set(px, BOARD_BOTTOM - POST_H / 2 + 0.61, -0.55);
+      m.castShadow = m.receiveShadow = true;
+      g.add(m); solids.push({ m, order: 9 });
       return m;
     });
+
     const teaserTex = drawBoard(sec.title, sec.teaser, s.accent);
     const openTex = drawOpenBoard(s.paper, s.accent);
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: teaserTex }));
+    faceMat.map = teaserTex;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceMat);
     face.userData.stopId = id;
     g.add(face);
     // The coloured bar across the top while open: its own strip, so its height can stay
     // readable on screen however the sign is stretched. Text scrolls underneath it.
-    const bar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: s.accent }));
+    const bar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), barMat);
     bar.visible = false;
     g.add(bar);
 
+    const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
     const board = {
       id, face, scale: s.scale, layout: null,
       width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // original size (world units)
       /**
        * Resize and shift the sign face. `w`/`h` are world units; `ox`/`oy` move it within the
-       * sign's plane. The frame strips keep a constant thickness.
+       * sign's plane. Rim, lip and fittings keep a constant thickness and follow the face.
        */
       setLayout(L) {
         const lw = L.w / s.scale, lh = L.h / s.scale, x = L.ox / s.scale, y = cy + L.oy / s.scale;
         face.scale.set(lw, lh, 1);
-        face.position.set(x, y, 0.27);
-        parts[0].scale.set(lw + 2 * T, T, 0.5); parts[0].position.set(x, y + lh / 2 + T / 2, 0);
-        parts[1].scale.set(lw + 2 * T, T, 0.5); parts[1].position.set(x, y - lh / 2 - T / 2, 0);
-        parts[2].scale.set(T, lh, 0.5);         parts[2].position.set(x - lw / 2 - T / 2, y, 0);
-        parts[3].scale.set(T, lh, 0.5);         parts[3].position.set(x + lw / 2 + T / 2, y, 0);
-        parts[4].scale.set(lw, lh, 0.45);       parts[4].position.set(x, y, -0.02);
+        face.position.set(x, y, 0.31);
+        const top = y + lh / 2, bot = y - lh / 2;
+        // rim (deep) and its lighter inner lip
+        set(rim[0], lw + 2 * T, T, DEPTH, x, top + T / 2, 0);
+        set(rim[1], lw + 2 * T, T, DEPTH, x, bot - T / 2, 0);
+        set(rim[2], T, lh, DEPTH, x - lw / 2 - T / 2, y, 0);
+        set(rim[3], T, lh, DEPTH, x + lw / 2 + T / 2, y, 0);
+        set(lip[0], lw + 2 * LIP, LIP, 0.14, x, top + LIP / 2, 0.48);
+        set(lip[1], lw + 2 * LIP, LIP, 0.14, x, bot - LIP / 2, 0.48);
+        set(lip[2], LIP, lh, 0.14, x - lw / 2 - LIP / 2, y, 0.48);
+        set(lip[3], LIP, lh, 0.14, x + lw / 2 + LIP / 2, y, 0.48);
+        set(back, lw, lh, 0.8, x, y, -0.12);
+        set(beam, lw + 2 * T, 0.32, 0.32, x, bot + lh * 0.18, -0.62);          // beam tying the posts together
+        // catwalk under the sign, projecting forward, with railing and a ladder at the right end
+        const cwY = bot - T - 0.1, cwW = lw + 1.2;
+        set(catwalk, cwW, 0.14, 1.15, x, cwY, 0.62);
+        set(railTop, cwW, 0.09, 0.09, x, cwY + 0.98, 1.14);
+        set(railMid, cwW, 0.07, 0.07, x, cwY + 0.52, 1.14);
+        railPosts.forEach((m, i) => set(m, 0.09, 0.98, 0.09, x - cwW / 2 + 0.05 + (i / 8) * (cwW - 0.1), cwY + 0.49, 1.14));
+        const ladH = Math.max(1.2, cwY + 0.2), lx = x + cwW / 2 - 0.55;
+        set(ladderRails[0], 0.08, ladH, 0.08, lx - 0.22, cwY - ladH / 2, 1.05);
+        set(ladderRails[1], 0.08, ladH, 0.08, lx + 0.22, cwY - ladH / 2, 1.05);
+        rungs.forEach((m, i) => set(m, 0.5, 0.06, 0.07, lx, cwY - 0.25 - (i / 8) * (ladH - 0.45), 1.05));
+        // lamps on arms above the sign, shining down onto the face
+        const top2 = top + T;
+        for (let i = 0; i < 4; i++) {
+          const lx2 = x + (i - 1.5) * (lw * 0.26);
+          set(stems[i], 0.1, 0.55, 0.1, lx2, top2 + 0.27, -0.1);
+          set(arms[i], 0.08, 0.08, 1.15, lx2, top2 + 0.55, 0.48);
+          set(hoods[i], 0.55, 0.13, 0.42, lx2, top2 + 0.5, 1.02);
+          set(bulbs[i], 0.3, 0.07, 0.24, lx2, top2 + 0.42, 1.02);
+        }
         const barH = L.bar ?? 0.0694 * L.h;     // default = the teaser's stripe proportion
         bar.scale.set(lw, barH / s.scale, 1);
-        bar.position.set(x, y + lh / 2 - barH / s.scale / 2, 0.275);
+        bar.position.set(x, y + lh / 2 - barH / s.scale / 2, 0.315);
         board.layout = { ...L, bar: barH };
       },
       /** Swap the face between the teaser and the plain "content is open" surface.
@@ -1274,24 +1352,36 @@ export function buildWorld(scene, sections, opts = {}) {
        *  test must stay ON with an always-pass function: with it off, WebGL writes no depth and
        *  the depth-of-field pass would treat the sign as far-away sky and blur it. */
       setOpen(on) {
-        face.material.map = on ? openTex : teaserTex;
-        face.material.depthFunc = fMat.depthFunc = bar.material.depthFunc = on ? THREE.AlwaysDepth : THREE.LessEqualDepth;
+        faceMat.map = on ? openTex : teaserTex;
+        const fn = on ? THREE.AlwaysDepth : THREE.LessEqualDepth;
+        mine.forEach((m) => { m.depthFunc = fn; });
         bar.visible = on;
         bar.renderOrder = on ? 12 : 0;
         face.renderOrder = on ? 11 : 0;
-        parts.forEach((m) => { m.renderOrder = on ? 10 : 0; });
+        solids.forEach(({ m, order }) => { m.renderOrder = on ? order : 0; });
+        // The catwalk, railing and ladder stand in front of the face, so they would cut across the text.
+        walkway.forEach((m) => { m.visible = !on; });
       },
+      /** Lamps glow after dark. */
+      setNight(n) { lampMat.color.setRGB(0.55 + 0.45 * n, 0.52 + 0.4 * n, 0.45 + 0.1 * n); },
     };
     board.setLayout({ w: board.width, h: board.height, ox: 0, oy: 0 });
-    for (const px of [-BOARD_W / 2 + 2.2, BOARD_W / 2 - 2.2]) {
-      const h = BOARD_BOTTOM + 3;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, h, 10), postMat);
-      post.position.set(px, BOARD_BOTTOM - h / 2 + 0.61, -0.2);
-      post.castShadow = true;
-      g.add(post);
-    }
-    g.traverse((o) => o.layers.set(1)); // layer 1: drawn sharp, after (and not blurred by) depth of field
+    board.setNight(0);
+
+    // layer 1 = drawn sharp after depth of field; the signs also stay on layer 0 so they cast shadows
+    g.traverse((o) => o.layers.enable(1));
     boardGroup.add(g);
+    g.updateMatrixWorld(true);
+
+    // soft contact shadow where each post meets the hill
+    for (const px of postXs) {
+      const wp = new THREE.Vector3(px, 0, -0.55).applyMatrix4(g.matrixWorld);
+      const blob = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4).rotateX(-Math.PI / 2), blobMat);
+      blob.position.set(px, (heightAt(wp.x, wp.z) - g.position.y) / s.scale + 0.08, -0.55);
+      blob.renderOrder = 1;
+      blob.layers.set(1);              // layer 1 only: it is a ground decal, not a shadow caster
+      g.add(blob);
+    }
     g.updateMatrixWorld(true);
     board.center = face.getWorldPosition(new THREE.Vector3());
     board.normal = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
@@ -1304,6 +1394,8 @@ export function buildWorld(scene, sections, opts = {}) {
   const glow = glowKit();
   return {
     boards,
+    /** Every sign material, so depth of field can render them only in its sharp pass. */
+    signMats,
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
     update(dt) {
       time += dt;
@@ -1349,6 +1441,7 @@ export function buildWorld(scene, sections, opts = {}) {
       glow.decalMat.opacity = n * 1.0;   // the four panes on the ground
       glow.shaftMat.opacity = n * 0.1;   // soft shaft out of each window
       ffUniforms.uNight.value = n;
+      boards.forEach((b) => b.setNight(n));
     },
     /** Lets the fireflies share the depth-of-field settings, so near ones bloom into bokeh. */
     setView({ height, focus, aperture, maxBlur }) {
