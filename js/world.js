@@ -177,6 +177,23 @@ function shade(geo, lo = 0.7, hi = 1.08) {
 
 const lathe = (pts, seg) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
 
+/** A tiny grass tuft: five thin triangular blades fanned out and leaning, about 0.4 tall. */
+function tuftGeometry() {
+  const pos = [], col = [];
+  const blades = [[0, 0.42, 0.2], [1.3, 0.30, 0.3], [2.5, 0.38, 0.22], [3.7, 0.28, 0.32], [5.0, 0.36, 0.25]]; // yaw, height, lean
+  for (const [yaw, h, lean] of blades) {
+    const c = Math.cos(yaw), sn = Math.sin(yaw), hw = 0.055;
+    const tip = [c * lean * h * 1.2, h, sn * lean * h * 1.2];
+    const l = [-sn * hw, 0, c * hw], r = [sn * hw, 0, -c * hw];
+    for (const [v, k] of [[l, 0.62], [r, 0.62], [tip, 1.1]]) { pos.push(v[0], v[1], v[2]); col.push(k, k, k); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 /**
  * A low-poly pine: stacked, overlapping skirts that droop to a jagged, scalloped hem, narrowing
  * to a point at the top. Unit size: radius up to 1, height from y = -0.5 to 0.5.
@@ -559,7 +576,7 @@ function buildHouse(rand) {
   g.add(attic);
 
   g.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = !o.userData.noShadow; } });
-  return { group: g, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius };
+  return { group: g, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d };
 }
 
 // ---------------------------------------------------------------- the world
@@ -696,7 +713,7 @@ export function buildWorld(scene, sections, opts = {}) {
     hs.group.position.set(st.x, st.y, st.z);
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (rand() - 0.5) * 0.12; // front door faces the path
     scene.add(hs.group);
-    houses.push({ x: st.x, z: st.z, r: hs.radius * sc });
+    houses.push({ x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y });
     windowMats.push(hs.glassMat);
     if (houseLights.length < houseCap) {
       const light = new THREE.PointLight(LIGHT_COLOR, 0, 11, 1.6);
@@ -720,6 +737,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const BARK = new THREE.Color('#8a5a3c'), BIRCH = new THREE.Color('#e8e2d2');
   const free = (x, z, pad = 0) => !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5);
   const D = low ? 0.55 : 1; // detail multiplier: weaker machines get fewer plants
+  const anchors = []; // things grass gathers around: { x, z, r (footprint radius), n (tuft count) }
 
   /** A trunk-and-branches pair: a branch leans out from the trunk into the canopy. */
   function branch(x, y, z, s, lenMul = 1) {
@@ -732,6 +750,7 @@ export function buildWorld(scene, sections, opts = {}) {
 
   function addTree(x, z, s, force) {
     const y = heightAt(x, z);
+    anchors.push({ x, z, r: 0.55 * s, n: 7 });
     const kind = force ?? rand();
     if (kind < 0.4) { // round oak / apple / blossom tree: trunk, root flare, branches, lobes, leaf tufts
       items.trunk.push({ p: [x, y + 0.95 * s, z], s: [0.3 * s, 1.9 * s, 0.3 * s] });
@@ -814,6 +833,7 @@ export function buildWorld(scene, sections, opts = {}) {
 
   function addBush(x, z, s) {
     const y = heightAt(x, z);
+    anchors.push({ x, z, r: 0.75 * s, n: 5 });
     const col = pick(GREENS);
     items.bush.push({ p: [x, y + 0.4 * s, z], s: [s * 1.1, s * 0.8, s * 1.1], c: col });
     if (rand() < 0.5) items.bush.push({ p: [x + 0.5 * s, heightAt(x + 0.5 * s, z) + 0.28 * s, z + 0.2 * s], s: [s * 0.7, s * 0.55, s * 0.7], c: col.clone().offsetHSL(0, 0, -0.04) });
@@ -889,13 +909,6 @@ export function buildWorld(scene, sections, opts = {}) {
       items.rock.push({ p: [rx, heightAt(rx, rz) + s * 0.22, rz], s: [s * 1.2, s * 0.7, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.06, 0.5 + rand() * 0.2) });
     }
   }
-  // Grass: lots of blades, leaning every which way
-  for (let i = 0; i < Math.round(1500 * D); i++) {
-    const x = (rand() - 0.5) * 130, z = -55 + rand() * 90;
-    if (Math.abs(x - pathX(z)) < 2.1 || nearHouse(x, z, 0.6) || nearPond(x, z, -1)) continue;
-    const s = 0.4 + rand() * 0.9;
-    items.grass.push({ p: [x, heightAt(x, z) + 0.25 * s, z], s: [1, s, 1], rz: (rand() - 0.5) * 0.35, c: pick(GREENS).clone().offsetHSL(0, 0, -0.08 + rand() * 0.12) });
-  }
   // Wildflowers: stems with heads of several kinds, in drifts of one colour with a few strays
   const PALETTE = [
     { kind: 'daisy', c: '#ffffff' }, { kind: 'daisy', c: '#fff3b0' }, { kind: 'poppy', c: '#e8402f' },
@@ -954,6 +967,52 @@ export function buildWorld(scene, sections, opts = {}) {
     const x = POND.x + Math.cos(a) * r, z = POND.z + Math.sin(a) * r, s = 0.3 + rand() * 0.6;
     items.rock.push({ p: [x, heightAt(x, z) + s * 0.2, z], s: [s * 1.2, s * 0.65, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.05, 0.5 + rand() * 0.2) });
   }
+  // Grass: small, simple tufts (3 flat blades each). A light scatter over the meadow, and
+  // thick rings gathered at the base of houses, trees, bushes and rocks, like the reference.
+  function tuft(x, z, s = 1) {
+    if (Math.abs(x - pathX(z)) < 1.7 || nearPond(x, z, -1.5)) return;
+    items.grass.push({
+      p: [x, heightAt(x, z) - 0.02, z], s: [s, s * (0.75 + rand() * 0.5), s], ry: rand() * 6.28,
+      c: pick(GREENS).clone().offsetHSL(0, 0, -0.06 + rand() * 0.1),
+    });
+  }
+  for (let i = 0; i < Math.round(420 * D); i++) {
+    const x = (rand() - 0.5) * 120, z = -50 + rand() * 82;
+    if (nearHouse(x, z, 0.6)) continue;
+    tuft(x, z, 0.7 + rand() * 0.4);
+  }
+  for (const hh of houses) {                                 // houses: grass hugging the foot of the walls
+    const c = Math.cos(hh.rot), sn = Math.sin(hh.rot);
+    for (let k = 0; k < Math.round(90 * D); k++) {
+      // a point just outside the main body's rectangle, in the house's own frame
+      const per = rand() * 2 * (hh.w + hh.d);
+      let lx, lz;
+      if (per < hh.w) { lx = per - hh.w / 2; lz = hh.d / 2; }
+      else if (per < hh.w + hh.d) { lx = hh.w / 2; lz = per - hh.w - hh.d / 2; }
+      else if (per < 2 * hh.w + hh.d) { lx = per - hh.w - hh.d - hh.w / 2; lz = -hh.d / 2; }
+      else { lx = -hh.w / 2; lz = per - 2 * hh.w - hh.d - hh.d / 2; }
+      const out = 0.25 + rand() * rand() * 1.1;                // most hug the wall, a few straggle outward
+      const nx = Math.abs(lz) > Math.abs(lx) * 0.6 && Math.abs(lz) >= hh.d / 2 - 1e-6 ? 0 : Math.sign(lx);
+      const nz = nx === 0 ? Math.sign(lz) : 0;
+      lx += nx * out; lz += nz * out;
+      tuft(hh.x + lx * c + lz * sn, hh.z - lx * sn + lz * c, 0.85 + rand() * 0.5);
+    }
+  }
+  for (const an of anchors) {                                // trees and bushes: a tight ring at the roots
+    for (let k = 0; k < Math.round(an.n * D) + 2; k++) {
+      const a = rand() * 6.28, r = an.r * (0.8 + rand() * 1.1);
+      tuft(an.x + Math.cos(a) * r, an.z + Math.sin(a) * r, 0.65 + rand() * 0.45);
+    }
+  }
+  for (const rk of items.rock) {                             // rocks: grass hugging the foot of each stone
+    const size = Math.max(rk.s[0], rk.s[2]);
+    if (size < 0.3) continue;
+    for (let k = 0; k < Math.round(7 * D) + 2; k++) {
+      const a = rand() * 6.28, r = size * (0.8 + rand() * 0.7);
+      tuft(rk.p[0] + Math.cos(a) * r, rk.p[2] + Math.sin(a) * r, 0.6 + rand() * 0.45);
+    }
+  }
+
   // A couple of short wooden fences beside the path
   for (const [zA, zB, side] of [[2, -8, 1], [-20, -30, -1]]) {
     let prev = null;
@@ -1009,7 +1068,7 @@ export function buildWorld(scene, sections, opts = {}) {
   instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), flat(), items.bush);
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.berry, { shadow: false });
   instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
-  instanced(new THREE.ConeGeometry(0.1, 1, 4).translate(0, 0.5, 0), white(), items.grass, { shadow: false });
+  instanced(tuftGeometry(), flat({ side: THREE.DoubleSide }), items.grass, { shadow: false });
   instanced(new THREE.CylinderGeometry(0.014, 0.02, 1, 4), white(), items.stem, { shadow: false });
   instanced(new THREE.SphereGeometry(1, 8, 6), white(), items.head, { shadow: false });
   instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.dot, { shadow: false });
