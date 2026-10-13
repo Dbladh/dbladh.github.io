@@ -284,3 +284,19 @@ body.scene-mode::before {
 @container (min-width: 520px) and (max-width: 700px) {
   .about-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); }
 }
+
+
+/* ---------- AI page: app cards with icon + looping demo video ---------- */
+.stop h4 { margin: 0 0 0.35em; font-size: 1.02em; }
+.app-wrap { container-type: inline-size; margin: 1.2em 0 0.6em; }
+.app-cards { display: grid; gap: 1.2em; grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 520px) { .app-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.app-card { margin: 0; padding: 14px; border-radius: 16px; background: #f6f4ee; border: 2px solid var(--ink); }
+.app-card figcaption { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.app-card figcaption span { display: flex; flex-direction: column; line-height: 1.25; }
+.app-card figcaption small { color: #444; font-size: 0.82em; }
+.app-icon { width: 56px; height: 56px; border-radius: 13px; flex: none; box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+.app-video {
+  display: block; width: 100%; max-width: 250px; height: auto; aspect-ratio: 442 / 960; margin: 0 auto;
+  border-radius: 14px; background: #111; object-fit: cover;
+}

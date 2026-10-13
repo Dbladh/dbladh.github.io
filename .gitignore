@@ -1,3 +1,7 @@
 .DS_Store
 # the 23 MB original; the site uses the web-sized images/about_me_image.jpg
 images/about_me_image.png
+# raw sources for the AI page (the site uses the web-sized files next to them)
+images/ai/Skwigl App.mp4
+images/ai/ios_APP_Tilt Drifter.MP4
+images/ai/*.icon/

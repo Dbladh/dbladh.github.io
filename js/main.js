@@ -30,6 +30,20 @@ document.querySelectorAll('.stop').forEach((el) => {
   sections[el.dataset.stop] = { el, title: el.dataset.title, teaser: el.dataset.teaser };
 });
 
+// Demo videos play only while they are on screen (and never auto-play for reduced motion).
+{
+  const vids = [...document.querySelectorAll('video.app-video')];
+  if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && e.intersectionRatio > 0.5) e.target.play().catch(() => {});
+        else e.target.pause();
+      }
+    }, { threshold: [0, 0.5, 1] });
+    vids.forEach((v) => io.observe(v));
+  }
+}
+
 // Each section is a labelled region (screen readers announce its heading).
 document.querySelectorAll('.stop').forEach((el) => {
   const h2 = el.querySelector('h2');
