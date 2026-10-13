@@ -166,6 +166,13 @@ body.scene-mode .controls {
   border: 2px solid var(--ink); border-radius: var(--radius);
 }
 
+/* With a sign open, the top controls step aside so the sign can use the whole height. */
+body.scene-mode .controls { transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s; }
+body.scene-mode.sign-open .controls {
+  opacity: 0; transform: translateY(-14px); visibility: hidden; pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s 0.25s;
+}
+
 body.scene-mode #content {
   position: fixed; inset: 0; z-index: 15; max-width: none; padding: 0;
   display: grid; place-items: center; pointer-events: none;

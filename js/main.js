@@ -146,9 +146,11 @@ function start() {
   /** Where an open sign ends up: it stretches to fill the space between the controls and the nav. */
   function fitLayout(b) {
     const vw = window.innerWidth, vh = window.innerHeight;
-    const cr = controls.getBoundingClientRect(), nr = nav.getBoundingClientRect();
+    const nr = nav.getBoundingClientRect();
+    // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
+    const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
     const x0 = 12, x1 = vw - 12;
-    const y0 = Math.max(12, cr.bottom + 8), y1 = Math.min(vh - 12, nr.top - 8);
+    const y0 = Math.max(12, topEdge + 8), y1 = Math.min(vh - 12, nr.top - 8);
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
@@ -223,6 +225,7 @@ function start() {
 
     // 1. Close whatever is open.
     if (openId) {
+      body.classList.remove('sign-open'); // controls come back as the sign closes
       const prev = openId, b = boardOf(prev);
       const hadFocus = sections[prev]?.el.contains(document.activeElement);
       await hideText(prev, quick);
@@ -242,6 +245,7 @@ function start() {
     if (id !== 'home') {
       const b = boardOf(id);
       openId = id;
+      body.classList.add('sign-open');   // hides the top controls so the sign gets the full height
       b.setOpen(true);
       await morphBoard(b, fitLayout(b), quick ? 0 : 0.45);
       if (token !== navToken) return;
@@ -258,6 +262,7 @@ function start() {
     simpleBtn.textContent = on ? 'Back to the landscape' : 'Simple view';
     store.set('simple', on ? '1' : '0');
     Object.values(sections).forEach((s) => s.el.classList.remove('is-open', 'is-shown'));
+    body.classList.remove('sign-open');
     if (openId) { const b = boardOf(openId); b.setLayout({ w: b.width, h: b.height, ox: 0, oy: 0 }); b.setOpen(false); openId = null; }
     if (!on) { onResize(); goTo(active, { instant: true, silent: true, record: false }); }
   }
