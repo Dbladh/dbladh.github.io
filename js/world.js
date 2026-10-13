@@ -144,9 +144,12 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
   g.fillStyle = accent; g.fillRect(0, 0, W, 40);
   const padX = 50, areaY = 40 + 22, areaH = H - areaY - 26;
-  // With a photo, the picture takes the right-hand side (a rounded square) and the title keeps the left.
+  // With a photo, the picture takes the left-hand side (a rounded square) and the title sits to its right,
+  // held to two lines (a long title would otherwise wrap onto a third).
   const pic = photo && photo.complete && photo.naturalWidth ? Math.min(areaH, W * 0.33) : 0;
-  const maxW = W - padX * 2 - (pic ? pic + 22 : 0);
+  const textX = padX + (pic ? pic + 30 : 0);
+  const maxW = W - padX - textX;
+  const maxLines = pic ? 2 : 99;
   const wrap = (size) => {                                  // greedy word wrap at this font size
     g.font = `800 ${size}px ${FACE_FONT}`;
     const lines = []; let line = '';
@@ -159,15 +162,15 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
     return lines;
   };
   let size = 250, lines = wrap(size);
-  while (size > 40 && (!lines || lines.length * size * 1.0 > areaH)) { size -= 4; lines = wrap(size); }
+  while (size > 40 && (!lines || lines.length > maxLines || lines.length * size * 1.0 > areaH)) { size -= 4; lines = wrap(size); }
   const fitted = size;                                      // the largest size this title fits at
   if (forceSize && forceSize < fitted) { size = forceSize; lines = wrap(size) || lines; }
   g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
   g.font = `800 ${size}px ${FACE_FONT}`;
   const lh = size * 1.0, total = lines.length * lh, top = areaY + (areaH - total) / 2;
-  lines.forEach((ln, i) => g.fillText(ln, padX, top + i * lh + size * 0.8));
+  lines.forEach((ln, i) => g.fillText(ln, textX, top + i * lh + size * 0.8));
   if (pic) {
-    const x = W - padX - pic, y = areaY + (areaH - pic) / 2, r = 30;
+    const x = padX, y = areaY + (areaH - pic) / 2, r = 30;
     g.save();
     g.beginPath(); g.roundRect(x, y, pic, pic, r); g.clip();
     // "cover" crop, leaning toward the top so the face stays in frame
@@ -1806,7 +1809,10 @@ export function buildWorld(scene, sections, opts = {}) {
   const layoutFaces = () => {
     if (!faces.length) return;
     const fits = faces.map((f) => paintBoard(f.canvas, f.title, f.accent, null, f.photo));
-    const common = Math.min(...fits);
+    // The plain titles share the smallest of their fitted sizes. The photo sign uses that size too unless it
+    // would need a third line, in which case it takes the largest size that keeps its title on two lines.
+    const plain = fits.filter((_, i) => !faces[i].photo);
+    const common = Math.min(...(plain.length ? plain : fits));
     faces.forEach((f) => { paintBoard(f.canvas, f.title, f.accent, common, f.photo); f.tex.needsUpdate = true; });
   };
   layoutFaces();
