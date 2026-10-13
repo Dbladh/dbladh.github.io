@@ -312,7 +312,11 @@ function start() {
     if (!simple) draw(0);
   }
   let dofSized = false, dofTimer = 0;
-  const slow = { t: 0, n: 0, strikes: 0, hold: 0 }; // frame-rate watch (see end of frame())
+  const slow = { t: 0, n: 0, strikes: 0, hold: 0, retryAt: 0, backoff: 30000 }; // frame-rate watch (see end of frame())
+  document.addEventListener('visibilitychange', () => {
+    slow.t = 0; slow.n = 0; slow.strikes = 0; slow.hold = performance.now() + 2500;
+    if (!document.hidden && dof && !dof.enabled) { dof.enabled = true; slow.retryAt = performance.now(); }
+  });
   window.addEventListener('resize', onResize);
 
   // ---- Input ----
@@ -510,11 +514,19 @@ function start() {
     slow.t += dt; slow.n++;
     if (slow.t > 3) {
       const fps = slow.n / slow.t;
-      slow.strikes = fps < 26 ? slow.strikes + 1 : 0;
-      if (slow.strikes >= 2) { // genuinely slow for ~6s in a row
+      slow.strikes = fps < 22 ? slow.strikes + 1 : 0;
+      const now = performance.now();
+      if (slow.strikes >= 3) { // genuinely slow for ~9s in a row
         slow.strikes = 0;
-        if (dof?.enabled) dof.enabled = false;
-        else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); onResize(); }
+        if (dof?.enabled) {
+          dof.enabled = false;                        // drop soft focus first...
+          // ...but only for a while. If this is the second drop shortly after a retry, wait longer (up to 5 min).
+          slow.backoff = now - slow.retryAt < 20000 ? Math.min(slow.backoff * 2, 300000) : 30000;
+          slow.retryAt = now + slow.backoff;
+        } else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); onResize(); }
+      } else if (fps >= 40 && dof && !dof.enabled && now >= slow.retryAt) {
+        dof.enabled = true;                           // the slow patch passed: bring depth of field back
+        slow.retryAt = now;                           // marks the moment of the retry (see the back-off above)
       }
       slow.t = 0; slow.n = 0;
     }
