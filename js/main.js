@@ -216,6 +216,9 @@ function start() {
     const quick = instant || reduceMotion;
     active = id;
     body.dataset.stop = id;
+    // The top controls leave as soon as we start heading to a sign (the zoom), and return when
+    // we head back to the overview. The open sign then gets the full height.
+    body.classList.toggle('sign-open', id !== 'home');
     nav.querySelectorAll('a').forEach((a) => {
       if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -225,7 +228,6 @@ function start() {
 
     // 1. Close whatever is open.
     if (openId) {
-      body.classList.remove('sign-open'); // controls come back as the sign closes
       const prev = openId, b = boardOf(prev);
       const hadFocus = sections[prev]?.el.contains(document.activeElement);
       await hideText(prev, quick);
@@ -245,7 +247,6 @@ function start() {
     if (id !== 'home') {
       const b = boardOf(id);
       openId = id;
-      body.classList.add('sign-open');   // hides the top controls so the sign gets the full height
       b.setOpen(true);
       await morphBoard(b, fitLayout(b), quick ? 0 : 0.45);
       if (token !== navToken) return;
