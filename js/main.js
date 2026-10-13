@@ -150,8 +150,9 @@ function start() {
     const vw = window.innerWidth, vh = window.innerHeight;
     // On short screens the nav steps aside while a sign is open (see CSS), and the sign runs nearly
     // edge to edge; the back link in the sign's bar, Esc and the arrow keys still navigate.
-    const compact = matchMedia('(max-height: 600px)').matches;
-    const m = compact ? 4 : 12;
+    // "Tight" = a short screen or a phone-width one: nav out of the way, sign edge to edge, rim may bleed off.
+    const compact = matchMedia('(max-height: 600px), (max-width: 600px)').matches;
+    const m = compact ? 2 : 12;
     const nr = nav.getBoundingClientRect();
     // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
     const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
@@ -161,7 +162,7 @@ function start() {
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
-    const frame = (compact ? 0.45 : 0.7) * b.scale / upp + (compact ? 0 : 4);                                        // keep the frame on screen
+    const frame = (compact ? 0.1 : 0.7) * b.scale / upp + (compact ? 0 : 4);                                        // keep the frame on screen
     const MAX = 4.5;                                                                // cap extreme stretches
     const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
     const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);

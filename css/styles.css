@@ -237,12 +237,6 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
    same row as the time/Simple-view pill, with the tagline directly underneath, and JS tilts the
    scene up so the billboards get the room. */
 @media (max-height: 600px) {
-  /* With a sign open the bottom nav steps aside too, so the sign can run edge to edge. */
-  body.scene-mode #stopnav { transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s; }
-  body.scene-mode.sign-open #stopnav {
-    opacity: 0; transform: translate(-50%, 16px); visibility: hidden; pointer-events: none;
-    transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s 0.25s;
-  }
   body.scene-mode .hero h1 {
     z-index: 6;                     /* above the landscape: it must stay readable over the hills */
     left: 18px; right: auto; top: 14px; text-align: left;
@@ -251,5 +245,16 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
   body.scene-mode .tagline {
     left: 20px; right: auto; top: 50px; text-align: left; padding: 0;
     font-size: clamp(0.85rem, 1.6vw, 1.05rem);
+  }
+}
+
+
+/* With a sign open on a short or phone-width screen, the bottom nav steps aside too, so the sign can run
+   edge to edge. (Back link in the sign's bar, Esc and the arrow keys still navigate.) */
+@media (max-height: 600px), (max-width: 600px) {
+  body.scene-mode #stopnav { transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s; }
+  body.scene-mode.sign-open #stopnav {
+    opacity: 0; transform: translate(-50%, 16px); visibility: hidden; pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s 0.25s;
   }
 }
