@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Danny Bladh</title>
+  <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+
+  <!-- The 3D scene is decoration: all real content lives in <main> below. -->
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <header class="hero">
+    <h1>Danny Bladh</h1>
+    <p class="tagline" id="tagline"
+       data-phrases="Creative problem solver|AI-curious builder|Culture builder|Always learning">
+      Creative problem solver · AI-curious builder · Culture builder · Always learning
+    </p>
+  </header>
+
+  <nav id="stopnav" aria-label="Sections">
+    <a href="#home">Overview</a>
+    <a href="#creativity">Creativity</a>
+    <a href="#ai">AI</a>
+    <a href="#engineering">Engineering</a>
+    <a href="#about">About</a>
+  </nav>
+
+  <div class="controls" id="controls" hidden>
+    <label class="time">
+      <span id="time-label">Time: 4:00 pm</span>
+      <input id="time" type="range" min="0" max="24" step="0.25" value="16"
+             aria-label="Time of day">
+    </label>
+    <button id="simple-toggle" type="button" aria-pressed="false">Simple view</button>
+  </div>
+
+  <main id="content">
+
+    <section class="stop" id="creativity" data-stop="creativity"
+             data-title="Creativity &amp; problem solving"
+             data-teaser="Finding a different way in: building culture and solving problems sideways.">
+      <a class="back" href="#home">← Back to the landscape</a>
+      <h2 tabindex="-1">Creativity &amp; problem solving</h2>
+      <p class="lede">I look for the angle nobody picked yet, then try it quickly and see what happens.</p>
+
+      <!-- PLACEHOLDER STORIES: replace each with a real experience (work, project or life). -->
+      <article class="story">
+        <h3>Story title: a culture-building moment</h3>
+        <dl>
+          <dt>Situation</dt><dd>Placeholder: what was going on, and what wasn't working.</dd>
+          <dt>What I noticed</dt><dd>Placeholder: the thing others missed or the real problem underneath.</dd>
+          <dt>What I tried</dt><dd>Placeholder: the creative move, and what I did differently.</dd>
+          <dt>What it changed</dt><dd>Placeholder: the outcome, even if it's small or still in progress.</dd>
+        </dl>
+      </article>
+
+      <article class="story">
+        <h3>Story title: a creative fix</h3>
+        <dl>
+          <dt>Situation</dt><dd>Placeholder.</dd>
+          <dt>What I noticed</dt><dd>Placeholder.</dd>
+          <dt>What I tried</dt><dd>Placeholder.</dd>
+          <dt>What it changed</dt><dd>Placeholder.</dd>
+        </dl>
+      </article>
+
+      <article class="story">
+        <h3>Story title: a life experience (games welcome)</h3>
+        <dl>
+          <dt>Situation</dt><dd>Placeholder.</dd>
+          <dt>What I noticed</dt><dd>Placeholder.</dd>
+          <dt>What I tried</dt><dd>Placeholder.</dd>
+          <dt>What it changed</dt><dd>Placeholder.</dd>
+        </dl>
+      </article>
+    </section>
+
+    <section class="stop" id="ai" data-stop="ai"
+             data-title="AI: how I think and how I use it"
+             data-teaser="Prototyping, building apps with OTS, and AI-assisted discovery and design.">
+      <a class="back" href="#home">← Back to the landscape</a>
+      <h2 tabindex="-1">AI: how I think and how I use it</h2>
+      <p class="lede">Placeholder: one or two honest sentences on your sentiment toward AI (where it excites you, where you're cautious).</p>
+
+      <h3>How I use it</h3>
+      <ul>
+        <li><strong>Prototyping.</strong> Placeholder: turning an idea into something clickable fast.</li>
+        <li><strong>Building apps with OTS.</strong> Placeholder: what you've made and what you learned.</li>
+        <li><strong>AI-assisted discovery and design.</strong> Placeholder: how you explore problems and shape solutions with it.</li>
+      </ul>
+
+      <article class="story">
+        <h3>Story title: something I built with AI</h3>
+        <dl>
+          <dt>Situation</dt><dd>Placeholder.</dd>
+          <dt>What I noticed</dt><dd>Placeholder.</dd>
+          <dt>What I tried</dt><dd>Placeholder.</dd>
+          <dt>What it changed</dt><dd>Placeholder.</dd>
+        </dl>
+      </article>
+    </section>
+
+    <section class="stop" id="engineering" data-stop="engineering"
+             data-title="Engineering: where I honestly am"
+             data-teaser="Some HTML and CSS, growing fast with AI tools, and open about what I'm still learning.">
+      <a class="back" href="#home">← Back to the landscape</a>
+      <h2 tabindex="-1">Engineering: where I honestly am</h2>
+      <p class="lede">I'd rather be clear about my level than oversell it.</p>
+
+      <h3>What I can do today</h3>
+      <ul>
+        <li>Write and edit HTML and CSS.</li>
+        <li>Build apps and experiences for personal projects using AI tools.</li>
+      </ul>
+
+      <h3>Where my depth is still limited</h3>
+      <p>My technical knowledge is still growing. I lean on AI tools and on people with deeper expertise, and I'm willing to learn.</p>
+
+      <h3>What I'm learning next</h3>
+      <ul>
+        <li>Placeholder: e.g. JavaScript fundamentals (this site is a practice ground).</li>
+        <li>Placeholder: another skill you're working on.</li>
+      </ul>
+    </section>
+
+    <section class="stop" id="about" data-stop="about"
+             data-title="About &amp; contact"
+             data-teaser="Who I am, and how to reach me.">
+      <a class="back" href="#home">← Back to the landscape</a>
+      <h2 tabindex="-1">About &amp; contact</h2>
+      <p class="lede">Placeholder: a short, human bio. Where you're based, what you care about, what you do for fun.</p>
+      <ul>
+        <li><a href="https://github.com/Dbladh">GitHub: Dbladh</a></li>
+        <li>Placeholder: email or LinkedIn link</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <p id="live" class="sr-only" aria-live="polite"></p>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

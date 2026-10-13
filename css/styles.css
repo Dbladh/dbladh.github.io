@@ -1,0 +1,198 @@
+/* Simple view is the baseline: a plain, readable, color-blocked page.
+   body.scene-mode (added by js/main.js once WebGL is up) turns it into the landscape.
+   Art direction: oversized chunky type, soft pastel color blocks, mono call-to-actions. */
+
+:root {
+  --ink: #111111;
+  --cream: #fcf6e8;
+  --pink: #fdd0dc;
+  --blue: #d9e8f2;
+  --mint: #dcf0d6;
+  --accent: #ff7a3d;
+  --focus: #2457ff;
+  --sky-top: #5aa0f0;   /* updated live by js/sky.js */
+  --sky-bot: #cfe6f7;
+  --radius: 18px;
+  --display: "Helvetica Neue", "Arial Black", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font: 18px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+a { color: var(--ink); }
+a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.skip {
+  position: absolute; left: 8px; top: -60px; z-index: 100;
+  background: var(--ink); color: #fff; padding: 8px 14px; border-radius: 8px;
+}
+.skip:focus { top: 8px; }
+
+#scene { display: none; }
+
+/* ---------- Simple view (default) ---------- */
+
+.hero { padding: 40px 20px 8px; max-width: 900px; margin: 0 auto; }
+.hero h1 {
+  margin: 0; font-family: var(--display); font-weight: 900;
+  font-size: clamp(3rem, 12vw, 6.5rem); line-height: 0.95; letter-spacing: -0.04em;
+}
+.tagline { margin: 12px 0 0; font-size: 1.2rem; }
+
+#stopnav {
+  max-width: 900px; margin: 0 auto; padding: 8px 20px;
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  font-family: var(--mono); font-weight: 700; text-transform: uppercase; font-size: 0.9rem;
+}
+
+.controls {
+  max-width: 900px; margin: 0 auto; padding: 4px 20px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+}
+.controls[hidden] { display: none; }
+.time { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 0.8rem; }
+.time input { width: 150px; accent-color: var(--ink); }
+#time-label { min-width: 12em; }
+
+#simple-toggle {
+  font-family: var(--mono); font-weight: 700; font-size: 0.8rem; text-transform: uppercase;
+  color: var(--ink); background: transparent; border: 2px solid var(--ink);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+#simple-toggle[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+#content { max-width: 900px; margin: 0 auto; padding: 16px 20px 80px; }
+
+.stop {
+  margin: 20px 0; padding: 28px 28px 32px;
+  border-radius: var(--radius); background: var(--cream);
+  border: 2px solid var(--ink);
+}
+#creativity  { background: var(--pink); }
+#ai          { background: var(--blue); }
+#engineering { background: var(--cream); }
+#about       { background: var(--mint); }
+
+.stop h2 {
+  margin: 0 0 10px; font-family: var(--display); font-weight: 900;
+  font-size: clamp(2rem, 6vw, 3.4rem); line-height: 1; letter-spacing: -0.03em;
+}
+.stop h3 { margin: 24px 0 6px; font-size: 1.1rem; }
+.lede { font-size: 1.15rem; }
+.back { display: none; }
+
+.story {
+  margin: 18px 0; padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.6); border-radius: 14px;
+}
+.story h3 { margin-top: 0; }
+.story dt {
+  font-family: var(--mono); font-weight: 700; font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px;
+}
+.story dd { margin: 0 0 4px; }
+
+/* ---------- Landscape mode ---------- */
+
+body.scene-mode {
+  overflow: hidden;
+  min-height: 100vh; /* children are all fixed, so give the sky gradient a height */
+  background: linear-gradient(to bottom, var(--sky-top), var(--sky-bot) 62%);
+}
+
+/* Stacking: sky gradient (body) < big name (.hero h1) < canvas (hills hide letters) < UI. */
+body.scene-mode #scene {
+  display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1;
+}
+
+body.scene-mode .hero { position: static; padding: 0; max-width: none; margin: 0; }
+
+body.scene-mode .hero h1 {
+  position: fixed; z-index: 0; left: 0; right: 0; top: 7vh;
+  text-align: center; color: #fff; margin: 0;
+  font-size: clamp(3rem, 14vw, 13rem);
+  pointer-events: none; transition: opacity 0.4s;
+}
+body.scene-mode .tagline {
+  position: fixed; z-index: 5; left: 0; right: 0; top: calc(7vh + clamp(3rem, 14vw, 13rem) * 0.95 + 8px);
+  text-align: center; margin: 0; padding: 0 16px;
+  font-size: clamp(1.05rem, 2.6vw, 1.7rem); font-weight: 600; color: #fff;
+  text-shadow: 0 2px 14px rgba(20, 20, 60, 0.55);
+  pointer-events: none; transition: opacity 0.35s;
+}
+body.scene-mode .tagline.fade { opacity: 0; }
+body.scene-mode:not([data-stop="home"]) .hero h1,
+body.scene-mode:not([data-stop="home"]) .tagline { opacity: 0; }
+
+body.scene-mode #stopnav {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 20; max-width: calc(100vw - 24px); margin: 0; padding: 8px 10px;
+  background: var(--cream); border: 2px solid var(--ink); border-radius: 999px; gap: 4px;
+  overflow-x: auto; flex-wrap: nowrap;
+}
+body.scene-mode #stopnav a {
+  color: var(--ink); text-decoration: none; white-space: nowrap;
+  padding: 6px 14px; border-radius: 999px;
+}
+body.scene-mode #stopnav a:hover { background: rgba(0, 0, 0, 0.08); }
+body.scene-mode #stopnav a[aria-current="page"] { background: var(--ink); color: #fff; }
+
+body.scene-mode .controls {
+  position: fixed; top: 12px; right: 12px; z-index: 20; max-width: none;
+  margin: 0; padding: 8px 14px; background: var(--cream);
+  border: 2px solid var(--ink); border-radius: var(--radius);
+}
+
+body.scene-mode #content {
+  position: fixed; inset: 0; z-index: 15; max-width: none; padding: 0;
+  display: grid; place-items: center; pointer-events: none;
+}
+body.scene-mode .stop { display: none; margin: 0; }
+body.scene-mode .stop.is-open {
+  display: block; pointer-events: auto;
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 150px);
+  overflow-y: auto; padding: 26px 30px 30px;
+  box-shadow: 8px 8px 0 var(--ink);
+  animation: rise 0.45s ease both;
+}
+body.scene-mode .back {
+  display: inline-block; margin-bottom: 12px; color: var(--ink);
+  font-family: var(--mono); font-weight: 700; font-size: 0.85rem; text-transform: uppercase;
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 600px) {
+  body { font-size: 17px; }
+  body.scene-mode .controls { left: 12px; right: 12px; flex-wrap: nowrap; justify-content: space-between; gap: 8px; padding: 6px 10px; }
+  .time { gap: 6px; font-size: 0.72rem; }
+  .time input { width: 84px; }
+  #time-label { min-width: 0; white-space: nowrap; }
+  #simple-toggle { font-size: 0.7rem; padding: 5px 10px; white-space: nowrap; }
+  body.scene-mode .stop.is-open { max-height: calc(100vh - 190px); padding: 18px; }
+  body.scene-mode .hero h1 { top: 14vh; }
+  body.scene-mode .tagline { top: calc(14vh + clamp(3rem, 14vw, 13rem) * 0.95 + 8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  body.scene-mode .stop.is-open { animation: none; }
+  body.scene-mode .hero h1, body.scene-mode .tagline { transition: none; }
+}
