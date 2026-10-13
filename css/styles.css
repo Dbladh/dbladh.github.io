@@ -145,7 +145,7 @@ body.scene-mode .hero { position: static; padding: 0; max-width: none; margin: 0
 
 /* Title block: the name sits well below the top controls, and the tagline below the name's descender. */
 body.scene-mode {
-  --name-size: clamp(2.4rem, 9.5vw, 8rem);
+  --name-size: clamp(2.4rem, 7.5vw, 5.5rem);   /* capped at 88px so it never gets huge on big monitors */
   --name-top: clamp(84px, 11vh, 130px);        /* the controls pill ends near 64px, so >= 20px of air */
 }
 body.scene-mode .hero h1 {
