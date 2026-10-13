@@ -51,6 +51,9 @@ function fbm(x, z) {
 }
 
 /** The dirt path's x position at depth z (it winds from the camera up toward the AI hill). */
+/** A small pond in the right-hand meadow. */
+export const POND = { x: 17, z: -4, r: 6.5 };
+
 export function pathX(z) {
   // Wide S-curves near the camera that settle toward the middle at the AI hill.
   const amp = 13 * (1 - 0.92 * smooth(-30, -66, z));
@@ -62,6 +65,10 @@ function rawHeight(x, z) {
   const calm = 0.2 + 0.8 * smooth(12, 46, Math.hypot(x, z - 22)); // gentle meadow near the camera
   let h = (fbm(x * 0.016, z * 0.016) - 0.45) * 15 * calm;
   h += (fbm(x * 0.06 + 9, z * 0.06 + 3) - 0.5) * 3 * calm;
+  h += (fbm(x * 0.14 + 60, z * 0.14 + 20) - 0.5) * 1.3 * calm;   // knolls and swales a few metres wide
+  h += (vnoise(x * 0.55 + 7, z * 0.55 + 3) - 0.5) * 0.32 * calm; // fine ripples in the ground
+  const pdx = x - POND.x, pdz = z - POND.z;
+  h -= 2.5 * Math.exp(-(pdx * pdx + pdz * pdz) / (2 * (POND.r * 0.62) ** 2)); // pond basin
   h += Math.max(0, -z - 10) * 0.05;
   h += smooth(-95, -170, z) * (10 + fbm(x * 0.03 + 20, z * 0.03) * 22); // distant ridges
   for (const s of Object.values(STOPS)) {
@@ -302,7 +309,7 @@ const SHUTTERS = ['#4f9a8a', '#7a5a9a', '#c45a4a', '#5a86c4', '#6aa84f'];
  * A gable roof sitting on a wall block. The wall-coloured triangle fills the gable ends;
  * two slabs form the overhanging roof. Built with the ridge along local x, then yawed.
  */
-function addGable(group, { cx, cz, len, span, base, rh, ov, yaw, wallMat, roofMat }) {
+function addGable(group, { cx, cz, len, span, base, rh, ov, ends = [ov, ov], yaw, wallMat, roofMat }) {
   const g = new THREE.Group();
   g.position.set(cx, base, cz);
   g.rotation.y = yaw;
@@ -317,15 +324,16 @@ function addGable(group, { cx, cz, len, span, base, rh, ov, yaw, wallMat, roofMa
   const half = span / 2 + ov;
   const slope = Math.hypot(half, rh);
   const ang = Math.atan2(rh, half);
-  const L = len + 2 * ov;
+  const L = len + ends[0] + ends[1];
+  const shift = (ends[1] - ends[0]) / 2;   // roof may overhang one gable end more than the other (or not at all)
   for (const s of [1, -1]) {
     const slab = new THREE.Mesh(slabGeometry(L, 0.16, slope + 0.05), roofMat);
-    slab.position.set(0, rh / 2 + 0.06, s * half / 2);
+    slab.position.set(shift, rh / 2 + 0.06, s * half / 2);
     slab.rotation.x = s * ang;
     g.add(slab);
   }
   // Ridge cap
-  g.add(box(L, 0.14, 0.26, mat('#b8451f'), 0, rh + 0.1, 0));
+  g.add(box(L, 0.14, 0.26, mat('#b8451f'), shift, rh + 0.1, 0));
   group.add(g);
 }
 
@@ -362,49 +370,75 @@ function buildHouse(rand) {
   const trim = mat('#fff8ea'), shutterMat = mat(pick(SHUTTERS));
   const glassMat = glassMaterial();
   const stone = mat('#b8b0a0');
+  const doorSide = rand() < 0.5 ? -1 : 1;           // which side of the front wall the door is on
+  const hasWing = rand() < 0.6;
+  const wingSide = -doorSide;                       // the wing grows out of the side without the door
+  const top = 0.35 + h;
+  const rh = 1.3 + rand() * 0.8;
+  let radius = Math.max(w / 2, d / 2 + 1.3) + 0.8;  // footprint radius used to keep plants and rocks clear
 
   g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0)); // plinth reaches below ground, so no gaps on slopes
   g.add(box(w, h, d, wallMat, 0, 0.35 + h / 2, 0));
-  const top = 0.35 + h;
-  const rh = 1.3 + rand() * 0.8;
-  addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: 0.35, yaw: 0, wallMat, roofMat });
 
-  // Optional wing: a smaller block with a perpendicular roof (gives the L-shaped look).
-  const doorSide = rand() < 0.5 ? -1 : 1;
-  if (rand() < 0.65) {
-    const side = -doorSide;
-    const w2 = 2.2 + rand() * 1.0, d2 = d * (0.7 + rand() * 0.25), h2 = h * 0.82;
-    const cx = side * (w / 2 + w2 / 2 - 0.2), cz = -0.2 - rand() * 0.4;
+  // Main roof. On the wing side it ends flush with the gable wall, so the wing's roof can meet it cleanly.
+  const OV = 0.35;
+  const ends = hasWing ? (wingSide > 0 ? [OV, 0] : [0, OV]) : [OV, OV];
+  addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat, roofMat });
+
+  // Wing: lower, with its ridge kept just under the main eave and its eaves ending inside the main walls.
+  if (hasWing) {
+    const w2 = 2.2 + rand() * 1.0, d2 = d * (0.7 + rand() * 0.2), h2 = h * 0.82;
+    const overlap = 0.3;                              // wing wall sinks this far into the main wall
+    const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = -0.2 - rand() * 0.3;
+    const rh2 = Math.min(rh * 0.8, Math.max(0.7, h - h2 + 0.35));
     g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz));
     g.add(box(w2, h2, d2, wallMat, cx, 0.35 + h2 / 2, cz));
-    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh * 0.8, ov: 0.3, yaw: Math.PI / 2, wallMat, roofMat });
-    addWindow(g, cx, 1.55, cz + d2 / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.5);
+    // inner eave overhang (0.15) is smaller than the overlap (0.3), so it stays hidden inside the main house
+    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat, roofMat });
+    addWindow(g, cx + wingSide * 0.2, 1.55, cz + d2 / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.5);
+    addWindow(g, cx + wingSide * (w2 / 2 + 0.03), 1.55, cz, wingSide * Math.PI / 2, glassMat, trim, shutterMat, false);
+    radius = Math.max(radius, w / 2 + w2 + 0.8, Math.abs(cz) + d2 / 2 + 1.2);
   }
 
-  // Chimney
-  const chX = (rand() < 0.5 ? -1 : 1) * w * 0.28;
+  // Chimney: on the main ridge, clear of the wing
+  const chX = (hasWing ? -wingSide : (rand() < 0.5 ? -1 : 1)) * w * 0.26;
   g.add(box(0.58, rh + 1.2, 0.58, mat('#b5543a'), chX, top + (rh + 1.2) / 2 - 0.2, -d * 0.12));
   g.add(box(0.74, 0.14, 0.74, mat('#8f3f2b'), chX, top + rh + 0.95, -d * 0.12));
 
-  // Arched door
-  const dx = doorSide * w * 0.2;
+  // Arched door with a matching arched frame
+  const dx = doorSide * w * 0.22;
   const doorMat = mat(pick(['#9a4a2c', '#6a3a22', '#3f7f6f']));
-  g.add(box(0.95, 1.55, 0.1, trim, dx, 0.35 + 0.78, d / 2 + 0.02));
-  g.add(box(0.76, 1.45, 0.12, doorMat, dx, 0.35 + 0.73, d / 2 + 0.03));
+  const doorBase = 0.35, doorH = 1.45, springY = doorBase + doorH;       // where the arch starts
+  g.add(box(0.95, doorH + 0.05, 0.1, trim, dx, doorBase + (doorH + 0.05) / 2, d / 2 + 0.02));
+  const archTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.475, 0.475, 0.1, 14, 1, false, -Math.PI / 2, Math.PI), trim);
+  archTrim.rotation.x = -Math.PI / 2;
+  archTrim.position.set(dx, springY, d / 2 + 0.02);
+  g.add(archTrim);
+  g.add(box(0.76, doorH, 0.12, doorMat, dx, doorBase + doorH / 2, d / 2 + 0.03));
   const arch = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.12, 14, 1, false, -Math.PI / 2, Math.PI), doorMat);
   arch.rotation.x = -Math.PI / 2;
-  arch.position.set(dx, 0.35 + 1.45, d / 2 + 0.03);
+  arch.position.set(dx, springY, d / 2 + 0.03);
   g.add(arch);
   g.add(box(1.5, 0.12, 1.1, stone, dx, 0.3, d / 2 + 0.55)); // doorstep
 
-  // Windows: opposite the door on the front, plus both sides
-  addWindow(g, -doorSide * w * 0.28, 1.65, d / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.6);
-  if (w > 4.3) addWindow(g, doorSide * w * 0.38 * -1, 1.65, d / 2 + 0.03, 0, glassMat, trim, shutterMat, false);
-  addWindow(g, w / 2 + 0.03, 1.65, 0, Math.PI / 2, glassMat, trim, shutterMat, false);
-  addWindow(g, -w / 2 - 0.03, 1.65, 0, -Math.PI / 2, glassMat, trim, shutterMat, false);
+  // Windows: one on the front opposite the door (never overlapping it), and one in the end wall
+  // that is NOT the wing's wall. Round attic window in the free gable.
+  addWindow(g, -doorSide * w * 0.27, 1.65, d / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.6);
+  const freeSide = hasWing ? -wingSide : (rand() < 0.5 ? -1 : 1);
+  addWindow(g, freeSide * (w / 2 + 0.03), 1.65, 0, freeSide * Math.PI / 2, glassMat, trim, shutterMat, false);
+  if (!hasWing) addWindow(g, -freeSide * (w / 2 + 0.03), 1.65, 0, -freeSide * Math.PI / 2, glassMat, trim, shutterMat, false);
+  const attic = new THREE.Group();
+  attic.position.set(freeSide * (w / 2 + 0.02), top + rh * 0.34, 0);
+  attic.rotation.y = freeSide * Math.PI / 2;
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.08, 16), trim);
+  ring.rotation.x = Math.PI / 2;
+  const pane = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.1, 16), glassMat);
+  pane.rotation.x = Math.PI / 2;
+  attic.add(ring, pane);
+  g.add(attic);
 
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { group: g, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), halfW: w / 2 + 1.5 };
+  return { group: g, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius };
 }
 
 // ---------------------------------------------------------------- the world
@@ -431,6 +465,7 @@ function drawOpenBoard(paper, accent) {
 export function buildWorld(scene, sections, opts = {}) {
   const maxLights = opts.maxLights ?? 14;
   const skyScene = opts.skyScene ?? scene; // clouds live on the layer behind the title text
+  const low = !!opts.low;                  // weaker machine: fewer plants, coarser terrain
   const rand = rng(11);
   const pick = (a) => a[Math.floor(rand() * a.length)];
 
@@ -439,6 +474,7 @@ export function buildWorld(scene, sections, opts = {}) {
 
   // ---- House sites: all along the path, alternating sides, on flattened plots ----
   const nearSign = (x, z, pad = 0) => Object.values(STOPS).some((s) => Math.hypot(x - s.x, z - s.z) < 9 * Math.max(s.scale, 0.8) + pad);
+  const nearPond = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r * 1.3 + pad;
   PADS.length = 0;
   const sites = [];
   [-8, -16, -24, -32, -40, -48].forEach((z0, i) => {
@@ -447,31 +483,56 @@ export function buildWorld(scene, sections, opts = {}) {
     const slope = pathX(z + 0.5) - pathX(z - 0.5);            // dx/dz of the path
     const k = Math.sqrt(1 + slope * slope);
     const nx = 1 / k, nz = -slope / k;                         // unit normal to the path
-    const perp = 6.6 + rand() * 1.4;                           // distance from the path's centre line
+    const perp = 7.2 + rand() * 1.4;                           // distance from the path's centre line
     const x = pathX(z) + side * perp * nx, zz = z + side * perp * nz;
-    if (nearSign(x, zz)) return;
+    if (nearSign(x, zz) || nearPond(x, zz, 4)) return;
     const site = { x, z: zz, fx: -side * nx, fz: -side * nz, perp, y: rawHeight(x, zz) };
     sites.push(site);
-    PADS.push({ x, z: zz, r: 7.2, y: site.y });
+    PADS.push({ x, z: zz, r: 7.6, y: site.y });
   });
 
-  // ---- Terrain: colour by height, warm meadow patches, pale path ----
-  const geo = new THREE.PlaneGeometry(380, 250, 190, 125);
+  // Water level: a little below the average ground height on a ring around the pond.
+  let ringSum = 0;
+  for (let k = 0; k < 8; k++) ringSum += rawHeight(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
+  const WATER_Y = ringSum / 8 - 0.5;
+
+  // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
+  const SEG = low ? [190, 125] : [380, 250];
+  const geo = new THREE.PlaneGeometry(380, 250, SEG[0], SEG[1]);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, -75);
   const p = geo.attributes.position;
   const colors = new Float32Array(p.count * 3);
   const cLow = new THREE.Color('#55ad5a'), cHigh = new THREE.Color('#c9ee9a');
   const cWarm = new THREE.Color('#e2ea8a'), cPath = new THREE.Color('#f1e5c6'), cDeep = new THREE.Color('#3f9a58');
+  const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
+  const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
   const c = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
     const h = heightAt(x, z);
     p.setY(i, h);
+    const slope = (Math.abs(heightAt(x + 1.2, z) - h) + Math.abs(heightAt(x, z + 1.2) - h)) / 1.2;
     const t = THREE.MathUtils.clamp((h + 3) / 16, 0, 1);
     c.copy(cLow).lerp(cHigh, t);
     c.lerp(cDeep, smooth(0.25, 0, t) * 0.5);
     c.lerp(cWarm, smooth(0.52, 0.78, fbm(x * 0.05 + 40, z * 0.05)) * 0.65);
+
+    // Patchwork fields on gentle ground in the middle distance, with mown stripes.
+    const gx = Math.floor((x + 300) / 15), gz = Math.floor((z + 300) / 19);
+    if (z < -14 && z > -92 && hash(gx * 3.1, gz * 1.7) > 0.58 && Math.abs(x - pathX(z)) > 6) {
+      const stripe = 0.5 + 0.5 * Math.sin(x * 1.9 + gz * 2.0);
+      c.lerp(hash(gx, gz) > 0.78 ? cGold : cCrop, (0.3 + 0.25 * stripe) * (1 - smooth(0.3, 0.7, slope)));
+    }
+    c.lerp(cDirt, smooth(0.78, 0.9, vnoise(x * 0.3 + 90, z * 0.3)) * 0.55);  // bare earth patches
+    c.lerp(cRock, smooth(0.5, 1.1, slope) * 0.75);                           // steep ground is rocky
+    c.offsetHSL(0, 0, (hash(x * 7.1, z * 5.3) - 0.5) * 0.06);                // fine grass grain
+
+    // Pond shore: sand above the waterline, dark bed below it.
+    const dp = Math.hypot(x - POND.x, z - POND.z);
+    c.lerp(cSand, (1 - smooth(WATER_Y + 0.1, WATER_Y + 0.9, h)) * (1 - smooth(POND.r * 1.3, POND.r * 2.1, dp)) * 0.9);
+    c.lerp(cBed, smooth(WATER_Y, WATER_Y - 1.4, h) * 0.7);
+
     const onPath = 1 - smooth(1.5, 3.1, Math.abs(x - pathX(z)));
     let walk = 0; // short footpath from each front door to the main path
     for (const st of sites) {
@@ -490,21 +551,31 @@ export function buildWorld(scene, sections, opts = {}) {
   terrain.receiveShadow = true;
   scene.add(terrain);
 
-  // ---- Village: cottages scattered along the path ----
-  const houses = []; // { x, z }
+  // Pond water: glossy, picks up the sky through the environment map.
+  const water = new THREE.Mesh(
+    new THREE.CircleGeometry(POND.r * 1.6, 48).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x4fb0d4, roughness: 0.05, metalness: 0.05, transparent: true, opacity: 0.8, envMapIntensity: 1.8 }),
+  );
+  water.position.set(POND.x, WATER_Y, POND.z);
+  scene.add(water);
+
+  // ---- Village: cottages along the path ----
+  const houses = []; // { x, z, r }
   const windowMats = [];
   const houseLights = [];
   const houseCap = Math.min(6, Math.max(1, maxLights - 3));
   const LIGHT_COLOR = 0xffb35a;
 
-  const nearHouse = (x, z, r = 6.5) => houses.some((hh) => Math.hypot(x - hh.x, z - hh.z) < r);
+  // Anything that is a plant or a rock must stay outside every house's footprint.
+  const nearHouse = (x, z, pad = 1.5) => houses.some((hh) => Math.hypot(x - hh.x, z - hh.z) < hh.r + pad);
   for (const st of sites) {
     const hs = buildHouse(rand);
-    hs.group.scale.setScalar(0.95 + rand() * 0.3);
+    const sc = 0.95 + rand() * 0.3;
+    hs.group.scale.setScalar(sc);
     hs.group.position.set(st.x, st.y, st.z);
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (rand() - 0.5) * 0.12; // front door faces the path
     scene.add(hs.group);
-    houses.push({ x: st.x, z: st.z });
+    houses.push({ x: st.x, z: st.z, r: hs.radius * sc });
     windowMats.push(hs.glassMat);
     if (houseLights.length < houseCap) {
       const light = new THREE.PointLight(LIGHT_COLOR, 0, 11, 1.6);
@@ -515,102 +586,272 @@ export function buildWorld(scene, sections, opts = {}) {
     }
   }
 
-  // ---- Instanced vegetation ----
-  const items = { trunk: [], lobe: [], cypress: [], pine: [], bush: [], rock: [], tuft: [], flower: [] };
+  // ---- Vegetation and props (instanced) ----
+  const items = {
+    trunk: [], flare: [], lobe: [], leaf: [], fruit: [], cypress: [], pine: [], bush: [], berry: [],
+    rock: [], grass: [], stem: [], head: [], dot: [], spike: [], fern: [], mushStem: [], mushCap: [],
+    log: [], reed: [], reedTop: [], lily: [], post: [], rail: [],
+  };
   const GREENS = ['#5cb85c', '#6cc96a', '#4aa857', '#7fd070', '#8fcf5a'].map((h) => new THREE.Color(h));
-  const FALL = ['#f58a3c', '#f7b83c', '#e86a3a', '#ffcf5a'].map((h) => new THREE.Color(h));
+  const FALL = ['#ff9a4a', '#ffc94a', '#f2703c', '#ffd966'].map((h) => new THREE.Color(h));
   const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h));
   const BLOSSOM = new THREE.Color('#ffb3c8');
+  const BARK = new THREE.Color('#8a5a3c'), BIRCH = new THREE.Color('#e8e2d2');
+  const free = (x, z, pad = 0) => !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5);
+  const D = low ? 0.55 : 1; // detail multiplier: weaker machines get fewer plants
 
-  function addTree(x, z, s) {
+  /** A trunk-and-branches pair: a branch leans out from the trunk into the canopy. */
+  function branch(x, y, z, s, lenMul = 1) {
+    const a = rand() * 6.28, tilt = 0.55 + rand() * 0.4, len = (1.0 + rand() * 0.5) * s * lenMul;
+    items.trunk.push({
+      p: [x - Math.sin(tilt) * Math.cos(a) * len * 0.5, y + Math.cos(tilt) * len * 0.5, z + Math.sin(tilt) * Math.sin(a) * len * 0.5],
+      s: [0.09 * s, len, 0.09 * s], ry: a, rz: tilt,
+    });
+  }
+
+  function addTree(x, z, s, force) {
     const y = heightAt(x, z);
-    const kind = rand();
-    if (kind < 0.42) { // puffy round tree: trunk + 3-5 soft lobes
-      items.trunk.push({ p: [x, y + 0.9 * s, z], s: [0.32 * s, 1.8 * s, 0.32 * s] });
-      const col = rand() < 0.2 ? pick(FALL) : rand() < 0.04 ? BLOSSOM : pick(GREENS);
-      const n = 3 + Math.floor(rand() * 3);
+    const kind = force ?? rand();
+    if (kind < 0.4) { // round oak / apple / blossom tree: trunk, root flare, branches, lobes, leaf tufts
+      items.trunk.push({ p: [x, y + 0.95 * s, z], s: [0.3 * s, 1.9 * s, 0.3 * s] });
+      items.flare.push({ p: [x, y + 0.2 * s, z], s: [0.6 * s, 0.55 * s, 0.6 * s] });
+      branch(x, y + 1.7 * s, z, s); branch(x, y + 1.9 * s, z, s);
+      const roll = rand();
+      const base = roll < 0.18 ? pick(FALL) : roll < 0.3 ? BLOSSOM : pick(GREENS);
+      const lobes = [];
+      const n = 4 + Math.floor(rand() * 3);
       for (let k = 0; k < n; k++) {
-        const a = rand() * 6.28, r = (k === 0 ? 0 : 0.9) * s;
+        const a = rand() * 6.28, r = (k === 0 ? 0 : 0.95) * s;
         const ls = (1.1 + rand() * 0.7) * s;
+        const L = { x: x + Math.cos(a) * r, y: y + (2.7 + rand() * 1.1) * s, z: z + Math.sin(a) * r, r: ls };
+        lobes.push(L);
         items.lobe.push({
-          p: [x + Math.cos(a) * r, y + (2.6 + rand() * 1.1) * s, z + Math.sin(a) * r],
-          s: [ls, ls * (0.85 + rand() * 0.2), ls], c: col.clone().offsetHSL((rand() - 0.5) * 0.03, 0, (rand() - 0.5) * 0.06),
+          p: [L.x, L.y, L.z], s: [ls, ls * (0.85 + rand() * 0.2), ls],
+          c: base.clone().offsetHSL((rand() - 0.5) * 0.03, 0, (rand() - 0.5) * 0.06),
         });
       }
-    } else if (kind < 0.7) { // tall cypress
+      // leaf tufts break up the smooth outline of the canopy
+      for (let k = 0; k < 9; k++) {
+        const L = lobes[Math.floor(rand() * lobes.length)];
+        const th = rand() * 6.28, ph = Math.acos(rand() * 1.4 - 0.5);
+        const ts = (0.3 + rand() * 0.28) * s;
+        items.leaf.push({
+          p: [L.x + Math.sin(ph) * Math.cos(th) * L.r * 0.92, L.y + Math.cos(ph) * L.r * 0.8, L.z + Math.sin(ph) * Math.sin(th) * L.r * 0.92],
+          s: [ts, ts * 0.85, ts], c: base.clone().offsetHSL(0, 0.04, 0.05 + rand() * 0.07),
+        });
+      }
+      if (roll >= 0.3 && rand() < 0.35) { // apple tree: red fruit among the leaves
+        const fc = pick([new THREE.Color('#e2402f'), new THREE.Color('#f0883a'), new THREE.Color('#d9344a')]);
+        for (let k = 0; k < 6; k++) {
+          const L = lobes[Math.floor(rand() * lobes.length)];
+          const th = rand() * 6.28;
+          items.fruit.push({ p: [L.x + Math.cos(th) * L.r * 0.8, L.y - L.r * 0.3 + rand() * L.r * 0.5, L.z + Math.sin(th) * L.r * 0.8], s: [0.13 * s, 0.13 * s, 0.13 * s], c: fc });
+        }
+      }
+    } else if (kind < 0.66) { // tall cypress, sometimes with a smaller companion
       items.trunk.push({ p: [x, y + 0.5 * s, z], s: [0.25 * s, 1.0 * s, 0.25 * s] });
       const hgt = (3 + rand() * 2.2) * s;
-      items.cypress.push({ p: [x, y + hgt * 0.9, z], s: [0.9 * s, hgt, 0.9 * s], c: pick(DARK) });
-    } else if (kind < 0.88) { // layered pine
-      items.trunk.push({ p: [x, y + 0.6 * s, z], s: [0.3 * s, 1.2 * s, 0.3 * s] });
+      items.cypress.push({ p: [x, y + hgt * 0.9, z], s: [(0.8 + rand() * 0.35) * s, hgt, (0.8 + rand() * 0.35) * s], c: pick(DARK) });
+      if (rand() < 0.4) items.cypress.push({ p: [x + 1.0 * s, heightAt(x + s, z) + hgt * 0.35, z + 0.4 * s], s: [0.55 * s, hgt * 0.5, 0.55 * s], c: pick(DARK) });
+    } else if (kind < 0.84) { // layered pine, four tiers
+      items.trunk.push({ p: [x, y + 0.7 * s, z], s: [0.3 * s, 1.4 * s, 0.3 * s] });
       const col = pick(DARK);
-      for (let k = 0; k < 3; k++) {
-        const r = (2.0 - k * 0.55) * s;
-        items.pine.push({ p: [x, y + (1.6 + k * 1.15) * s, z], s: [r, 1.8 * s, r], c: col });
+      for (let k = 0; k < 4; k++) {
+        const r = (2.1 - k * 0.5) * s;
+        items.pine.push({ p: [x, y + (1.5 + k * 1.0) * s, z], s: [r, 1.7 * s, r], ry: rand() * 6.28, c: col.clone().offsetHSL(0, 0, k * 0.02) });
       }
-    } else { // slender birch-like tree with a small bright canopy
-      items.trunk.push({ p: [x, y + 1.4 * s, z], s: [0.2 * s, 2.8 * s, 0.2 * s], c: new THREE.Color('#e8e2d2') });
+    } else { // slender birch with a bright canopy and a couple of branches
+      items.trunk.push({ p: [x, y + 1.5 * s, z], s: [0.2 * s, 3.0 * s, 0.2 * s], c: BIRCH });
+      branch(x, y + 2.4 * s, z, s, 0.8);
       const col = rand() < 0.5 ? pick(FALL) : pick(GREENS);
+      for (let k = 0; k < 4; k++) {
+        const ls = (0.8 + rand() * 0.4) * s;
+        items.lobe.push({ p: [x + (rand() - 0.5) * 0.9 * s, y + (3.3 + k * 0.5) * s, z + (rand() - 0.5) * 0.9 * s], s: [ls, ls * 1.2, ls], c: col.clone().offsetHSL(0, 0, (rand() - 0.5) * 0.08) });
+      }
+    }
+    // Undergrowth at the foot of the tree: ferns, mushrooms, now and then a fallen log.
+    if (rand() < 0.55) {
+      for (let k = 0; k < 4; k++) {
+        const a = rand() * 6.28, r = (0.9 + rand() * 0.9) * s;
+        const fx = x + Math.cos(a) * r, fz = z + Math.sin(a) * r;
+        for (let f = 0; f < 5; f++) {
+          const fa = (f / 5) * 6.28;
+          items.fern.push({ p: [fx, heightAt(fx, fz) + 0.22, fz], s: [0.8, 0.8, 0.8], ry: fa, rz: 0.95, c: pick(DARK).clone().offsetHSL(0, 0, 0.06) });
+        }
+      }
+    }
+    if (rand() < 0.25) {
       for (let k = 0; k < 3; k++) {
-        const ls = (0.9 + rand() * 0.4) * s;
-        items.lobe.push({ p: [x + (rand() - 0.5) * 0.8 * s, y + (3.2 + k * 0.55) * s, z + (rand() - 0.5) * 0.8 * s], s: [ls, ls * 1.15, ls], c: col });
+        const a = rand() * 6.28, r = (0.7 + rand() * 0.6) * s;
+        const mx = x + Math.cos(a) * r, mz = z + Math.sin(a) * r, my = heightAt(mx, mz);
+        const ms = 0.7 + rand() * 0.7;
+        items.mushStem.push({ p: [mx, my + 0.09 * ms, mz], s: [ms, ms, ms], c: new THREE.Color('#f3ecd8') });
+        const cap = pick([new THREE.Color('#d8342a'), new THREE.Color('#e8832a'), new THREE.Color('#b87a4b')]);
+        items.mushCap.push({ p: [mx, my + 0.17 * ms, mz], s: [0.15 * ms, 0.11 * ms, 0.15 * ms], c: cap });
+        if (cap.r > 0.6) for (let d = 0; d < 3; d++) items.dot.push({ p: [mx + (rand() - 0.5) * 0.1 * ms, my + 0.23 * ms, mz + (rand() - 0.5) * 0.1 * ms], s: [0.03 * ms, 0.02 * ms, 0.03 * ms], c: new THREE.Color('#ffffff') });
+      }
+    }
+    if (rand() < 0.12) items.log.push({ p: [x + 1.6 * s, heightAt(x + 1.6 * s, z) + 0.2, z + 0.5 * s], s: [0.24, 1.4 + rand() * 1.0, 0.24], rx: Math.PI / 2, ry: rand() * 6.28, c: BARK });
+  }
+
+  function addBush(x, z, s) {
+    const y = heightAt(x, z);
+    const col = pick(GREENS);
+    items.bush.push({ p: [x, y + 0.4 * s, z], s: [s * 1.1, s * 0.8, s * 1.1], c: col });
+    if (rand() < 0.5) items.bush.push({ p: [x + 0.5 * s, heightAt(x + 0.5 * s, z) + 0.28 * s, z + 0.2 * s], s: [s * 0.7, s * 0.55, s * 0.7], c: col.clone().offsetHSL(0, 0, -0.04) });
+    if (rand() < 0.4) { // berries
+      const bc = pick([new THREE.Color('#c93a4a'), new THREE.Color('#7a4bb0'), new THREE.Color('#3a63c9')]);
+      for (let k = 0; k < 6; k++) {
+        const th = rand() * 6.28, ph = Math.acos(rand() * 0.9);
+        items.berry.push({ p: [x + Math.sin(ph) * Math.cos(th) * s * 1.0, y + 0.4 * s + Math.cos(ph) * s * 0.75, z + Math.sin(ph) * Math.sin(th) * s * 1.0], s: [0.07, 0.07, 0.07], c: bc });
       }
     }
   }
 
-  // Forest clusters (denser where noise is high), kept off the path, houses and signs.
+  // Forest clusters (denser where noise is high); clear of the path, houses, signs and pond.
   let placedTrees = 0, guard = 0;
-  while (placedTrees < 150 && guard++ < 6000) {
+  const treeTarget = Math.round(165 * D);
+  while (placedTrees < treeTarget && guard++ < 9000) {
     const x = (rand() - 0.5) * 220, z = -150 + rand() * 175;
     if (z > -6 && Math.abs(x) < 30) continue;                     // open meadow in front of the camera
     if (Math.abs(x - pathX(z)) < 4.5 && z > -80) continue;        // keep the path clear
-    if (nearSign(x, z) || nearHouse(x, z)) continue;
+    if (!free(x, z, 2)) continue;
     const dens = fbm(x * 0.045 + 5, z * 0.045);
     if (dens < 0.46 && rand() < 0.8) continue;
     addTree(x, z, 0.75 + rand() * 0.75);
     placedTrees++;
   }
-  // Garden trees and bushes next to each house.
+  // Garden: trees, bushes, hedges and lavender just outside each house's footprint.
   for (const hh of houses) {
-    for (let k = 0; k < 3; k++) {
-      const a = rand() * 6.28, r = 4 + rand() * 3;
+    for (let k = 0; k < 6; k++) {
+      const a = rand() * 6.28, r = hh.r + 0.8 + rand() * 2.8;
       const x = hh.x + Math.cos(a) * r, z = hh.z + Math.sin(a) * r;
-      if (Math.abs(x - pathX(z)) < 3.5 || nearSign(x, z)) continue;
-      if (rand() < 0.4) addTree(x, z, 0.6 + rand() * 0.4);
-      else items.bush.push({ p: [x, heightAt(x, z) + 0.45, z], s: [0.9, 0.7, 0.9], c: pick(GREENS) });
+      if (Math.abs(x - pathX(z)) < 3.2 || !free(x, z)) continue;
+      const roll = rand();
+      if (roll < 0.28) addTree(x, z, 0.55 + rand() * 0.4);
+      else if (roll < 0.7) addBush(x, z, 0.5 + rand() * 0.45);
+      else { // a short hedge row
+        const ha = rand() * 6.28;
+        for (let q = 0; q < 4; q++) {
+          const hx = x + Math.cos(ha) * q * 0.75, hz = z + Math.sin(ha) * q * 0.75;
+          if (!free(hx, hz)) continue;
+          items.bush.push({ p: [hx, heightAt(hx, hz) + 0.32, hz], s: [0.62, 0.58, 0.62], c: GREENS[1] });
+        }
+      }
     }
   }
-  // Bushes lining the path.
-  for (let z = 24; z > -60; z -= 1.6 + rand() * 2.4) {
-    const side = rand() < 0.5 ? -1 : 1;
-    const x = pathX(z) + side * (3.4 + rand() * 2.5);
-    if (nearSign(x, z) || nearHouse(x, z, 4)) continue;
-    const s = 0.5 + rand() * 0.7;
-    items.bush.push({ p: [x, heightAt(x, z) + 0.4 * s, z], s: [s * 1.1, s * 0.8, s * 1.1], c: pick(GREENS) });
+  // Path edge: bushes, lavender, ferns, little edging stones.
+  for (let z = 24; z > -62; z -= 1.3 + rand() * 2.0) {
+    const px = pathX(z);
+    for (const side of [-1, 1]) {
+      if (rand() < 0.45) {
+        const x = px + side * (3.2 + rand() * 2.4);
+        if (free(x, z)) addBush(x, z, 0.45 + rand() * 0.6);
+      }
+      if (rand() < 0.35) { // lavender clump
+        const lx = px + side * (2.5 + rand() * 1.2);
+        if (free(lx, z)) for (let q = 0; q < 6; q++) {
+          const ox = lx + (rand() - 0.5) * 0.7, oz = z + (rand() - 0.5) * 0.7;
+          items.spike.push({ p: [ox, heightAt(ox, oz) + 0.3, oz], s: [1, 0.7 + rand() * 0.6, 1], rz: (rand() - 0.5) * 0.25, c: pick([new THREE.Color('#8f6ad8'), new THREE.Color('#a47be6'), new THREE.Color('#7a55c4')]) });
+        }
+      }
+      // edging stones either side of the path
+      const sx = px + side * (1.9 + rand() * 0.35);
+      if (rand() < 0.8 && z > -60) items.rock.push({ p: [sx, heightAt(sx, z) + 0.06, z], s: [0.22 + rand() * 0.18, 0.12, 0.2 + rand() * 0.14], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.05, 0.6 + rand() * 0.15) });
+    }
   }
-  // Rocks
-  for (let i = 0; i < 46; i++) {
+  // Rocks scattered about, a few piled in clusters
+  for (let i = 0; i < Math.round(60 * D); i++) {
     const x = (rand() - 0.5) * 160, z = -90 + rand() * 110;
-    if (Math.abs(x - pathX(z)) < 3 || nearHouse(x, z, 4) || nearSign(x, z, -2)) continue;
+    if (Math.abs(x - pathX(z)) < 3 || !free(x, z, 1)) continue;
+    const n = rand() < 0.35 ? 3 : 1;
+    for (let k = 0; k < n; k++) {
+      const s = (0.35 + rand() * 0.85) * (k ? 0.65 : 1);
+      const rx = x + (rand() - 0.5) * 1.4 * (n - 1), rz = z + (rand() - 0.5) * 1.4 * (n - 1);
+      items.rock.push({ p: [rx, heightAt(rx, rz) + s * 0.22, rz], s: [s * 1.2, s * 0.7, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.06, 0.5 + rand() * 0.2) });
+    }
+  }
+  // Grass: lots of blades, leaning every which way
+  for (let i = 0; i < Math.round(1500 * D); i++) {
+    const x = (rand() - 0.5) * 130, z = -55 + rand() * 90;
+    if (Math.abs(x - pathX(z)) < 2.1 || nearHouse(x, z, 0.6) || nearPond(x, z, -1)) continue;
     const s = 0.4 + rand() * 0.9;
-    items.rock.push({ p: [x, heightAt(x, z) + s * 0.25, z], s: [s * 1.2, s * 0.7, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.06, 0.55 + rand() * 0.15) });
+    items.grass.push({ p: [x, heightAt(x, z) + 0.25 * s, z], s: [1, s, 1], rz: (rand() - 0.5) * 0.35, c: pick(GREENS).clone().offsetHSL(0, 0, -0.08 + rand() * 0.12) });
   }
-  // Grass tufts
-  for (let i = 0; i < 360; i++) {
-    const x = (rand() - 0.5) * 120, z = -50 + rand() * 80;
-    if (Math.abs(x - pathX(z)) < 2.2 || nearHouse(x, z, 3.5)) continue;
-    const s = 0.5 + rand() * 0.8;
-    items.tuft.push({ p: [x, heightAt(x, z) + 0.3 * s, z], s: [s, s, s], ry: rand() * 6.28, c: pick(GREENS).clone().offsetHSL(0, 0, -0.06) });
-  }
-  // Flowers in clusters
-  const FLOWERS = ['#ffffff', '#ffd23f', '#ff7aa8', '#c59bff', '#ff9f5a'].map((h) => new THREE.Color(h));
-  for (let k = 0; k < 14; k++) {
-    const cx = (rand() - 0.5) * 90, cz = -35 + rand() * 60;
-    const base = pick(FLOWERS);
-    for (let i = 0; i < 28; i++) {
+  // Wildflowers: stems with heads of several kinds, in drifts of one colour with a few strays
+  const PALETTE = [
+    { kind: 'daisy', c: '#ffffff' }, { kind: 'daisy', c: '#fff3b0' }, { kind: 'poppy', c: '#e8402f' },
+    { kind: 'tulip', c: '#ff7aa8' }, { kind: 'tulip', c: '#ffd23f' }, { kind: 'spike', c: '#8f6ad8' },
+    { kind: 'sun', c: '#ffc928' }, { kind: 'daisy', c: '#ffb36b' },
+  ];
+  const STEM = new THREE.Color('#4f9a47');
+  for (let k = 0; k < Math.round(22 * D); k++) {
+    const cx = (rand() - 0.5) * 100, cz = -38 + rand() * 66;
+    const base = pick(PALETTE);
+    const count = Math.round((18 + rand() * 16));
+    for (let i = 0; i < count; i++) {
       const x = cx + (rand() - 0.5) * 9, z = cz + (rand() - 0.5) * 9;
-      if (Math.abs(x - pathX(z)) < 2.4 || nearHouse(x, z, 3.5) || nearSign(x, z, -3)) continue;
-      items.flower.push({ p: [x, heightAt(x, z) + 0.25, z], s: [1, 1, 1], c: rand() < 0.75 ? base : pick(FLOWERS) });
+      if (Math.abs(x - pathX(z)) < 2.4 || nearHouse(x, z, 0.5) || nearSign(x, z, -3) || nearPond(x, z, -1.5)) continue;
+      const f = rand() < 0.8 ? base : pick(PALETTE);
+      const y = heightAt(x, z), col = new THREE.Color(f.c);
+      const ht = f.kind === 'sun' ? 1.0 + rand() * 0.35 : f.kind === 'spike' ? 0.55 : 0.32 + rand() * 0.28;
+      items.stem.push({ p: [x, y + ht / 2, z], s: [1, ht, 1], rz: (rand() - 0.5) * 0.15, c: STEM });
+      if (f.kind === 'daisy') {
+        items.head.push({ p: [x, y + ht + 0.02, z], s: [0.12, 0.035, 0.12], c: col });
+        items.dot.push({ p: [x, y + ht + 0.05, z], s: [0.045, 0.03, 0.045], c: new THREE.Color('#f4b400') });
+      } else if (f.kind === 'poppy') {
+        items.head.push({ p: [x, y + ht + 0.03, z], s: [0.13, 0.05, 0.13], c: col });
+        items.dot.push({ p: [x, y + ht + 0.07, z], s: [0.04, 0.03, 0.04], c: new THREE.Color('#2b1a14') });
+      } else if (f.kind === 'tulip') {
+        items.head.push({ p: [x, y + ht + 0.07, z], s: [0.07, 0.11, 0.07], c: col });
+      } else if (f.kind === 'spike') {
+        items.spike.push({ p: [x, y + ht + 0.12, z], s: [1.2, 0.9, 1.2], c: col });
+      } else { // sunflower: big disc, dark centre
+        items.head.push({ p: [x, y + ht + 0.03, z], s: [0.24, 0.05, 0.24], rx: 0.5, c: col });
+        items.dot.push({ p: [x, y + ht + 0.07, z], s: [0.1, 0.05, 0.1], c: new THREE.Color('#4a2c14') });
+      }
+    }
+  }
+  // Pond life: reeds with brown heads around the shore, lily pads with a few lotus flowers
+  for (let k = 0; k < Math.round(46 * D); k++) {
+    const a = rand() * 6.28, r = POND.r * (0.95 + rand() * 0.5);
+    const x = POND.x + Math.cos(a) * r, z = POND.z + Math.sin(a) * r;
+    const gy = heightAt(x, z);
+    if (gy < WATER_Y - 0.5 || gy > WATER_Y + 1.1) continue;
+    for (let q = 0; q < 3; q++) {
+      const ox = x + (rand() - 0.5) * 0.5, oz = z + (rand() - 0.5) * 0.5, ht = 1.0 + rand() * 0.9;
+      items.reed.push({ p: [ox, gy + ht / 2, oz], s: [1, ht, 1], rz: (rand() - 0.5) * 0.18, c: new THREE.Color('#6fa24a') });
+      if (rand() < 0.6) items.reedTop.push({ p: [ox, gy + ht + 0.1, oz], s: [1, 1, 1], c: new THREE.Color('#6b4a2b') });
+    }
+  }
+  for (let k = 0; k < Math.round(16 * D); k++) {
+    const a = rand() * 6.28, r = rand() * POND.r * 0.75;
+    const x = POND.x + Math.cos(a) * r, z = POND.z + Math.sin(a) * r;
+    items.lily.push({ p: [x, WATER_Y + 0.05, z], s: [0.7 + rand() * 0.6, 1, 0.7 + rand() * 0.6], ry: rand() * 6.28, c: pick(GREENS).clone().offsetHSL(0, 0, -0.05) });
+    if (rand() < 0.3) items.head.push({ p: [x, WATER_Y + 0.14, z], s: [0.14, 0.09, 0.14], c: new THREE.Color('#ff9fc2') });
+  }
+  // Rocks around the pond edge
+  for (let k = 0; k < Math.round(14 * D); k++) {
+    const a = rand() * 6.28, r = POND.r * (1.1 + rand() * 0.45);
+    const x = POND.x + Math.cos(a) * r, z = POND.z + Math.sin(a) * r, s = 0.3 + rand() * 0.6;
+    items.rock.push({ p: [x, heightAt(x, z) + s * 0.2, z], s: [s * 1.2, s * 0.65, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.05, 0.5 + rand() * 0.2) });
+  }
+  // A couple of short wooden fences beside the path
+  for (const [zA, zB, side] of [[2, -8, 1], [-20, -30, -1]]) {
+    let prev = null;
+    for (let z = zA; z > zB; z -= 1.5) {
+      const x = pathX(z) + side * 3.9;
+      if (!free(x, z, -0.5)) { prev = null; continue; }
+      const P = [x, heightAt(x, z), z];
+      items.post.push({ p: [P[0], P[1] + 0.45, P[2]], s: [1, 1, 1], c: new THREE.Color('#a9835a') });
+      if (prev) {
+        const dxp = P[0] - prev[0], dzp = P[2] - prev[2], len = Math.hypot(dxp, dzp);
+        const ang = Math.atan2(-dzp, dxp);
+        for (const yy of [0.35, 0.7]) {
+          items.rail.push({ p: [(P[0] + prev[0]) / 2, (P[1] + prev[1]) / 2 + yy, (P[2] + prev[2]) / 2], s: [len, 1, 1], ry: ang, c: new THREE.Color('#b8956a') });
+        }
+      }
+      prev = P;
     }
   }
 
@@ -619,7 +860,7 @@ export function buildWorld(scene, sections, opts = {}) {
     if (!list.length) return null;
     const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach((it, i) => {
-      _e.set(0, it.ry ?? rand() * 6.28, 0);
+      _e.set(it.rx || 0, it.ry ?? rand() * 6.28, it.rz || 0);
       _m.compose(_v.set(...it.p), _q.setFromEuler(_e), _s.set(...it.s));
       mesh.setMatrixAt(i, _m);
       const col = it.c ?? defaultColor;
@@ -631,14 +872,49 @@ export function buildWorld(scene, sections, opts = {}) {
     return mesh;
   }
   const white = (extra = {}) => new THREE.MeshLambertMaterial({ color: 0xffffff, ...extra });
-  instanced(new THREE.CylinderGeometry(0.5, 0.7, 1, 7), white(), items.trunk, { defaultColor: new THREE.Color('#8a5a3c') });
+  const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 1, 7);
+  instanced(trunkGeo, white(), items.trunk, { defaultColor: BARK });
+  instanced(new THREE.ConeGeometry(0.75, 1, 7), white(), items.flare, { defaultColor: BARK });
   instanced(new THREE.SphereGeometry(1, 14, 10), white(), items.lobe);
+  instanced(new THREE.SphereGeometry(1, 8, 6), white(), items.leaf, { shadow: false });
+  instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.fruit, { shadow: false });
   instanced(new THREE.SphereGeometry(1, 12, 14), white(), items.cypress);
   instanced(new THREE.ConeGeometry(1, 1, 10), white(), items.pine);
   instanced(new THREE.SphereGeometry(1, 10, 8), white(), items.bush);
+  instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.berry, { shadow: false });
   instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
-  instanced(new THREE.ConeGeometry(0.18, 0.9, 4), white(), items.tuft, { shadow: false });
-  instanced(new THREE.IcosahedronGeometry(0.2, 0), white({ flatShading: true }), items.flower, { shadow: false });
+  instanced(new THREE.ConeGeometry(0.1, 1, 4).translate(0, 0.5, 0), white(), items.grass, { shadow: false });
+  instanced(new THREE.CylinderGeometry(0.014, 0.02, 1, 4), white(), items.stem, { shadow: false });
+  instanced(new THREE.SphereGeometry(1, 8, 6), white(), items.head, { shadow: false });
+  instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.dot, { shadow: false });
+  instanced(new THREE.ConeGeometry(0.05, 0.5, 5).translate(0, 0.25, 0), white(), items.spike, { shadow: false });
+  instanced(new THREE.ConeGeometry(0.12, 0.85, 3).translate(0, 0.42, 0), white(), items.fern, { shadow: false });
+  instanced(new THREE.CylinderGeometry(0.028, 0.034, 0.18, 5), white(), items.mushStem, { shadow: false });
+  instanced(new THREE.SphereGeometry(1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), white(), items.mushCap, { shadow: false });
+  instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), white(), items.log, { defaultColor: BARK });
+  instanced(new THREE.CylinderGeometry(0.04, 0.05, 1, 5), white(), items.reed, { shadow: false });
+  instanced(new THREE.CylinderGeometry(0.06, 0.06, 0.28, 6), white(), items.reedTop, { shadow: false });
+  instanced(new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12), white(), items.lily, { shadow: false });
+  instanced(new THREE.BoxGeometry(0.12, 0.9, 0.12), white(), items.post);
+  instanced(new THREE.BoxGeometry(1, 0.08, 0.06), white(), items.rail);
+
+  // ---- Butterflies: a few drifting about the meadow by day ----
+  const butterflies = [];
+  const wingGeo = new THREE.BufferGeometry();
+  wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.16, 0.09, 0.03, 0.14, -0.08, 0.02], 3));
+  wingGeo.computeVertexNormals();
+  for (let i = 0; i < Math.round(14 * D); i++) {
+    const col = new THREE.Color(pick(['#ffd23f', '#ff9fc2', '#ffffff', '#7ac6ff', '#ff8a3c']));
+    const m = new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide });
+    const grp = new THREE.Group();
+    const wl = new THREE.Mesh(wingGeo, m), wr = new THREE.Mesh(wingGeo, m);
+    wr.scale.x = -1;
+    grp.add(wl, wr);
+    const bx = (rand() - 0.5) * 50, bz = -20 + rand() * 40;
+    grp.userData = { bx, bz, by: heightAt(bx, bz) + 1.1 + rand() * 1.2, ph: rand() * 6.28, sp: 0.5 + rand() * 0.6, wl, wr };
+    scene.add(grp);
+    butterflies.push(grp);
+  }
 
   // ---- Clouds: soft clumps that drift sideways ----
   const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xe8eeff, emissiveIntensity: 0.55 });
@@ -850,6 +1126,15 @@ export function buildWorld(scene, sections, opts = {}) {
       for (const cl of clouds) {
         cl.position.x += cl.userData.speed * dt;
         if (cl.position.x > 190) cl.position.x = -190;
+      }
+      // butterflies flutter along looping paths; they roost (hide) once it gets dark
+      for (const bf of butterflies) {
+        const u = bf.userData, t = time * u.sp + u.ph;
+        bf.visible = night < 0.5;
+        bf.position.set(u.bx + Math.sin(t) * 3.2 + Math.sin(t * 2.3) * 0.8, u.by + Math.sin(t * 1.7) * 0.5, u.bz + Math.cos(t * 0.8) * 3.0);
+        bf.rotation.y = t + Math.PI / 2;
+        const flap = Math.sin(time * 22 + u.ph) * 0.9;
+        u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
       }
       const a = ffGeo.attributes.position;
       const pos = new THREE.Vector3();

@@ -54,7 +54,8 @@ function start() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   // Weaker machines get fewer real lights (each one costs every pixel).
-  const lowEnd = (navigator.hardwareConcurrency || 4) <= 4 || matchMedia('(max-width: 700px)').matches;
+  const forced = new URLSearchParams(location.search).get('detail'); // ?detail=high|low, handy for testing
+  const lowEnd = forced ? forced === 'low' : (navigator.hardwareConcurrency || 4) <= 4 || matchMedia('(max-width: 700px)').matches;
 
   // Two layers so the sun, moon, stars and clouds sit *behind* the big title while the
   // hills stay in front of it: #sky (below the text) and #scene (above the text).
@@ -67,7 +68,7 @@ function start() {
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
   camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
   const sky = createSky(scene, skyScene, renderer);
-  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene });
+  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene, low: lowEnd });
   const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
   let focus = 60;
 
