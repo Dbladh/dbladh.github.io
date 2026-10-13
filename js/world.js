@@ -19,6 +19,14 @@ export const STOPS = {
                  scale: 0.45, accent: '#9fdc8c', paper: '#ffffff', yaw: 0.22 },
 };
 
+// Hills that fill the left and right edges of the view: gentle shoulders near the camera, bigger hills
+// behind them, and far backdrop hills. { x, z, rx, rz, h }
+const FLANKS = [
+  { x: -52, z: -20, rx: 24, rz: 22, h: 7 },  { x: 54, z: -14, rx: 24, rz: 22, h: 6.5 },
+  { x: -34, z: 6, rx: 16, rz: 13, h: 2.4 },  { x: 36, z: 8, rx: 16, rz: 13, h: 2.2 },
+  { x: -82, z: -42, rx: 34, rz: 30, h: 15 }, { x: 84, z: -40, rx: 34, rz: 30, h: 14 },
+];
+
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
 const SIGN_GREY = 0xc8c6bd; // frame + posts: the billboard's steel/concrete grey
 
@@ -82,6 +90,10 @@ function rawHeight(x, z) {
     const { x: hx, z: hz, rx, rz, h: hh } = s.hill;
     const dx = (x - hx) / (rx / 1.8), dz = (z - hz) / (rz / 1.8);
     h += hh * Math.exp(-0.5 * (dx * dx + dz * dz));
+  }
+  for (const f of FLANKS) {
+    const dx = (x - f.x) / (f.rx / 1.8), dz = (z - f.z) / (f.rz / 1.8);
+    h += f.h * Math.exp(-0.5 * (dx * dx + dz * dz));
   }
   h -= 0.35 * (1 - smooth(0, 4, Math.abs(x - pathX(z)))); // path sits in a shallow trough
   return h;
@@ -612,6 +624,56 @@ function buildHouse(rand) {
   return { group: g, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d };
 }
 
+/** A farm barn: red walls, dark gable roof, big double doors with white X bracing, a hay-loft hatch. */
+function buildBarn() {
+  const g = new THREE.Group();
+  const w = 5.6, d = 3.9, h = 3.0, top = 0.35 + h, rh = 1.7;
+  const red = '#b5402f';
+  const wallMat = mat(red, { vertexColors: true }), plain = mat(red), trim = mat('#f6efdc'), stone = mat('#9c9588');
+  g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0));
+  g.add(wallBox(w, h, d, wallMat, 0, 0.35 + h / 2, 0));
+  addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: 0.4, yaw: 0, wallMat: plain, roofMat: roofMaterial('#4a3a36') });
+  const fz = d / 2 + 0.03;
+  g.add(box(2.3, 2.3, 0.1, trim, 0, 0.35 + 1.15, fz));                      // door frame
+  g.add(box(2.0, 2.05, 0.12, mat('#8f3226'), 0, 0.35 + 1.05, fz + 0.02));   // doors
+  for (const a of [0.74, -0.74]) {                                            // white X bracing
+    const x = new THREE.Mesh(UNIT_BOX, trim);
+    x.scale.set(2.5, 0.12, 0.05); x.rotation.z = a; x.position.set(0, 0.35 + 1.05, fz + 0.1);
+    g.add(x);
+  }
+  g.add(box(1.9, 0.1, 0.06, trim, 0, 0.35 + 1.05, fz + 0.1));
+  g.add(box(0.9, 0.7, 0.08, trim, 0, top + 0.5, fz - 0.03));                 // hatch frame in the gable
+  g.add(box(0.7, 0.5, 0.1, mat('#3b2018'), 0, top + 0.5, fz));
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return { group: g, radius: Math.max(w, d) / 2 + 1.4, w, d };
+}
+
+/** A small windmill: tapered tower, red cap, and a four-bladed rotor that turns (see `rotor`). */
+function buildWindmill() {
+  const g = new THREE.Group();
+  const stone = mat('#9c9588'), wall = mat('#f1e7cf'), roof = mat('#b5402f'), wood = mat('#8a6a46'), cloth = mat('#fbf6e6');
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 1.2, 8), stone)).position.y = 0.2;
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.45, 5.2, 8), wall);
+  tower.position.y = 3.4; g.add(tower);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(1.25, 1.7, 8), roof);
+  cap.position.y = 6.85; g.add(cap);
+  const door = box(0.7, 1.2, 0.12, mat('#6b3a22'), 0, 1.2, 1.5); g.add(door);
+  const rotor = new THREE.Group();
+  rotor.position.set(0, 5.9, 1.2);
+  rotor.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 8).rotateX(Math.PI / 2), wood));
+  for (let k = 0; k < 4; k++) {
+    const arm = new THREE.Group();
+    arm.rotation.z = k * Math.PI / 2 + 0.4;
+    arm.add(box(0.14, 4.2, 0.1, wood, 0, 2.1, 0));                          // spar
+    arm.add(box(0.8, 3.0, 0.04, cloth, 0.45, 2.3, 0.04));                   // sail
+    for (let r = 0; r < 4; r++) arm.add(box(0.8, 0.05, 0.05, wood, 0.45, 0.9 + r * 0.72, 0.05)); // slats
+    rotor.add(arm);
+  }
+  g.add(rotor);
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return { group: g, rotor, radius: 3.2 };
+}
+
 // ---------------------------------------------------------------- the world
 
 /**
@@ -668,6 +730,41 @@ export function buildWorld(scene, sections, opts = {}) {
     PADS.push({ x, z: zz, r: 7.6, y: site.y });
   });
 
+  // ---- Hamlets on the left and right slopes, each on its own winding path off the main one ----
+  const curve = (pts) => new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z))).getPoints(80).map((v) => [v.x, v.z]);
+  const branches = [
+    curve([[pathX(4), 4], [-9, 2], [-17, -2], [-23, -7], [-29, -12], [-36, -17], [-43, -23]]),   // left, ends at the windmill
+    curve([[pathX(2), 2], [9, 1], [17, -2], [24, -6], [30, -11], [36, -9], [41, -5]]),             // right, ends at the barn
+  ];
+  const farm = [];                                          // barn / windmill, built later
+  const tangent = (b, i) => { const a = b[Math.max(0, i - 1)], c = b[Math.min(b.length - 1, i + 1)]; const dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; };
+  [[0, 0.46, 1], [0, 0.7, -1], [1, 0.42, -1], [1, 0.66, 1]].forEach(([bi, u, side]) => {
+    const b = branches[bi], i = Math.round(u * (b.length - 1)), [tx, tz] = tangent(b, i);
+    const nx = -tz, nz = tx, perp = 6.0;
+    const x = b[i][0] + side * nx * perp, zz = b[i][1] + side * nz * perp;
+    if (nearPond(x, zz, 3) || nearSign(x, zz)) return;
+    const site = { x, z: zz, fx: -side * nx, fz: -side * nz, perp, y: rawHeight(x, zz), hamlet: true };
+    sites.push(site);
+    PADS.push({ x, z: zz, r: 6.0, y: site.y });
+  });
+  { // windmill at the end of the left path (on the flank hill), barn at the end of the right path
+    const wb = branches[0][branches[0].length - 1], bb = branches[1][branches[1].length - 1];
+    const wy = rawHeight(wb[0] - 2, wb[1] - 1), by = rawHeight(bb[0] + 2, bb[1] - 1);
+    farm.push({ kind: 'windmill', x: wb[0] - 2, z: wb[1] - 1, y: wy });
+    farm.push({ kind: 'barn', x: bb[0] + 2.5, z: bb[1] - 1, y: by, rot: Math.atan2(-(bb[0] + 2.5), 22 - (bb[1] - 1)) + 0.5 });
+    PADS.push({ x: wb[0] - 2, z: wb[1] - 1, r: 4, y: wy }, { x: bb[0] + 2.5, z: bb[1] - 1, r: 5.5, y: by });
+  }
+  const distToPolyline = (x, z, pts) => {                   // for painting the branch paths on the ground
+    let best = 1e9;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1];
+      const abx = bx - ax, abz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz || 1)));
+      best = Math.min(best, Math.hypot(x - (ax + abx * t), z - (az + abz * t)));
+    }
+    return best;
+  };
+  const branchBox = branches.map((b) => ({ x0: Math.min(...b.map((p) => p[0])) - 4, x1: Math.max(...b.map((p) => p[0])) + 4, z0: Math.min(...b.map((p) => p[1])) - 4, z1: Math.max(...b.map((p) => p[1])) + 4 }));
+
   // Water level: a little below the average ground height on a ring around the pond.
   let ringSum = 0;
   for (let k = 0; k < 8; k++) ringSum += rawHeight(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
@@ -719,7 +816,13 @@ export function buildWorld(scene, sections, opts = {}) {
       const tt = THREE.MathUtils.clamp(((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz), 0, 1);
       walk = Math.max(walk, 1 - smooth(0.6, 1.5, Math.hypot(x - (ax + abx * tt), z - (az + abz * tt))));
     }
-    c.lerp(cPath, Math.max(onPath, walk) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
+    let branch = 0;
+    branches.forEach((b, bi) => {
+      const bx = branchBox[bi];
+      if (x < bx.x0 || x > bx.x1 || z < bx.z0 || z > bx.z1) return;
+      branch = Math.max(branch, 1 - smooth(0.8, 1.9, distToPolyline(x, z, b)));
+    });
+    c.lerp(cPath, Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -760,6 +863,36 @@ export function buildWorld(scene, sections, opts = {}) {
       light.position.copy(hs.lightAnchor).applyMatrix4(hs.group.matrixWorld);
       scene.add(light);
       houseLights.push(light);
+    }
+  }
+
+  // Barn, windmill and a few hay bales
+  const windmills = [];
+  for (const f of farm) {
+    if (f.kind === 'barn') {
+      const bn = buildBarn();
+      bn.group.position.set(f.x, f.y, f.z);
+      bn.group.rotation.y = f.rot;
+      scene.add(bn.group);
+      houses.push({ x: f.x, z: f.z, r: bn.radius, w: bn.w, d: bn.d, rot: f.rot });
+      const bale = new THREE.CylinderGeometry(0.55, 0.55, 0.9, 12);
+      const baleMat = mat('#d8b85a');
+      for (let k = 0; k < 4; k++) {
+        const m = new THREE.Mesh(bale, baleMat);
+        const a = f.rot + 0.9 + k * 0.5, r = bn.radius + 0.6 + (k % 2) * 0.7;
+        const bx = f.x + Math.sin(a) * r, bz = f.z + Math.cos(a) * r;
+        m.position.set(bx, heightAt(bx, bz) + 0.5, bz);
+        m.rotation.set(Math.PI / 2, rand() * 3, 0);
+        m.castShadow = m.receiveShadow = true;
+        scene.add(m);
+      }
+    } else {
+      const wm = buildWindmill();
+      wm.group.position.set(f.x, f.y, f.z);
+      wm.group.rotation.y = Math.atan2(-f.x, 22 - f.z) - 0.5;            // face roughly toward the viewer
+      scene.add(wm.group);
+      windmills.push(wm.rotor);
+      houses.push({ x: f.x, z: f.z, r: wm.radius, w: 3.2, d: 3.2, rot: 0 });
     }
   }
 
@@ -1069,6 +1202,41 @@ export function buildWorld(scene, sections, opts = {}) {
       }
       prev = P;
     }
+  }
+
+  // Fences along parts of the branch paths, and lanterns' worth of trees around the hamlets and flank hills
+  branches.forEach((b, bi) => {
+    for (const side of [1, -1]) {
+      let prev = null;
+      for (let i = 14; i < b.length - 10; i += 3) {
+        const [tx, tz] = tangent(b, i), nx = -tz, nz = tx;
+        const inRun = (i > 20 && i < 44) === (side > 0);              // each side fenced along a different stretch
+        const x = b[i][0] + side * nx * 2.3, z = b[i][1] + side * nz * 2.3;
+        if (!inRun || !free(x, z, -0.5)) { prev = null; continue; }
+        const P = [x, heightAt(x, z), z];
+        items.post.push({ p: [P[0], P[1] + 0.45, P[2]], s: [1, 1, 1], c: new THREE.Color('#a9835a') });
+        if (prev) {
+          const dxp = P[0] - prev[0], dzp = P[2] - prev[2], len = Math.hypot(dxp, dzp), ang = Math.atan2(-dzp, dxp);
+          for (const yy of [0.35, 0.7]) items.rail.push({ p: [(P[0] + prev[0]) / 2, (P[1] + prev[1]) / 2 + yy, (P[2] + prev[2]) / 2], s: [len, 1, 1], ry: ang, c: new THREE.Color('#b8956a') });
+        }
+        prev = P;
+      }
+    }
+  });
+  const cluster = (cx, cz, r, n, sMin = 0.7, sMax = 1.3) => {
+    for (let i = 0, got = 0; got < n && i < n * 12; i++) {
+      const a = rand() * 6.28, d = Math.sqrt(rand()) * r, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+      if (!free(x, z, 1.5) || Math.abs(x - pathX(z)) < 4.5) continue;
+      if (branches.some((b) => distToPolyline(x, z, b) < 2.8)) continue;
+      addTree(x, z, sMin + rand() * (sMax - sMin));
+      got++;
+    }
+  };
+  cluster(-30, -7, 11, Math.round(14 * D));  cluster(-46, -14, 12, Math.round(14 * D));  cluster(-20, 10, 9, Math.round(7 * D));
+  cluster(30, -2, 11, Math.round(14 * D));   cluster(46, -10, 12, Math.round(14 * D));   cluster(22, 12, 9, Math.round(7 * D));
+  for (const f of farm) for (let k = 0; k < Math.round(7 * D); k++) {   // garden bushes and tall grass round the farm buildings
+    const a = rand() * 6.28, r = 3 + rand() * 3, x = f.x + Math.cos(a) * r, z = f.z + Math.sin(a) * r;
+    if (free(x, z, 0) && !branches.some((b) => distToPolyline(x, z, b) < 2)) addBush(x, z, 0.5 + rand() * 0.5);
   }
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -1558,6 +1726,7 @@ export function buildWorld(scene, sections, opts = {}) {
     update(dt) {
       time += dt;
       ffUniforms.uTime.value = time;
+      for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       for (const cl of clouds) {
         cl.position.x += cl.userData.speed * dt;
         if (cl.position.x > 190) cl.position.x = -190;
