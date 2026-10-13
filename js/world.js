@@ -51,7 +51,9 @@ function fbm(x, z) {
 
 /** The dirt path's x position at depth z (it winds from the camera up toward the AI hill). */
 export function pathX(z) {
-  return Math.sin((z - 22) * 0.075) * 8;
+  // Wide S-curves near the camera that settle toward the middle at the AI hill.
+  const amp = 13 * (1 - 0.92 * smooth(-30, -66, z));
+  return Math.sin((z - 22) * 0.082) * amp + Math.sin((z - 22) * 0.21) * 1.8 * (1 - smooth(-20, -60, z));
 }
 
 /** Ground height at (x, z). */
@@ -230,10 +232,12 @@ function buildHouse(rand) {
 /**
  * @param {THREE.Scene} scene
  * @param {Record<string, {title:string, teaser:string}>} sections
- * @param {{maxLights?: number}} [opts] maxLights caps real point lights (for weaker GPUs)
+ * @param {{maxLights?: number, skyScene?: THREE.Scene}} [opts] maxLights caps real point lights
+ *   (for weaker GPUs); skyScene is where clouds go (behind the title)
  */
 export function buildWorld(scene, sections, opts = {}) {
   const maxLights = opts.maxLights ?? 14;
+  const skyScene = opts.skyScene ?? scene; // clouds live on the layer behind the title text
   const rand = rng(11);
   const pick = (a) => a[Math.floor(rand() * a.length)];
 
@@ -274,15 +278,20 @@ export function buildWorld(scene, sections, opts = {}) {
   const LIGHT_COLOR = 0xffb35a;
 
   const nearSign = (x, z, pad = 0) => Object.values(STOPS).some((s) => Math.hypot(x - s.x, z - s.z) < 9 * Math.max(s.scale, 0.8) + pad);
+  // Spread out toward the screen edges, like a hillside village (x is a target; the path pushes houses aside).
   const village = [
-    [-4, 1], [-10, -1], [-18, 1], [-24, -1], [-31, 1], [-37, -1], [-44, 1], [-52, -1],
+    [-26, -14], [-17, -19], [-31, -27], [-20, -33], [-8, -41],
+    [28, -13], [17, -20], [32, -27], [21, -34], [8, -44],
+    [-3, -54], [3, -29],
   ];
-  for (const [z, side0] of village) {
-    let placed = false;
-    for (const side of [side0, -side0]) {
-      const off = 6.5 + rand() * 3;
-      const x = pathX(z) + side * off, zz = z + (rand() - 0.5) * 2;
-      if (nearSign(x, zz)) continue;
+  const nearHouse = (x, z, r = 6.5) => houses.some((hh) => Math.hypot(x - hh.x, z - hh.z) < r);
+  for (const [vx, vz] of village) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const zz = vz + (rand() - 0.5) * 3;
+      let x = vx + (rand() - 0.5) * 4;
+      const dp = x - pathX(zz);
+      if (Math.abs(dp) < 7) x = pathX(zz) + Math.sign(dp || 1) * (7 + rand() * 2); // keep off the path
+      if (nearSign(x, zz) || nearHouse(x, zz, 8)) continue;
       const hs = buildHouse(rand);
       const s = 0.95 + rand() * 0.35;
       hs.group.scale.setScalar(s);
@@ -301,7 +310,6 @@ export function buildWorld(scene, sections, opts = {}) {
       break;
     }
   }
-  const nearHouse = (x, z, r = 6.5) => houses.some((hh) => Math.hypot(x - hh.x, z - hh.z) < r);
 
   // ---- Instanced vegetation ----
   const items = { trunk: [], lobe: [], cypress: [], pine: [], bush: [], rock: [], tuft: [], flower: [] };
@@ -442,7 +450,7 @@ export function buildWorld(scene, sections, opts = {}) {
     }
     g.position.set((rand() - 0.5) * 320, 40 + rand() * 26, -75 - rand() * 60);
     g.userData.speed = 0.5 + rand() * 0.8;
-    scene.add(g);
+    skyScene.add(g);
     clouds.push(g);
   }
 

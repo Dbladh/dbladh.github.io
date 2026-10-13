@@ -32,7 +32,12 @@ function sample(hour) {
   };
 }
 
-export function createSky(scene) {
+/**
+ * @param {THREE.Scene} scene     main scene (terrain etc.): fog and the real lights live here
+ * @param {THREE.Scene} skyScene  separate scene drawn on a canvas *behind* the title text:
+ *                                 sun, moon, stars and clouds
+ */
+export function createSky(scene, skyScene) {
   const fog = new THREE.Fog(0xcfe9fb, 60, 230);
   scene.fog = fog;
 
@@ -60,7 +65,7 @@ export function createSky(scene) {
     new THREE.SphereGeometry(3.4, 24, 16),
     new THREE.MeshBasicMaterial({ color: 0xe8eeff, fog: false }),
   );
-  scene.add(sunMesh, moonMesh);
+  skyScene.add(sunMesh, moonMesh);
 
   // Stars: points on a big upper hemisphere, faded in at night.
   const N = 450;
@@ -79,7 +84,13 @@ export function createSky(scene) {
     starGeo,
     new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }),
   );
-  scene.add(stars);
+  skyScene.add(stars);
+
+  // The sky layer has its own (matching) lights so clouds shade correctly day and night.
+  const skyHemi = new THREE.HemisphereLight(0xffffff, 0x8aa0c0, 0.8);
+  const skySun = new THREE.DirectionalLight(0xffffff, 1);
+  skyScene.add(skyHemi, skySun);
+  skyScene.fog = fog;
 
   const root = document.documentElement;
 
@@ -103,6 +114,11 @@ export function createSky(scene) {
     moonLight.intensity = 0.35 * night;
     hemi.intensity = s.hemi * 1.9; // bright, soft, storybook lighting
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
+    skyHemi.intensity = hemi.intensity;
+    skyHemi.color.copy(hemi.color);
+    skySun.intensity = sunLight.intensity * 0.8;
+    skySun.color.copy(sunLight.color);
+    skySun.position.set(sx, Math.max(sy, 22), sz + 25);
     fog.color.copy(s.bot);
     stars.material.opacity = night * night;
     sunMesh.visible = sy > -6;

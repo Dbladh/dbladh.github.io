@@ -7,6 +7,7 @@ import { createDOF } from './dof.js';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
+const skyCanvas = document.getElementById('sky');
 const live = document.getElementById('live');
 const nav = document.getElementById('stopnav');
 const controls = document.getElementById('controls');
@@ -49,10 +50,17 @@ function start() {
   // Weaker machines get fewer real lights (each one costs every pixel).
   const lowEnd = (navigator.hardwareConcurrency || 4) <= 4 || matchMedia('(max-width: 700px)').matches;
 
+  // Two layers so the sun, moon, stars and clouds sit *behind* the big title while the
+  // hills stay in front of it: #sky (below the text) and #scene (above the text).
+  const skyRenderer = new THREE.WebGLRenderer({ canvas: skyCanvas, antialias: true, alpha: true });
+  skyRenderer.setClearColor(0x000000, 0);
+  skyRenderer.outputColorSpace = THREE.SRGBColorSpace;
+
   const scene = new THREE.Scene();
+  const skyScene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
-  const sky = createSky(scene);
-  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14 });
+  const sky = createSky(scene, skyScene);
+  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene });
   const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
   let focus = 60;
 
@@ -71,6 +79,7 @@ function start() {
   let tween = null;
   let active = 'home';
   const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
+  let parallax = 1; // 1 on the overview, 0 when zoomed in
 
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -117,6 +126,8 @@ function start() {
   function onResize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
+    skyRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    skyRenderer.setSize(w, h, false);
     camera.aspect = w / h;
     // Keep the view wide enough on portrait phones.
     camera.fov = w / h < 0.8 ? 70 : 55;
@@ -183,7 +194,6 @@ function start() {
     const label = fmt(h);
     timeLabel.textContent = 'Time: ' + label;
     timeInput.setAttribute('aria-valuetext', label);
-    store.set('hour', String(h));
   }
   timeInput.addEventListener('input', () => setTime(parseFloat(timeInput.value)));
 
@@ -206,9 +216,11 @@ function start() {
 
   // ---- Boot ----
   controls.hidden = false;
-  const savedHour = parseFloat(store.get('hour'));
-  timeInput.value = Number.isFinite(savedHour) ? savedHour : 16;
-  setTime(parseFloat(timeInput.value));
+  // Start at the visitor's actual local time (rounded to the slider's quarter-hour steps).
+  const nowD = new Date();
+  const nowHour = Math.round((nowD.getHours() + nowD.getMinutes() / 60) * 4) / 4;
+  timeInput.value = nowHour;
+  setTime(nowHour);
   onResize();
 
   const initial = location.hash.slice(1); // read before setSimple() rewrites the hash
@@ -232,21 +244,23 @@ function start() {
       if (tween.t >= 1) { const d = tween.done; tween = null; d(); }
     }
 
-    // Gentle parallax from pointer position (off for reduced motion).
-    const par = reduceMotion ? 0 : 1;
-    pointer.sx += (pointer.x - pointer.sx) * 0.05;
-    pointer.sy += (pointer.y - pointer.sy) * 0.05;
-    const amt = active === 'home' ? 1 : 0.35;
+    // Subtle parallax from pointer position, only on the overview. It fades fully to zero
+    // when zoomed in on a billboard (and for reduced motion), then eases back on return.
+    const target = reduceMotion || active !== 'home' ? 0 : 1;
+    parallax += (target - parallax) * Math.min(1, dt * 4);
+    pointer.sx += (pointer.x - pointer.sx) * 0.04;
+    pointer.sy += (pointer.y - pointer.sy) * 0.04;
     camera.position.copy(cur.pos);
-    camera.position.x += pointer.sx * 2.2 * amt * par;
-    camera.position.y += -pointer.sy * 1.0 * amt * par;
+    camera.position.x += pointer.sx * 0.9 * parallax;
+    camera.position.y += -pointer.sy * 0.4 * parallax;
     look.copy(cur.look);
-    look.x += pointer.sx * 1.2 * amt * par;
+    look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
 
     if (!reduceMotion) world.update(dt);
 
     // Depth of field: focus on whatever the camera is looking at, easing between stops.
+    skyRenderer.render(skyScene, camera);
     if (dof && dof.enabled) {
       const want = camera.position.distanceTo(cur.look);
       focus += (want - focus) * Math.min(1, dt * 4);
@@ -268,5 +282,5 @@ function start() {
   }
   const slow = { t: 0, n: 0 };
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { scene, camera, renderer, world };
+  window.__portfolio = { scene, skyScene, camera, renderer, world };
 }
