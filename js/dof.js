@@ -114,8 +114,8 @@ export function createDOF(renderer) {
       target.setSize(size.x, size.y);
       material.uniforms.texel.value.set(1 / size.x, 1 / size.y);
       const k = size.y / 900;
-      material.uniforms.aperture.value = 95 * k;
-      material.uniforms.maxBlur.value = 13 * k;
+      material.uniforms.aperture.value = 250 * k;
+      material.uniforms.maxBlur.value = 16 * k;
     },
 
     /** Render `scene` with `focus` (world units from the camera) in sharp focus. */

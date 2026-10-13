@@ -37,7 +37,7 @@ function sample(hour) {
  * @param {THREE.Scene} skyScene  separate scene drawn on a canvas *behind* the title text:
  *                                 sun, moon, stars and clouds
  */
-export function createSky(scene, skyScene) {
+export function createSky(scene, skyScene, renderer) {
   const fog = new THREE.Fog(0xcfe9fb, 60, 230);
   scene.fog = fog;
 
@@ -92,6 +92,39 @@ export function createSky(scene, skyScene) {
   skyScene.add(skyHemi, skySun);
   skyScene.fog = fog;
 
+  // ---- Reflection environment: a little sky-gradient dome (plus a bright sun) that is baked
+  // into a PMREM map, so glass and roofs pick up the current sky. Rebuilt as the hour moves.
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene();
+  const envGeo = new THREE.SphereGeometry(50, 32, 20);
+  const envCol = new Float32Array(envGeo.attributes.position.count * 3);
+  envGeo.setAttribute('color', new THREE.BufferAttribute(envCol, 3));
+  envScene.add(new THREE.Mesh(envGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const envSun = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  envScene.add(envSun);
+  const envGround = new THREE.Color('#6f9a5c');
+  let envTarget = null, envHour = -99;
+  const _c = new THREE.Color();
+
+  function updateEnv(hour, s, sunPos, night) {
+    if (Math.abs(hour - envHour) < 0.5 && envTarget) return;
+    envHour = hour;
+    const pos = envGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const ny = pos.getY(i) / 50;
+      if (ny >= 0) _c.copy(s.bot).lerp(s.top, THREE.MathUtils.smoothstep(ny, 0, 0.85));
+      else _c.copy(s.bot).lerp(envGround, THREE.MathUtils.smoothstep(-ny, 0, 0.5));
+      envCol[i * 3] = _c.r; envCol[i * 3 + 1] = _c.g; envCol[i * 3 + 2] = _c.b;
+    }
+    envGeo.attributes.color.needsUpdate = true;
+    envSun.position.copy(sunPos).setLength(38);
+    envSun.material.color.copy(s.sun).multiplyScalar(THREE.MathUtils.lerp(4, 0.15, night)); // HDR glint by day
+    const target = pmrem.fromScene(envScene, 0.02);
+    envTarget?.dispose();
+    envTarget = target;
+    scene.environment = target.texture;
+  }
+
   const root = document.documentElement;
 
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
@@ -123,6 +156,8 @@ export function createSky(scene, skyScene) {
     stars.material.opacity = night * night;
     sunMesh.visible = sy > -6;
     moonMesh.visible = -sy > -6;
+
+    updateEnv(hour, s, sunMesh.position, night);
 
     root.style.setProperty('--sky-top', '#' + s.top.getHexString());
     root.style.setProperty('--sky-bot', '#' + s.bot.getHexString());

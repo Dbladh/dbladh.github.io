@@ -57,7 +57,7 @@ export function pathX(z) {
 }
 
 /** Ground height at (x, z). */
-export function heightAt(x, z) {
+function rawHeight(x, z) {
   const calm = 0.2 + 0.8 * smooth(12, 46, Math.hypot(x, z - 22)); // gentle meadow near the camera
   let h = (fbm(x * 0.016, z * 0.016) - 0.45) * 15 * calm;
   h += (fbm(x * 0.06 + 9, z * 0.06 + 3) - 0.5) * 3 * calm;
@@ -68,6 +68,19 @@ export function heightAt(x, z) {
     h += s.hillH * Math.exp(-(dx * dx + dz * dz) / (2 * sig * sig));
   }
   h -= 0.35 * (1 - smooth(0, 4, Math.abs(x - pathX(z)))); // path sits in a shallow trough
+  return h;
+}
+
+// Flat building plots: the terrain eases to each house's ground level, so nothing floats.
+const PADS = []; // { x, z, r, y } filled in by buildWorld before the terrain is made
+
+/** Ground height at (x, z), including the flattened plots under houses. */
+export function heightAt(x, z) {
+  let h = rawHeight(x, z);
+  for (const pad of PADS) {
+    const w = 1 - smooth(pad.r, pad.r + 4.5, Math.hypot(x - pad.x, z - pad.z));
+    if (w > 0) h = lerp(h, pad.y, w);
+  }
   return h;
 }
 
@@ -125,6 +138,105 @@ function box(w, h, d, material, x = 0, y = 0, z = 0) {
   return m;
 }
 
+// ---------------------------------------------------------------- house materials
+
+let _tileTex = null;
+/** Seamless roof-tile texture: staggered rows of rounded tiles with shaded edges. */
+function tileTexture() {
+  if (_tileTex) return _tileTex;
+  const S = 256, cols = 8, rows = 10;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, S, S);
+  const tw = S / cols, th = S / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let k = -1; k <= cols; k++) {
+      const x = k * tw + (r % 2 ? tw / 2 : 0), y = r * th;
+      const v = 190 + Math.floor(((r * 7 + k * 13) % 5) * 9); // slight tile-to-tile variation
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.beginPath();
+      g.moveTo(x + 1, y);
+      g.lineTo(x + tw - 1, y);
+      g.lineTo(x + tw - 1, y + th * 0.62);
+      g.quadraticCurveTo(x + tw / 2, y + th * 1.18, x + 1, y + th * 0.62);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(40,30,30,0.55)'; g.lineWidth = 1.6; g.stroke(); // shadow line under each tile
+    }
+  }
+  _tileTex = new THREE.CanvasTexture(c);
+  _tileTex.wrapS = _tileTex.wrapT = THREE.RepeatWrapping;
+  _tileTex.colorSpace = THREE.SRGBColorSpace;
+  _tileTex.anisotropy = 8;
+  return _tileTex;
+}
+
+const roofCache = new Map();
+/** Tiled roof material in the given tint (standard material: catches light and shows relief). */
+function roofMaterial(hex) {
+  if (!roofCache.has(hex)) {
+    const tex = tileTexture();
+    roofCache.set(hex, new THREE.MeshStandardMaterial({
+      color: hex, map: tex, bumpMap: tex, bumpScale: 2.2, roughness: 0.78, metalness: 0, envMapIntensity: 0.35,
+    }));
+  }
+  return roofCache.get(hex);
+}
+
+/** A roof slab whose top-face UVs follow its real size, so tiles keep a constant scale. */
+function slabGeometry(len, thick, span) {
+  const g = new THREE.BoxGeometry(len, thick, span);
+  const uv = g.attributes.uv;
+  for (let i = 8; i < 16; i++) uv.setXY(i, uv.getX(i) * (len / 1.7), uv.getY(i) * (span / 1.7)); // +y and -y faces
+  return g;
+}
+
+let _glassTex = null, _glassGlow = null;
+function glassTextures() {
+  if (_glassTex) return { map: _glassTex, glow: _glassGlow };
+  const S = 128;
+  const make = (draw) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    draw(c.getContext('2d'));
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  // Glass: sky-blue gradient, diagonal reflection streaks, dark muntins and frame.
+  _glassTex = make((g) => {
+    const grad = g.createLinearGradient(0, 0, 0, S);
+    grad.addColorStop(0, '#b9dcf3'); grad.addColorStop(1, '#5f8fb4');
+    g.fillStyle = grad; g.fillRect(0, 0, S, S);
+    g.fillStyle = 'rgba(255,255,255,0.45)';
+    g.beginPath(); g.moveTo(10, S); g.lineTo(46, S); g.lineTo(S, 36); g.lineTo(S, 0); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.25)';
+    g.beginPath(); g.moveTo(58, S); g.lineTo(78, S); g.lineTo(S, 82); g.lineTo(S, 62); g.closePath(); g.fill();
+    g.strokeStyle = '#27323d'; g.lineWidth = 7;
+    g.strokeRect(0, 0, S, S);
+    g.beginPath(); g.moveTo(S / 2, 0); g.lineTo(S / 2, S); g.moveTo(0, S / 2); g.lineTo(S, S / 2); g.stroke();
+  });
+  // Night glow: warm lamplit panes, black where the muntins are.
+  _glassGlow = make((g) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
+    const grad = g.createRadialGradient(S / 2, S * 0.65, 4, S / 2, S / 2, S * 0.75);
+    grad.addColorStop(0, '#ffffff'); grad.addColorStop(1, '#a8741f');
+    g.fillStyle = grad; g.fillRect(5, 5, S - 10, S - 10);
+    g.fillStyle = '#000'; g.fillRect(S / 2 - 4, 0, 8, S); g.fillRect(0, S / 2 - 4, S, 8);
+  });
+  return { map: _glassTex, glow: _glassGlow };
+}
+
+/** One glass material per house, so all its windows light up together. */
+function glassMaterial() {
+  const { map, glow } = glassTextures();
+  return new THREE.MeshStandardMaterial({
+    color: 0xffffff, map, metalness: 0.45, roughness: 0.1, envMapIntensity: 1.6,
+    emissive: 0xffb84a, emissiveMap: glow, emissiveIntensity: 0,
+  });
+}
+
 // ---------------------------------------------------------------- buildings
 
 const WALLS = ['#f6e3c0', '#f9d9b0', '#fbe9c8', '#f3d2c2', '#eadfc2', '#fdf0d8'];
@@ -152,7 +264,8 @@ function addGable(group, { cx, cz, len, span, base, rh, ov, yaw, wallMat, roofMa
   const ang = Math.atan2(rh, half);
   const L = len + 2 * ov;
   for (const s of [1, -1]) {
-    const slab = box(L, 0.16, slope + 0.05, roofMat, 0, rh / 2 + 0.06, s * half / 2);
+    const slab = new THREE.Mesh(slabGeometry(L, 0.16, slope + 0.05), roofMat);
+    slab.position.set(0, rh / 2 + 0.06, s * half / 2);
     slab.rotation.x = s * ang;
     g.add(slab);
   }
@@ -178,12 +291,12 @@ function buildHouse(rand) {
   const g = new THREE.Group();
   const pick = (a) => a[Math.floor(rand() * a.length)];
   const w = 3.6 + rand() * 1.8, d = 3 + rand() * 1.2, h = 2.2 + rand() * 0.8;
-  const wallMat = mat(pick(WALLS)), roofMat = mat(pick(ROOFS));
+  const wallMat = mat(pick(WALLS)), roofMat = roofMaterial(pick(ROOFS));
   const trim = mat('#fff8ea'), shutterMat = mat(pick(SHUTTERS));
-  const glassMat = new THREE.MeshLambertMaterial({ color: 0xbfd9e8, emissive: 0xffb84a, emissiveIntensity: 0 });
+  const glassMat = glassMaterial();
   const stone = mat('#b8b0a0');
 
-  g.add(box(w + 0.2, 0.35, d + 0.2, stone, 0, 0.175, 0));
+  g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0)); // plinth reaches below ground, so no gaps on slopes
   g.add(box(w, h, d, wallMat, 0, 0.35 + h / 2, 0));
   const top = 0.35 + h;
   const rh = 1.3 + rand() * 0.8;
@@ -195,7 +308,7 @@ function buildHouse(rand) {
     const side = -doorSide;
     const w2 = 2.2 + rand() * 1.0, d2 = d * (0.7 + rand() * 0.25), h2 = h * 0.82;
     const cx = side * (w / 2 + w2 / 2 - 0.2), cz = -0.2 - rand() * 0.4;
-    g.add(box(w2 + 0.2, 0.35, d2 + 0.2, stone, cx, 0.175, cz));
+    g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz));
     g.add(box(w2, h2, d2, wallMat, cx, 0.35 + h2 / 2, cz));
     addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh * 0.8, ov: 0.3, yaw: Math.PI / 2, wallMat, roofMat });
     addWindow(g, cx, 1.55, cz + d2 / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.5);
@@ -244,6 +357,24 @@ export function buildWorld(scene, sections, opts = {}) {
   const clouds = [];
   const boards = [];
 
+  // ---- House sites: all along the path, alternating sides, on flattened plots ----
+  const nearSign = (x, z, pad = 0) => Object.values(STOPS).some((s) => Math.hypot(x - s.x, z - s.z) < 9 * Math.max(s.scale, 0.8) + pad);
+  PADS.length = 0;
+  const sites = [];
+  [-8, -16, -24, -32, -40, -48].forEach((z0, i) => {
+    const z = z0 + (rand() - 0.5) * 2.5;
+    const side = i % 2 === 0 ? -1 : 1;
+    const slope = pathX(z + 0.5) - pathX(z - 0.5);            // dx/dz of the path
+    const k = Math.sqrt(1 + slope * slope);
+    const nx = 1 / k, nz = -slope / k;                         // unit normal to the path
+    const perp = 6.6 + rand() * 1.4;                           // distance from the path's centre line
+    const x = pathX(z) + side * perp * nx, zz = z + side * perp * nz;
+    if (nearSign(x, zz)) return;
+    const site = { x, z: zz, fx: -side * nx, fz: -side * nz, perp, y: rawHeight(x, zz) };
+    sites.push(site);
+    PADS.push({ x, z: zz, r: 5.4, y: site.y });
+  });
+
   // ---- Terrain: colour by height, warm meadow patches, pale path ----
   const geo = new THREE.PlaneGeometry(380, 250, 190, 125);
   geo.rotateX(-Math.PI / 2);
@@ -262,7 +393,15 @@ export function buildWorld(scene, sections, opts = {}) {
     c.lerp(cDeep, smooth(0.25, 0, t) * 0.5);
     c.lerp(cWarm, smooth(0.52, 0.78, fbm(x * 0.05 + 40, z * 0.05)) * 0.65);
     const onPath = 1 - smooth(1.5, 3.1, Math.abs(x - pathX(z)));
-    c.lerp(cPath, onPath * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
+    let walk = 0; // short footpath from each front door to the main path
+    for (const st of sites) {
+      const ax = st.x + st.fx * 3.2, az = st.z + st.fz * 3.2;
+      const bx = st.x + st.fx * st.perp, bz = st.z + st.fz * st.perp;
+      const abx = bx - ax, abz = bz - az;
+      const tt = THREE.MathUtils.clamp(((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz), 0, 1);
+      walk = Math.max(walk, 1 - smooth(0.6, 1.5, Math.hypot(x - (ax + abx * tt), z - (az + abz * tt))));
+    }
+    c.lerp(cPath, Math.max(onPath, walk) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -277,37 +416,21 @@ export function buildWorld(scene, sections, opts = {}) {
   const houseLights = [];
   const LIGHT_COLOR = 0xffb35a;
 
-  const nearSign = (x, z, pad = 0) => Object.values(STOPS).some((s) => Math.hypot(x - s.x, z - s.z) < 9 * Math.max(s.scale, 0.8) + pad);
-  // Spread out toward the screen edges, like a hillside village (x is a target; the path pushes houses aside).
-  const village = [
-    [-26, -14], [-17, -19], [-31, -27], [-20, -33], [-8, -41],
-    [28, -13], [17, -20], [32, -27], [21, -34], [8, -44],
-    [-3, -54], [3, -29],
-  ];
   const nearHouse = (x, z, r = 6.5) => houses.some((hh) => Math.hypot(x - hh.x, z - hh.z) < r);
-  for (const [vx, vz] of village) {
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const zz = vz + (rand() - 0.5) * 3;
-      let x = vx + (rand() - 0.5) * 4;
-      const dp = x - pathX(zz);
-      if (Math.abs(dp) < 7) x = pathX(zz) + Math.sign(dp || 1) * (7 + rand() * 2); // keep off the path
-      if (nearSign(x, zz) || nearHouse(x, zz, 8)) continue;
-      const hs = buildHouse(rand);
-      const s = 0.95 + rand() * 0.35;
-      hs.group.scale.setScalar(s);
-      hs.group.position.set(x, heightAt(x, zz) - 0.05, zz);
-      hs.group.rotation.y = Math.atan2(pathX(zz) - x, 5) + (rand() - 0.5) * 0.25;
-      scene.add(hs.group);
-      houses.push({ x, z: zz });
-      windowMats.push(hs.glassMat);
-      if (houseLights.length < maxLights) {
-        const light = new THREE.PointLight(LIGHT_COLOR, 0, 11, 1.6);
-        hs.group.updateMatrixWorld(true);
-        light.position.copy(hs.lightAnchor).applyMatrix4(hs.group.matrixWorld);
-        scene.add(light);
-        houseLights.push(light);
-      }
-      break;
+  for (const st of sites) {
+    const hs = buildHouse(rand);
+    hs.group.scale.setScalar(0.95 + rand() * 0.3);
+    hs.group.position.set(st.x, st.y, st.z);
+    hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (rand() - 0.5) * 0.12; // front door faces the path
+    scene.add(hs.group);
+    houses.push({ x: st.x, z: st.z });
+    windowMats.push(hs.glassMat);
+    if (houseLights.length < maxLights) {
+      const light = new THREE.PointLight(LIGHT_COLOR, 0, 11, 1.6);
+      hs.group.updateMatrixWorld(true);
+      light.position.copy(hs.lightAnchor).applyMatrix4(hs.group.matrixWorld);
+      scene.add(light);
+      houseLights.push(light);
     }
   }
 

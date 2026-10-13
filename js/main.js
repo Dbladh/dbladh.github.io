@@ -59,7 +59,7 @@ function start() {
   const scene = new THREE.Scene();
   const skyScene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
-  const sky = createSky(scene, skyScene);
+  const sky = createSky(scene, skyScene, renderer);
   const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene });
   const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
   let focus = 60;
@@ -262,7 +262,8 @@ function start() {
     // Depth of field: focus on whatever the camera is looking at, easing between stops.
     skyRenderer.render(skyScene, camera);
     if (dof && dof.enabled) {
-      const want = camera.position.distanceTo(cur.look);
+      // On the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
+      const want = active === 'home' ? 54 : camera.position.distanceTo(cur.look);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.render(scene, camera, focus);
     } else {
