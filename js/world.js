@@ -767,17 +767,48 @@ export function buildWorld(scene, sections, opts = {}) {
     g.scale.setScalar(s.scale);
 
     const cy = BOARD_BOTTOM + BOARD_H / 2;
-    const frame = box(BOARD_W + 0.8, BOARD_H + 0.8, 0.5, frameMat, 0, cy, 0);
-    frame.castShadow = true;
+    const T = 0.4;                      // frame thickness: constant, however far the sign stretches
+    const fMat = frameMat.clone();      // own material, so "open" can switch off depth-testing per sign
+    const parts = [0, 1, 2, 3, 4].map(() => {   // top, bottom, left, right, backing
+      const m = new THREE.Mesh(UNIT_BOX, fMat);
+      m.castShadow = true;
+      g.add(m);
+      return m;
+    });
     const teaserTex = drawBoard(sec.title, sec.teaser, s.accent);
     const openTex = drawOpenBoard(s.paper, s.accent);
-    const face = new THREE.Mesh(
-      new THREE.PlaneGeometry(BOARD_W, BOARD_H),
-      new THREE.MeshBasicMaterial({ map: teaserTex }),
-    );
-    face.position.set(0, cy, 0.27);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: teaserTex }));
     face.userData.stopId = id;
-    g.add(frame, face);
+    g.add(face);
+
+    const board = {
+      id, face, scale: s.scale, layout: null,
+      width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // original size (world units)
+      /**
+       * Resize and shift the sign face. `w`/`h` are world units; `ox`/`oy` move it within the
+       * sign's plane. The frame strips keep a constant thickness.
+       */
+      setLayout(L) {
+        const lw = L.w / s.scale, lh = L.h / s.scale, x = L.ox / s.scale, y = cy + L.oy / s.scale;
+        face.scale.set(lw, lh, 1);
+        face.position.set(x, y, 0.27);
+        parts[0].scale.set(lw + 2 * T, T, 0.5); parts[0].position.set(x, y + lh / 2 + T / 2, 0);
+        parts[1].scale.set(lw + 2 * T, T, 0.5); parts[1].position.set(x, y - lh / 2 - T / 2, 0);
+        parts[2].scale.set(T, lh, 0.5);         parts[2].position.set(x - lw / 2 - T / 2, y, 0);
+        parts[3].scale.set(T, lh, 0.5);         parts[3].position.set(x + lw / 2 + T / 2, y, 0);
+        parts[4].scale.set(lw, lh, 0.45);       parts[4].position.set(x, y, -0.02);
+        board.layout = { ...L };
+      },
+      /** Swap the face between the teaser and the plain "content is open" surface.
+       *  Open signs draw over the terrain, since a stretched sign can dip below the hill. */
+      setOpen(on) {
+        face.material.map = on ? openTex : teaserTex;
+        face.material.depthTest = fMat.depthTest = !on;
+        face.renderOrder = on ? 11 : 0;
+        parts.forEach((m) => { m.renderOrder = on ? 10 : 0; });
+      },
+    };
+    board.setLayout({ w: board.width, h: board.height, ox: 0, oy: 0 });
     for (const px of [-BOARD_W / 2 + 2.2, BOARD_W / 2 - 2.2]) {
       const h = BOARD_BOTTOM + 3;
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, h, 10), postMat);
@@ -787,14 +818,9 @@ export function buildWorld(scene, sections, opts = {}) {
     }
     boardGroup.add(g);
     g.updateMatrixWorld(true);
-    boards.push({
-      id, face, scale: s.scale,
-      width: BOARD_W * s.scale, height: BOARD_H * s.scale,
-      /** Swap the face between the teaser and the plain "content is open" surface. */
-      setOpen(on) { face.material.map = on ? openTex : teaserTex; },
-      center: face.getWorldPosition(new THREE.Vector3()),
-      normal: new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta)),
-    });
+    board.center = face.getWorldPosition(new THREE.Vector3());
+    board.normal = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
+    boards.push(board);
   }
 
   // ---- per-frame + day/night ----

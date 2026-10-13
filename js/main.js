@@ -30,6 +30,12 @@ document.querySelectorAll('.stop').forEach((el) => {
   sections[el.dataset.stop] = { el, title: el.dataset.title, teaser: el.dataset.teaser };
 });
 
+// Each section is a labelled region (screen readers announce its heading).
+document.querySelectorAll('.stop').forEach((el) => {
+  const h2 = el.querySelector('h2');
+  if (h2) { h2.id = h2.id || el.id + '-title'; el.setAttribute('role', 'region'); el.setAttribute('aria-labelledby', h2.id); }
+});
+
 // ---- Renderer (fall back to the plain page if WebGL isn't available) ----
 let renderer = null;
 try {
@@ -90,18 +96,25 @@ function start() {
 
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
+  const boardOf = (id) => world.boards.find((b) => b.id === id);
+  const lerpLayout = (a, b, k) => ({
+    w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k,
+    ox: a.ox + (b.ox - a.ox) * k, oy: a.oy + (b.oy - a.oy) * k,
+  });
+
   /** Lay a section's text exactly over the sign face (found by projecting its corners). */
   function placeOnBoard(id) {
-    const b = world.boards.find((x) => x.id === id), st = stops[id], el = sections[id].el;
-    if (!b || !st) return;
+    const b = boardOf(id), st = stops[id], el = sections[id]?.el;
+    if (!b || !st || !el) return;
     tmpCam.fov = camera.fov; tmpCam.aspect = camera.aspect; tmpCam.near = camera.near; tmpCam.far = camera.far;
     tmpCam.position.copy(st.pos); tmpCam.lookAt(st.look);
     tmpCam.updateProjectionMatrix(); tmpCam.updateMatrixWorld(true);
-    const right = new THREE.Vector3(b.normal.z, 0, -b.normal.x);
+    b.face.updateWorldMatrix(true, false);
+    const v = new THREE.Vector3();
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-      const v = b.center.clone().addScaledVector(right, sx * b.width / 2);
-      v.y += sy * b.height / 2;
+    for (const sx of [-0.5, 0.5]) for (const sy of [-0.5, 0.5]) {
+      v.set(sx, sy, 0);
+      b.face.localToWorld(v);
       v.project(tmpCam);
       const px = (v.x * 0.5 + 0.5) * window.innerWidth, py = (-v.y * 0.5 + 0.5) * window.innerHeight;
       x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
@@ -109,47 +122,110 @@ function start() {
     const w = x1 - x0;
     el.style.left = x0 + 'px'; el.style.top = y0 + 'px';
     el.style.width = w + 'px'; el.style.height = (y1 - y0) + 'px';
-    el.style.fontSize = Math.max(15, w / 46) + 'px';
+    el.style.fontSize = Math.min(24, Math.max(15, w / 52)) + 'px';
   }
 
-  function openPanel(id) {
-    Object.entries(sections).forEach(([k, s]) => s.el.classList.toggle('is-open', k === id));
-    world.boards.forEach((b) => b.setOpen(false));
-    const sec = sections[id];
-    if (!sec) { body.classList.remove('board-fill'); return; }
-    sec.el.removeAttribute('style');
-    // Wide screens: the content sits right on the zoomed-in sign. Portrait phones keep a full-screen sheet.
-    const onBoard = camera.aspect >= 1.15;
-    body.classList.toggle('board-fill', onBoard);
-    if (onBoard) {
-      world.boards.find((b) => b.id === id)?.setOpen(true);
-      placeOnBoard(id);
-    }
-    sec.el.querySelector('h2')?.focus({ preventScroll: true });
+  /** Where an open sign ends up: it stretches to fill the space between the controls and the nav. */
+  function fitLayout(b) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const cr = controls.getBoundingClientRect(), nr = nav.getBoundingClientRect();
+    const x0 = 12, x1 = vw - 12;
+    const y0 = Math.max(12, cr.bottom + 8), y1 = Math.min(vh - 12, nr.top - 8);
+    const st = stops[b.id];
+    const dist = st.pos.distanceTo(st.look);
+    const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
+    const frame = (0.4 * b.scale) / upp + 4;                                        // keep the frame on screen
+    const MAX = 4.5;                                                                // cap extreme stretches
+    return {
+      w: Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX),
+      h: Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX),
+      ox: ((x0 + x1) / 2 - vw / 2) * upp,
+      oy: -((y0 + y1) / 2 - vh / 2) * upp,
+    };
   }
 
-  function goTo(id, { instant = false, silent = false } = {}) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let morph = null;   // the sign currently changing size
+  let openId = null;  // billboard whose content is open (or opening)
+  let navToken = 0;   // bumps on every navigation so stale transitions stop themselves
+
+  function morphBoard(b, to, dur) {
+    morph?.resolve();
+    if (!dur || reduceMotion) { morph = null; b.setLayout(to); return Promise.resolve(); }
+    return new Promise((resolve) => { morph = { b, from: { ...b.layout }, to, t: 0, dur, resolve }; });
+  }
+
+  function flyTo(target, quick) {
+    tween?.done();
+    if (quick) { cur.pos.copy(target.pos); cur.look.copy(target.look); tween = null; return Promise.resolve(); }
+    return new Promise((resolve) => {
+      tween = { fromP: cur.pos.clone(), fromL: cur.look.clone(), to: target, t: 0, dur: 1.6, done: resolve };
+    });
+  }
+
+  function showText(id) {
+    const el = sections[id].el;
+    Object.values(sections).forEach((s) => { if (s.el !== el) s.el.classList.remove('is-open', 'is-shown'); });
+    placeOnBoard(id);
+    el.scrollTop = 0;
+    el.classList.add('is-open');
+    requestAnimationFrame(() => el.classList.add('is-shown'));
+    el.querySelector('h2')?.focus({ preventScroll: true });
+  }
+
+  async function hideText(id, quick) {
+    const el = sections[id]?.el;
+    if (!el) return;
+    el.classList.remove('is-shown');
+    if (!quick) await wait(150);
+    el.classList.remove('is-open');
+  }
+
+  /**
+   * Navigate. Sequence: fade the open text out -> the sign shrinks back to its original size ->
+   * the camera flies -> the new sign stretches to fit -> its text fades in.
+   * A newer call cancels an older one at its next step (navToken).
+   */
+  async function goTo(id, { instant = false, silent = false, record = true } = {}) {
     if (!stops[id]) id = 'home';
+    if (id === openId && !instant && !tween && !morph) return; // already here
+    const token = ++navToken;
+    const quick = instant || reduceMotion;
     active = id;
     body.dataset.stop = id;
     nav.querySelectorAll('a').forEach((a) => {
       if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
-    Object.values(sections).forEach((s) => s.el.classList.remove('is-open'));
-    body.classList.remove('board-fill');
-    world.boards.forEach((b) => b.setOpen(false));
+    if (!silent) live.textContent = id === 'home' ? 'Back to the landscape overview' : `Opened: ${sections[id].title}`;
+    if (record && location.hash !== '#' + id) history.pushState(null, '', '#' + id); // Back button closes a sign
 
-    const target = stops[id];
-    const finish = () => { if (active === id) openPanel(id); };
-    if (instant || reduceMotion) {
-      cur.pos.copy(target.pos); cur.look.copy(target.look); tween = null;
-      finish();
-    } else {
-      tween = { fromP: cur.pos.clone(), fromL: cur.look.clone(), to: target, t: 0, dur: 1.6, done: finish };
+    // 1. Close whatever is open.
+    if (openId) {
+      const prev = openId, b = boardOf(prev);
+      const hadFocus = sections[prev]?.el.contains(document.activeElement);
+      await hideText(prev, quick);
+      if (token !== navToken) return;
+      await morphBoard(b, { w: b.width, h: b.height, ox: 0, oy: 0 }, quick ? 0 : 0.4);
+      if (token !== navToken) return;
+      b.setOpen(false);
+      openId = null;
+      if (hadFocus) nav.querySelector(`a[href="#${id}"]`)?.focus();
     }
-    if (!silent) live.textContent = id === 'home' ? 'Overview of the landscape' : `${sections[id].title} section`;
-    if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id);
+
+    // 2. Fly the camera.
+    await flyTo(stops[id], quick);
+    if (token !== navToken) return;
+
+    // 3. Open the new sign: stretch to fit, then show its text.
+    if (id !== 'home') {
+      const b = boardOf(id);
+      openId = id;
+      b.setOpen(true);
+      await morphBoard(b, fitLayout(b), quick ? 0 : 0.45);
+      if (token !== navToken) return;
+      showText(id);
+    }
   }
 
   // ---- Simple view toggle ----
@@ -160,9 +236,9 @@ function start() {
     simpleBtn.setAttribute('aria-pressed', String(on));
     simpleBtn.textContent = on ? 'Back to the landscape' : 'Simple view';
     store.set('simple', on ? '1' : '0');
-    Object.values(sections).forEach((s) => s.el.classList.remove('is-open'));
-    body.classList.remove('board-fill');
-    if (!on) { onResize(); goTo(active, { instant: true, silent: true }); }
+    Object.values(sections).forEach((s) => s.el.classList.remove('is-open', 'is-shown'));
+    if (openId) { const b = boardOf(openId); b.setLayout({ w: b.width, h: b.height, ox: 0, oy: 0 }); b.setOpen(false); openId = null; }
+    if (!on) { onResize(); goTo(active, { instant: true, silent: true, record: false }); }
   }
 
   // ---- Sizing ----
@@ -177,9 +253,13 @@ function start() {
     camera.updateProjectionMatrix();
     dof?.resize();
     layoutStops();
-    if (active !== 'home' && !tween && !simple) { // keep a zoomed-in sign filling the screen
+    if (!simple && active !== 'home' && !tween) { // keep a zoomed-in sign filling the screen
       cur.pos.copy(stops[active].pos); cur.look.copy(stops[active].look);
-      if (sections[active]?.el.classList.contains('is-open')) openPanel(active);
+      if (openId && !morph) {
+        const b = boardOf(openId);
+        b.setLayout(fitLayout(b));
+        if (sections[openId].el.classList.contains('is-open')) placeOnBoard(openId);
+      }
     }
   }
   window.addEventListener('resize', onResize);
@@ -228,7 +308,7 @@ function start() {
     else if (e.key === 'ArrowLeft') { goTo(ORDER[(i + ORDER.length - 1) % ORDER.length]); e.preventDefault(); }
     else if (e.key === 'Escape') goTo('home');
   });
-  window.addEventListener('hashchange', () => { if (!simple) goTo(location.hash.slice(1)); });
+  window.addEventListener('hashchange', () => { if (!simple) goTo(location.hash.slice(1) || 'home', { record: false }); });
 
   // ---- Time of day ----
   function fmt(h) {
@@ -292,9 +372,16 @@ function start() {
       if (tween.t >= 1) { const d = tween.done; tween = null; d(); }
     }
 
+    if (morph) {
+      morph.t += dt / morph.dur;
+      const k = ease(Math.min(morph.t, 1));
+      morph.b.setLayout(lerpLayout(morph.from, morph.to, k));
+      if (morph.t >= 1) { const r = morph.resolve; morph = null; r(); }
+    }
+
     // Subtle parallax from pointer position, only on the overview. It fades fully to zero
     // when zoomed in on a billboard (and for reduced motion), then eases back on return.
-    const target = reduceMotion || active !== 'home' ? 0 : 1;
+    const target = reduceMotion || active !== 'home' || openId ? 0 : 1;
     parallax += (target - parallax) * Math.min(1, dt * 4);
     pointer.sx += (pointer.x - pointer.sx) * 0.04;
     pointer.sy += (pointer.y - pointer.sy) * 0.04;

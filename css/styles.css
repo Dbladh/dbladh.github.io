@@ -169,34 +169,22 @@ body.scene-mode #content {
   display: grid; place-items: center; pointer-events: none;
 }
 body.scene-mode .stop { display: none; margin: 0; }
-/* Zoomed in: the billboard's content fills the screen (room left for the nav pill below). */
+/* Zoomed in: the section's text sits right on the (stretched) billboard. JS sets
+   left/top/width/height/font-size from the sign's projected corners; the 3D face supplies the colour. */
 body.scene-mode #content { place-items: stretch; }
 body.scene-mode .stop.is-open {
   display: block; pointer-events: auto;
-  position: absolute; inset: 68px 12px 78px 12px;
-  overflow-y: auto; border-radius: 22px;
-  padding: clamp(20px, 4vw, 56px) max(24px, calc((100% - 880px) / 2)) 48px;
-  box-shadow: 8px 8px 0 var(--ink);
-  animation: rise 0.45s ease both;
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
-}
-body.scene-mode .stop.is-open h2 { font-size: clamp(2.2rem, 6.5vw, 5rem); }
-
-/* Wide screens: no modal. The text is laid directly over the zoomed-in sign (JS sets
-   left/top/width/height/font-size from the sign's projected corners; the 3D face supplies the colour). */
-body.scene-mode.board-fill .stop.is-open {
-  inset: auto; border: 0; border-radius: 0; box-shadow: none; animation: none;
-  background: transparent; padding: 3.4% 4.2% 3%;
+  position: absolute; inset: auto;
+  overflow-y: auto; border: 0; border-radius: 0; box-shadow: none; background: transparent;
+  padding: 3.4% 4.2% 3.4%;
   scrollbar-width: thin;
+  opacity: 0; transition: opacity 0.2s ease;
 }
-body.scene-mode.board-fill .stop.is-open h2 { font-size: 2.3em; }
-body.scene-mode.board-fill .stop.is-open h3 { font-size: 1.05em; }
-body.scene-mode.board-fill .stop.is-open .lede { font-size: 1.1em; }
-body.scene-mode.board-fill .back { font-size: 0.7em; }
-body.scene-mode .back {
-  display: inline-block; margin-bottom: 12px; color: var(--ink);
-  font-family: var(--mono); font-weight: 700; font-size: 0.85rem; text-transform: uppercase;
-}
+body.scene-mode .stop.is-open.is-shown { opacity: 1; }
+body.scene-mode .stop.is-open h2 { font-size: 2.3em; }
+body.scene-mode .stop.is-open h3 { font-size: 1.05em; }
+body.scene-mode .stop.is-open .lede { font-size: 1.1em; }
+body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family: var(--mono); font-weight: 700; text-transform: uppercase; font-size: 0.7em; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
@@ -207,13 +195,12 @@ body.scene-mode .back {
   .time input { width: 84px; }
   #time-label { min-width: 0; white-space: nowrap; }
   #simple-toggle { font-size: 0.7rem; padding: 5px 10px; white-space: nowrap; }
-  body.scene-mode .stop.is-open { inset: 84px 8px 76px 8px; padding: 18px 18px 40px; }
   body.scene-mode .hero h1 { top: 14vh; }
   body.scene-mode .tagline { top: calc(14vh + clamp(3rem, 14vw, 13rem) * 0.95 + 8px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  body.scene-mode .stop.is-open { animation: none; }
+  body.scene-mode .stop.is-open { transition: none; }
   body.scene-mode .hero h1, body.scene-mode .tagline { transition: none; }
 }
