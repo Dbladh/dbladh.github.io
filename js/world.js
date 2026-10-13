@@ -415,12 +415,18 @@ function addWindow(group, x, y, z, yaw, glassMat, trim, shutterMat, withBox) {
   const w = new THREE.Group();
   w.position.set(x, y, z);
   w.rotation.y = yaw;
-  w.add(box(0.98, 0.98, 0.1, trim));
-  w.add(box(0.74, 0.74, 0.14, glassMat));
-  w.add(box(0.06, 0.74, 0.16, trim));            // mullion
-  w.add(box(1.15, 0.1, 0.24, trim, 0, -0.55, 0.06));
-  for (const s of [-1, 1]) w.add(box(0.3, 0.9, 0.08, shutterMat, s * 0.66, 0, 0.0));
-  if (withBox) w.add(box(0.9, 0.2, 0.2, mat('#7a4a2c'), 0, -0.72, 0.12));
+  // Glass sits slightly *behind* a frame that stands proud of the wall, so the frame shades it.
+  w.add(box(0.76, 0.76, 0.05, glassMat, 0, 0, -0.01));
+  const T = 0.13, F = 0.14, out = 0.06;                       // frame width, depth, how far it stands out
+  w.add(box(0.98, T, F, trim, 0, 0.5 - T / 2, out));          // top
+  w.add(box(0.98, T, F, trim, 0, -0.5 + T / 2, out));         // bottom
+  w.add(box(T, 0.98, F, trim, -0.5 + T / 2, 0, out));         // left
+  w.add(box(T, 0.98, F, trim, 0.5 - T / 2, 0, out));          // right
+  w.add(box(0.05, 0.76, 0.06, trim, 0, 0, out));              // vertical muntin
+  w.add(box(0.76, 0.05, 0.06, trim, 0, 0, out));              // horizontal muntin
+  w.add(box(1.18, 0.1, 0.3, trim, 0, -0.56, 0.1));            // projecting sill
+  for (const s of [-1, 1]) w.add(box(0.3, 0.98, 0.07, shutterMat, s * 0.68, 0, 0.03));
+  if (withBox) w.add(box(0.9, 0.2, 0.2, mat('#7a4a2c'), 0, -0.74, 0.14));
   group.add(w);
 
   // Night light: a shaft out of the glass and the window's four panes projected on the ground.
@@ -432,15 +438,46 @@ function addWindow(group, x, y, z, yaw, glassMat, trim, shutterMat, withBox) {
   const decal = new THREE.Mesh(kit.decalGeo, kit.decalMat);
   decal.position.set(0, -y + 0.26, 2.2);
   shaft.renderOrder = decal.renderOrder = 2;
+  shaft.userData.noShadow = decal.userData.noShadow = true; // light effects, not objects
   lg.add(shaft, decal);
   group.add(lg);
 }
+
+const WALL_GEO = (() => {              // unit box, darker toward the bottom (baked ground occlusion)
+  const g = new THREE.BoxGeometry(1, 1, 1);
+  const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) { const k = 0.7 + 0.3 * (pos.getY(i) + 0.5); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+})();
+function wallBox(w, h, d, material, x, y, z) {
+  const m = new THREE.Mesh(WALL_GEO, material);
+  m.scale.set(w, h, d); m.position.set(x, y, z);
+  return m;
+}
+
+let _blob = null;
+function blobTexture() {              // soft radial falloff, used for contact shadows
+  if (_blob) return _blob;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.6, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  _blob = new THREE.CanvasTexture(c);
+  return _blob;
+}
+const CONTACT_MAT = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x14200c, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+const EAVE_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false });
 
 function buildHouse(rand) {
   const g = new THREE.Group();
   const pick = (a) => a[Math.floor(rand() * a.length)];
   const w = 3.6 + rand() * 1.8, d = 3 + rand() * 1.2, h = 2.2 + rand() * 0.8;
-  const wallMat = mat(pick(WALLS)), roofMat = roofMaterial(pick(ROOFS));
+  const wallHex = pick(WALLS);
+  const wallMat = mat(wallHex, { vertexColors: true }), wallPlain = mat(wallHex); // plain one for the gable triangles
+  const roofMat = roofMaterial(pick(ROOFS));
   const trim = mat('#fff8ea'), shutterMat = mat(pick(SHUTTERS));
   const glassMat = glassMaterial();
   const stone = mat('#b8b0a0');
@@ -452,12 +489,22 @@ function buildHouse(rand) {
   let radius = Math.max(w / 2, d / 2 + 1.3) + 0.8;  // footprint radius used to keep plants and rocks clear
 
   g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0)); // plinth reaches below ground, so no gaps on slopes
-  g.add(box(w, h, d, wallMat, 0, 0.35 + h / 2, 0));
+  g.add(wallBox(w, h, d, wallMat, 0, 0.35 + h / 2, 0));
+  // soft contact shadow on the ground, and a band of shade under the eave on the front wall
+  const contact = new THREE.Mesh(new THREE.PlaneGeometry(w + 3.4, d + 3.4).rotateX(-Math.PI / 2), CONTACT_MAT);
+  contact.position.y = 0.07;
+  contact.renderOrder = 1;
+  contact.userData.noShadow = true;
+  g.add(contact);
+  const eave = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.45), EAVE_MAT);
+  eave.position.set(0, 0.35 + h - 0.225, d / 2 + 0.012);
+  eave.userData.noShadow = true;
+  g.add(eave);
 
   // Main roof. On the wing side it ends flush with the gable wall, so the wing's roof can meet it cleanly.
   const OV = 0.35;
   const ends = hasWing ? (wingSide > 0 ? [OV, 0] : [0, OV]) : [OV, OV];
-  addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat, roofMat });
+  addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat: wallPlain, roofMat });
 
   // Wing: lower, with its ridge kept just under the main eave and its eaves ending inside the main walls.
   if (hasWing) {
@@ -466,9 +513,9 @@ function buildHouse(rand) {
     const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = -0.2 - rand() * 0.3;
     const rh2 = Math.min(rh * 0.8, Math.max(0.7, h - h2 + 0.35));
     g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz));
-    g.add(box(w2, h2, d2, wallMat, cx, 0.35 + h2 / 2, cz));
+    g.add(wallBox(w2, h2, d2, wallMat, cx, 0.35 + h2 / 2, cz));
     // inner eave overhang (0.15) is smaller than the overlap (0.3), so it stays hidden inside the main house
-    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat, roofMat });
+    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat: wallPlain, roofMat });
     addWindow(g, cx + wingSide * 0.2, 1.55, cz + d2 / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.5);
     addWindow(g, cx + wingSide * (w2 / 2 + 0.03), 1.55, cz, wingSide * Math.PI / 2, glassMat, trim, shutterMat, false);
     radius = Math.max(radius, w / 2 + w2 + 0.8, Math.abs(cz) + d2 / 2 + 1.2);
@@ -511,7 +558,7 @@ function buildHouse(rand) {
   attic.add(ring, pane);
   g.add(attic);
 
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = !o.userData.noShadow; } });
   return { group: g, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius };
 }
 

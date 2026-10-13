@@ -137,21 +137,23 @@ export function createSky(scene, skyScene, renderer) {
     sunMesh.position.set(sx, sy, sz);
     moonMesh.position.set(-sx, -sy, sz);
     // Light comes from the sun's direction, but never lower than ~12 degrees (keeps shadows sane).
-    const dir = new THREE.Vector3(sx, Math.max(sy, 22), sz + 25).normalize();
+    // The light comes from the side and a little toward the camera (not from behind the village),
+    // so facades you look at are modelled by it and roof/eave shadows fall where you can see them.
+    const dir = new THREE.Vector3(sx * 1.25, Math.max(sy, 26), 20).normalize();
     sunLight.position.copy(sunLight.target.position).addScaledVector(dir, 180);
     moonLight.position.set(-sx, Math.max(-sy, 6), sz);
 
     const night = THREE.MathUtils.clamp(1 - (sy + 8) / 18, 0, 1);
     sunLight.color.copy(s.sun);
-    sunLight.intensity = s.sunI * 1.3;
+    sunLight.intensity = s.sunI * 1.75;
     moonLight.intensity = 0.35 * night;
-    hemi.intensity = s.hemi * 1.9; // bright, soft, storybook lighting
+    hemi.intensity = s.hemi * 1.45; // soft fill, kept low enough that shadows still read
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
     skyHemi.intensity = hemi.intensity;
     skyHemi.color.copy(hemi.color);
     skySun.intensity = sunLight.intensity * 0.8;
     skySun.color.copy(sunLight.color);
-    skySun.position.set(sx, Math.max(sy, 22), sz + 25);
+    skySun.position.set(sx * 1.25, Math.max(sy, 26), 20);
     fog.color.copy(s.bot);
     stars.material.opacity = night * night;
     sunMesh.visible = sy > -6;
