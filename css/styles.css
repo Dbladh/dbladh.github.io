@@ -146,7 +146,7 @@ body.scene-mode .hero { position: static; padding: 0; max-width: none; margin: 0
 /* Title block: the name sits well below the top controls, and the tagline below the name's descender. */
 body.scene-mode {
   --name-size: clamp(2.4rem, 7.5vw, 5.5rem);   /* capped at 88px so it never gets huge on big monitors */
-  --name-top: clamp(84px, 11vh, 130px);        /* the controls pill ends near 64px, so >= 20px of air */
+  --name-top: calc(clamp(84px, 11vh, 130px) + env(safe-area-inset-top, 0px));        /* the controls pill ends near 64px, so >= 20px of air */
 }
 body.scene-mode .hero h1 {
   position: fixed; z-index: 0; left: 0; right: 0; top: var(--name-top);
@@ -224,7 +224,7 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
   .time input { width: 84px; }
   #time-label { min-width: 0; white-space: nowrap; }
   #simple-toggle { font-size: 0.7rem; padding: 5px 10px; white-space: nowrap; }
-  body.scene-mode { --name-size: clamp(2.4rem, 13vw, 4rem); --name-top: 88px; }
+  body.scene-mode { --name-size: clamp(2.4rem, 13vw, 4rem); --name-top: calc(88px + env(safe-area-inset-top, 0px)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -310,4 +310,8 @@ body.scene-mode::before {
 
 
 /* Behind everything (and under floating mobile browser toolbars) the page colour is the sky's horizon colour. */
-html:has(body.scene-mode) { background: var(--sky-bot); }
+html:has(body.scene-mode) {
+  /* Seamless under the browser chrome: sky at the top, ground at the bottom, matching the scene's own edges. */
+  background: linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-bot) 40%, var(--ground, #4f7f45) 66%, var(--ground, #4f7f45) 100%);
+  background-attachment: fixed;
+}

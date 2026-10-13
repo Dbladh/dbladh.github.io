@@ -196,6 +196,7 @@ export function createSky(scene, skyScene, renderer) {
   }
 
   const root = document.documentElement;
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
 
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
   function set(hour) {
@@ -233,6 +234,11 @@ export function createSky(scene, skyScene, renderer) {
 
     root.style.setProperty('--sky-top', '#' + s.top.getHexString());
     root.style.setProperty('--sky-bot', '#' + s.bot.getHexString());
+    // Ground colour for whatever sits below the scene (under a phone's browser toolbar): green by day, dark at night.
+    const ground = _a.set('#2c4a33').lerp(_b.set('#5f9150'), 1 - night);
+    root.style.setProperty('--ground', '#' + ground.getHexString());
+    // Tint the phone's status bar / address bar to the top of the sky (live).
+    if (themeMeta) themeMeta.setAttribute('content', '#' + s.top.getHexString());
     return { night, horizon: s.bot.clone() };
   }
 
