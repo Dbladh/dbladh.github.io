@@ -148,15 +148,20 @@ function start() {
   /** Where an open sign ends up: it stretches to fill the space between the controls and the nav. */
   function fitLayout(b) {
     const vw = window.innerWidth, vh = window.innerHeight;
+    // On short screens the nav steps aside while a sign is open (see CSS), and the sign runs nearly
+    // edge to edge; the back link in the sign's bar, Esc and the arrow keys still navigate.
+    const compact = matchMedia('(max-height: 600px)').matches;
+    const m = compact ? 4 : 12;
     const nr = nav.getBoundingClientRect();
     // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
     const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
-    const x0 = 12, x1 = vw - 12;
-    const y0 = Math.max(12, topEdge + 8), y1 = Math.min(vh - 12, nr.top - 8);
+    const x0 = m, x1 = vw - m;
+    const y0 = Math.max(m, topEdge + (compact ? 0 : 8));
+    const y1 = compact ? vh - m : Math.min(vh - m, nr.top - 8);
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
-    const frame = (0.7 * b.scale) / upp + 4;                                        // keep the frame on screen
+    const frame = (compact ? 0.45 : 0.7) * b.scale / upp + (compact ? 0 : 4);                                        // keep the frame on screen
     const MAX = 4.5;                                                                // cap extreme stretches
     const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
     const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);

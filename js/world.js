@@ -103,13 +103,22 @@ function rawHeight(x, z) {
 // Flat building plots: the terrain eases to each house's ground level, so nothing floats.
 const PADS = []; // { x, z, r, y } filled in by buildWorld before the terrain is made
 
-/** Ground height at (x, z), including the flattened plots under houses. */
+/**
+ * Ground height at (x, z), including the flattened plots under houses.
+ * Where plots overlap, the nearer plot dominates (weights are raised to a high power), so the core of
+ * every plot is exactly level instead of being dragged toward its neighbour's height.
+ */
 export function heightAt(x, z) {
   let h = rawHeight(x, z);
+  let wSum = 0, ySum = 0, wMax = 0;
   for (const pad of PADS) {
     const w = 1 - smooth(pad.r, pad.r + 4.5, Math.hypot(x - pad.x, z - pad.z));
-    if (w > 0) h = lerp(h, pad.y, w);
+    if (w <= 0) continue;
+    const k = w ** 10;
+    wSum += k; ySum += k * pad.y;
+    if (w > wMax) wMax = w;
   }
+  if (wMax > 0) h = lerp(h, ySum / wSum, wMax);
   return h;
 }
 
@@ -603,7 +612,7 @@ function buildHouse(rand) {
   arch.rotation.x = -Math.PI / 2;
   arch.position.set(dx, springY, d / 2 + 0.03);
   g.add(arch);
-  g.add(box(1.5, 0.12, 1.1, stone, dx, 0.3, d / 2 + 0.55)); // doorstep
+  g.add(box(1.5, 0.9, 1.1, stone, dx, -0.09, d / 2 + 0.55));  // doorstep: a block that sinks into the ground
 
   // Windows: one on the front opposite the door (never overlapping it), and one in the end wall
   // that is NOT the wing's wall. Round attic window in the free gable.
@@ -743,10 +752,10 @@ export function buildWorld(scene, sections, opts = {}) {
     const b = branches[bi], i = Math.round(u * (b.length - 1)), [tx, tz] = tangent(b, i);
     const nx = -tz, nz = tx, perp = 6.0;
     const x = b[i][0] + side * nx * perp, zz = b[i][1] + side * nz * perp;
-    if (nearPond(x, zz, 3) || nearSign(x, zz)) return;
+    if (nearPond(x, zz, 3) || nearSign(x, zz) || sites.some((o) => Math.hypot(o.x - x, o.z - zz) < 13)) return;
     const site = { x, z: zz, fx: -side * nx, fz: -side * nz, perp, y: rawHeight(x, zz), hamlet: true };
     sites.push(site);
-    PADS.push({ x, z: zz, r: 6.0, y: site.y });
+    PADS.push({ x, z: zz, r: 7.2, y: site.y });
   });
   { // windmill at the end of the left path (on the flank hill), barn at the end of the right path
     const wb = branches[0][branches[0].length - 1], bb = branches[1][branches[1].length - 1];
@@ -758,9 +767,9 @@ export function buildWorld(scene, sections, opts = {}) {
     // The left path now ends at one more cottage, facing back down the path.
     { const [tx, tz] = tangent(branches[0], branches[0].length - 3);
       const hx = wb[0] - tx * 1.5 + tz * 4.5, hz = wb[1] - tz * 1.5 - tx * 4.5;
-      if (!nearPond(hx, hz, 3) && !nearSign(hx, hz)) {
+      if (!nearPond(hx, hz, 3) && !nearSign(hx, hz) && !sites.some((o) => Math.hypot(o.x - hx, o.z - hz) < 13)) {
         const site = { x: hx, z: hz, fx: tz * -1 + 0, fz: tx * 1, perp: 4.5, y: rawHeight(hx, hz), hamlet: true };
-        sites.push(site); PADS.push({ x: hx, z: hz, r: 6, y: site.y });
+        sites.push(site); PADS.push({ x: hx, z: hz, r: 7.2, y: site.y });
       } }
     farm.push({ kind: 'barn', x: bb[0] + 2.5, z: bb[1] - 1, y: by, rot: Math.atan2(-(bb[0] + 2.5), 22 - (bb[1] - 1)) + 0.5 });
     PADS.push({ x: bb[0] + 2.5, z: bb[1] - 1, r: 5.5, y: by });
@@ -775,6 +784,24 @@ export function buildWorld(scene, sections, opts = {}) {
     return best;
   };
   const branchBox = branches.map((b) => ({ x0: Math.min(...b.map((p) => p[0])) - 4, x1: Math.max(...b.map((p) => p[0])) + 4, z0: Math.min(...b.map((p) => p[1])) - 4, z1: Math.max(...b.map((p) => p[1])) + 4 }));
+
+  // Level neighbouring plots together: buildings closer than a plot's reach share one ground height,
+  // otherwise their overlapping skirts tilt each other's ground (and the houses look crooked).
+  {
+    const items = [...sites, ...farm];
+    const parent = items.map((_, i) => i);
+    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    for (let i = 0; i < items.length; i++) for (let j = 0; j < i; j++) {
+      if (Math.hypot(items[i].x - items[j].x, items[i].z - items[j].z) < 15) parent[find(i)] = find(j);
+    }
+    const sum = new Map(), cnt = new Map();
+    items.forEach((it, i) => { const g = find(i); sum.set(g, (sum.get(g) || 0) + it.y); cnt.set(g, (cnt.get(g) || 0) + 1); });
+    items.forEach((it, i) => { const g = find(i); it.y = sum.get(g) / cnt.get(g); });
+    for (const pad of PADS) {
+      const it = items.find((o) => o.x === pad.x && o.z === pad.z);
+      if (it) pad.y = it.y;
+    }
+  }
 
   // Water level: a little below the average ground height on a ring around the pond.
   let ringSum = 0;
