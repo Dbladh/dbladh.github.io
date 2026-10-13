@@ -178,7 +178,7 @@ body.scene-mode .stop.is-open {
   display: block; pointer-events: auto;
   position: absolute; inset: auto;
   overflow-y: auto; border: 0; border-radius: 0; box-shadow: none; background: transparent;
-  padding: 3.4% 4.2% 3.4%;
+  padding: 2.2% 4.2% 3.4%;
   scrollbar-width: thin;
   opacity: 0; transition: opacity 0.2s ease;
 }

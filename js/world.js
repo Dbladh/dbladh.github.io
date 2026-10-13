@@ -422,7 +422,7 @@ function drawOpenBoard(paper, accent) {
   c.width = 1024; c.height = 576; // same size as the teaser face, so the stripe stays crisp
   const g = c.getContext('2d');
   g.fillStyle = paper; g.fillRect(0, 0, 1024, 576);
-  g.fillStyle = accent; g.fillRect(0, 0, 1024, 40);
+  void accent; // the coloured bar is a separate mesh (see setLayout), not part of this texture
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -781,6 +781,11 @@ export function buildWorld(scene, sections, opts = {}) {
     const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: teaserTex }));
     face.userData.stopId = id;
     g.add(face);
+    // The coloured bar across the top while open: its own strip, so its height can stay
+    // readable on screen however the sign is stretched. Text scrolls underneath it.
+    const bar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: s.accent }));
+    bar.visible = false;
+    g.add(bar);
 
     const board = {
       id, face, scale: s.scale, layout: null,
@@ -798,7 +803,10 @@ export function buildWorld(scene, sections, opts = {}) {
         parts[2].scale.set(T, lh, 0.5);         parts[2].position.set(x - lw / 2 - T / 2, y, 0);
         parts[3].scale.set(T, lh, 0.5);         parts[3].position.set(x + lw / 2 + T / 2, y, 0);
         parts[4].scale.set(lw, lh, 0.45);       parts[4].position.set(x, y, -0.02);
-        board.layout = { ...L };
+        const barH = L.bar ?? 0.0694 * L.h;     // default = the teaser's stripe proportion
+        bar.scale.set(lw, barH / s.scale, 1);
+        bar.position.set(x, y + lh / 2 - barH / s.scale / 2, 0.275);
+        board.layout = { ...L, bar: barH };
       },
       /** Swap the face between the teaser and the plain "content is open" surface.
        *  Open signs draw over the terrain (a stretched sign can dip below the hill). The depth
@@ -806,7 +814,9 @@ export function buildWorld(scene, sections, opts = {}) {
        *  the depth-of-field pass would treat the sign as far-away sky and blur it. */
       setOpen(on) {
         face.material.map = on ? openTex : teaserTex;
-        face.material.depthFunc = fMat.depthFunc = on ? THREE.AlwaysDepth : THREE.LessEqualDepth;
+        face.material.depthFunc = fMat.depthFunc = bar.material.depthFunc = on ? THREE.AlwaysDepth : THREE.LessEqualDepth;
+        bar.visible = on;
+        bar.renderOrder = on ? 12 : 0;
         face.renderOrder = on ? 11 : 0;
         parts.forEach((m) => { m.renderOrder = on ? 10 : 0; });
       },
@@ -819,6 +829,7 @@ export function buildWorld(scene, sections, opts = {}) {
       post.castShadow = true;
       g.add(post);
     }
+    g.traverse((o) => o.layers.set(1)); // layer 1: drawn sharp, after (and not blurred by) depth of field
     boardGroup.add(g);
     g.updateMatrixWorld(true);
     board.center = face.getWorldPosition(new THREE.Vector3());

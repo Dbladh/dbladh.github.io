@@ -65,6 +65,7 @@ function start() {
   const scene = new THREE.Scene();
   const skyScene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
+  camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
   const sky = createSky(scene, skyScene, renderer);
   const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene });
   const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
@@ -97,10 +98,14 @@ function start() {
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
   const boardOf = (id) => world.boards.find((b) => b.id === id);
-  const lerpLayout = (a, b, k) => ({
-    w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k,
-    ox: a.ox + (b.ox - a.ox) * k, oy: a.oy + (b.oy - a.oy) * k,
-  });
+  const lerpLayout = (a, b, k) => {
+    const ab = a.bar ?? 0.0694 * a.h, bb = b.bar ?? 0.0694 * b.h;
+    return {
+      w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k,
+      ox: a.ox + (b.ox - a.ox) * k, oy: a.oy + (b.oy - a.oy) * k,
+      bar: ab + (bb - ab) * k,
+    };
+  };
 
   /** Lay a section's text exactly over the sign face (found by projecting its corners). */
   function placeOnBoard(id) {
@@ -119,10 +124,22 @@ function start() {
       const px = (v.x * 0.5 + 0.5) * window.innerWidth, py = (-v.y * 0.5 + 0.5) * window.innerHeight;
       x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
     }
-    const w = x1 - x0;
-    el.style.left = x0 + 'px'; el.style.top = y0 + 'px';
-    el.style.width = w + 'px'; el.style.height = (y1 - y0) + 'px';
+    const w = x1 - x0, h = y1 - y0;
+    const barPx = Math.min(h * 0.5, (b.layout.bar / b.layout.h) * h);
+    // The scrolling text starts *below* the coloured bar, so it slides underneath it...
+    el.style.left = x0 + 'px'; el.style.top = (y0 + barPx) + 'px';
+    el.style.width = w + 'px'; el.style.height = (h - barPx) + 'px';
     el.style.fontSize = Math.min(24, Math.max(15, w / 52)) + 'px';
+    // ...and the back link is pinned inside the bar.
+    const back = el.querySelector('.back');
+    if (back) {
+      back.style.position = 'fixed';
+      back.style.left = (x0 + w * 0.042) + 'px';
+      back.style.top = (y0 + barPx / 2) + 'px';
+      back.style.transform = 'translateY(-50%)';
+      back.style.margin = '0';
+      back.style.zIndex = '2';
+    }
   }
 
   /** Where an open sign ends up: it stretches to fill the space between the controls and the nav. */
@@ -136,11 +153,14 @@ function start() {
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
     const frame = (0.4 * b.scale) / upp + 4;                                        // keep the frame on screen
     const MAX = 4.5;                                                                // cap extreme stretches
+    const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
+    const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);
+    const barPx = Math.min(56, Math.max(34, (h / upp) * 0.0694)); // always tall enough to hold the back link
     return {
-      w: Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX),
-      h: Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX),
+      w, h,
       ox: ((x0 + x1) / 2 - vw / 2) * upp,
       oy: -((y0 + y1) / 2 - vh / 2) * upp,
+      bar: barPx * upp,
     };
   }
 
@@ -280,6 +300,7 @@ function start() {
   });
 
   const ray = new THREE.Raycaster();
+  ray.layers.enable(1);
   const ndc = new THREE.Vector2();
   const faces = world.boards.map((b) => b.face);
   function pick(e) {

@@ -100,6 +100,27 @@ export function createDOF(renderer) {
   quad.frustumCulled = false;
   const quadScene = new THREE.Scene();
   quadScene.add(quad);
+
+  // Writes the main pass's depth into the screen's depth buffer (no colour), so the billboards
+  // drawn afterwards are hidden by trees and hills in front of them exactly as in the main pass.
+  const depthCopy = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    uniforms: { tDepth: { value: target.depthTexture } },
+    vertexShader: VERT,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tDepth;
+      varying vec2 vUv;
+      void main() {
+        gl_FragDepth = texture2D(tDepth, vUv).x;
+        gl_FragColor = vec4(0.0);
+      }`,
+    colorWrite: false,
+    depthTest: true,
+    depthWrite: true,
+    depthFunc: THREE.AlwaysDepth,
+  }));
+  depthCopy.frustumCulled = false;
+  const depthScene = new THREE.Scene();
+  depthScene.add(depthCopy);
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
   const size = new THREE.Vector2();
@@ -129,12 +150,26 @@ export function createDOF(renderer) {
       material.uniforms.cameraNear.value = camera.near;
       material.uniforms.cameraFar.value = camera.far;
       material.uniforms.focus.value = Math.max(focus, 1);
+      // Layer 0 = the world (blurred by depth of field); layer 1 = billboards (kept sharp).
+      camera.layers.set(0);
       renderer.setRenderTarget(target);
       renderer.clear();
       renderer.render(scene, camera);
       renderer.setRenderTarget(null);
       renderer.clear();
       renderer.render(quadScene, quadCam);
+
+      // Billboards: drawn crisp on top, depth-tested against the world's depth.
+      const prevAuto = renderer.autoClear, prevShadow = renderer.shadowMap.autoUpdate;
+      renderer.autoClear = false;
+      renderer.shadowMap.autoUpdate = false; // shadows were already rendered in the main pass
+      renderer.render(depthScene, quadCam);
+      camera.layers.set(1);
+      renderer.render(scene, camera);
+      renderer.autoClear = prevAuto;
+      renderer.shadowMap.autoUpdate = prevShadow;
+      camera.layers.enable(0);
+      camera.layers.enable(1);
     },
   };
 }
