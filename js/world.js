@@ -633,6 +633,7 @@ function buildHouse(rand) {
     addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat: wallPlain, roofMat });
     addWindow(g, cx + wingSide * 0.2, 1.55, cz + d2 / 2 + 0.03, 0, glassMat, trim, shutterMat, rand() < 0.5);
     addWindow(g, cx + wingSide * (w2 / 2 + 0.03), 1.55, cz, wingSide * Math.PI / 2, glassMat, trim, shutterMat, false);
+    addWindow(g, cx, 1.55, cz - d2 / 2 - 0.03, Math.PI, glassMat, trim, shutterMat, false);
     radius = Math.max(radius, w / 2 + w2 + 0.8, Math.abs(cz) + d2 / 2 + 1.2);
   }
 
@@ -663,6 +664,10 @@ function buildHouse(rand) {
   const freeSide = hasWing ? -wingSide : (rand() < 0.5 ? -1 : 1);
   addWindow(g, freeSide * (w / 2 + 0.03), 1.65, 0, freeSide * Math.PI / 2, glassMat, trim, shutterMat, false);
   if (!hasWing) addWindow(g, -freeSide * (w / 2 + 0.03), 1.65, 0, -freeSide * Math.PI / 2, glassMat, trim, shutterMat, false);
+  // Back wall: windows too, so no house shows a blank rear (the foreground cottage is seen from behind).
+  const backZ = -d / 2 - 0.03;
+  const backXs = w > 4.4 ? [-w * 0.26, w * 0.26] : [0];
+  backXs.forEach((bx, i) => addWindow(g, bx, 1.65, backZ, Math.PI, glassMat, trim, shutterMat, i === 0 && rand() < 0.6));
   const attic = new THREE.Group();
   attic.position.set(freeSide * (w / 2 + 0.02), top + rh * 0.34, 0);
   attic.rotation.y = freeSide * Math.PI / 2;
