@@ -546,7 +546,7 @@ function cloudTexture(variant) {
       const env = Math.max(0, 1 - (dx * dx * 0.85 + dy * dy * 1.35));                   // ellipse: wide but with real body
       const d = (base + fine * 0.3) * (0.3 + 0.95 * Math.pow(env, 0.7)) * 1.75;
       const a = smooth(0.3, 0.72, d);
-      const shade = 0.78 + 0.22 * (1 - ny);                                            // underside a touch darker
+      const shade = 0.95 + 0.05 * (1 - ny);                                            // nearly white; barely shaded underneath
       const i = (y * W + x) * 4;
       img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * shade);
       img.data[i + 3] = Math.round(255 * a * a * (3 - 2 * a));                          // an extra ease: softer fringe
@@ -1402,7 +1402,7 @@ export function buildWorld(scene, sections, opts = {}) {
       const u = (j / (n - 1)) - 0.5;
       sp.userData = {
         w, h, bx: u * span + (rand() - 0.5) * 10, by: (rand() - 0.5) * 7 + (1 - Math.abs(u) * 1.4) * 2.5,
-        ph: rand() * 6.28, sp: 0.04 + rand() * 0.09, amp: 3 + rand() * 6, base: 0.42 + rand() * 0.36,
+        ph: rand() * 6.28, sp: 0.04 + rand() * 0.09, amp: 3 + rand() * 6, base: 0.62 + rand() * 0.3,
         high: rand(),                                               // 0 = low/shaded layer, 1 = high/bright layer
       };
       sp.position.set(sp.userData.bx, sp.userData.by, (rand() - 0.5) * 6);
@@ -1857,7 +1857,7 @@ export function buildWorld(scene, sections, opts = {}) {
         sp.position.y = u.by + Math.sin(t * 0.7 + 1.3) * u.amp * 0.18;
         sp.scale.set(u.w * (1 + 0.07 * Math.sin(t * 0.8 + 2)), u.h * (1 + 0.14 * Math.cos(t * 0.6)), 1);
         sp.material.rotation = 0.05 * Math.sin(t * 0.5 + u.ph);
-        sp.material.opacity = (u.base + 0.12 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt);
+        sp.material.opacity = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt));
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       for (const bf of butterflies) {
@@ -1891,10 +1891,12 @@ export function buildWorld(scene, sections, opts = {}) {
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     setClouds(night, horizon) {
       cloudLook.night = night;
-      const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.55);
+      // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
+      const warm = Math.max(0, horizon.r - horizon.b);                       // how orange the horizon is
+      const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.1 + 0.5 * Math.min(1, warm * 2.5));
       const dark = new THREE.Color(0.42, 0.46, 0.72);
       cloudLook.tint.copy(day).lerp(dark, night);
-      for (const sp of cloudSprites) sp.material.color.copy(cloudLook.tint).multiplyScalar(0.82 + 0.18 * sp.userData.high);
+      for (const sp of cloudSprites) sp.material.color.copy(cloudLook.tint).multiplyScalar(0.94 + 0.06 * sp.userData.high);
     },
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {

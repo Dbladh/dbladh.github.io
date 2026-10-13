@@ -66,26 +66,32 @@ export function createSky(scene, skyScene, renderer) {
     c.width = c.height = 128;
     const g = c.getContext('2d');
     const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.55)');
-    gr.addColorStop(0.5, 'rgba(255,255,255,0.14)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    for (let i = 0; i <= 16; i++) {                       // smooth gaussian-like falloff, no visible rim
+      const r = i / 16;
+      gr.addColorStop(r, `rgba(255,255,255,${(0.95 * Math.exp(-r * r * 5.5)).toFixed(3)})`);
+    }
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   })();
   const halo = (color, scale, opacity) => {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity, depthWrite: false, depthTest: false, fog: false, blending: THREE.AdditiveBlending }));
     sp.scale.setScalar(scale);
+    sp.renderOrder = -10;
     return sp;
   };
   const sunMesh = new THREE.Mesh(
     new THREE.SphereGeometry(10, 28, 18),
-    new THREE.MeshBasicMaterial({ color: 0xfff1b8, fog: false }),
+    new THREE.MeshBasicMaterial({ color: 0xfff1b8, fog: false, depthTest: false, depthWrite: false }),
   );
-  sunMesh.add(halo(0xffd890, 64, 0.6));
+  sunMesh.renderOrder = -10;   // behind everything else in this layer, whatever its distance
+  sunMesh.add(halo(0xffd890, 64, 0.5));
   const moonMesh = new THREE.Mesh(
     new THREE.SphereGeometry(7, 28, 18),
-    new THREE.MeshBasicMaterial({ color: 0xe8eeff, fog: false }),
+    new THREE.MeshBasicMaterial({ color: 0xe8eeff, fog: false, depthTest: false, depthWrite: false }),
   );
-  moonMesh.add(halo(0xaec4ff, 42, 0.4));
+  moonMesh.renderOrder = -10;
+  moonMesh.add(halo(0xaec4ff, 42, 0.35));
   skyScene.add(sunMesh, moonMesh);
 
   // Stars: points on a big upper hemisphere, faded in at night.

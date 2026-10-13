@@ -152,13 +152,15 @@ body.scene-mode .hero h1 {
   position: fixed; z-index: 0; left: 0; right: 0; top: var(--name-top);
   text-align: center; color: #fff; margin: 0;
   font-size: var(--name-size);
+  /* A soft deep-blue shadow keeps the white name legible over bright white clouds. */
+  text-shadow: 0 2px 22px rgba(24, 40, 110, 0.5), 0 1px 3px rgba(20, 30, 90, 0.35);
   pointer-events: none; transition: opacity 0.4s;
 }
 body.scene-mode .tagline {
   position: fixed; z-index: 5; left: 0; right: 0; top: calc(var(--name-top) + var(--name-size) * 1.12 + 14px);   /* clears the "y" tail */
   text-align: center; margin: 0; padding: 0 16px;
   font-size: clamp(1.05rem, 2.6vw, 1.7rem); font-weight: 600; color: #fff;
-  text-shadow: 0 2px 14px rgba(20, 20, 60, 0.55);
+  text-shadow: 0 0 12px rgba(20, 35, 100, 0.85), 0 1px 3px rgba(15, 25, 80, 0.65);
   pointer-events: none; transition: opacity 0.35s;
 }
 /* Name and tagline opacity is set from JS every frame, tied to the camera (see main.js). */
@@ -257,4 +259,11 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
     opacity: 0; transform: translate(-50%, 16px); visibility: hidden; pointer-events: none;
     transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s 0.25s;
   }
+}
+
+
+/* A faint deep-blue wash at the top of the sky: the name and tagline stay readable over bright white clouds. */
+body.scene-mode::before {
+  content: ""; position: fixed; left: 0; right: 0; top: 0; height: 240px; z-index: 0; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(22, 38, 105, 0.34), rgba(22, 38, 105, 0));
 }
