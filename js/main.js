@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261013010446';
-import { createSky } from './sky.js?v=20261013010446';
-import { createDOF } from './dof.js?v=20261013010446';
+import { buildWorld } from './world.js?v=20261013010859';
+import { createSky } from './sky.js?v=20261013010859';
+import { createDOF } from './dof.js?v=20261013010859';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -138,7 +138,7 @@ function start() {
       v.set(sx, sy, 0);
       b.face.localToWorld(v);
       v.project(tmpCam);
-      const px = (v.x * 0.5 + 0.5) * window.innerWidth, py = (-v.y * 0.5 + 0.5) * window.innerHeight;
+      const px = (v.x * 0.5 + 0.5) * VW(), py = (-v.y * 0.5 + 0.5) * VH();
       x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
     }
     const w = x1 - x0, h = y1 - y0;
@@ -161,7 +161,8 @@ function start() {
 
   /** Where an open sign ends up: it stretches to fill the space between the controls and the nav. */
   function fitLayout(b) {
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const vw = VW(), vh = VH();
+    const safeH = Math.min(vh, window.innerHeight);   // bottom edge above any floating browser toolbar
     // On short screens the nav steps aside while a sign is open (see CSS), and the sign runs nearly
     // edge to edge; the back link in the sign's bar, Esc and the arrow keys still navigate.
     // "Tight" = a short screen or a phone-width one: nav out of the way, sign edge to edge, rim may bleed off.
@@ -173,7 +174,7 @@ function start() {
     const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
     const x0 = m, x1 = vw - m;
     const y0 = Math.max(m, topEdge + (compact ? 0 : 8));
-    const y1 = navHidden ? vh - m : Math.min(vh - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
+    const y1 = navHidden ? safeH - m : Math.min(safeH - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
@@ -293,6 +294,14 @@ function start() {
   }
 
   // ---- Sizing ----
+  // The scene is drawn to the LARGE viewport (100lvh): on phones the browser's bottom toolbar floats over the
+  // page, and a canvas sized to the small viewport would leave a band of plain background underneath it.
+  // UI that must stay clear of the toolbar (the nav, an open sign) still uses window.innerHeight.
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;visibility:hidden;pointer-events:none';
+  document.body.appendChild(probe);
+  const VW = () => probe.offsetWidth || window.innerWidth;
+  const VH = () => probe.offsetHeight || window.innerHeight;
   const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
   const quality = { scale: 1 };                     // the watchdog lowers this before it ever drops depth of field
   function pixelRatioFor(w, h) {
@@ -301,7 +310,7 @@ function start() {
     return Math.max(0.6, Math.min(dpr, budget) * quality.scale);
   }
   function onResize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = VW(), h = VH();
     const ratio = pixelRatioFor(w, h);
     renderer.setPixelRatio(ratio);
     renderer.setSize(w, h, false);
@@ -344,8 +353,8 @@ function start() {
 
   // ---- Input ----
   window.addEventListener('pointermove', (e) => {
-    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-    pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
+    pointer.x = (e.clientX / VW()) * 2 - 1;
+    pointer.y = (e.clientY / VH()) * 2 - 1;
   });
 
   const ray = new THREE.Raycaster();
@@ -353,7 +362,7 @@ function start() {
   const ndc = new THREE.Vector2();
   const faces = world.boards.map((b) => b.face);
   function pick(e) {
-    ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+    ndc.set((e.clientX / VW()) * 2 - 1, -(e.clientY / VH()) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObjects(faces, false)[0];
     return hit ? hit.object.userData.stopId : null;
