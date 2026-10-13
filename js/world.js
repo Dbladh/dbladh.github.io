@@ -498,12 +498,12 @@ function lampWashTexture() {
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = 'lighter';
   const vg = g.createLinearGradient(0, 0, 0, H);                       // general brightening toward the top
-  vg.addColorStop(0, 'rgba(255,255,255,0.32)'); vg.addColorStop(0.55, 'rgba(255,255,255,0.05)'); vg.addColorStop(1, 'rgba(255,255,255,0)');
+  vg.addColorStop(0, 'rgba(255,255,255,0.22)'); vg.addColorStop(0.6, 'rgba(255,255,255,0.04)'); vg.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = vg; g.fillRect(0, 0, W, H);
   for (let i = 0; i < 4; i++) {                                        // lamp positions: x = 0.5 + (i - 1.5) * 0.26
     const cx = W * (0.5 + (i - 1.5) * 0.26);
-    const rg = g.createRadialGradient(cx, 0, 4, cx, 0, W * 0.3);
-    rg.addColorStop(0, 'rgba(255,255,255,0.95)'); rg.addColorStop(0.35, 'rgba(255,255,255,0.4)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    const rg = g.createRadialGradient(cx, 0, 4, cx, 0, W * 0.34);
+    rg.addColorStop(0, 'rgba(255,255,255,0.6)'); rg.addColorStop(0.45, 'rgba(255,255,255,0.22)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
     g.save(); g.translate(0, 0); g.scale(1, 0.9);
     g.fillStyle = rg; g.fillRect(cx - W * 0.3, 0, W * 0.6, H / 0.9);
     g.restore();
@@ -1351,12 +1351,12 @@ export function buildWorld(scene, sections, opts = {}) {
     const sty = { night: 0, open: false };
     const applyLight = () => {
       const k = sty.open ? 0 : sty.night;                              // an open sign is lit evenly for reading
-      const dim = 1 - 0.58 * k;                                        // the face is dim after dark...
+      const dim = 1 - 0.4 * k;                                        // the face is dim after dark...
       faceMat.color.setRGB(dim, dim * 0.98, dim * 0.94);
-      washMat.opacity = k * 0.9;                                       // ...and the lamps' pools light it up
-      beamMat.opacity = k * 0.13;
-      haloMat.opacity = sty.open ? sty.night * 0.4 : sty.night * 0.85;
-      lipMat.emissive.setRGB(0.5 * sty.night, 0.34 * sty.night, 0.12 * sty.night); // rim catches the glow
+      washMat.opacity = k * 0.5;                                       // ...and the lamps' pools light it up
+      beamMat.opacity = k * 0.07;
+      haloMat.opacity = sty.open ? sty.night * 0.25 : sty.night * 0.5;
+      lipMat.emissive.setRGB(0.26 * sty.night, 0.18 * sty.night, 0.07 * sty.night); // rim catches the glow
     };
 
     const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
@@ -1402,7 +1402,7 @@ export function buildWorld(scene, sections, opts = {}) {
           set(hoods[i], 0.55, 0.13, 0.42, lx2, top2 + 0.5, 1.02);
           set(bulbs[i], 0.3, 0.07, 0.24, lx2, top2 + 0.42, 1.02);
           halos[i].position.set(lx2, top2 + 0.36, 1.02);
-          halos[i].scale.setScalar(1.9);
+          halos[i].scale.setScalar(1.5);
           // cone: apex at the bulb, base a wide ellipse on the face
           const pos = cones[i].geometry.attributes.position;
           pos.setXYZ(0, lx2, top2 + 0.4, 1.02);
