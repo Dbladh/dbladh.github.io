@@ -265,8 +265,10 @@ function start() {
       // On the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
       const want = active === 'home' ? 54 : camera.position.distanceTo(cur.look);
       focus += (want - focus) * Math.min(1, dt * 4);
+      world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus);
     } else {
+      world.setView({ height: canvas.height, focus, aperture: 0, maxBlur: 0 });
       renderer.render(scene, camera);
     }
 

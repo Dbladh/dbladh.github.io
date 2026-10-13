@@ -237,6 +237,60 @@ function glassMaterial() {
   });
 }
 
+// ---------------------------------------------------------------- window light
+
+let _glow = null;
+/** Shared night-light pieces: a "four panes" light pattern for the ground and a soft shaft material. */
+function glowKit() {
+  if (_glow) return _glow;
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 256;
+  const g = c.getContext('2d');
+  g.shadowColor = '#fff'; g.shadowBlur = 4; g.fillStyle = '#fff';
+  // The pattern widens away from the wall (light spreads) and is split by the window's muntins.
+  const xAt = (y, t) => lerp(lerp(34, 10, (y - 12) / 228), lerp(94, 118, (y - 12) / 228), t);
+  for (const [ya, yb] of [[14, 106], [140, 238]]) {
+    for (const [t0, t1] of [[0, 0.42], [0.58, 1]]) {
+      g.beginPath();
+      g.moveTo(xAt(ya, t0), ya); g.lineTo(xAt(ya, t1), ya);
+      g.lineTo(xAt(yb, t1), yb); g.lineTo(xAt(yb, t0), yb);
+      g.closePath(); g.fill();
+    }
+  }
+  g.shadowBlur = 0;
+  g.globalCompositeOperation = 'destination-in'; // fade out with distance from the wall
+  const fade = g.createLinearGradient(0, 0, 0, 256);
+  fade.addColorStop(0, 'rgba(255,255,255,1)'); fade.addColorStop(1, 'rgba(255,255,255,0.18)');
+  g.fillStyle = fade; g.fillRect(0, 0, 128, 256);
+  const gobo = new THREE.CanvasTexture(c);
+  gobo.colorSpace = THREE.SRGBColorSpace;
+
+  const add = { transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false };
+  _glow = {
+    gobo,
+    decalMat: new THREE.MeshBasicMaterial({ map: gobo, color: 0xffb25a, polygonOffset: true, polygonOffsetFactor: -2, ...add }),
+    shaftMat: new THREE.MeshBasicMaterial({ color: 0xffa646, vertexColors: true, side: THREE.DoubleSide, ...add }),
+    decalGeo: new THREE.PlaneGeometry(1.5, 3.2).rotateX(-Math.PI / 2),
+  };
+  return _glow;
+}
+
+/** A faint cone of light from a window rectangle down onto its pool on the ground. */
+function shaftGeometry(h) {
+  const gy = -h + 0.26;
+  const P = [
+    [-0.37, 0.37, 0.06], [0.37, 0.37, 0.06], [0.37, -0.37, 0.06], [-0.37, -0.37, 0.06], // window: TL TR BR BL
+    [-0.75, gy, 3.5], [0.75, gy, 3.5], [0.55, gy, 1.1], [-0.55, gy, 1.1],               // ground: far L/R, near R/L
+  ];
+  const B = [1, 1, 1, 1, 0.1, 0.1, 0.32, 0.32]; // brightest at the glass, fading toward the ground
+  const idx = [0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P.flat(), 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(B.flatMap((b) => [b, b, b]), 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
 // ---------------------------------------------------------------- buildings
 
 const WALLS = ['#f6e3c0', '#f9d9b0', '#fbe9c8', '#f3d2c2', '#eadfc2', '#fdf0d8'];
@@ -285,6 +339,18 @@ function addWindow(group, x, y, z, yaw, glassMat, trim, shutterMat, withBox) {
   for (const s of [-1, 1]) w.add(box(0.3, 0.9, 0.08, shutterMat, s * 0.66, 0, 0.0));
   if (withBox) w.add(box(0.9, 0.2, 0.2, mat('#7a4a2c'), 0, -0.72, 0.12));
   group.add(w);
+
+  // Night light: a shaft out of the glass and the window's four panes projected on the ground.
+  const kit = glowKit();
+  const lg = new THREE.Group();
+  lg.position.set(x, y, z);
+  lg.rotation.y = yaw;
+  const shaft = new THREE.Mesh(shaftGeometry(y), kit.shaftMat);
+  const decal = new THREE.Mesh(kit.decalGeo, kit.decalMat);
+  decal.position.set(0, -y + 0.26, 2.2);
+  shaft.renderOrder = decal.renderOrder = 2;
+  lg.add(shaft, decal);
+  group.add(lg);
 }
 
 function buildHouse(rand) {
@@ -372,7 +438,7 @@ export function buildWorld(scene, sections, opts = {}) {
     if (nearSign(x, zz)) return;
     const site = { x, z: zz, fx: -side * nx, fz: -side * nz, perp, y: rawHeight(x, zz) };
     sites.push(site);
-    PADS.push({ x, z: zz, r: 5.4, y: site.y });
+    PADS.push({ x, z: zz, r: 7.2, y: site.y });
   });
 
   // ---- Terrain: colour by height, warm meadow patches, pale path ----
@@ -414,6 +480,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const houses = []; // { x, z }
   const windowMats = [];
   const houseLights = [];
+  const houseCap = Math.min(6, Math.max(1, maxLights - 3));
   const LIGHT_COLOR = 0xffb35a;
 
   const nearHouse = (x, z, r = 6.5) => houses.some((hh) => Math.hypot(x - hh.x, z - hh.z) < r);
@@ -425,7 +492,7 @@ export function buildWorld(scene, sections, opts = {}) {
     scene.add(hs.group);
     houses.push({ x: st.x, z: st.z });
     windowMats.push(hs.glassMat);
-    if (houseLights.length < maxLights) {
+    if (houseLights.length < houseCap) {
       const light = new THREE.PointLight(LIGHT_COLOR, 0, 11, 1.6);
       hs.group.updateMatrixWorld(true);
       light.position.copy(hs.lightAnchor).applyMatrix4(hs.group.matrixWorld);
@@ -577,39 +644,98 @@ export function buildWorld(scene, sections, opts = {}) {
     clouds.push(g);
   }
 
-  // ---- Fireflies: a glowing particle each, and real lights on a handful of them ----
-  const FF = 70;
-  const ffBase = [];
-  const ffPos = new Float32Array(FF * 3);
-  for (let i = 0; i < FF; i++) {
-    const x = (rand() - 0.5) * 70, z = -30 + rand() * 50;
-    const y = heightAt(x, z) + 1 + rand() * 3;
-    ffBase.push({ x, y, z, ph: rand() * 6.28 });
-    ffPos.set([x, y, z], i * 3);
-  }
+  // ---- Fireflies: spread through the whole depth of the scene ----
+  // Near ones sit right in front of the camera (big, soft bokeh), far ones twinkle on the hills.
+  const FF_GROUPS = [
+    { n: 30, xr: 14, z0: 8, z1: 19 },     // close to the camera
+    { n: 36, xr: 32, z0: -22, z1: 8 },    // middle distance
+    { n: 28, xr: 62, z0: -64, z1: -22 },  // far away
+  ];
+  const FF_COLORS = ['#d8ff6a', '#ffe27a', '#9dffb0', '#ffd0a0', '#c6ff8a'].map((h) => new THREE.Color(h));
+  const ffData = [];
+  FF_GROUPS.forEach((gr, gi) => {
+    for (let i = 0; i < gr.n; i++) {
+      const x = (rand() * 2 - 1) * gr.xr, z = gr.z0 + rand() * (gr.z1 - gr.z0);
+      ffData.push({ x, z, y: heightAt(x, z) + 0.7 + rand() * 3, ph: rand() * 6.28, gi, col: pick(FF_COLORS) });
+    }
+  });
+  const FF = ffData.length;
   const ffGeo = new THREE.BufferGeometry();
+  const ffPos = new Float32Array(FF * 3), ffCol = new Float32Array(FF * 3), ffSeed = new Float32Array(FF);
+  ffData.forEach((f, i) => { ffPos.set([f.x, f.y, f.z], i * 3); ffCol.set([f.col.r, f.col.g, f.col.b], i * 3); ffSeed[i] = rand(); });
   ffGeo.setAttribute('position', new THREE.BufferAttribute(ffPos, 3));
-  // Soft round glow sprite (points are square by default).
-  const glow = document.createElement('canvas');
-  glow.width = glow.height = 64;
-  const gx = glow.getContext('2d');
-  const grad = gx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.25, 'rgba(255,255,255,0.7)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  gx.fillStyle = grad; gx.fillRect(0, 0, 64, 64);
-  const fireflies = new THREE.Points(ffGeo, new THREE.PointsMaterial({
-    color: 0xe6ff8a, size: 16, sizeAttenuation: false, transparent: true, opacity: 0,
-    map: new THREE.CanvasTexture(glow), depthWrite: false, blending: THREE.AdditiveBlending,
+  ffGeo.setAttribute('aColor', new THREE.BufferAttribute(ffCol, 3));
+  ffGeo.setAttribute('aSeed', new THREE.BufferAttribute(ffSeed, 1));
+  const ffUniforms = {
+    uNight: { value: 0 }, uTime: { value: 0 }, uScale: { value: 700 }, uBase: { value: 0.34 },
+    uFocus: { value: 55 }, uAperture: { value: 0 }, uMaxBlur: { value: 14 },
+  };
+  const fireflies = new THREE.Points(ffGeo, new THREE.ShaderMaterial({
+    uniforms: ffUniforms,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */ `
+      uniform float uTime, uScale, uBase, uFocus, uAperture, uMaxBlur;
+      attribute vec3 aColor; attribute float aSeed;
+      varying vec3 vColor; varying float vSoft; varying float vTwinkle;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float dist = max(-mv.z, 0.5);
+        // Same circle-of-confusion maths as the depth-of-field pass, so near fireflies
+        // become big soft bokeh discs and far ones stay tiny sparks.
+        float coc = clamp(uAperture * abs(1.0 / uFocus - 1.0 / dist), 0.0, uMaxBlur);
+        float core = uBase * projectionMatrix[1][1] * uScale * 0.5 / dist;
+        float size = core + coc * 1.8 + 3.0;
+        gl_PointSize = size;
+        gl_Position = projectionMatrix * mv;
+        vSoft = coc * 1.8 / size;
+        vColor = aColor;
+        vTwinkle = 0.62 + 0.38 * sin(uTime * (1.4 + aSeed) + aSeed * 40.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uNight;
+      varying vec3 vColor; varying float vSoft; varying float vTwinkle;
+      void main() {
+        float r = length(gl_PointCoord * 2.0 - 1.0);
+        float glow = exp(-r * r * 4.5);
+        float disc = smoothstep(1.0, 0.8, r) * 0.55 + glow * 0.35;
+        float a = mix(glow, disc, vSoft) * (1.0 - 0.5 * vSoft) * vTwinkle * uNight * 1.7;
+        if (a < 0.003) discard;
+        gl_FragColor = vec4(vColor, a);
+      }`,
   }));
+  fireflies.frustumCulled = false;
   scene.add(fireflies);
-  const ffLights = [];
-  const FF_LIGHTS = Math.max(0, Math.min(6, maxLights - houseLights.length));
-  for (let i = 0; i < FF_LIGHTS; i++) {
-    const l = new THREE.PointLight(0xd8ff6a, 0, 7, 1.6);
-    scene.add(l);
-    ffLights.push(l);
+
+  // Some fireflies carry real lights (spread near/middle/far) plus a glow pool on the ground.
+  const FF_LIGHTS = Math.max(0, Math.min(8, maxLights - houseLights.length));
+  const byGroup = FF_GROUPS.map(() => []);
+  ffData.forEach((f, i) => byGroup[f.gi].push(i));
+  const carriers = [];
+  for (let k = 0; carriers.length < FF_LIGHTS && k < 20; k++) {
+    for (const list of byGroup) if (list[k] !== undefined && carriers.length < FF_LIGHTS) carriers.push(list[k]);
   }
+  const poolTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const ffLights = carriers.map((idx) => {
+    const col = ffData[idx].col;
+    const light = new THREE.PointLight(col, 0, 13, 1.4);
+    const pool = new THREE.Mesh(
+      new THREE.PlaneGeometry(7, 7).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: poolTex, color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    );
+    pool.renderOrder = 2;
+    scene.add(light, pool);
+    return { idx, light, pool };
+  });
 
   // ---- Billboards ----
   const boardGroup = new THREE.Group();
@@ -654,34 +780,54 @@ export function buildWorld(scene, sections, opts = {}) {
   }
 
   // ---- per-frame + day/night ----
-  let time = 0;
-  const HOUSE_I = 26, FF_I = 5;
+  let time = 0, night = 0;
+  const HOUSE_I = 26, FF_I = 9;
+  const glow = glowKit();
   return {
     boards,
-    /** Per-frame animation: drifting clouds, bobbing fireflies (and their lights). */
+    /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
     update(dt) {
       time += dt;
+      ffUniforms.uTime.value = time;
       for (const cl of clouds) {
         cl.position.x += cl.userData.speed * dt;
         if (cl.position.x > 190) cl.position.x = -190;
       }
       const a = ffGeo.attributes.position;
+      const pos = new THREE.Vector3();
       for (let i = 0; i < FF; i++) {
-        const b = ffBase[i];
-        const x = b.x + Math.sin(time * 0.6 + b.ph) * 1.4;
-        const y = b.y + Math.sin(time * 0.9 + b.ph * 2) * 0.7;
-        const z = b.z + Math.cos(time * 0.5 + b.ph) * 1.4;
-        a.setXYZ(i, x, y, z);
-        if (i < ffLights.length) ffLights[i].position.set(x, y, z);
+        const f = ffData[i];
+        const amp = f.gi === 0 ? 1.8 : 1.3;
+        a.setXYZ(i,
+          f.x + Math.sin(time * 0.35 + f.ph) * amp,
+          f.y + Math.sin(time * 0.8 + f.ph * 2) * 0.7,
+          f.z + Math.cos(time * 0.3 + f.ph * 1.3) * amp);
       }
       a.needsUpdate = true;
+      ffLights.forEach((fl, k) => {
+        pos.fromBufferAttribute(a, fl.idx);
+        const flick = 0.75 + 0.25 * Math.sin(time * 2.1 + k * 1.7);
+        fl.light.position.copy(pos);
+        fl.light.intensity = night * FF_I * flick;
+        fl.pool.position.set(pos.x, heightAt(pos.x, pos.z) + 0.08, pos.z);
+        fl.pool.material.opacity = night * 0.5 * flick;
+      });
     },
-    /** 0 = daytime, 1 = full night. Switches on window glow and every night light. */
+    /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
+      night = n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.7;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
-      fireflies.material.opacity = n;
-      ffLights.forEach((l, i) => { l.intensity = n * FF_I * (0.75 + 0.25 * Math.sin(time * 2 + i)); });
+      glow.decalMat.opacity = n * 1.0;   // the four panes on the ground
+      glow.shaftMat.opacity = n * 0.1;   // soft shaft out of each window
+      ffUniforms.uNight.value = n;
+    },
+    /** Lets the fireflies share the depth-of-field settings, so near ones bloom into bokeh. */
+    setView({ height, focus, aperture, maxBlur }) {
+      ffUniforms.uScale.value = height;
+      ffUniforms.uFocus.value = focus;
+      ffUniforms.uAperture.value = aperture;
+      ffUniforms.uMaxBlur.value = maxBlur;
     },
   };
 }

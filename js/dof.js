@@ -118,6 +118,11 @@ export function createDOF(renderer) {
       material.uniforms.maxBlur.value = 16 * k;
     },
 
+    /** Current blur settings in drawing-buffer pixels (used by the firefly shader). */
+    get params() {
+      return { height: size.y, aperture: material.uniforms.aperture.value, maxBlur: material.uniforms.maxBlur.value };
+    },
+
     /** Render `scene` with `focus` (world units from the camera) in sharp focus. */
     render(scene, camera, focus) {
       material.uniforms.cameraNear.value = camera.near;
