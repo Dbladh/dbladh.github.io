@@ -81,12 +81,54 @@ export function createSky(scene, skyScene, renderer) {
     pos[i * 3 + 1] = Math.cos(v) * r;
     pos[i * 3 + 2] = Math.sin(u) * Math.sin(v) * r - 40;
   }
+  // Each star gets its own twinkle: a phase and speed, a brightness and a size, plus a rare sparkle.
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const stars = new THREE.Points(
-    starGeo,
-    new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }),
-  );
+  const seed = new Float32Array(N), size = new Float32Array(N), tint = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    seed[i] = Math.random();
+    size[i] = Math.random() < 0.15 ? 4.0 + Math.random() * 2.0 : 2.4 + Math.random() * 1.6; // a few bright ones
+    const warm = Math.random();
+    tint.set([1.0, 0.92 + 0.08 * (1 - warm), 0.82 + 0.18 * (1 - warm) + 0.0], i * 3);       // white to pale gold...
+    if (Math.random() < 0.35) tint.set([0.78, 0.88, 1.0], i * 3);                          // ...and some pale blue
+  }
+  starGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  starGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  starGeo.setAttribute('aTint', new THREE.BufferAttribute(tint, 3));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const starMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uNight: { value: 0 }, uPx: { value: Math.min(window.devicePixelRatio || 1, 1.5) }, uTwinkle: { value: reduce ? 0 : 1 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */ `
+      uniform float uTime, uPx, uTwinkle;
+      attribute float aSeed, aSize; attribute vec3 aTint;
+      varying vec3 vTint; varying float vBright;
+      void main() {
+        float speed = 0.7 + aSeed * 2.4;
+        float ph = aSeed * 62.8;
+        float slow = 0.5 + 0.5 * sin(uTime * speed + ph);                 // gentle breathing
+        float fast = 0.5 + 0.5 * sin(uTime * speed * 3.1 + ph * 1.7);     // quicker flutter
+        float spark = pow(0.5 + 0.5 * sin(uTime * (0.35 + aSeed) + ph * 2.3), 10.0);   // rare bright flash
+        float tw = mix(0.95, 0.4 + 0.5 * slow + 0.25 * fast + 0.7 * spark, uTwinkle);
+        vBright = tw;
+        vTint = aTint;
+        gl_PointSize = aSize * uPx * mix(1.0, 0.75 + 0.35 * tw, uTwinkle);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uNight;
+      varying vec3 vTint; varying float vBright;
+      void main() {
+        float r = length(gl_PointCoord * 2.0 - 1.0);
+        float core = 1.0 - smoothstep(0.0, 1.0, r);
+        float a = clamp((core * 1.25 + exp(-r * r * 5.0) * 0.7) * vBright * uNight, 0.0, 1.0);
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(vTint, a);
+      }`,
+  });
+  starMat.onBeforeRender = () => { starMat.uniforms.uTime.value = performance.now() / 1000; };
+  const stars = new THREE.Points(starGeo, starMat);
+  stars.frustumCulled = false;
   skyScene.add(stars);
 
   // The sky layer has its own (matching) lights so clouds shade correctly day and night.
@@ -158,7 +200,7 @@ export function createSky(scene, skyScene, renderer) {
     skySun.color.copy(sunLight.color);
     skySun.position.set(sx * 1.25, Math.max(sy, 26), 20);
     fog.color.copy(s.bot);
-    stars.material.opacity = night * night;
+    starMat.uniforms.uNight.value = night * night;
     sunMesh.visible = sy > -6;
     moonMesh.visible = -sy > -6;
 
