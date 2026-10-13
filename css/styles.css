@@ -143,14 +143,19 @@ body.scene-mode #scene {
 
 body.scene-mode .hero { position: static; padding: 0; max-width: none; margin: 0; }
 
+/* Title block: the name sits well below the top controls, and the tagline below the name's descender. */
+body.scene-mode {
+  --name-size: clamp(2.4rem, 9.5vw, 8rem);
+  --name-top: clamp(84px, 11vh, 130px);        /* the controls pill ends near 64px, so >= 20px of air */
+}
 body.scene-mode .hero h1 {
-  position: fixed; z-index: 0; left: 0; right: 0; top: 7vh;
+  position: fixed; z-index: 0; left: 0; right: 0; top: var(--name-top);
   text-align: center; color: #fff; margin: 0;
-  font-size: clamp(3rem, 14vw, 13rem);
+  font-size: var(--name-size);
   pointer-events: none; transition: opacity 0.4s;
 }
 body.scene-mode .tagline {
-  position: fixed; z-index: 5; left: 0; right: 0; top: calc(7vh + clamp(3rem, 14vw, 13rem) * 0.95 + 8px);
+  position: fixed; z-index: 5; left: 0; right: 0; top: calc(var(--name-top) + var(--name-size) * 1.12 + 14px);   /* clears the "y" tail */
   text-align: center; margin: 0; padding: 0 16px;
   font-size: clamp(1.05rem, 2.6vw, 1.7rem); font-weight: 600; color: #fff;
   text-shadow: 0 2px 14px rgba(20, 20, 60, 0.55);
@@ -217,8 +222,7 @@ body.scene-mode .back { display: inline-block; margin-bottom: 0.6em; font-family
   .time input { width: 84px; }
   #time-label { min-width: 0; white-space: nowrap; }
   #simple-toggle { font-size: 0.7rem; padding: 5px 10px; white-space: nowrap; }
-  body.scene-mode .hero h1 { top: 14vh; }
-  body.scene-mode .tagline { top: calc(14vh + clamp(3rem, 14vw, 13rem) * 0.95 + 8px); }
+  body.scene-mode { --name-size: clamp(2.4rem, 13vw, 4rem); --name-top: 88px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
