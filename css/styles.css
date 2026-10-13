@@ -57,7 +57,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
 }
 .skip:focus { top: 8px; }
 
-#scene, #sky { display: none; }
+#scene, #sky, .edge { display: none; }
 
 /* ---------- Simple view (default) ---------- */
 
@@ -315,3 +315,24 @@ html:has(body.scene-mode) {
   background: linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-bot) 40%, var(--ground, #4f7f45) 66%, var(--ground, #4f7f45) 100%);
   background-attachment: fixed;
 }
+
+
+/* ---------- Edge strips: what mobile Safari samples to tint its status bar and toolbar ---------- */
+body.scene-mode .edge {
+  display: block; position: fixed; left: 0; right: 0; z-index: 3; pointer-events: none;
+}
+body.scene-mode .edge-top {
+  top: 0; height: 4px; background-color: var(--sky-top);
+}
+body.scene-mode .edge-top::after {          /* a soft fade so the strip never reads as a band */
+  content: ""; position: absolute; left: 0; right: 0; top: 4px; height: 56px;
+  background: linear-gradient(to bottom, var(--sky-top), transparent);
+}
+body.scene-mode .edge-bottom {
+  bottom: 0; height: 4px; background-color: var(--ground, #4f7f45);
+}
+body.scene-mode .edge-bottom::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 4px; height: 70px;
+  background: linear-gradient(to top, var(--ground, #4f7f45), transparent);
+}
+html:has(body.scene-mode) { background-color: var(--sky-top); }

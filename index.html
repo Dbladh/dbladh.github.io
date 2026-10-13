@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261013081413">
+  <link rel="stylesheet" href="css/styles.css?v=20261013091856">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -24,6 +24,10 @@
   <!-- The 3D scene is decoration: all real content lives in <main> below. -->
   <canvas id="sky" aria-hidden="true"></canvas>
   <canvas id="scene" aria-hidden="true"></canvas>
+  <!-- Solid-colour strips on the very top and bottom edges. Newer mobile Safari tints its status bar and bottom
+       toolbar from the colour found at the page edges; the WebGL canvas cannot be sampled, these can. -->
+  <div class="edge edge-top" aria-hidden="true"></div>
+  <div class="edge edge-bottom" aria-hidden="true"></div>
 
   <header class="hero">
     <h1>Danny Bladh</h1>
@@ -186,6 +190,6 @@
 
   <p id="live" class="sr-only" aria-live="polite"></p>
 
-  <script type="module" src="js/main.js?v=20261013081413"></script>
+  <script type="module" src="js/main.js?v=20261013091856"></script>
 </body>
 </html>
