@@ -9,11 +9,11 @@ import * as THREE from 'three';
 // `hill.x`) and, in portrait, steps to its `stagger` depth so the three signs zig-zag instead of overlapping.
 // `scale` shrinks the sign (the About sign is a small roadside one).
 export const STOPS = {
-  creativity:  { desk: { x: -38, z: -58 }, stagger: { z: -46 }, hill: { x: -13, z: -54, rx: 26, rz: 18, h: 9 },
+  creativity:  { desk: { x: -38, z: -58 }, stagger: { z: -41 }, hill: { x: -11, z: -54, rx: 26, rz: 18, h: 9 },
                  scale: 1, accent: '#ff9db8', paper: '#ffffff', yaw: 0.28 },
-  ai:          { desk: { x: 0, z: -78 },   stagger: { z: -76 }, hill: { x: 0, z: -80, rx: 30, rz: 16, h: 12 },
+  ai:          { desk: { x: 0, z: -78 },   stagger: { z: -76 }, hill: { x: 0, z: -80, rx: 30, rz: 16, h: 12 }, raise: 13,
                  scale: 1, accent: '#8ec5ff', paper: '#ffffff', yaw: -0.18 },
-  engineering: { desk: { x: 38, z: -58 },  stagger: { z: -58 }, hill: { x: 13, z: -60, rx: 26, rz: 18, h: 9 },
+  engineering: { desk: { x: 38, z: -58 },  stagger: { z: -58 }, hill: { x: 11, z: -60, rx: 26, rz: 18, h: 9 },
                  scale: 1, accent: '#ffd36a', paper: '#ffffff', yaw: -0.30 },
   about:       { desk: { x: -10, z: -14 }, stagger: { z: -14 }, hill: { x: -4, z: -14, rx: 9, rz: 7, h: 2.2 },
                  scale: 0.45, accent: '#9fdc8c', paper: '#ffffff', yaw: 0.22 },
@@ -1756,7 +1756,8 @@ export function buildWorld(scene, sections, opts = {}) {
           }
         }
         void bottomAt0;
-        b.place(x, z, Math.min(Math.max(0, lift), 9));
+        // In portrait some signs stand on taller stilts so neighbours that share screen width don't overlap.
+        b.place(x, z, Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t);
       }
     },
     /** Every sign material, so depth of field can render them only in its sharp pass. */
