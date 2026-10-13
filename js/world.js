@@ -13,6 +13,7 @@ export const STOPS = {
 };
 
 const BOARD_W = 16, BOARD_H = 9, BOARD_BOTTOM = 2.2;
+const SIGN_GREY = 0x9a9890; // frame + posts: the billboard's steel/concrete grey
 
 // ---------------------------------------------------------------- helpers
 
@@ -755,7 +756,7 @@ export function buildWorld(scene, sections, opts = {}) {
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const frameMat = mat('#f2efe6');
-  const postMat = mat('#d8d4c8');
+  const postMat = new THREE.MeshBasicMaterial({ color: SIGN_GREY }); // same grey as the frame, so they read as one sign
 
   for (const [id, s] of Object.entries(STOPS)) {
     const sec = sections[id];
@@ -768,7 +769,7 @@ export function buildWorld(scene, sections, opts = {}) {
 
     const cy = BOARD_BOTTOM + BOARD_H / 2;
     const T = 0.4;                      // frame thickness: constant, however far the sign stretches
-    const fMat = new THREE.MeshBasicMaterial({ color: 0xece7da }); // unlit like the face, own material per sign
+    const fMat = new THREE.MeshBasicMaterial({ color: SIGN_GREY }); // unlit like the face, own material per sign
     const parts = [0, 1, 2, 3, 4].map(() => {   // top, bottom, left, right, backing
       const m = new THREE.Mesh(UNIT_BOX, fMat);
       m.castShadow = true;
