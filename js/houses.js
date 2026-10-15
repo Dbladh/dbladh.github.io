@@ -565,6 +565,14 @@ function makeHouse(R, theme, opts) {
   const wallTileSize = wallTile(wallSpec.kind);
   const wallMat = wallMaterial(wallSpec.kind, wallSpec.hex, true);
   const wallPlain = wallMaterial(wallSpec.kind, wallSpec.hex, false);   // for extruded gable triangles (no colour attribute)
+  // A second wall material on some houses: a stone base under timber/plaster, a different gable, or a wing.
+  const others = theme.walls.filter((c) => c.kind !== wallSpec.kind);
+  const spec2 = others.length && R() < 0.8 ? weighted(R, others) : { kind: 'stone', hex: theme.plinth };
+  const mixRoll = R();
+  const mix = mixRoll < 0.4 ? 'none' : mixRoll < 0.65 ? 'base' : mixRoll < 0.85 ? 'gable' : (hasWing ? 'wing' : 'base');
+  const mat2 = wallMaterial(spec2.kind, spec2.hex, true);
+  const plain2 = wallMaterial(spec2.kind, spec2.hex, false);
+  const tile2 = wallTile(spec2.kind);
   const roofMat = roofMaterial(roofSpec.kind, roofSpec.hex);
   const trim = mat(trimHex), shutterMat = mat(shutterHex);
   const glassMat = glassMaterial();
@@ -590,6 +598,10 @@ function makeHouse(R, theme, opts) {
   // --- body
   g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0));                // plinth reaches below ground
   put(new THREE.Mesh(wallGeometry(w, h, d, wallTileSize), wallMat), 0, 0.35 + h / 2, 0);
+  if (mix === 'base') {                                                 // a course of the second material round the foot
+    const bh = 0.85 + R() * 0.3;
+    put(new THREE.Mesh(wallGeometry(w + 0.1, bh, d + 0.1, tile2), mat2), 0, 0.35 + bh / 2, 0);
+  }
   const contact = new THREE.Mesh(new THREE.PlaneGeometry(w + 3.4, d + 3.4).rotateX(-Math.PI / 2), CONTACT_MAT);
   contact.position.y = 0.07; contact.renderOrder = 1; contact.userData.noShadow = true;
   g.add(contact);
@@ -610,7 +622,7 @@ function makeHouse(R, theme, opts) {
   if (shape === 'hip') {
     addHip(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, roofMat, tile: roofTileSize, ridge });
   } else {
-    addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat: wallPlain, roofMat, tile: roofTileSize, wallTileSize, thick, ridge });
+    addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat: mix === 'gable' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize, thick, ridge });
   }
 
   // --- wing: lower, ridge kept under the main eave, eaves ending inside the main walls
@@ -621,8 +633,8 @@ function makeHouse(R, theme, opts) {
     const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = -0.2 - R() * 0.3;
     const rh2 = Math.min(rh * 0.8, Math.max(0.7, h - h2 + (shape === 'hip' ? 0.2 : 0.35)));
     g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz));
-    put(new THREE.Mesh(wallGeometry(w2, h2, d2, wallTileSize), wallMat), cx, 0.35 + h2 / 2, cz);
-    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat: wallPlain, roofMat, tile: roofTileSize, wallTileSize, thick, ridge });
+    put(new THREE.Mesh(wallGeometry(w2, h2, d2, mix === 'wing' ? tile2 : wallTileSize), mix === 'wing' ? mat2 : wallMat), cx, 0.35 + h2 / 2, cz);
+    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat: mix === 'wing' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: mix === 'wing' ? tile2 : wallTileSize, thick, ridge });
     wing = { cx, cz, w2, d2, h2 };
     radius = Math.max(radius, w / 2 + w2 + 0.8, Math.abs(cz) + d2 / 2 + 1.2);
   }
@@ -813,7 +825,7 @@ function makeHouse(R, theme, opts) {
   return {
     group: merged, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d,
     chimneys, smoke: chimneys.length > 0 && !low && R() < 0.8,
-    sig: `${wallSpec.kind}${wallSpec.hex}|${roofSpec.kind}${roofSpec.hex}|${shape}`,
+    sig: `${wallSpec.kind}${wallSpec.hex}${mix}${spec2.kind}|${roofSpec.kind}${roofSpec.hex}|${shape}`,
   };
 }
 
