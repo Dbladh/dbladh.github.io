@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261013092538';
-import { createSky } from './sky.js?v=20261013092538';
-import { createDOF } from './dof.js?v=20261013092538';
+import { buildWorld } from './world.js?v=20261014190651';
+import { createSky } from './sky.js?v=20261014190651';
+import { createDOF } from './dof.js?v=20261014190651';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -82,7 +82,11 @@ function start() {
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
   camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
   const sky = createSky(scene, skyScene, renderer);
-  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene, low: lowEnd });
+  // ?seed=NN pins the village's look; otherwise every visit gets a new one.
+  const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
+  const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
+  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene, low: lowEnd, seed });
+  console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
   const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
   let focus = 60;
 
@@ -322,6 +326,7 @@ function start() {
         `scene css ${Math.round(cv.top)}..${Math.round(cv.bottom)}  sky ${Math.round(sk.top)}..${Math.round(sk.bottom)}`,
         `nav ${Math.round(nv.top)}..${Math.round(nv.bottom)}`,
         `html ${document.documentElement.clientHeight}  body ${document.body.clientHeight}  scrollY ${Math.round(scrollY)}`,
+        `village seed ${seed} (${world.themeName})`,
         `css ${css}`,
         `ua ${navigator.userAgent.replace(/^Mozilla\/5.0 /, '').slice(0, 70)}`,
       ].join('\n');

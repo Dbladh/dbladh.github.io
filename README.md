@@ -34,3 +34,9 @@ Push this folder to a repo named `dbladh.github.io` on the `main` branch; Pages 
 - Replace every "Placeholder" in `index.html` with a real story.
 - Pick final colors and fonts; add a favicon and social preview image.
 - Vendor `three` into the repo (instead of the CDN) if you want zero third-party requests.
+
+## URL options
+
+- `?seed=NN` pins the village's look (theme, house designs, layout). Without it every visit gets a new village; the console prints the seed in use. Billboards, terrain, hills, forest and pond never change.
+- `?debug=1` shows a viewport/seed readout.
+- `?detail=low|high` forces the detail level.
