@@ -208,6 +208,18 @@ const ROOF_TEX = {
       g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1.4; g.stroke();
     }
   },
+  metal(g, S) {                                       // standing-seam: raised seams every ~0.4 units, running down the slope
+    g.fillStyle = '#c8c8c8'; g.fillRect(0, 0, S, S);
+    const n = 5, pw = S / n;
+    for (let k = 0; k < n; k++) {
+      const x = k * pw;
+      const grad = g.createLinearGradient(x, 0, x + pw, 0);
+      grad.addColorStop(0, '#dcdcdc'); grad.addColorStop(1, '#b4b4b4');
+      g.fillStyle = grad; g.fillRect(x + 4, 0, pw - 4, S);
+      g.fillStyle = '#7e7e7e'; g.fillRect(x, 0, 4, S);
+      g.fillStyle = '#f2f2f2'; g.fillRect(x + 4, 0, 2, S);
+    }
+  },
   thatch(g, S) {
     g.fillStyle = '#9d9d9d'; g.fillRect(0, 0, S, S);
     for (let i = 0; i < 1100; i++) {
@@ -220,8 +232,8 @@ const ROOF_TEX = {
     }
   },
 };
-const ROOF_TILE = { tile: 1.7, slate: 1.3, shingle: 1.5, thatch: 2.2 };
-const ROOF_BUMP = { tile: 2.2, slate: 1.6, shingle: 2.0, thatch: 3.0 };
+const ROOF_TILE = { tile: 1.7, slate: 1.3, shingle: 1.5, thatch: 2.2, metal: 2.0 };
+const ROOF_BUMP = { tile: 2.2, slate: 1.6, shingle: 2.0, thatch: 3.0, metal: 1.2 };
 const roofTexCache = new Map(), roofMatCache = new Map();
 export function roofMaterial(kind, hex) {
   if (typeof hex === 'undefined') { hex = kind; kind = 'tile'; }           // legacy call roofMaterial('#hex')
@@ -230,7 +242,7 @@ export function roofMaterial(kind, hex) {
     if (!roofTexCache.has(kind)) roofTexCache.set(kind, canvasTex(256, (g, S) => ROOF_TEX[kind](g, S)));
     const tex = roofTexCache.get(kind);
     roofMatCache.set(key, new THREE.MeshStandardMaterial({
-      color: hex, map: tex, bumpMap: tex, bumpScale: ROOF_BUMP[kind], roughness: kind === 'slate' ? 0.55 : 0.82, metalness: 0, envMapIntensity: 0.35,
+      color: hex, map: tex, bumpMap: tex, bumpScale: ROOF_BUMP[kind], roughness: kind === 'metal' ? 0.38 : kind === 'slate' ? 0.55 : 0.82, metalness: kind === 'metal' ? 0.3 : 0, envMapIntensity: 0.35,
     }));
   }
   return roofMatCache.get(key);
@@ -477,16 +489,16 @@ export const THEMES = [
   {
     name: 'Brick & terracotta',
     walls: [{ kind: 'brick', hex: '#b5543a', w: 3 }, { kind: 'brick', hex: '#9c4a38', w: 2 }, { kind: 'plaster', hex: '#f1e2c4', w: 3 }, { kind: 'stone', hex: '#b9ae98', w: 1 }],
-    roofs: [{ kind: 'tile', hex: '#c8512b', w: 4 }, { kind: 'tile', hex: '#a8442a', w: 2 }, { kind: 'slate', hex: '#59616b', w: 1 }],
+    roofs: [{ kind: 'tile', hex: '#c8512b', w: 4 }, { kind: 'tile', hex: '#a8442a', w: 2 }, { kind: 'slate', hex: '#59616b', w: 1 }, { kind: 'metal', hex: '#4c5560', w: 1 }],
     trims: ['#fff8ea', '#f3e6cc'], shutters: ['#3e7d5c', '#2f5d8a', '#7a3b3b', '#d8b34a'], doors: ['#6a3a22', '#2f5d8a', '#3e7d5c', '#8a2f2f'],
     chimneys: [['brick', 4], ['corbel', 2], ['pots', 2], ['double', 1]], plinth: '#b8b0a0', ridge: '#8a3a22',
   },
   {
     name: 'Cool stone & slate',
     walls: [{ kind: 'stone', hex: '#9b9a93', w: 4 }, { kind: 'stone', hex: '#8c8f93', w: 2 }, { kind: 'plaster', hex: '#d9d6cc', w: 2 }, { kind: 'clap', hex: '#7f8b94', w: 1 }],
-    roofs: [{ kind: 'slate', hex: '#4a5560', w: 4 }, { kind: 'slate', hex: '#5d6a74', w: 3 }, { kind: 'shingle', hex: '#5b4a40', w: 1 }],
+    roofs: [{ kind: 'slate', hex: '#4a5560', w: 4 }, { kind: 'slate', hex: '#5d6a74', w: 3 }, { kind: 'shingle', hex: '#5b4a40', w: 1 }, { kind: 'metal', hex: '#3b434b', w: 2 }, { kind: 'metal', hex: '#6b4a3a', w: 1 }],
     trims: ['#f4f4ef', '#dfe3e6'], shutters: ['#2d4a6b', '#4a5560', '#7a2f35', '#3e6a5a'], doors: ['#2d4a6b', '#6a2f35', '#3a4a3a', '#1f2a36'],
-    chimneys: [['stone', 4], ['tall', 2], ['pots', 1]], plinth: '#8d8c85', ridge: '#2f3740',
+    chimneys: [['stone', 3], ['bigstone', 3], ['tall', 2], ['pots', 1]], plinth: '#8d8c85', ridge: '#2f3740',
   },
   {
     name: 'Whitewash & blue',
@@ -500,7 +512,7 @@ export const THEMES = [
     walls: [{ kind: 'timber', hex: '#efe3c2', w: 4 }, { kind: 'clap', hex: '#b99b6a', w: 2 }, { kind: 'plaster', hex: '#e6d9b8', w: 2 }, { kind: 'stone', hex: '#a39a84', w: 1 }],
     roofs: [{ kind: 'thatch', hex: '#c9ab62', w: 4 }, { kind: 'thatch', hex: '#b39455', w: 3 }, { kind: 'shingle', hex: '#6a4a38', w: 1 }],
     trims: ['#5a3f28', '#6a4a30'], shutters: ['#3f6a3a', '#7a3b2a', '#4a5a7a', '#6a4a30'], doors: ['#5a3a22', '#3f6a3a', '#7a3b2a', '#2f2f3a'],
-    chimneys: [['stone', 4], ['corbel', 2], ['none', 1]], plinth: '#8f8574', ridge: '#7a6535',
+    chimneys: [['stone', 3], ['bigstone', 2], ['corbel', 2], ['none', 1]], plinth: '#8f8574', ridge: '#7a6535',
   },
   {
     name: 'Pastel storybook',
@@ -512,9 +524,9 @@ export const THEMES = [
   {
     name: 'Autumn cottage',
     walls: [{ kind: 'clap', hex: '#b86a3c', w: 3 }, { kind: 'plaster', hex: '#e2b86a', w: 3 }, { kind: 'brick', hex: '#a85a3a', w: 2 }, { kind: 'stone', hex: '#a89a7a', w: 1 }],
-    roofs: [{ kind: 'shingle', hex: '#6a4a38', w: 3 }, { kind: 'slate', hex: '#4a5a4a', w: 2 }, { kind: 'tile', hex: '#8a3a22', w: 2 }],
+    roofs: [{ kind: 'shingle', hex: '#6a4a38', w: 3 }, { kind: 'slate', hex: '#4a5a4a', w: 2 }, { kind: 'tile', hex: '#8a3a22', w: 2 }, { kind: 'metal', hex: '#4a4f52', w: 2 }, { kind: 'metal', hex: '#6a3a2c', w: 1 }],
     trims: ['#f6ecd2', '#e8d9b0'], shutters: ['#d8a72a', '#3f5a3a', '#7a2f25', '#4a3a2a'], doors: ['#3f5a3a', '#7a2f25', '#d8a72a', '#4a3a2a'],
-    chimneys: [['brick', 3], ['stone', 2], ['corbel', 2]], plinth: '#a09882', ridge: '#4a3322',
+    chimneys: [['brick', 3], ['stone', 2], ['bigstone', 2], ['corbel', 2]], plinth: '#a09882', ridge: '#4a3322',
   },
 ];
 
@@ -563,17 +575,22 @@ function makeHouse(R, theme, opts) {
   const roofSpec = weighted(R, theme.roofs);
   const trimHex = pick(theme.trims), shutterHex = pick(theme.shutters), doorHex = pick(theme.doors);
   const wallTileSize = wallTile(wallSpec.kind);
-  const wallMat = wallMaterial(wallSpec.kind, wallSpec.hex, true);
-  const wallPlain = wallMaterial(wallSpec.kind, wallSpec.hex, false);   // for extruded gable triangles (no colour attribute)
+  let wallMat = wallMaterial(wallSpec.kind, wallSpec.hex, true);
+  let wallPlain = wallMaterial(wallSpec.kind, wallSpec.hex, false);   // for extruded gable triangles (no colour attribute)
   // A second wall material on some houses: a stone base under timber/plaster, a different gable, or a wing.
   const others = theme.walls.filter((c) => c.kind !== wallSpec.kind);
   const spec2 = others.length && R() < 0.8 ? weighted(R, others) : { kind: 'stone', hex: theme.plinth };
   const mixRoll = R();
-  const mix = mixRoll < 0.4 ? 'none' : mixRoll < 0.65 ? 'base' : mixRoll < 0.85 ? 'gable' : (hasWing ? 'wing' : 'base');
+  const mix = mixRoll < 0.35 ? 'none' : mixRoll < 0.5 ? 'upper' : mixRoll < 0.65 ? 'base' : mixRoll < 0.85 ? 'gable' : (hasWing ? 'wing' : 'base');
   const mat2 = wallMaterial(spec2.kind, spec2.hex, true);
   const plain2 = wallMaterial(spec2.kind, spec2.hex, false);
   const tile2 = wallTile(spec2.kind);
   const roofMat = roofMaterial(roofSpec.kind, roofSpec.hex);
+  let upperTile = wallTileSize;
+  if (mix === 'upper') {                                              // stone ground floor, timber boarding above
+    const hex = pick(['#a9784a', '#8a6a45', '#c9a46a', '#7a5a3a']);
+    wallMat = wallMaterial('clap', hex, true); wallPlain = wallMaterial('clap', hex, false); upperTile = wallTile('clap');
+  }
   const trim = mat(trimHex), shutterMat = mat(shutterHex);
   const glassMat = glassMaterial();
   const stone = mat(theme.plinth);
@@ -597,10 +614,11 @@ function makeHouse(R, theme, opts) {
 
   // --- body
   g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0));                // plinth reaches below ground
-  put(new THREE.Mesh(wallGeometry(w, h, d, wallTileSize), wallMat), 0, 0.35 + h / 2, 0);
-  if (mix === 'base') {                                                 // a course of the second material round the foot
-    const bh = 0.85 + R() * 0.3;
-    put(new THREE.Mesh(wallGeometry(w + 0.1, bh, d + 0.1, tile2), mat2), 0, 0.35 + bh / 2, 0);
+  put(new THREE.Mesh(wallGeometry(w, h, d, upperTile), wallMat), 0, 0.35 + h / 2, 0);
+  if (mix === 'base' || mix === 'upper') {                              // a course of stone (or the second material) round the foot
+    const bh = mix === 'upper' ? 1.15 : 0.85 + R() * 0.3;
+    const bm = mix === 'upper' ? wallMaterial('stone', theme.plinth, true) : mat2;
+    put(new THREE.Mesh(wallGeometry(w + 0.1, bh, d + 0.1, mix === 'upper' ? wallTile('stone') : tile2), bm), 0, 0.35 + bh / 2, 0);
   }
   const contact = new THREE.Mesh(new THREE.PlaneGeometry(w + 3.4, d + 3.4).rotateX(-Math.PI / 2), CONTACT_MAT);
   contact.position.y = 0.07; contact.renderOrder = 1; contact.userData.noShadow = true;
@@ -663,7 +681,7 @@ function makeHouse(R, theme, opts) {
   const chZ = shape === 'hip' ? 0 : -d * 0.12;
   const chBase = top + (shape === 'hip' ? rh * 0.55 : rh * 0.72);
   const chTop = top + rh + 0.95;
-  if (chStyle !== 'none') {
+  if (chStyle !== 'none' && chStyle !== 'bigstone') {
     const bh = chTop - chBase + 0.2, my = chBase - 0.2 + bh / 2;
     const brick = wallMaterial('brick', chStyle === 'stone' ? '#8f8b82' : '#a8523a', false);
     const stoneMat = wallMaterial('stone', '#8f8b82', false);
@@ -728,16 +746,44 @@ function makeHouse(R, theme, opts) {
   }
   g.add(box(1.5, 0.9, 1.1, stone, dx, -0.09, front + 0.55));       // doorstep: a block that sinks into the ground
 
-  // porch canopy over the door
-  if (R() < 0.38) {
-    const post = mat(trimHex);
-    const px = 0.78;
-    for (const s of [-1, 1]) g.add(box(0.12, 2.05, 0.12, post, dx + s * px, 0.35 + 1.02, front + 1.0));
-    const roof = box(1.9, 0.12, 1.25, roofMat, dx, 2.5, front + 0.55);
-    roof.rotation.x = 0.16;
-    g.add(roof);
-    g.add(box(1.7, 0.12, 0.12, post, dx, 2.36, front + 1.0));
-    radius = Math.max(radius, d / 2 + 2.0);
+  // porch: a small canopy, a full-width veranda, or an open pergola over the door
+  {
+    const post = mat(trimHex), pr = R();
+    const kind = pr < 0.18 ? 'canopy' : pr < 0.34 && w >= 4.2 && !low ? 'veranda' : pr < 0.46 && !low ? 'pergola' : null;
+    if (kind === 'canopy') {
+      const px = 0.78;
+      for (const s of [-1, 1]) g.add(box(0.12, 2.05, 0.12, post, dx + s * px, 0.35 + 1.02, front + 1.0));
+      const roof = box(1.9, 0.12, 1.25, roofMat, dx, 2.5, front + 0.55);
+      roof.rotation.x = 0.16;
+      g.add(roof);
+      g.add(box(1.7, 0.12, 0.12, post, dx, 2.36, front + 1.0));
+      radius = Math.max(radius, d / 2 + 2.0);
+    } else if (kind === 'veranda') {
+      const vw = w * 0.9, vd = 1.7, deckY = 0.4;
+      g.add(box(vw, 0.18, vd, mat('#8a6a45'), 0, deckY - 0.05, front + vd / 2 - 0.05));
+      const px = [-vw / 2 + 0.12, vw / 2 - 0.12, dx - 0.85, dx + 0.85].filter((x) => Math.abs(x) <= vw / 2);
+      for (const x of px) g.add(box(0.12, 2.1, 0.12, post, x, deckY + 1.05, front + vd - 0.1));
+      const eaveY = top - 0.35, lowY = 2.5, run = vd + 0.25;
+      const ang = Math.atan2(eaveY - lowY, run);
+      const roof = new THREE.Mesh(slabGeometry(vw + 0.5, 0.12, run / Math.cos(ang) + 0.1, roofTileSize), roofMat);
+      roof.position.set(0, (eaveY + lowY) / 2 + 0.06, front + run / 2 - 0.05);
+      roof.rotation.x = ang;
+      g.add(roof);
+      g.add(box(vw, 0.12, 0.12, post, 0, lowY - 0.08, front + vd - 0.1));
+      radius = Math.max(radius, d / 2 + vd + 0.8);
+    } else if (kind === 'pergola') {
+      const pw = 2.4, pd = 1.9, y0 = 2.55;
+      for (const sx of [-1, 1]) for (const sz of [0.2, pd]) g.add(box(0.12, y0 - 0.3, 0.12, post, dx + sx * pw / 2, 0.35 + (y0 - 0.3) / 2, front + sz));
+      for (const sx of [-1, 1]) g.add(box(0.12, 0.16, pd + 0.4, post, dx + sx * pw / 2, y0, front + pd / 2 + 0.15));
+      for (let k = 0; k < 6; k++) g.add(box(pw + 0.5, 0.07, 0.1, post, dx, y0 + 0.11, front + 0.1 + k * (pd / 5)));
+      const leaf = mat('#5fa04a');
+      for (let k = 0; k < 7; k++) {
+        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2 + (k % 3) * 0.04, 0), leaf);
+        m.position.set(dx + (k - 3) * 0.32, y0 + 0.2, front + 0.2 + (k * 0.47) % pd);
+        g.add(m);
+      }
+      radius = Math.max(radius, d / 2 + pd + 0.6);
+    }
   }
   // lantern beside the door
   if (!low && R() < 0.65) {
@@ -748,6 +794,19 @@ function makeHouse(R, theme, opts) {
 
   // --- front and side windows
   const freeSide = hasWing ? -wingSide : (R() < 0.5 ? -1 : 1);
+  if (chStyle === 'bigstone') {                                       // a broad external stack up the free gable wall
+    const sm = wallMaterial('stone', '#8f8b82', false), capm = mat('#6a675f');
+    const cz = -d * 0.28, top2 = top + rh + 0.75, base = -0.3, bh2 = top2 - base;
+    const cxx = freeSide * (w / 2 + 0.22);
+    const body2 = new THREE.Mesh(wallGeometry(0.6, bh2, 0.95, 1.4), sm);
+    body2.position.set(cxx, base + bh2 / 2, cz); g.add(body2);
+    const shoulder = new THREE.Mesh(wallGeometry(0.8, 0.9, 1.15, 1.4), sm);        // wider footing
+    shoulder.position.set(cxx + freeSide * 0.08, 0.35 + 0.35, cz); g.add(shoulder);
+    g.add(box(0.5, 0.5, 0.8, sm, cxx - freeSide * 0.02, top2 + 0.2, cz));          // narrower flue head
+    g.add(box(0.72, 0.12, 1.02, capm, cxx, top2 + 0.5, cz));
+    chimneys.push([cxx, top2 + 0.7, cz]);
+    radius = Math.max(radius, w / 2 + 1.1);
+  }
   addWindow(g, -doorSide * w * 0.27, 1.65, front + 0.03, 0, glassMat, trim, shutterMat, dressOpts(R() < 0.6));
   addWindow(g, freeSide * (w / 2 + 0.03), 1.65, 0, freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
   if (!hasWing) addWindow(g, -freeSide * (w / 2 + 0.03), 1.65, 0, -freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
