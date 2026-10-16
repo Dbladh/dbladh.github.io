@@ -128,6 +128,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
 body.scene-mode {
   overflow: hidden;
   min-height: 100vh; min-height: 100lvh; /* children are all fixed, so give the page a height (large viewport) */
+  background: transparent;                /* the sky is painted by #sky and <html>; the base cream would cover them */
 }
 
 /* Stacking: sky gradient (body) < sun/moon/stars/clouds (#sky) < big name (.hero h1)
