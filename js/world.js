@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015192133';
+} from './houses.js?v=20261015192426';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1772,7 +1772,7 @@ varying vec3 vWPos; varying float vWDist;`)
 
   // ---- per-frame + day/night ----
   let time = 0, night = 0;
-  const HOUSE_I = 26, FF_I = 9;
+  const HOUSE_I = 20, FF_I = 9;
   const glow = glowMats();
   let camPos = null;
   // Anything drifting between the camera and a sign fades out until it is clear of it again.
@@ -2027,12 +2027,12 @@ varying vec3 vWPos; varying float vWDist;`)
     setNight(n) {
       night = n;
       windU.uDay.value = 1 - n;
-      for (const m of windowMats) m.emissiveIntensity = n * 1.7;
+      for (const m of windowMats) m.emissiveIntensity = n * 1.3;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
       setLanterns(n);
       smokeMat.color.setRGB(0.9 - 0.45 * n, 0.92 - 0.42 * n, 0.95 - 0.3 * n);
-      glow.decalMat.opacity = n * 1.0;   // the four panes on the ground
-      glow.shaftMat.opacity = n * 0.1;   // soft shaft out of each window
+      glow.decalMat.opacity = n * 0.42;   // the four panes on the ground
+      glow.shaftMat.opacity = n * 0.05;   // soft shaft out of each window
       ffUniforms.uNight.value = n;
       boards.forEach((b) => b.setNight(n));
     },

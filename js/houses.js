@@ -300,7 +300,7 @@ function glowKit() {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 256;
   const g = c.getContext('2d');
-  g.shadowColor = '#fff'; g.shadowBlur = 4; g.fillStyle = '#fff';
+  g.shadowColor = '#fff'; g.shadowBlur = 16; g.fillStyle = 'rgba(255,255,255,0.8)';
   const xAt = (y, t) => lerp(lerp(34, 10, (y - 12) / 228), lerp(94, 118, (y - 12) / 228), t);
   for (const [ya, yb] of [[14, 106], [140, 238]]) {
     for (const [t0, t1] of [[0, 0.42], [0.58, 1]]) {
