@@ -58,6 +58,15 @@ const FRAG = /* glsl */ `
     // The buffer is premultiplied linear; convert the colour to sRGB, then re-premultiply.
     float a = col.a;
     vec3 c = a > 0.0001 ? col.rgb / a : col.rgb;
+    // Grade: filmic tone curve, a little more saturation, warm highlights over cool shadows, soft vignette.
+    c *= 1.18;
+    c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+    float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = mix(vec3(luma), c, 1.2);
+    c += vec3(-0.004, 0.006, 0.018) * (1.0 - smoothstep(0.0, 0.3, luma));
+    c *= mix(vec3(1.0), vec3(1.05, 1.0, 0.93), smoothstep(0.45, 1.0, luma));
+    float vig = smoothstep(1.05, 0.35, length((vUv - 0.5) * vec2(1.0, 0.9)));
+    c *= mix(0.8, 1.0, vig);
     gl_FragColor = vec4(c, a);
     #include <colorspace_fragment>
     gl_FragColor.rgb *= a;
