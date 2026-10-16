@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015193053';
+} from './houses.js?v=20261015193329';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -669,6 +669,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
   const c = new THREE.Color();
+  const masks = new Float32Array(p.count * 4);   // path, sand, bed, dirt: sharpened in the shader into crisp-edged patches
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
     const h = heightAt(x, z);
@@ -685,18 +686,18 @@ export function buildWorld(scene, sections, opts = {}) {
       const stripe = 0.5 + 0.5 * Math.sin(x * 1.9 + gz * 2.0);
       c.lerp(hash(gx, gz) > 0.78 ? cGold : cCrop, (0.3 + 0.25 * stripe) * (1 - smooth(0.3, 0.7, slope)));
     }
-    c.lerp(cDirt, smooth(0.78, 0.9, vnoise(x * 0.3 + 90, z * 0.3)) * 0.55);  // bare earth patches
+    const mDirt = smooth(0.74, 0.94, vnoise(x * 0.3 + 90, z * 0.3));       // bare earth patches (crisp edge, see shader)
     c.lerp(cRock, smooth(0.5, 1.1, slope) * 0.75);                           // steep ground is rocky
     c.offsetHSL(0, 0, (hash(x * 7.1, z * 5.3) - 0.5) * 0.06);                // fine grass grain
 
     // Pond shore: sand above the waterline, dark bed below it.
     const dp = Math.hypot(x - POND.x, z - POND.z);
-    c.lerp(cSand, (1 - smooth(WATER_Y + 0.1, WATER_Y + 0.9, h)) * (1 - smooth(POND.r * 1.3, POND.r * 2.1, dp)) * 0.9);
-    c.lerp(cBed, smooth(WATER_Y, WATER_Y - 1.4, h) * 0.7);
+    let mSand = (1 - smooth(WATER_Y + 0.1, WATER_Y + 0.9, h)) * (1 - smooth(POND.r * 1.3, POND.r * 2.1, dp));
+    let mBed = smooth(WATER_Y + 0.2, WATER_Y - 0.6, h);
     const rq = riverQuery(x, z);
     if (rq && rq.d < rq.hw * 3.4) {                                           // sandy banks, darker bed
-      c.lerp(cSand, (1 - smooth(rq.hw * 1.5, rq.hw * 3.2, rq.d)) * 0.55);
-      c.lerp(cBed, (1 - smooth(rq.hw * 0.4, rq.hw * 1.6, rq.d)) * 0.75);
+      mSand = Math.max(mSand, 1 - smooth(rq.hw * 1.5, rq.hw * 3.2, rq.d));
+      mBed = Math.max(mBed, 1 - smooth(rq.hw * 0.7, rq.hw * 1.5, rq.d));
     }
 
     const onPath = 1 - smooth(1.5, 3.1, Math.abs(x - pathX(z)));
@@ -714,10 +715,12 @@ export function buildWorld(scene, sections, opts = {}) {
       if (x < bx.x0 || x > bx.x1 || z < bx.z0 || z > bx.z1) return;
       branch = Math.max(branch, 1 - smooth(0.8, 1.9, distToPolyline(x, z, b)));
     });
-    c.lerp(cPath, Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
+    const mPath = Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z));   // path dissolves on the AI hill
+    masks.set([mPath, mSand, mBed, mDirt], i * 4);
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('aMask', new THREE.BufferAttribute(masks, 4));
   geo.computeVertexNormals();
   // Wind and cloud shadows are painted in the terrain's own shader (no extra geometry): long grass
   // strokes that stream along the wind, and big soft cloud shadows that drift over the hills.
@@ -732,18 +735,33 @@ export function buildWorld(scene, sections, opts = {}) {
   windTex.minFilter = THREE.LinearMipmapLinearFilter;
   windTex.generateMipmaps = true;
   windTex.needsUpdate = true;
-  const windU = { uWindTex: { value: windTex }, uWindT: { value: 0 }, uDay: { value: 1 }, uWindAmt: { value: classic ? 0 : 1 } };
+  const windU = { uCPath: { value: cPath }, uCSand: { value: cSand }, uCBed: { value: cBed }, uCDirt: { value: cDirt }, uWindTex: { value: windTex }, uWindT: { value: 0 }, uDay: { value: 1 }, uWindAmt: { value: classic ? 0 : 1 } };
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   terrainMat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, windU);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying float vWDist;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aMask;\nvarying vec4 vMask;\nvarying vec3 vWPos;\nvarying float vWDist;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMask = aMask;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 uniform sampler2D uWindTex; uniform float uWindT; uniform float uDay; uniform float uWindAmt;
-varying vec3 vWPos; varying float vWDist;`)
+uniform vec3 uCPath, uCSand, uCBed, uCDirt;
+varying vec4 vMask; varying vec3 vWPos; varying float vWDist;
+float crisp(float m) { float w = max(fwidth(m) * 0.7, 0.015); return smoothstep(0.5 - w, 0.5 + w, m); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  // crisp-edged ground types: dirt patches, sand shores, wet bed, then the path on top
+  float grassKeep = 1.0;
+  vec3 gcol = diffuseColor.rgb;
+  float kDirt = crisp(vMask.w), kSand = crisp(vMask.y), kBed = crisp(vMask.z), kPath = crisp(vMask.x);
+  float grassW = (1.0 - kDirt) * (1.0 - kSand) * (1.0 - kBed) * (1.0 - kPath);
+  vec3 dirtC = uCDirt * (0.92 + 0.16 * texture2D(uWindTex, vWPos.xz * 0.35).r);
+  diffuseColor.rgb = mix(diffuseColor.rgb, dirtC, kDirt);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uCSand, kSand);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uCBed, kBed);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uCPath * (0.94 + 0.12 * texture2D(uWindTex, vWPos.xz * 0.5).g), kPath);
+  float onlyGrass = grassW;
+}
 {
   // only green grass: dirt, sand, path and rock are redder than they are green, so they are left alone
   float grass = smoothstep(1.06, 1.3, diffuseColor.g / max(diffuseColor.r, 0.02)) * (1.0 - smoothstep(0.55, 0.8, diffuseColor.b));
@@ -827,11 +845,11 @@ varying vec3 vWPos; varying float vWDist;`)
         col += vec3(1.0, 0.92, 0.75) * spec * 1.8;
         float tw = sin(dot(q, vec2(11.0, 7.0)) + uTime * 3.0) * sin(dot(q, vec2(-5.0, 13.0)) - uTime * 2.3);
         col += vec3(1.0) * smoothstep(0.9, 1.0, tw) * uDay * 0.45;
-        float shore = 1.0 - smoothstep(0.0, 0.32, vDepth);
+        float shore = 1.0 - smoothstep(0.0, 0.2, vDepth);
         float fn = 0.5 + 0.5 * sin(dot(q, vec2(3.1, 2.3)) + uTime * 0.9) * sin(dot(q, vec2(-2.4, 3.7)) - uTime * 0.7);
-        float foam = shore * smoothstep(0.25, 0.75, fn + shore * 0.6);
+        float foam = shore * smoothstep(0.42, 0.52, fn + shore * 0.5);
         col = mix(col, lin(vec3(0.95, 0.98, 1.0)) * (0.35 + 0.65 * uDay), foam * 0.75);
-        float alpha = mix(0.5, 0.93, smoothstep(0.0, 0.55, vDepth)) * (1.0 - smoothstep(0.82, 1.0, vEdge));
+        float alpha = mix(0.8, 0.94, smoothstep(0.05, 0.6, vDepth)) * (1.0 - smoothstep(0.82, 1.0, vEdge));
         gl_FragColor = vec4(col, alpha);
         #include <fog_fragment>
       }`,
