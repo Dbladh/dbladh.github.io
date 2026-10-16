@@ -127,8 +127,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
 
 body.scene-mode {
   overflow: hidden;
-  min-height: 100vh; min-height: 100lvh; /* children are all fixed, so give the sky gradient a height (large viewport) */
-  background: linear-gradient(to bottom, var(--sky-top), var(--sky-bot) 62%);
+  min-height: 100vh; min-height: 100lvh; /* children are all fixed, so give the page a height (large viewport) */
 }
 
 /* Stacking: sky gradient (body) < sun/moon/stars/clouds (#sky) < big name (.hero h1)
@@ -136,6 +135,9 @@ body.scene-mode {
 body.scene-mode #sky {
   display: block; position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; z-index: -1;
   pointer-events: none; filter: blur(1.2px);
+  /* The sky gradient lives on the canvas itself. (On <body> it would paint over this z-index:-1 canvas, now that
+     <html> has its own background for the mobile browser bars, and hide every cloud, star, sun and moon.) */
+  background: linear-gradient(to bottom, var(--sky-top), var(--sky-bot) 62%);
 }
 body.scene-mode #scene {
   display: block; position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; z-index: 1;
