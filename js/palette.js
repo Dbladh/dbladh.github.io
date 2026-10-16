@@ -20,6 +20,8 @@ export const PAL = {
   thatch: '#C6AE78',
   thatchDeep: '#B39A68',
   inkSign: '#443F42',      // billboard lettering: a warm charcoal with a hint of rose, ~10:1 on white (AAA)
+  paper: '#FBFAF5',        // card and sign-content paper
+  coralText: '#A94638',    // coral deep enough for text and links on cream (about 5:1)
   ink: '#3F4F5A',          // frames, doors on pale houses, ironwork
   marigold: '#E3B04B',     // an occasional door or awning pop
   timber: '#A8815A',       // fences, decks, the bridge

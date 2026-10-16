@@ -1,15 +1,30 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015212114';
-import { createSky } from './sky.js?v=20261015212114';
-import { createDOF } from './dof.js?v=20261015212114';
+import { PAL } from './palette.js?v=20261015213238';
+import { buildWorld } from './world.js?v=20261015213238';
+import { createSky } from './sky.js?v=20261015213238';
+import { createDOF } from './dof.js?v=20261015213238';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
 const skyCanvas = document.getElementById('sky');
 const live = document.getElementById('live');
 const nav = document.getElementById('stopnav');
+// The town palette becomes CSS variables (--pal-cream, --pal-coral ...), so the stylesheet and the 3D scene share colours.
+for (const [k, v] of Object.entries(PAL)) document.documentElement.style.setProperty('--pal-' + k, v);
+// The big name: split into letters so they can rise in one after another (on load, and when returning to the overview).
+const nameEl = document.querySelector('.hero h1');
+if (nameEl && !nameEl.querySelector('.ch')) {
+  const txt = nameEl.textContent.trim();
+  nameEl.setAttribute('aria-label', txt);
+  nameEl.innerHTML = [...txt].map((ch, i) => `<span class="ch" aria-hidden="true" style="--i:${i}">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+}
+function riseName() {
+  if (!nameEl) return;
+  nameEl.classList.remove('rise'); void nameEl.offsetWidth; nameEl.classList.add('rise');
+}
+riseName();
 /** Slides the gold marker behind the current tab (and keeps that tab in view when the pill scrolls on phones). */
 function placeNavMarker() {
   const cur = nav.querySelector('a[aria-current="page"]') || nav.querySelector('a');
@@ -19,6 +34,7 @@ function placeNavMarker() {
   if (nav.scrollWidth > nav.clientWidth) cur.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
 }
 window.addEventListener('resize', placeNavMarker);
+if (window.ResizeObserver) { const ro = new ResizeObserver(placeNavMarker); nav.querySelectorAll('a').forEach((a) => ro.observe(a)); }
 document.fonts?.ready.then(placeNavMarker);
 const controls = document.getElementById('controls');
 const timeInput = document.getElementById('time');
@@ -271,6 +287,7 @@ function start() {
       else a.removeAttribute('aria-current');
     });
     placeNavMarker();
+    if (id === 'home') riseName();
     if (!silent) live.textContent = id === 'home' ? 'Back to the landscape overview' : `Opened: ${sections[id].title}`;
     if (record && location.hash !== '#' + id) history.pushState(null, '', '#' + id); // Back button closes a sign
 

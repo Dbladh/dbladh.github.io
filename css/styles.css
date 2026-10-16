@@ -15,13 +15,18 @@
 }
 
 :root {
-  --ink: #111111;
-  --cream: #fcf6e8;
-  --pink: #fdd0dc;
-  --blue: #d9e8f2;
-  --mint: #dcf0d6;
-  --accent: #ff7a3d;
-  --focus: #2457ff;
+  /* The town palette (js/palette.js writes the same values as --pal-* at startup; these are the fallbacks). */
+  --ink: var(--pal-inkSign, #443F42);
+  --cream: var(--pal-cream, #EFEEE5);
+  --paper: var(--pal-paper, #FBFAF5);
+  --line: var(--pal-sage, #ACAD97);
+  --gold: var(--pal-gold, #DACA9C);
+  --coral: var(--pal-coral, #D15E4D);
+  --coral-text: var(--pal-coralText, #A94638);
+  --soft-blue: var(--pal-softBlue, #C5D2DB);
+  --leaf: var(--pal-blueGreen, #AABEB4);
+  --focus: var(--pal-coral, #D15E4D);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .27 0 0 0 0 .25 0 0 0 0 .26 0 0 0 .08 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
   --sky-top: #5aa0f0;   /* updated live by js/sky.js */
   --sky-bot: #cfe6f7;
   --radius: 18px;
@@ -36,7 +41,7 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: var(--cream);
+  background: var(--grain), var(--cream);
   color: var(--ink);
   font: 18px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -399,3 +404,120 @@ html:has(body.scene-mode) { background-color: var(--sky-top); }
 /* With a sign open the soft fades go away so they never tint the sign's colour bar. */
 body.scene-mode.sign-open .edge-top::after,
 body.scene-mode.sign-open .edge-bottom::after { display: none; }
+
+
+/* =====================================================================================================
+   Cozy storybook UI: paper, stitched edges, soft shadows, gentle bounce. Uses the town palette tokens above.
+   ===================================================================================================== */
+
+/* ---------- Navigation: icon + label tabs (scene pill and simple-view pill share these) ---------- */
+#stopnav a { display: inline-flex; align-items: center; gap: 7px; }
+#stopnav .ico { width: 1.15em; height: 1.15em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#stopnav a span { display: inline-block; }
+body.scene-mode #stopnav { background-image: var(--grain); }
+body.scene-mode #stopnav::after {            /* a faint stitched line just inside the pill */
+  content: ""; position: absolute; inset: 3px; border: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 999px; pointer-events: none;
+}
+@media (max-width: 480px) {
+  /* Phones: only the current tab shows its label; the others are icons, so all five fit. */
+  body.scene-mode #stopnav a { padding: 8px 11px; gap: 0; }
+  body.scene-mode #stopnav a span { max-width: 0; overflow: hidden; opacity: 0; transition: max-width 0.35s ease, opacity 0.25s ease, margin 0.35s ease; }
+  body.scene-mode #stopnav a[aria-current="page"] { gap: 7px; padding: 8px 13px; }
+  body.scene-mode #stopnav a[aria-current="page"] span { max-width: 9em; opacity: 1; }
+}
+
+/* Simple view: the same pill, in the flow of the page */
+body:not(.scene-mode) #stopnav {
+  max-width: 900px; margin: 6px auto 4px; padding: 8px 20px; gap: 8px;
+  font-family: var(--name-font); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase;
+}
+body:not(.scene-mode) #stopnav a {
+  color: var(--ink); text-decoration: none; padding: 7px 14px; border: 1.5px solid var(--line); border-radius: 999px;
+  background: var(--paper); transition: background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+body:not(.scene-mode) #stopnav a:hover { background: var(--gold); border-color: var(--gold); transform: translateY(-1px); }
+body:not(.scene-mode) #stopnav a:active { transform: scale(0.96); }
+
+/* ---------- Title and tagline ---------- */
+body.scene-mode .hero h1 { text-shadow: 0 3px 24px rgba(52, 44, 66, 0.42), 0 1px 3px rgba(40, 34, 52, 0.3); }
+.hero h1 .ch { display: inline-block; }
+.hero h1.rise .ch { animation: letterRise 0.8s cubic-bezier(0.25, 1.4, 0.5, 1) both; animation-delay: calc(var(--i) * 42ms); }
+@keyframes letterRise { 0% { opacity: 0; transform: translateY(0.35em) scale(0.92); } 100% { opacity: 1; transform: none; } }
+.tagline .phrase { transition: opacity 0.35s ease, transform 0.35s ease; }
+.tagline .phrase.fade { transform: translateY(6px); }
+body.scene-mode .tagline::before {
+  content: "\2726"; display: inline-block; margin-right: 0.45em; color: var(--gold); font-size: 0.8em;
+  text-shadow: 0 0 10px rgba(255, 236, 170, 0.8); animation: twinkle 3.2s ease-in-out infinite;
+}
+@keyframes twinkle { 0%, 100% { opacity: 0.55; transform: scale(0.85) rotate(0deg); } 50% { opacity: 1; transform: scale(1.15) rotate(20deg); } }
+
+/* ---------- Back button ---------- */
+body.scene-mode .back {
+  border: 1.5px solid var(--line); background: color-mix(in srgb, var(--cream) 92%, transparent); color: var(--ink);
+  font-family: var(--name-font); font-weight: 600; letter-spacing: 0.05em; text-transform: none; font-size: max(14px, 0.9em);
+  box-shadow: 0 3px 10px rgba(40, 52, 44, 0.16);
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.back .ico { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1); }
+body.scene-mode .back:hover { background: var(--gold); transform: translateY(-1px); box-shadow: 0 5px 14px rgba(40, 52, 44, 0.22); }
+body.scene-mode .back:hover .ico { transform: translateX(-3px); }
+body.scene-mode .back:active { background: var(--gold); color: var(--ink); transform: scale(0.96); }
+body:not(.scene-mode) .back { display: none; }
+
+/* ---------- Sign content: headings, links, cards ---------- */
+.stop h2 { font-family: var(--name-font); font-weight: 700; letter-spacing: -0.025em; }
+.stop h2::after {            /* a hand-drawn wavy underline in the sign's own accent colour */
+  content: ""; display: block; width: min(6.5em, 70%); height: 0.28em; margin-top: 0.12em;
+  background: var(--accent-stripe, var(--gold));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q6 0 12 4 T24 4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50% / 24px 100%;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q6 0 12 4 T24 4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50% / 24px 100%;
+}
+.stop h3 { font-family: var(--name-font); font-weight: 600; letter-spacing: 0.01em; }
+.stop a:not(.back) {
+  color: var(--coral-text); text-decoration: underline wavy color-mix(in srgb, var(--coral) 70%, transparent) 1.5px; text-underline-offset: 4px;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+.stop a:not(.back):hover { text-decoration-style: solid; text-decoration-color: var(--coral); color: var(--ink); }
+
+.story {
+  position: relative; margin: 22px 0 18px; padding: 16px 20px 14px; background: color-mix(in srgb, var(--cream) 78%, #fff);
+  border: 2px dashed var(--line); border-radius: 16px;
+  box-shadow: 0 6px 14px rgba(70, 64, 60, 0.12);
+}
+.story:nth-of-type(odd) { transform: rotate(-0.35deg); }
+.story:nth-of-type(even) { transform: rotate(0.35deg); }
+.story::before {             /* a strip of washi tape holding the card to the sign */
+  content: ""; position: absolute; top: -10px; left: 22px; width: 68px; height: 18px; border-radius: 3px;
+  background: var(--accent-stripe, var(--gold)); opacity: 0.85; transform: rotate(-3deg);
+  box-shadow: 0 1px 2px rgba(60, 50, 40, 0.18);
+}
+.story dt { font-family: var(--name-font); font-weight: 600; letter-spacing: 0.08em; display: flex; align-items: center; gap: 7px; }
+.story dt::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); flex: none; }
+
+.app-card {
+  background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px;
+  box-shadow: 0 6px 14px rgba(70, 64, 60, 0.14);
+}
+.app-card figcaption small { color: color-mix(in srgb, var(--ink) 70%, #fff); }
+.about-photo img {
+  border: 6px solid var(--paper); border-radius: 14px; outline: 1.5px solid var(--line); background: var(--cream);
+  box-shadow: 0 8px 18px rgba(60, 52, 48, 0.2); transform: rotate(-1.2deg);
+}
+
+/* ---------- Simple view: cards ---------- */
+body:not(.scene-mode) .hero h1 { font-family: var(--name-font); }
+body:not(.scene-mode) .stop {
+  background: var(--paper); border: 1.5px solid var(--line); border-top: 12px solid var(--accent-stripe, var(--line));
+  border-radius: 20px; box-shadow: 0 10px 24px rgba(70, 64, 60, 0.12);
+}
+body:not(.scene-mode) .controls { color: var(--ink); }
+body:not(.scene-mode) #simple-toggle { border-color: var(--line); font-family: var(--name-font); font-weight: 600; letter-spacing: 0.06em; }
+body:not(.scene-mode) #simple-toggle:hover { background: var(--gold); border-color: var(--gold); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero h1.rise .ch { animation: none; }
+  body.scene-mode .tagline::before { animation: none; }
+  .story:nth-of-type(odd), .story:nth-of-type(even), .about-photo img { transform: none; }
+  .back .ico, #stopnav a { transition: none; }
+}
