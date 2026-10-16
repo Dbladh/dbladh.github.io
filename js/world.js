@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015203926';
+import { PAL } from './palette.js?v=20261015204352';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015203926';
+} from './houses.js?v=20261015204352';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1478,21 +1478,70 @@ export function buildWorld(scene, sections, opts = {}) {
   // Faceted, flat-shaded low-poly forms (not smooth spheres): jittered icosahedra for foliage,
   // a lathed flame for cypress, stepped tiers for pines. Vertex colours add a baked top-light.
   const flat = (extra = {}) => white({ flatShading: true, vertexColors: true, ...extra });
+  // Surface texture and relief for foliage and bark (desktop): a mottled leaf texture and a streaky bark texture,
+  // each with a normal map derived from it. They only modulate the existing colours, so palettes still apply.
+  let foliageMat, foliageMatDS, barkMat, logMat;
+  {
+    const mk = (draw, S = 128) => { const c = document.createElement('canvas'); c.width = c.height = S; draw(c.getContext('2d'), S); return c; };
+    const tex = (c, rx, ry) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.repeat.set(rx, ry); t.anisotropy = 4; return t; };
+    if (!low) {
+      const lr = rng(31), br = rng(32);
+      const leafC = mk((g, S) => {
+        g.fillStyle = '#d6d6d6'; g.fillRect(0, 0, S, S);
+        for (let i = 0; i < 170; i++) {                                         // overlapping leaves with a darker vein
+          const x = lr() * S, y = lr() * S, a = lr() * 6.28, l = 7 + lr() * 11, v = 186 + Math.floor(lr() * 70);
+          for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+            if (x + ox < -20 || x + ox > S + 20 || y + oy < -20 || y + oy > S + 20) continue;
+            g.save(); g.translate(x + ox, y + oy); g.rotate(a);
+            g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.ellipse(0, 0, l, l * 0.42, 0, 0, 6.3); g.fill();
+            g.strokeStyle = `rgb(${v - 60},${v - 60},${v - 60})`; g.lineWidth = 1; g.beginPath(); g.moveTo(-l * 0.8, 0); g.lineTo(l * 0.8, 0); g.stroke();
+            g.restore();
+          }
+        }
+      });
+      const barkC = mk((g, S) => {
+        g.fillStyle = '#c8c8c8'; g.fillRect(0, 0, S, S);
+        for (let i = 0; i < 90; i++) {                                          // vertical ridges and cracks
+          const x = br() * S, wd = 1 + br() * 3, v = 120 + Math.floor(br() * 120);
+          g.strokeStyle = `rgb(${v},${v},${v})`; g.lineWidth = wd;
+          g.beginPath(); g.moveTo(x, 0);
+          for (let y = 0; y <= S; y += 16) g.lineTo(x + Math.sin(y * 0.09 + i) * 2.5, y);
+          g.stroke();
+        }
+      });
+      const leafT = tex(leafC, 2, 2), barkT = tex(barkC, 1, 3);
+      const leafN = normalMapFrom({ image: leafC }, 'tree-leaf', 3.5), barkN = normalMapFrom({ image: barkC }, 'tree-bark', 4);
+      leafN.repeat.set(2, 2); barkN.repeat.set(1, 3);
+      foliageMat = flat({ map: leafT, normalMap: leafN, normalScale: new THREE.Vector2(0.9, 0.9) });
+      foliageMatDS = flat({ map: leafT, normalMap: leafN, normalScale: new THREE.Vector2(0.9, 0.9), side: THREE.DoubleSide });
+      barkMat = flat({ map: barkT, normalMap: barkN, normalScale: new THREE.Vector2(1.1, 1.1) });
+      logMat = white({ map: barkT, normalMap: barkN, normalScale: new THREE.Vector2(1.1, 1.1) });
+    } else {
+      foliageMat = flat(); foliageMatDS = flat({ side: THREE.DoubleSide }); barkMat = flat(); logMat = white();
+    }
+  }
+  /** Planar UVs for geometry that has none (the pine tiers): continuous, no seams. */
+  const addPlanarUV = (geo, k = 0.5) => {
+    const p = geo.attributes.position, uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i++) { uv[i * 2] = (p.getX(i) + p.getZ(i) * 0.4) * k; uv[i * 2 + 1] = (p.getY(i) + p.getZ(i) * 0.6) * k; }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return geo;
+  };
   const blobGeos = [0, 1, 2].map((i) => shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.38, i * 7.3), 0.7, 1.1));
   const lobeLists = [[], [], []];
   items.lobe.forEach((it, i) => lobeLists[i % 3].push(it));
   const trunkGeo = shade(jitter(new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 2), 0.18, 5), 0.75, 1.05);
-  instanced(trunkGeo, flat(), items.trunk, { defaultColor: BARK });
-  instanced(shade(new THREE.ConeGeometry(0.75, 1, 6), 0.7, 1.0), flat(), items.flare, { defaultColor: BARK });
+  instanced(trunkGeo, barkMat, items.trunk, { defaultColor: BARK });
+  instanced(shade(new THREE.ConeGeometry(0.75, 1, 6), 0.7, 1.0), barkMat, items.flare, { defaultColor: BARK });
   const farBlobs = [0, 1, 2].map((i) => shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, i * 7.3), 0.7, 1.1));
-  lobeLists.forEach((list, i) => instanced(blobGeos[i], flat(), list, { farGeometry: farBlobs[i] }));
-  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.35, 3), 0.8, 1.12), flat(), items.leaf, { shadow: false });
+  lobeLists.forEach((list, i) => instanced(blobGeos[i], foliageMat, list, { farGeometry: farBlobs[i] }));
+  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.35, 3), 0.8, 1.12), foliageMat, items.leaf, { shadow: false });
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.fruit, { shadow: false });
   // cypress: a faceted flame, widest a little below the middle
-  instanced(shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1), flat(), items.cypress);
+  instanced(shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1), foliageMat, items.cypress);
   // pine: drooping jagged tiers, two-sided so it never turns see-through
-  instanced(pineGeometry(5, 9), flat({ side: THREE.DoubleSide }), items.pine, { farGeometry: pineGeometry(3, 6) });
-  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), flat(), items.bush, { farGeometry: shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, 11), 0.65, 1.08) });
+  instanced(addPlanarUV(pineGeometry(5, 9)), foliageMatDS, items.pine, { farGeometry: addPlanarUV(pineGeometry(3, 6)) });
+  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), foliageMat, items.bush, { farGeometry: shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, 11), 0.65, 1.08) });
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.berry, { shadow: false });
   instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
   instanced(tuftGeometry(), flat({ side: THREE.DoubleSide }), items.grass, { shadow: false });
@@ -1503,7 +1552,7 @@ export function buildWorld(scene, sections, opts = {}) {
   instanced(new THREE.ConeGeometry(0.12, 0.85, 3).translate(0, 0.42, 0), white(), items.fern, { shadow: false });
   instanced(new THREE.CylinderGeometry(0.028, 0.034, 0.18, 5), white(), items.mushStem, { shadow: false });
   instanced(new THREE.SphereGeometry(1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), white(), items.mushCap, { shadow: false });
-  instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), white(), items.log, { defaultColor: BARK });
+  instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), logMat, items.log, { defaultColor: BARK });
   instanced(new THREE.CylinderGeometry(0.04, 0.05, 1, 5), white(), items.reed, { shadow: false });
   instanced(new THREE.CylinderGeometry(0.06, 0.06, 0.28, 6), white(), items.reedTop, { shadow: false });
   instanced(new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12), white(), items.lily, { shadow: false });
