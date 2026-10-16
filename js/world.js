@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015193329';
+} from './houses.js?v=20261015193420';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -669,6 +669,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
   const c = new THREE.Color();
+  const masks2 = new Float32Array(p.count * 4);  // crop field, gold field, rock
   const masks = new Float32Array(p.count * 4);   // path, sand, bed, dirt: sharpened in the shader into crisp-edged patches
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
@@ -680,14 +681,15 @@ export function buildWorld(scene, sections, opts = {}) {
     c.lerp(cDeep, smooth(0.25, 0, t) * 0.5);
     c.lerp(cWarm, smooth(0.52, 0.78, fbm(x * 0.05 + 40, z * 0.05)) * 0.65);
 
-    // Patchwork fields on gentle ground in the middle distance, with mown stripes.
+    // Patchwork fields on gentle ground in the middle distance, with mown stripes (painted crisp in the shader).
+    let fCrop = 0, fGold = 0;
     const gx = Math.floor((x + 300) / 15), gz = Math.floor((z + 300) / 19);
     if (z < -14 && z > -92 && hash(gx * 3.1, gz * 1.7) > 0.58 && Math.abs(x - pathX(z)) > 6) {
-      const stripe = 0.5 + 0.5 * Math.sin(x * 1.9 + gz * 2.0);
-      c.lerp(hash(gx, gz) > 0.78 ? cGold : cCrop, (0.3 + 0.25 * stripe) * (1 - smooth(0.3, 0.7, slope)));
+      const k = 1 - smooth(0.3, 0.7, slope);                              // fields only on gentle ground
+      if (hash(gx, gz) > 0.78) fGold = k; else fCrop = k;
     }
     const mDirt = smooth(0.74, 0.94, vnoise(x * 0.3 + 90, z * 0.3));       // bare earth patches (crisp edge, see shader)
-    c.lerp(cRock, smooth(0.5, 1.1, slope) * 0.75);                           // steep ground is rocky
+    const mRock = smooth(0.5, 1.1, slope);                                    // steep ground is rocky (crisp, see shader)
     c.offsetHSL(0, 0, (hash(x * 7.1, z * 5.3) - 0.5) * 0.06);                // fine grass grain
 
     // Pond shore: sand above the waterline, dark bed below it.
@@ -717,10 +719,12 @@ export function buildWorld(scene, sections, opts = {}) {
     });
     const mPath = Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z));   // path dissolves on the AI hill
     masks.set([mPath, mSand, mBed, mDirt], i * 4);
+    masks2.set([fCrop, fGold, mRock, 0], i * 4);
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.setAttribute('aMask', new THREE.BufferAttribute(masks, 4));
+  geo.setAttribute('aMask2', new THREE.BufferAttribute(masks2, 4));
   geo.computeVertexNormals();
   // Wind and cloud shadows are painted in the terrain's own shader (no extra geometry): long grass
   // strokes that stream along the wind, and big soft cloud shadows that drift over the hills.
@@ -735,24 +739,28 @@ export function buildWorld(scene, sections, opts = {}) {
   windTex.minFilter = THREE.LinearMipmapLinearFilter;
   windTex.generateMipmaps = true;
   windTex.needsUpdate = true;
-  const windU = { uCPath: { value: cPath }, uCSand: { value: cSand }, uCBed: { value: cBed }, uCDirt: { value: cDirt }, uWindTex: { value: windTex }, uWindT: { value: 0 }, uDay: { value: 1 }, uWindAmt: { value: classic ? 0 : 1 } };
+  const windU = { uCPath: { value: cPath }, uCSand: { value: cSand }, uCBed: { value: cBed }, uCDirt: { value: cDirt }, uCCrop: { value: cCrop }, uCGold: { value: cGold }, uCRock: { value: cRock }, uWindTex: { value: windTex }, uWindT: { value: 0 }, uDay: { value: 1 }, uWindAmt: { value: classic ? 0 : 1 } };
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   terrainMat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, windU);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aMask;\nvarying vec4 vMask;\nvarying vec3 vWPos;\nvarying float vWDist;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMask = aMask;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aMask; attribute vec4 aMask2;\nvarying vec4 vMask; varying vec4 vMask2;\nvarying vec3 vWPos;\nvarying float vWDist;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMask = aMask; vMask2 = aMask2;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 uniform sampler2D uWindTex; uniform float uWindT; uniform float uDay; uniform float uWindAmt;
-uniform vec3 uCPath, uCSand, uCBed, uCDirt;
-varying vec4 vMask; varying vec3 vWPos; varying float vWDist;
+uniform vec3 uCPath, uCSand, uCBed, uCDirt, uCCrop, uCGold, uCRock;
+varying vec4 vMask2; varying vec4 vMask; varying vec3 vWPos; varying float vWDist;
 float crisp(float m) { float w = max(fwidth(m) * 0.7, 0.015); return smoothstep(0.5 - w, 0.5 + w, m); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
   // crisp-edged ground types: dirt patches, sand shores, wet bed, then the path on top
-  float grassKeep = 1.0;
-  vec3 gcol = diffuseColor.rgb;
+  // patchwork fields (mown stripes inside each field) and bare rock on steep ground, both with hard edges
+  float stripe = 0.5 + 0.5 * sin(vWPos.x * 1.9 + floor((vWPos.z + 300.0) / 19.0) * 2.0);
+  float kCrop = crisp(vMask2.x), kGold = crisp(vMask2.y), kRock = crisp(vMask2.z);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uCCrop, kCrop * (0.55 + 0.3 * stripe));
+  diffuseColor.rgb = mix(diffuseColor.rgb, uCGold, kGold * (0.55 + 0.3 * stripe));
+  diffuseColor.rgb = mix(diffuseColor.rgb, uCRock * (0.9 + 0.2 * texture2D(uWindTex, vWPos.xz * 0.2).r), kRock);
   float kDirt = crisp(vMask.w), kSand = crisp(vMask.y), kBed = crisp(vMask.z), kPath = crisp(vMask.x);
   float grassW = (1.0 - kDirt) * (1.0 - kSand) * (1.0 - kBed) * (1.0 - kPath);
   vec3 dirtC = uCDirt * (0.92 + 0.16 * texture2D(uWindTex, vWPos.xz * 0.35).r);
