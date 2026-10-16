@@ -355,7 +355,7 @@ export function setLanterns(night) { lanternMat.color.setRGB(0.55 + 0.45 * night
  * Built with the ridge along local x, then yawed.
  */
 export function addGable(group, o) {
-  const { cx, cz, len, span, base, rh, ov, ends = [ov, ov], yaw, wallMat, roofMat, tile = 1.7, wallTileSize = 2.4, thick = 0.16, ridge = '#b8451f' } = o;
+  const { cx, cz, len, span, base, rh, ov, ends = [ov, ov], yaw, wallMat, roofMat, tile = 1.7, wallTileSize = 2.4, thick = 0.16, ridge = '#b8451f', plateMat = null } = o;
   const g = new THREE.Group();
   g.position.set(cx, base, cz);
   g.rotation.y = yaw;
@@ -381,11 +381,23 @@ export function addGable(group, o) {
     g.add(slab);
   }
   g.add(box(L, 0.14, 0.26, mat(ridge), shift, rh + 0.1, 0));
+  // The overhang lifts the roof's underside above the wall top; a thin plate of wall fills that gap so the
+  // roof sits on the walls instead of floating over them.
+  if (plateMat) {
+    const gap = Math.max(0, rh * ov / half + 0.06 - (thick / 2) * (slope / half) - 0.012);
+    if (gap > 0.02) {
+      for (const sgn of [1, -1]) {
+        const pl = new THREE.Mesh(wallGeometry(len, gap, 0.1, wallTileSize), plateMat);
+        pl.position.set(0, gap / 2, sgn * (span / 2 - 0.04));
+        g.add(pl);
+      }
+    }
+  }
   group.add(g);
 }
 
 /** Hip roof: slopes on all four sides (a pyramid when the plan is square). */
-export function addHip(group, { cx, cz, len, span, base, rh, ov, yaw = 0, roofMat, tile = 1.7, ridge = '#b8451f' }) {
+export function addHip(group, { cx, cz, len, span, base, rh, ov, yaw = 0, roofMat, tile = 1.7, ridge = '#b8451f', plateMat = null, wallTileSize = 2.4 }) {
   const ex = len / 2 + ov, ez = span / 2 + ov;
   const rx = Math.max(0.05, len / 2 - span / 2);
   const P = {
@@ -411,6 +423,13 @@ export function addHip(group, { cx, cz, len, span, base, rh, ov, yaw = 0, roofMa
   g.rotation.y = yaw;
   g.add(new THREE.Mesh(geo, roofMat));
   g.add(box(rx * 2 + 0.2, 0.13, 0.24, mat(ridge), 0, rh + 0.06, 0));
+  if (plateMat) {                                                       // fill the gap under the overhang (see addGable)
+    const gz = Math.max(0, rh * ov / ez - 0.012), gx = Math.max(0, rh * ov / Math.max(0.1, ex - rx) - 0.012);
+    for (const sgn of [1, -1]) {
+      if (gz > 0.02) { const p = new THREE.Mesh(wallGeometry(len, gz, 0.1, wallTileSize), plateMat); p.position.set(0, gz / 2, sgn * (span / 2 - 0.04)); g.add(p); }
+      if (gx > 0.02) { const p = new THREE.Mesh(wallGeometry(0.1, gx, span, wallTileSize), plateMat); p.position.set(sgn * (len / 2 - 0.04), gx / 2, 0); g.add(p); }
+    }
+  }
   group.add(g);
 }
 
@@ -640,9 +659,9 @@ function makeHouse(R, theme, opts) {
   // --- main roof
   const ends = hasWing ? (wingSide > 0 ? [OV, 0] : [0, OV]) : [OV, OV];
   if (shape === 'hip') {
-    addHip(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, roofMat, tile: roofTileSize, ridge });
+    addHip(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, roofMat, tile: roofTileSize, ridge, plateMat: wallMat, wallTileSize: upperTile });
   } else {
-    addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat: mix === 'gable' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize, thick, ridge });
+    addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat: mix === 'gable' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: upperTile, thick, ridge, plateMat: wallMat });
   }
 
   // --- wing: an extension at one end, built parallel to the main house (same ridge direction, same front),
@@ -658,7 +677,7 @@ function makeHouse(R, theme, opts) {
     put(new THREE.Mesh(wallGeometry(w2, h2, d2 + (setback ? 0 : 0.04), mix === 'wing' ? tile2 : wallTileSize), mix === 'wing' ? mat2 : wallMat), cx, 0.35 + h2 / 2, cz);
     // ends are [-x end, +x end]: the end touching the main house has no overhang
     const wEnds = wingSide > 0 ? [0, 0.3] : [0.3, 0];
-    addGable(g, { cx, cz, len: w2, span: d2, base: 0.35 + h2, rh: rh2, ov: 0.3, ends: wEnds, yaw: 0, wallMat: mix === 'wing' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: mix === 'wing' ? tile2 : wallTileSize, thick, ridge });
+    addGable(g, { cx, cz, len: w2, span: d2, base: 0.35 + h2, rh: rh2, ov: 0.3, ends: wEnds, yaw: 0, wallMat: mix === 'wing' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: mix === 'wing' ? tile2 : wallTileSize, thick, ridge, plateMat: mix === 'wing' ? mat2 : wallMat });
     wing = { cx, cz, w2, d2, h2 };
     radius = Math.max(radius, w / 2 + w2 + 0.8, d / 2 + 1.2);
   }
