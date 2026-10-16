@@ -1687,7 +1687,13 @@ export function buildWorld(scene, sections, opts = {}) {
       const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.1 + 0.5 * Math.min(1, warm * 2.5));
       const dark = new THREE.Color(0.42, 0.46, 0.72);
       cloudLook.tint.copy(day).lerp(dark, night);
-      for (const sp of cloudSprites) sp.material.color.copy(cloudLook.tint).multiplyScalar(0.94 + 0.06 * sp.userData.high);
+      // Sunset lights the bottoms of the low layer: warm orange-pink undersides under paler tops.
+      const glowAmt = Math.min(1, warm * 3) * (1 - night);
+      const under = new THREE.Color(1.0, 0.6, 0.46);
+      for (const sp of cloudSprites) {
+        sp.material.color.copy(cloudLook.tint).multiplyScalar(0.94 + 0.06 * sp.userData.high)
+          .lerp(under, (1 - sp.userData.high) * 0.55 * glowAmt);
+      }
     },
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {

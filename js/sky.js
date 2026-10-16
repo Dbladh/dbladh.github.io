@@ -47,6 +47,12 @@ export function createSky(scene, skyScene, renderer) {
   const sunLight = new THREE.DirectionalLight(0xffffff, 1);
   const moonLight = new THREE.DirectionalLight(0x9fb4ff, 0);
   scene.add(hemi, sunLight, sunLight.target, moonLight, moonLight.target);
+  // Rim light: a weak, shadowless light from behind the village so tree, roof and hill silhouettes
+  // pick up a bright edge against the haze.
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0);
+  scene.add(rimLight, rimLight.target);
+  rimLight.target.position.set(0, 3, -30);
+  rimLight.layers.enable(1);
   // Lights must be on layer 1 as well: the sharp billboard pass renders only layer 1, and lights
   // that are not visible to the camera's layers would leave the (lit) signs black.
   [hemi, sunLight, moonLight].forEach((l) => l.layers.enable(1));
@@ -222,6 +228,9 @@ export function createSky(scene, skyScene, renderer) {
     hemi.intensity = s.hemi * 1.45; // soft fill, kept low enough that shadows still read
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
     skyHemi.intensity = hemi.intensity;
+    rimLight.position.set(-sx * 0.7, 38, -150);
+    rimLight.color.copy(s.sun).lerp(s.top, 0.35);
+    rimLight.intensity = 0.55 * (1 - night) * Math.min(1, s.sunI + 0.3);
     skyHemi.color.copy(hemi.color);
     skySun.intensity = sunLight.intensity * 0.8;
     skySun.color.copy(sunLight.color);
