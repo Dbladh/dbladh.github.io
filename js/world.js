@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015191725';
+} from './houses.js?v=20261015191926';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1820,7 +1820,7 @@ varying vec3 vWPos; varying float vWDist;`)
         const sc = s.scale * mult * far;
         const hw = tanHalf * Math.max(1, cam.z - z) * aspect;               // half the visible width at its depth
         const fit = hw - (BOARD_W / 2) * sc - 2.2;                     // leave room for the frame and parallax
-        e.xMax = Math.max(Math.abs(s.hill.x), Math.min(Math.abs(s.desk.x), fit));
+        e.xMax = Math.max(Math.abs(s.hill.x) - 4, Math.min(Math.abs(s.desk.x), fit));   // may stand a little inside the crest to stay on screen
         e.sign = s.desk.x < 0 ? -1 : 1;
         e.x = e.sign * e.xMax;
         return e;
@@ -1887,7 +1887,7 @@ varying vec3 vWPos; varying float vWDist;`)
             const fixed = (e) => e.s.desk.x === 0;
             const step = (e, dir, amt) => {
               const nx = e.x + dir * amt;
-              const lim = Math.abs(e.s.desk.x) === 0 ? 0 : Math.max(e.xMax, Math.abs(e.s.desk.x));
+              const lim = Math.abs(e.s.desk.x) === 0 ? 0 : e.xMax;                 // never further out than fits on screen
               if (Math.abs(nx) > lim + 1e-6 && Math.sign(nx || 1) === e.sign) return false;
               if (Math.abs(nx) < Math.abs(e.s.hill.x) - 1e-6 && Math.abs(e.s.desk.x) > 0) return false;   // not past the hill's crest
               e.x = nx; solve(e); return true;
@@ -1908,6 +1908,16 @@ varying vec3 vWPos; varying float vWDist;`)
           if (!overlap(a, b)) continue;
           const f = a.z < b.z ? a : b;
           if (f.far > 1) { f.far = 1; solve(f); }
+        }
+        // last resort: shrink the side sign a little
+        for (let k = 0; k < 4; k++) {
+          let any = false;
+          for (const [a, b] of pairs) {
+            if (!overlap(a, b)) continue;
+            const e = a.s.desk.x !== 0 ? a : b.s.desk.x !== 0 ? b : null;
+            if (e && e.far > 0.8) { e.far = Math.max(0.8, e.far * 0.94); solve(e); any = true; }
+          }
+          if (!any) break;
         }
       }
       for (const e of entries) e.b.place(e.x, e.z, e.lift, mult * e.far);
