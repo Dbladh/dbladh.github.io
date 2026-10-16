@@ -136,17 +136,29 @@ const WALL_TEX = {
   },
 };
 const WALL_TILE = { brick: 1.7, stone: 2.4, plaster: 3.2, clap: 1.5, timber: 2.4 };
-const WALL_BUMP = { brick: 1.0, stone: 1.3, plaster: 0.35, clap: 0.9, timber: 0.6 };   // normal-map strength per wall kind
+const WALL_BUMP = { brick: 1.8, stone: 2.3, plaster: 0.5, clap: 1.7, timber: 1.2 };
+// fine surface grain mixed into each wall's relief: [amount, wood-grain streaks?]
+const WALL_GRAIN = { brick: [0.09, false], stone: [0.12, false], plaster: [0.04, false], clap: [0.1, true], timber: [0.08, true] };   // normal-map strength per wall kind
 
 /** A tangent-space normal map derived from a texture's brightness (mortar lines, tile edges and so on read as
  *  relief). Cached per key; wraps like the colour map so tiling stays seamless. */
 const normalCache = new Map();
-export function normalMapFrom(tex, key, strength = 4) {
+export function normalMapFrom(tex, key, strength = 4, grain = 0, streaks = false) {
   if (normalCache.has(key)) return normalCache.get(key);
   const src = tex.image, S = src.width;
   const d = src.getContext('2d').getImageData(0, 0, S, S).data;
   const lum = new Float32Array(S * S);
-  for (let i = 0; i < S * S; i++) lum[i] = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) / 255;
+  const hs = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+  for (let i = 0; i < S * S; i++) {
+    const x = i % S, y = (i / S) | 0;
+    let l = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) / 255;
+    if (grain) {
+      l += (hs(x, y) - 0.5) * grain;                                           // fine pitting / speckle
+      if (streaks) l += (hs(Math.floor(x / 18), y) - 0.5) * grain * 2.2;         // wood grain: streaks along the boards
+      else l += (hs(Math.floor(x / 5), Math.floor(y / 5)) - 0.5) * grain * 1.3;  // chips and unevenness in masonry
+    }
+    lum[i] = l;
+  }
   const out = document.createElement('canvas');
   out.width = out.height = S;
   const og = out.getContext('2d'), img = og.createImageData(S, S);
@@ -174,7 +186,7 @@ export function wallMaterial(kind, hex, vc = true) {
   if (!wallTexCache.has(tk)) wallTexCache.set(tk, canvasTex(256, (g, S) => WALL_TEX[kind](g, S, hex)));
   const tex = wallTexCache.get(tk);
   const m = new THREE.MeshStandardMaterial({
-    map: tex, normalMap: normalMapFrom(tex, 'w|' + tk), normalScale: new THREE.Vector2(WALL_BUMP[kind], WALL_BUMP[kind]), roughness: 0.92, metalness: 0, vertexColors: vc, envMapIntensity: 0.15,
+    map: tex, normalMap: normalMapFrom(tex, 'w|' + tk, 6, WALL_GRAIN[kind][0], WALL_GRAIN[kind][1]), normalScale: new THREE.Vector2(WALL_BUMP[kind], WALL_BUMP[kind]), roughness: 0.92, metalness: 0, vertexColors: vc, envMapIntensity: 0.15,
   });
   wallMatCache.set(key, m);
   return m;
@@ -260,7 +272,7 @@ const ROOF_TEX = {
   },
 };
 const ROOF_TILE = { tile: 1.7, slate: 1.3, shingle: 1.5, thatch: 2.2, metal: 2.0 };
-const ROOF_BUMP = { tile: 1.1, slate: 0.9, shingle: 1.1, thatch: 1.4, metal: 0.5 };      // normal-map strength per roof kind
+const ROOF_BUMP = { tile: 1.3, slate: 1.1, shingle: 1.8, thatch: 1.5, metal: 0.5 };      // normal-map strength per roof kind
 const roofTexCache = new Map(), roofMatCache = new Map();
 export function roofMaterial(kind, hex) {
   if (typeof hex === 'undefined') { hex = kind; kind = 'tile'; }           // legacy call roofMaterial('#hex')
@@ -269,7 +281,7 @@ export function roofMaterial(kind, hex) {
     if (!roofTexCache.has(kind)) roofTexCache.set(kind, canvasTex(256, (g, S) => ROOF_TEX[kind](g, S)));
     const tex = roofTexCache.get(kind);
     roofMatCache.set(key, new THREE.MeshStandardMaterial({
-      color: hex, map: tex, normalMap: normalMapFrom(tex, 'r|' + kind), normalScale: new THREE.Vector2(ROOF_BUMP[kind], ROOF_BUMP[kind]), roughness: kind === 'metal' ? 0.38 : kind === 'slate' ? 0.55 : 0.82, metalness: kind === 'metal' ? 0.3 : 0, envMapIntensity: 0.35,
+      color: hex, map: tex, normalMap: normalMapFrom(tex, 'r|' + kind, 5, kind === 'shingle' ? 0.1 : kind === 'thatch' ? 0.08 : 0.05, kind === 'shingle'), normalScale: new THREE.Vector2(ROOF_BUMP[kind], ROOF_BUMP[kind]), roughness: kind === 'metal' ? 0.38 : kind === 'slate' ? 0.55 : 0.82, metalness: kind === 'metal' ? 0.3 : 0, envMapIntensity: 0.35,
     }));
   }
   return roofMatCache.get(key);
