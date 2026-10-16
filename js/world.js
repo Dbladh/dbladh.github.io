@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015200425';
+} from './houses.js?v=20261015200535';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -620,7 +620,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const WATER_Y = POND_WATER;
 
   // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
-  const SEG = low ? [152, 100] : [304, 200];
+  const SEG = low ? [210, 138] : [304, 200];   // phones: finer than before so the pond's bowl and shore stay smooth
   const geo = new THREE.PlaneGeometry(380, 250, SEG[0], SEG[1]);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, -75);
@@ -749,7 +749,8 @@ export function buildWorld(scene, sections, opts = {}) {
           col += vec3(1.0) * smoothstep(0.9, 1.0, tw) * (0.12 + 0.3 * uDay);
           float rings = ringAt(p, uCenter + vec2(-1.6, 1.2), 0.0, 2.6) + ringAt(p, uCenter + vec2(2.0, -0.8), 0.37, 2.2) + ringAt(p, uCenter + vec2(0.4, -2.4), 0.71, 2.0);
           col = mix(col, lin(vec3(0.95, 0.99, 1.0)), clamp(rings, 0.0, 1.0) * 0.55 * (0.4 + 0.6 * uDay));
-          float shore = 1.0 - smoothstep(0.0, 0.14, depthW);
+          float sw = 0.14 + 0.006 * length(cameraPosition - vW);          // keep the foam line visible at distance / on small screens
+          float shore = 1.0 - smoothstep(0.0, sw, depthW);
           float fn = 0.5 + 0.5 * sin(dot(p, vec2(4.0, 3.0)) + uTime * 0.8) * sin(dot(p, vec2(-3.0, 4.5)) - uTime * 0.6);
           col = mix(col, lin(vec3(0.97, 0.99, 1.0)) * (0.4 + 0.6 * uDay), shore * smoothstep(0.25, 0.6, fn + 0.35) * 0.8);
           float alpha = mix(0.78, 0.95, smoothstep(0.0, 0.5, depthW));
