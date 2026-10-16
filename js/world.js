@@ -1220,6 +1220,50 @@ varying vec3 vWPos; varying float vWDist;`)
       void face;
       break;
     }
+    // stepping stones from some front doors toward the path
+    {
+      const stone2 = mat('#a8a698'), stone3 = mat('#b9b7a8');
+      let n = 0;
+      for (const st of sites) {
+        if (st.companion || TR() < 0.45) continue;
+        const len = Math.min(st.perp - 4.2, 7);
+        for (let u = 3.4 + 0.2, k = 0; u < 3.4 + len; u += 0.95, k++) {
+          const off = (k % 2 ? 1 : -1) * 0.16 + (TR() - 0.5) * 0.12;
+          const lx = st.fz, lz = -st.fx;                              // sideways across the walk
+          const sx = st.x + st.fx * u + lx * off, sz = st.z + st.fz * u + lz * off;
+          const sy = heightAt(sx, sz) + 0.04;
+          const s = box(0.62 + TR() * 0.14, 0.09, 0.46 + TR() * 0.1, k % 3 ? stone2 : stone3, sx, sy, sz);
+          s.rotation.y = TR() * 3.14;
+          street.add(s);
+        }
+        if (++n >= 6) break;
+      }
+    }
+    // a small arched footbridge across the pond's narrow side
+    {
+      const bz = POND.z - 0.8;
+      {
+        const xl = POND.x - POND.r * 0.95, xr = POND.x + POND.r * 0.95;
+        const x0 = xl - 0.6, x1 = xr + 0.6, N = 16, planks = mat('#9a7448'), rail = mat('#6a4a2c');
+        const baseY = (a) => Math.max(heightAt(a, bz), WATER_Y) + 0.12;
+        const yEnd0 = baseY(x0), yEnd1 = baseY(x1);
+        for (let k = 0; k < N; k++) {
+          const t0 = k / N, t1 = (k + 1) / N, tm = (t0 + t1) / 2;
+          const arch = Math.sin(tm * Math.PI) * 0.75;
+          const yy = yEnd0 + (yEnd1 - yEnd0) * tm + arch + 0.35;
+          const xx = x0 + (x1 - x0) * tm;
+          const slope = ((yEnd1 - yEnd0) / (x1 - x0)) + Math.cos(tm * Math.PI) * 0.75 * Math.PI / (x1 - x0);
+          const seg = box((x1 - x0) / N + 0.06, 0.1, 1.2, planks, xx, yy, bz);
+          seg.rotation.z = Math.atan(slope);
+          street.add(seg);
+          for (const sz of [-1, 1]) {
+            street.add(box(0.07, 0.75, 0.07, rail, xx, yy + 0.4, bz + sz * 0.58));
+            const r = box((x1 - x0) / N + 0.06, 0.06, 0.06, rail, xx, yy + 0.78, bz + sz * 0.58);
+            r.rotation.z = Math.atan(slope); street.add(r);
+          }
+        }
+      }
+    }
     street.children.forEach((c) => { c.castShadow = true; c.receiveShadow = true; });
     const merged = mergeByMaterial(street);
     merged.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });

@@ -917,6 +917,39 @@ function makeHouse(R, theme, opts) {
     extras.push('shed');
   }
 
+  // --- round corner turret on a few houses: a drum with a conical roof and a window, at the free front corner
+  if (!low && !tall && !opts.far && chStyle !== 'bigstone' && R() < 0.14) {
+    const tr = 0.85, tx = freeSide * (w / 2 - 0.05), tz = d / 2 - 0.1;
+    const th = h + 0.9;
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(tr, tr + 0.05, th, 14), wallPlain);
+    put(drum, tx, 0.35 + th / 2, tz);
+    g.add(cyl(tr + 0.14, 0.5, stone, tx, 0.15, tz, 14));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(tr + 0.35, 1.5, 14), roofMat);
+    put(cone, tx, 0.35 + th + 0.7, tz);
+    g.add(cyl(0.05, 0.5, mat('#3a3a40'), tx, 0.35 + th + 1.6, tz, 6));
+    for (const [yy, ang] of [[0.35 + th * 0.35, 0.0], [0.35 + th * 0.78, 0.0]]) {
+      addWindow(g, tx, yy + 0.5, tz + tr + 0.03, ang, glassMat, trim, shutterMat, { shutters: 'none', dress: R() < 0.5 ? 'curtain' : null, curtain: '#e8e0d0', box: false });
+    }
+    g.add(cyl(tr + 0.08, 0.1, trim, tx, 0.35 + th * 0.55, tz, 14));
+    radius = Math.max(radius, Math.abs(tx) + tr + 0.6);
+    extras.push('turret');
+  }
+
+  // --- trellis with a climbing plant on the free side wall
+  if (!low && !opts.far && chStyle !== 'bigstone' && R() < 0.3) {
+    const tz2 = -d * 0.28, tx2 = freeSide * (w / 2 + 0.05);
+    const lat = mat('#e8e2d0'), leaf = mat('#4f9a3f'), leaf2 = mat('#6cb84f');
+    for (let k = 0; k < 4; k++) g.add(box(0.04, 1.9, 0.05, lat, tx2, 1.4, tz2 - 0.6 + k * 0.4));
+    for (let k = 0; k < 4; k++) g.add(box(0.04, 0.05, 1.3, lat, tx2, 0.7 + k * 0.5, tz2));
+    const blossom = pick(['#f2a8c8', '#f4f1e8', '#e8c84a', '#d95a5a']);
+    for (let k = 0; k < 11; k++) {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.17 + (k % 3) * 0.04, 0), k % 4 === 0 ? mat(blossom) : (k % 2 ? leaf : leaf2));
+      m.position.set(tx2 + freeSide * 0.09, 0.55 + (k * 0.17) % 1.8, tz2 - 0.5 + ((k * 0.37) % 1.0));
+      g.add(m);
+    }
+    extras.push('trellis');
+  }
+
   // --- detached outbuilding on the free side, built parallel to the house with its front in line
   if (!low && !opts.far && R() < 0.62) {
     const kind = pick(['shed', 'shed', 'greenhouse', 'woodstore', 'stable']);
