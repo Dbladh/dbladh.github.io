@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015202001';
+} from './houses.js?v=20261015202253';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -737,15 +737,16 @@ export function buildWorld(scene, sections, opts = {}) {
         .replace('#include <normal_fragment_maps>', `
           // grass relief on green ground, pebbly relief where the ground colour turns red/tan (dirt, path, sand, rock)
           // wind: the grass relief streams along the breeze and bends back and forth, stronger in passing gusts
+          float greenW = smoothstep(0.04, 0.17, vColor.g - vColor.r);        // wind only moves clearly green ground
           vec2 wd = vec2(0.82, 0.57);
           float gust = 0.5 + 0.5 * sin(dot(vNormalMapUv, wd) * 9.0 - uWindTime * 0.55 + sin(uWindTime * 0.23) * 2.0);
-          gust = smoothstep(0.25, 0.95, gust) * (0.45 + 0.55 * (0.5 + 0.5 * sin(uWindTime * 0.31)));
-          vec2 sway = wd * (uWindTime * 0.017) + vec2(sin(uWindTime * 1.7 + vNormalMapUv.y * 60.0), cos(uWindTime * 1.3 + vNormalMapUv.x * 55.0)) * (0.0042 + 0.0105 * gust);
+          gust = smoothstep(0.25, 0.95, gust) * (0.45 + 0.55 * (0.5 + 0.5 * sin(uWindTime * 0.31))) * greenW;
+          vec2 sway = (wd * (uWindTime * 0.017) + vec2(sin(uWindTime * 1.7 + vNormalMapUv.y * 60.0), cos(uWindTime * 1.3 + vNormalMapUv.x * 55.0)) * (0.0042 + 0.0105 * gust)) * greenW;
           vec3 nA = texture2D(normalMap, vNormalMapUv + sway).xyz * 2.0 - 1.0;
           vec3 nB = texture2D(normalMap, vNormalMapUv * 1.37 + vec2(0.31, 0.17) - sway * 1.6).xyz * 2.0 - 1.0;
           vec3 nGr = normalize(vec3((nA.xy + nB.xy) * 0.75, 0.5 * (nA.z + nB.z)));
           vec3 nGd = texture2D(uGroundNormal, vNormalMapUv * 2.4).xyz * 2.0 - 1.0;
-          float wGd = smoothstep(-0.02, 0.1, vColor.r - vColor.g);
+          float wGd = 1.0 - smoothstep(0.0, 0.07, vColor.g - vColor.r);
           vec3 mapN = mix(vec3(nGr.xy * normalScale * (1.0 + 1.5 * gust), nGr.z), vec3(nGd.xy * uGroundScale, nGd.z), wGd);
           normal = normalize(tbn * mapN);`);
     };
