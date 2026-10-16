@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015194841';
+} from './houses.js?v=20261015195135';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1957,15 +1957,18 @@ export function buildWorld(scene, sections, opts = {}) {
       cloudLook.night = night;
       // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
       const warm = Math.max(0, horizon.r - horizon.b);                       // how orange the horizon is
-      const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.1 + 0.5 * Math.min(1, warm * 2.5));
+      // By day the clouds are white against the blue. When the horizon goes cream or peach (golden hour) a
+      // white cloud would vanish into it, so they turn shaded mauve-grey instead and the sky shows through.
+      const dusk = Math.min(1, warm * 2.6);
+      const day = new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.55, 0.46, 0.68), dusk * 0.9);
       const dark = new THREE.Color(0.42, 0.46, 0.72);
       cloudLook.tint.copy(day).lerp(dark, night);
       // Sunset lights the bottoms of the low layer: warm orange-pink undersides under paler tops.
       const glowAmt = Math.min(1, warm * 3) * (1 - night);
-      const under = new THREE.Color(1.0, 0.6, 0.46);
+      const under = new THREE.Color(1.0, 0.55, 0.42);
       for (const sp of cloudSprites) {
-        sp.material.color.copy(cloudLook.tint).multiplyScalar(0.94 + 0.06 * sp.userData.high)
-          .lerp(under, (1 - sp.userData.high) * 0.55 * glowAmt);
+        sp.material.color.copy(cloudLook.tint).multiplyScalar(0.84 + 0.16 * sp.userData.high)
+          .lerp(under, (1 - sp.userData.high) * 0.4 * glowAmt);
       }
     },
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
