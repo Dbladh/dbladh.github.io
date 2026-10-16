@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015191926';
+} from './houses.js?v=20261015192133';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -488,7 +488,7 @@ export function buildWorld(scene, sections, opts = {}) {
     const nx = 1 / k, nz = -slope / k;                         // unit normal to the path
     const perp = 6.8 + TR() * 2.6;                             // distance from the path's centre line
     const x = pathX(zc) + side * perp * nx, zz = zc + side * perp * nz;
-    if (nearSign(x, zz) || nearPond(x, zz, 4) || !farFromOthers(x, zz, 10.5)) return false;
+    if (nearSign(x, zz) || nearPond(x, zz, 4) || !farFromOthers(x, zz, 12.5)) return false;
     if (branches.some((b) => distToPolyline(x, zz, b) < 6.5)) return false;
     const y = rawHeight(x, zz);
     if (blocksSign(x, zz, y + 5.6)) return false;
@@ -537,12 +537,12 @@ export function buildWorld(scene, sections, opts = {}) {
       const lx = st.fz, lz = -st.fx;                           // lateral direction (along the house's front)
       let done = false;
       for (const sgn of TR() < 0.5 ? [1, -1] : [-1, 1]) {
-        const gap = 10.8 + TR() * 1.6;
+        const gap = 12.4 + TR() * 1.4;
         const x = st.x + lx * sgn * gap, zz = st.z + lz * sgn * gap;
         const along = Math.abs(x - pathX(zz));
         if (nearSign(x, zz) || nearPond(x, zz, 4) || along < 5.5) continue;
-        if (!sites.every((o) => Math.hypot(o.x - x, o.z - zz) >= 9.5)) continue;
-        if (farm.some((f) => Math.hypot(f.x - x, f.z - zz) < 11)) continue;
+        if (!sites.every((o) => Math.hypot(o.x - x, o.z - zz) >= 11.5)) continue;
+        if (farm.some((f) => Math.hypot(f.x - x, f.z - zz) < 13)) continue;
         if (branches.some((b) => distToPolyline(x, zz, b) < 6.5)) continue;
         const y = rawHeight(x, zz);
         if (blocksSign(x, zz, y + 5.6)) continue;
@@ -740,9 +740,13 @@ varying vec3 vWPos; varying float vWDist;`)
   const smokeSrc = [];                       // world positions of chimneys that smoke
   const recentSigs = [];                     // neighbouring houses should not be twins
   for (const st of sites) {
-    const hs = buildHouse(TR, theme, { avoid: recentSigs.slice(-2), low, tall: !!st.tall, far: st.z < -42 || !!st.companion });
-    recentSigs.push(hs.sig);
     const sc = 0.95 + TR() * 0.3;
+    const bopts = { avoid: recentSigs.slice(-2), low, tall: !!st.tall, far: st.z < -42 || !!st.companion };
+    let hs = buildHouse(TR, theme, bopts);
+    // wings, outbuildings and yards make a house wide: if that would run into a neighbour, build it plain instead
+    const roomFor = (r) => houses.every((o) => Math.hypot(o.x - st.x, o.z - st.z) >= (o.r + r) * 0.8);
+    if (!roomFor(hs.radius * sc)) hs = buildHouse(TR, theme, { ...bopts, compact: true });
+    recentSigs.push(hs.sig);
     hs.group.scale.setScalar(st.companion ? sc * 0.85 : sc);
     hs.group.position.set(st.x, st.y, st.z);
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (TR() - 0.5) * 0.16; // front door faces the path

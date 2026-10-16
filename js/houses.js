@@ -567,7 +567,8 @@ function makeHouse(R, theme, opts) {
   const tall = !!opts.tall && !opts.low;                // a two-storey house
   const w = 3.6 + R() * 1.9, d = 3 + R() * 1.3, h = (2.2 + R() * 0.9) * (tall ? 1.75 : 1);
   const doorSide = R() < 0.5 ? -1 : 1;
-  const hasWing = R() < 0.55;
+  const compact = !!opts.compact;                       // no wing or extras: used when a neighbour is too close
+  const hasWing = R() < 0.55 && !compact;
   const wingSide = -doorSide;
   const top = 0.35 + h;
 
@@ -651,10 +652,10 @@ function makeHouse(R, theme, opts) {
     const w2 = 2.4 + R() * 1.0, d2 = d * (0.78 + R() * 0.17), h2 = tall ? 2.5 + R() * 0.3 : h * 0.82;
     const setback = R() < 0.35 ? 0.35 + R() * 0.25 : 0;
     const overlap = 0.3;
-    const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = d / 2 - d2 / 2 - setback;
+    const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = d / 2 - d2 / 2 - setback + (setback ? 0 : 0.02);   // flush front sits 0.04 proud so the two walls never z-fight
     const rh2 = Math.min(rh * (d2 / d) * 0.95, Math.max(0.7, h - h2 + (shape === 'hip' ? 0.2 : 0.35)));
-    g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz));
-    put(new THREE.Mesh(wallGeometry(w2, h2, d2, mix === 'wing' ? tile2 : wallTileSize), mix === 'wing' ? mat2 : wallMat), cx, 0.35 + h2 / 2, cz);
+    g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz - 0.05));
+    put(new THREE.Mesh(wallGeometry(w2, h2, d2 + (setback ? 0 : 0.04), mix === 'wing' ? tile2 : wallTileSize), mix === 'wing' ? mat2 : wallMat), cx, 0.35 + h2 / 2, cz);
     // ends are [-x end, +x end]: the end touching the main house has no overhang
     const wEnds = wingSide > 0 ? [0, 0.3] : [0.3, 0];
     addGable(g, { cx, cz, len: w2, span: d2, base: 0.35 + h2, rh: rh2, ov: 0.3, ends: wEnds, yaw: 0, wallMat: mix === 'wing' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: mix === 'wing' ? tile2 : wallTileSize, thick, ridge });
@@ -918,7 +919,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- round corner turret on a few houses: a drum with a conical roof and a window, at the free front corner
-  if (!low && !tall && !opts.far && chStyle !== 'bigstone' && R() < 0.14) {
+  if (!low && !compact && !tall && !opts.far && chStyle !== 'bigstone' && R() < 0.14) {
     const tr = 0.85, tx = freeSide * (w / 2 - 0.05), tz = d / 2 - 0.1;
     const th = h + 0.9;
     const drum = new THREE.Mesh(new THREE.CylinderGeometry(tr, tr + 0.05, th, 14), wallPlain);
@@ -936,7 +937,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- trellis with a climbing plant on the free side wall
-  if (!low && !opts.far && chStyle !== 'bigstone' && R() < 0.3) {
+  if (!low && !compact && !opts.far && chStyle !== 'bigstone' && R() < 0.3) {
     const tz2 = -d * 0.28, tx2 = freeSide * (w / 2 + 0.05);
     const lat = mat('#e8e2d0'), leaf = mat('#4f9a3f'), leaf2 = mat('#6cb84f');
     for (let k = 0; k < 4; k++) g.add(box(0.04, 1.9, 0.05, lat, tx2, 1.4, tz2 - 0.6 + k * 0.4));
@@ -951,7 +952,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- detached outbuilding on the free side, built parallel to the house with its front in line
-  if (!low && !opts.far && R() < 0.62) {
+  if (!low && !compact && !opts.far && R() < 0.62) {
     const kind = pick(['shed', 'shed', 'greenhouse', 'woodstore', 'stable']);
     const ow = kind === 'stable' ? 2.7 : 1.9, od = kind === 'stable' ? 2.2 : 1.7, oh = kind === 'stable' ? 1.9 : 1.6;
     const ox = freeSide * (w / 2 + 1.55 + ow / 2), oz = d / 2 - od / 2;
@@ -992,7 +993,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- yard: one or two small things in front of the house, off the path to the door
-  if (!low && !opts.far) {
+  if (!low && !compact && !opts.far) {
     const yardKinds = ['well', 'haystack', 'woodpile', 'laundry', 'garden', 'bench', 'fence', 'fence'];
     const yx = -doorSide * (w * 0.18 + 1.4 + R() * 1.0), yz = d / 2 + 2.2 + R() * 0.7, y0 = 0.07;
     const count = 1 + (R() < 0.45 ? 1 : 0);
