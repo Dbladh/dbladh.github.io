@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015195441';
+} from './houses.js?v=20261015195819';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1314,10 +1314,43 @@ export function buildWorld(scene, sections, opts = {}) {
     const span = 26 + cr() * 30;                                    // how wide this cloud bank is
     const n = 3 + Math.floor(cr() * 2);
     for (let j = 0; j < n; j++) {
-      const tex = cloudTexture(Math.floor(cr() * 4));
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.45 });
-      const sp = new THREE.Sprite(mat);
-      const w = 34 + cr() * 38, h = w * (0.34 + cr() * 0.2);
+      // each cloud is its own procedural shape: domain-warped noise that keeps evolving, so no two match
+      const colorU = new THREE.Color(1, 1, 1);
+      const mat = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, fog: false,
+        uniforms: {
+          uTime: { value: 0 }, uOpacity: { value: 0.5 }, uColor: { value: colorU },
+          uSeed: { value: cr() * 80 }, uScale: { value: 1.3 + cr() * 1.6 }, uThr: { value: 0.34 + cr() * 0.12 },
+          uFlat: { value: cr() < 0.45 ? 1 : 0 },
+        },
+        vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `
+          uniform float uTime, uOpacity, uSeed, uScale, uThr, uFlat; uniform vec3 uColor; varying vec2 vUv;
+          float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
+          float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 5; k++) { s += a * n(p); p = p * 2.03 + vec2(7.1, 3.7); a *= 0.5; } return s; }
+          void main() {
+            vec2 p = vUv * 2.0 - 1.0;
+            float t = uTime * 0.045;
+            float r = length(vec2(p.x * 0.92, p.y * 1.3));
+            float env = 1.0 - smoothstep(0.3, 1.0, r);
+            env *= mix(1.0, smoothstep(-0.6, -0.05, p.y), uFlat);               // flat-bottomed cumulus
+            vec2 warp = vec2(fbm(p * 1.4 + uSeed + t), fbm(p * 1.4 + uSeed * 1.7 - t * 0.8));
+            vec2 pp = p * uScale + (warp - 0.5) * 1.4 + vec2(t * 2.2, -t * 0.4) + uSeed;
+            float d = fbm(pp) * (0.5 + 0.8 * env);
+            float dens = smoothstep(uThr, uThr + 0.26, d) * sqrt(env);
+            float d2 = fbm(pp + vec2(-0.1, 0.14));                                   // light from upper left
+            float lit = clamp(0.64 + (d - d2) * 3.4 + p.y * 0.12, 0.25, 1.0);
+            vec3 col = mix(uColor * 0.6, uColor, lit);
+            gl_FragColor = vec4(col, dens * uOpacity);
+            #include <colorspace_fragment>
+          }`,
+      });
+      mat.color = colorU;
+      const sp = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      sp.frustumCulled = false;
+      const w = 46 + cr() * 48, h = w * (0.38 + cr() * 0.24);
       const u = (j / (n - 1)) - 0.5;
       sp.userData = {
         w, h, bx: u * span + (cr() - 0.5) * 8, by: (cr() - 0.5) * 6 + (1 - Math.abs(u) * 1.4) * 2.0,
@@ -1912,8 +1945,9 @@ export function buildWorld(scene, sections, opts = {}) {
         sp.position.x = u.bx + Math.sin(t) * u.amp;
         sp.position.y = u.by + Math.sin(t * 0.7 + 1.3) * u.amp * 0.18;
         sp.scale.set(u.w * (1 + 0.07 * Math.sin(t * 0.8 + 2)), u.h * (1 + 0.14 * Math.cos(t * 0.6)), 1);
-        sp.material.rotation = 0.05 * Math.sin(t * 0.5 + u.ph);
-        sp.material.opacity = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt));
+        if (camera) { sp.quaternion.copy(camera.quaternion); sp.rotateZ(0.04 * Math.sin(t * 0.5 + u.ph)); }   // billboard
+        sp.material.uniforms.uTime.value = time;
+        sp.material.uniforms.uOpacity.value = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12);
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       for (const bf of butterflies) {
