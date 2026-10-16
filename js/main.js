@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015204352';
-import { createSky } from './sky.js?v=20261015204352';
-import { createDOF } from './dof.js?v=20261015204352';
+import { buildWorld } from './world.js?v=20261015204526';
+import { createSky } from './sky.js?v=20261015204526';
+import { createDOF } from './dof.js?v=20261015204526';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -446,7 +446,7 @@ function start() {
   }
   // The clock: starts at the visitor's real time and then runs on its own, a whole day in DAY_SECONDS.
   // Dragging the slider sets the time; the clock carries on from there (and waits while you drag).
-  const DAY_SECONDS = 120;
+  const DAY_SECONDS = 300;
   let hour = 12, shownMinute = -1, dragging = false;
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
