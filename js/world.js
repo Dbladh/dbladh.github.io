@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015204526';
+import { PAL } from './palette.js?v=20261015204834';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015204526';
+} from './houses.js?v=20261015204834';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -679,7 +679,31 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const terrainWind = { uWindTime: { value: 0 } };   // drives the grass relief's sway (desktop only)
+  const terrainWind = { uWindTime: { value: 0 }, uDay: { value: 1 } };   // grass sway (desktop) and cloud shadows
+  // Big soft cloud shadows drifting across the land by day: the same moving noise the clouds suggest, painted
+  // straight into the terrain colour (no shadow maps, no geometry).
+  const addCloudShadows = (sh) => {
+    sh.uniforms.uShadowT = terrainWind.uWindTime;
+    sh.uniforms.uShadowDay = terrainWind.uDay;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCWPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform float uShadowT; uniform float uShadowDay; varying vec3 vCWPos;
+float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
+float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * csN(p); p = p * 2.03 + vec2(4.1, 7.3); a *= 0.5; } return s; }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  vec2 cp = vCWPos.xz * 0.011 + vec2(uShadowT * 0.0035, uShadowT * 0.0014);
+  float cn = csF(cp) * 0.7 + csF(cp * 2.3 + 11.0 + vec2(-uShadowT * 0.002, 0.0)) * 0.3;
+  float cs = smoothstep(0.5, 0.68, cn) * uShadowDay;
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.7, 0.79, 0.97), cs * 0.72);   // cool, soft shade under each cloud
+}`);
+  };
+  if (low) terrainMat.onBeforeCompile = addCloudShadows;
   if (!low) {
     // A tiling grass relief: short blades and soft mottling, turned into a normal map so the ground catches the
     // light in tiny facets (no extra geometry). One small texture, repeated every ~7 units.
@@ -751,6 +775,7 @@ export function buildWorld(scene, sections, opts = {}) {
           float wGd = 1.0 - smoothstep(0.0, 0.07, vColor.g - vColor.r);
           vec3 mapN = mix(vec3(nGr.xy * normalScale * (1.0 + 1.5 * gust), nGr.z), vec3(nGd.xy * uGroundScale, nGd.z), wGd);
           normal = normalize(tbn * mapN);`);
+      addCloudShadows(sh);
     };
   }
   const terrain = new THREE.Mesh(geo, terrainMat);
@@ -2291,6 +2316,7 @@ export function buildWorld(scene, sections, opts = {}) {
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
       night = n;
+      terrainWind.uDay.value = 1 - n;
       pondU.uDay.value = 1 - n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.3;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
