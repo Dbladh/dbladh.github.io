@@ -1,15 +1,25 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015210142';
-import { createSky } from './sky.js?v=20261015210142';
-import { createDOF } from './dof.js?v=20261015210142';
+import { buildWorld } from './world.js?v=20261015212114';
+import { createSky } from './sky.js?v=20261015212114';
+import { createDOF } from './dof.js?v=20261015212114';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
 const skyCanvas = document.getElementById('sky');
 const live = document.getElementById('live');
 const nav = document.getElementById('stopnav');
+/** Slides the gold marker behind the current tab (and keeps that tab in view when the pill scrolls on phones). */
+function placeNavMarker() {
+  const cur = nav.querySelector('a[aria-current="page"]') || nav.querySelector('a');
+  if (!cur) return;
+  nav.style.setProperty('--ind-x', cur.offsetLeft + 'px');
+  nav.style.setProperty('--ind-w', cur.offsetWidth + 'px');
+  if (nav.scrollWidth > nav.clientWidth) cur.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+}
+window.addEventListener('resize', placeNavMarker);
+document.fonts?.ready.then(placeNavMarker);
 const controls = document.getElementById('controls');
 const timeInput = document.getElementById('time');
 const timeLabel = document.getElementById('time-label');
@@ -260,6 +270,7 @@ function start() {
       if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
+    placeNavMarker();
     if (!silent) live.textContent = id === 'home' ? 'Back to the landscape overview' : `Opened: ${sections[id].title}`;
     if (record && location.hash !== '#' + id) history.pushState(null, '', '#' + id); // Back button closes a sign
 

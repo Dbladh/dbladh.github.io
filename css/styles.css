@@ -170,23 +170,67 @@ body.scene-mode .tagline {
 .tagline .phrase { display: inline-block; transition: opacity 0.35s ease; }
 .tagline .phrase.fade { opacity: 0; }
 
+/* ---------- Scene UI: the town palette ----------
+   Cream pills with a sage edge and warm charcoal lettering (Outfit, not mono), a gold marker that slides to
+   the current tab, and small lifts on hover. Colours come from the town palette (js/palette.js). */
+body.scene-mode {
+  --ui-cream: #EFEEE5; --ui-sage: #ACAD97; --ui-gold: #DACA9C; --ui-coral: #D15E4D; --ui-ink: #443F42;
+}
 body.scene-mode #stopnav {
   position: fixed; left: 50%; bottom: max(14px, calc(env(safe-area-inset-bottom) + 6px)); transform: translateX(-50%);
-  z-index: 20; max-width: calc(100vw - 24px); margin: 0; padding: 8px 10px;
-  background: var(--cream); border: 2px solid var(--ink); border-radius: 999px; gap: 4px;
-  overflow-x: auto; flex-wrap: nowrap;
+  z-index: 20; max-width: calc(100vw - 24px); margin: 0; padding: 7px 8px;
+  background: color-mix(in srgb, var(--ui-cream) 94%, transparent); border: 1.5px solid var(--ui-sage); border-radius: 999px; gap: 2px;
+  box-shadow: 0 6px 22px rgba(40, 52, 44, 0.22), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none;
+  font-family: var(--name-font); font-weight: 600; font-size: 0.86rem; letter-spacing: 0.07em;
+}
+body.scene-mode #stopnav::-webkit-scrollbar { display: none; }
+/* the sliding marker behind the current tab */
+body.scene-mode #stopnav::before {
+  content: ""; position: absolute; top: 7px; bottom: 7px; left: var(--ind-x, 8px); width: var(--ind-w, 0px);
+  background: var(--ui-gold); border-radius: 999px; z-index: 0;
+  box-shadow: 0 2px 8px rgba(120, 100, 50, 0.25);
+  transition: left 0.42s cubic-bezier(0.3, 1.35, 0.5, 1), width 0.42s cubic-bezier(0.3, 1.35, 0.5, 1);
 }
 body.scene-mode #stopnav a {
-  color: var(--ink); text-decoration: none; white-space: nowrap;
-  padding: 6px 14px; border-radius: 999px;
+  position: relative; z-index: 1;
+  color: var(--ui-ink); text-decoration: none; white-space: nowrap;
+  padding: 7px 14px 6px; border-radius: 999px;
+  transition: color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
 }
-body.scene-mode #stopnav a:hover { background: rgba(0, 0, 0, 0.08); }
-body.scene-mode #stopnav a[aria-current="page"] { background: var(--ink); color: #fff; }
+body.scene-mode #stopnav a::after {            /* a little coral dot that pops in under a hovered tab */
+  content: ""; position: absolute; left: 50%; bottom: 1px; width: 5px; height: 5px; margin-left: -2.5px;
+  border-radius: 50%; background: var(--ui-coral); transform: scale(0); transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+body.scene-mode #stopnav a:hover { color: #8c3a2f; transform: translateY(-1px); }
+body.scene-mode #stopnav a:hover::after { transform: scale(1); }
+body.scene-mode #stopnav a:active { transform: translateY(0) scale(0.95); }
+body.scene-mode #stopnav a[aria-current="page"] { color: var(--ui-ink); animation: navPop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
+body.scene-mode #stopnav a[aria-current="page"]::after { transform: scale(0); }
+@keyframes navPop { 0% { transform: scale(0.92); } 60% { transform: scale(1.07); } 100% { transform: scale(1); } }
 
 body.scene-mode .controls {
   position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 20; max-width: none;
-  margin: 0; padding: 8px 14px; background: var(--cream);
-  border: 2px solid var(--ink); border-radius: var(--radius);
+  margin: 0; padding: 7px 12px; background: color-mix(in srgb, var(--ui-cream) 94%, transparent);
+  border: 1.5px solid var(--ui-sage); border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(40, 52, 44, 0.2), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  color: var(--ui-ink); font-family: var(--name-font);
+}
+body.scene-mode .controls .time { font-family: var(--name-font); font-weight: 500; font-size: 0.82rem; letter-spacing: 0.03em; }
+body.scene-mode .controls .time input { accent-color: var(--ui-coral); }
+body.scene-mode #simple-toggle {
+  font-family: var(--name-font); font-weight: 600; letter-spacing: 0.07em; font-size: 0.78rem;
+  color: var(--ui-ink); background: transparent; border: 1.5px solid var(--ui-sage); padding: 6px 14px;
+  transition: background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+body.scene-mode #simple-toggle:hover { background: var(--ui-gold); border-color: var(--ui-gold); transform: translateY(-1px); }
+body.scene-mode #simple-toggle:active { transform: scale(0.96); }
+body.scene-mode a:focus-visible, body.scene-mode button:focus-visible, body.scene-mode input:focus-visible { outline: 2px solid var(--ui-coral); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  body.scene-mode #stopnav::before, body.scene-mode #stopnav a, body.scene-mode #stopnav a::after, body.scene-mode #simple-toggle { transition: none; }
+  body.scene-mode #stopnav a[aria-current="page"] { animation: none; }
 }
 
 /* With a sign open, the top controls step aside so the sign can use the whole height. */
