@@ -520,3 +520,15 @@ body:not(.scene-mode) #simple-toggle:hover { background: var(--gold); border-col
   .story:nth-of-type(odd), .story:nth-of-type(even), .about-photo img { transform: none; }
   .back .ico, #stopnav a { transition: none; }
 }
+
+
+/* ---------- Phones: a bigger bottom nav ----------
+   Icons 26px and every tab at least 48x48 (a comfortable thumb target); the current tab shows its label. */
+@media (max-width: 600px) {
+  body.scene-mode #stopnav { padding: 6px 7px; gap: 2px; font-size: 0.98rem; max-width: calc(100vw - 16px); }
+  body.scene-mode #stopnav a { min-width: 52px; min-height: 52px; padding: 0 14px; justify-content: center; }
+  body.scene-mode #stopnav a[aria-current="page"] { padding: 0 18px; gap: 9px; }
+  body.scene-mode #stopnav .ico { width: 26px; height: 26px; stroke-width: 2.1; }
+  body.scene-mode #stopnav::before { top: 6px; bottom: 6px; }
+  body.scene-mode #stopnav a::after { bottom: 4px; }
+}
