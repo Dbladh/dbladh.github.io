@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015204834';
+import { PAL } from './palette.js?v=20261015205031';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015204834';
+} from './houses.js?v=20261015205031';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -697,10 +697,10 @@ float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
 float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * csN(p); p = p * 2.03 + vec2(4.1, 7.3); a *= 0.5; } return s; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
-  vec2 cp = vCWPos.xz * 0.011 + vec2(uShadowT * 0.0035, uShadowT * 0.0014);
-  float cn = csF(cp) * 0.7 + csF(cp * 2.3 + 11.0 + vec2(-uShadowT * 0.002, 0.0)) * 0.3;
-  float cs = smoothstep(0.5, 0.68, cn) * uShadowDay;
-  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.7, 0.79, 0.97), cs * 0.72);   // cool, soft shade under each cloud
+  vec2 cp = vCWPos.xz * 0.011 + vec2(uShadowT * 0.05, uShadowT * 0.02);   // drifts about 5 units a second
+  float cn = csF(cp) * 0.7 + csF(cp * 2.3 + 11.0 + vec2(-uShadowT * 0.03, uShadowT * 0.01)) * 0.3;
+  float cs = smoothstep(0.46, 0.64, cn) * uShadowDay;
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.66, 0.76, 0.96), cs * 0.85);   // cool, soft shade under each cloud
 }`);
   };
   if (low) terrainMat.onBeforeCompile = addCloudShadows;
