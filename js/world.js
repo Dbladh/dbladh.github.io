@@ -645,7 +645,8 @@ uniform sampler2D uWindTex; uniform float uWindT; uniform float uDay; uniform fl
 varying vec3 vWPos; varying float vWDist;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
-  float grass = smoothstep(0.0, 0.1, diffuseColor.g - diffuseColor.r * 0.9) * (1.0 - smoothstep(0.55, 0.8, diffuseColor.b));
+  // only green grass: dirt, sand, path and rock are redder than they are green, so they are left alone
+  float grass = smoothstep(1.06, 1.3, diffuseColor.g / max(diffuseColor.r, 0.02)) * (1.0 - smoothstep(0.55, 0.8, diffuseColor.b));
   // wind direction wanders a little from place to place so the strokes never line up into stripes
   float wob = texture2D(uWindTex, vWPos.xz * 0.011 + 0.2).r - 0.5;
   float ang = 0.3 + wob * 1.5;
@@ -654,9 +655,9 @@ varying vec3 vWPos; varying float vWDist;`)
   // gusts: fronts that travel along the wind, with calm spells in between
   float front = sin(dot(vWPos.xz, dir0) * 0.032 - uWindT * 0.85 + sin(dot(vWPos.xz, side0) * 0.018) * 2.2);
   float gate = sin(uWindT * 0.33) * 0.5 + 0.5;                       // slow breathing: wind rises and falls
-  float env = smoothstep(0.1, 0.85, front * 0.5 + 0.5) * (0.04 + 0.96 * smoothstep(0.3, 0.8, gate));
+  float env = smoothstep(0.5, 0.92, front * 0.5 + 0.5) * (0.04 + 0.96 * smoothstep(0.3, 0.8, gate));   // distinct bands that travel
   // short painted strokes (about 6:1), flowing with the wind and broken up by a second mask
-  float sway = uWindT * (0.4 + 1.3 * env);
+  float sway = uWindT * 1.2;                                          // the strokes themselves flow with the wind
   float u = dot(vWPos.xz, dir) - sway, v = dot(vWPos.xz, side);
   float s1 = texture2D(uWindTex, vec2(u * 0.012, v * 0.085)).r;
   float s2 = texture2D(uWindTex, vec2(u * 0.031 + 0.31, v * 0.21)).g;
