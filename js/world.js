@@ -538,6 +538,14 @@ export function buildWorld(scene, sections, opts = {}) {
     PADS.push({ x: bb[0] + 2.5, z: bb[1] - 1, r: 5.5, y: by });
   }
   sites.sort((p, q) => q.z - p.z);                           // nearest the camera first (they get the real lights)
+  // Up to two houses on the flanks or at the back are two storeys, and only where they cannot hide a sign.
+  {
+    const cand = sites.filter((st) => (Math.abs(st.x) > 15 || st.z < -34) && !blocksSign(st.x, st.z, st.y + 9.6));
+    for (let k = 0; k < 2 && cand.length; k++) {
+      const pick = cand.splice(Math.floor(TR() * cand.length), 1)[0];
+      if (TR() < 0.85) pick.tall = true;
+    }
+  }
 
   // Level neighbouring plots together: buildings closer than a plot's reach share one ground height,
   // otherwise their overlapping skirts tilt each other's ground (and the houses look crooked).
@@ -702,7 +710,7 @@ varying vec3 vWPos; varying float vWDist;`)
   const smokeSrc = [];                       // world positions of chimneys that smoke
   const recentSigs = [];                     // neighbouring houses should not be twins
   for (const st of sites) {
-    const hs = buildHouse(TR, theme, { avoid: recentSigs.slice(-2), low });
+    const hs = buildHouse(TR, theme, { avoid: recentSigs.slice(-2), low, tall: !!st.tall, far: st.z < -42 });
     recentSigs.push(hs.sig);
     const sc = 0.95 + TR() * 0.3;
     hs.group.scale.setScalar(sc);
@@ -1127,6 +1135,63 @@ varying vec3 vWPos; varying float vWDist;`)
       lx += nx * out; lz += nz * out;
       tuft(hh.x + lx * c + lz * sn, hh.z - lx * sn + lz * c, 0.85 + rand() * 0.5);
     }
+  }
+
+  // ---- Street life: lamp posts along the path, a signpost at the fork, and a market stall ----
+  {
+    const street = new THREE.Group();
+    const dark = mat('#3a3a40'), wood = mat('#8a6a45'), woodDark = mat('#6a4a2c');
+    const clear = (x, z, pad = 1.2) => !nearHouse(x, z, pad) && !nearSign(x, z) && !nearPond(x, z, 1.5)
+      && !branches.some((b) => distToPolyline(x, z, b) < 1.6);
+    const lamp = (x, z) => {
+      const y = heightAt(x, z);
+      street.add(box(0.1, 2.6, 0.1, dark, x, y + 1.3, z));
+      street.add(box(0.34, 0.42, 0.34, lanternMat, x, y + 2.65, z));
+      street.add(box(0.46, 0.08, 0.46, dark, x, y + 2.92, z));
+      street.add(box(0.3, 0.1, 0.3, dark, x, y + 0.05, z));
+    };
+    [[11, 1], [3, -1], [-9, 1], [-21, -1], [-33, 1]].forEach(([z, side]) => {
+      const x = pathX(z) + side * 2.7;
+      if (clear(x, z, 0.8)) lamp(x, z);
+    });
+    // signpost where the left branch leaves the path
+    {
+      const px = pathX(5) + 2.8, pz = 5, y = heightAt(px, pz);
+      street.add(box(0.14, 2.2, 0.14, woodDark, px, y + 1.1, pz));
+      for (const [k, yy, ry] of [[1, 1.85, 0.2], [-1, 1.45, -0.15]]) {
+        const b = box(1.1, 0.28, 0.06, wood, px + k * 0.5, y + yy, pz + 0.1);
+        b.rotation.y = ry; street.add(b);
+      }
+    }
+    // a market stall beside the path, in the first clear spot
+    for (const [z, side] of [[-2, -1], [-12, 1], [-26, -1], [-16, -1], [4, 1]]) {
+      const sx = pathX(z) + side * 4.6;
+      if (!clear(sx, z, 2.4)) continue;
+      const y = heightAt(sx, z), face = Math.atan2(-side, 0.1);
+      const st = new THREE.Group();
+      st.position.set(sx, y, z); st.rotation.y = -side * Math.PI / 2;
+      st.add(box(2.0, 0.08, 0.9, wood, 0, 0.9, 0));
+      for (const px of [-1, 1]) for (const pz of [-0.4, 0.4]) st.add(box(0.07, 2.0, 0.07, woodDark, px * 0.95, 1.0, pz));
+      const stripes = ['#d9534f', '#f4f1e8'];
+      for (let k = 0; k < 6; k++) {
+        const s = box(0.34, 0.05, 1.2, mat(stripes[k % 2]), -0.85 + k * 0.34, 2.05 - 0.0, 0.1);
+        s.rotation.x = -0.25; st.add(s);
+      }
+      for (let k = 0; k < 3; k++) st.add(box(0.28, 0.2, 0.28, mat(['#e8402f', '#f0a030', '#7ac04a'][k]), -0.5 + k * 0.5, 1.04, 0));
+      st.add(box(0.7, 0.45, 0.5, woodDark, 1.5, 0.22, 0.2));
+      st.updateMatrixWorld(true);
+      st.children.forEach((c) => street.add(c.clone()));
+      street.children.slice(-st.children.length).forEach((c, i) => {
+        c.applyMatrix4(st.matrixWorld);
+        // the clone already holds the local transform; bake the stall's placement into it
+      });
+      void face;
+      break;
+    }
+    street.children.forEach((c) => { c.castShadow = true; c.receiveShadow = true; });
+    const merged = mergeByMaterial(street);
+    merged.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(merged);
   }
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();

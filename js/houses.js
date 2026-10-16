@@ -564,7 +564,8 @@ function makeHouse(R, theme, opts) {
   const put = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
 
   // --- size and plan
-  const w = 3.6 + R() * 1.9, d = 3 + R() * 1.3, h = 2.2 + R() * 0.9;
+  const tall = !!opts.tall && !opts.low;                // a two-storey house
+  const w = 3.6 + R() * 1.9, d = 3 + R() * 1.3, h = (2.2 + R() * 0.9) * (tall ? 1.75 : 1);
   const doorSide = R() < 0.5 ? -1 : 1;
   const hasWing = R() < 0.55;
   const wingSide = -doorSide;
@@ -607,7 +608,7 @@ function makeHouse(R, theme, opts) {
   else if (shapeRoll > 0.82) shape = 'steep';
   if (thatch && shape === 'hip' && w < d) shape = 'gable';
   const rh = (shape === 'steep' ? 2.0 : shape === 'hip' ? 1.1 : 1.3) + R() * (shape === 'steep' ? 0.5 : 0.7);
-  const dormers = (shape === 'gable' || shape === 'steep') && !low && rh > 1.55 && R() < 0.45 ? (w > 4.6 && R() < 0.5 ? 2 : 1) : 0;
+  const dormers = !tall && (shape === 'gable' || shape === 'steep') && !low && rh > 1.55 && R() < 0.45 ? (w > 4.6 && R() < 0.5 ? 2 : 1) : 0;
 
   let radius = Math.max(w / 2, d / 2 + 1.3) + 0.8;
   const chimneys = [];                                // chimney tops (local) that can carry smoke
@@ -643,18 +644,22 @@ function makeHouse(R, theme, opts) {
     addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: OV, ends, yaw: 0, wallMat: mix === 'gable' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize, thick, ridge });
   }
 
-  // --- wing: lower, ridge kept under the main eave, eaves ending inside the main walls
+  // --- wing: an extension at one end, built parallel to the main house (same ridge direction, same front),
+  // with its front wall flush or set back a little, and a lower roof that meets the main wall.
   let wing = null;
   if (hasWing) {
-    const w2 = 2.2 + R() * 1.0, d2 = d * (0.7 + R() * 0.2), h2 = h * 0.82;
+    const w2 = 2.4 + R() * 1.0, d2 = d * (0.78 + R() * 0.17), h2 = tall ? 2.5 + R() * 0.3 : h * 0.82;
+    const setback = R() < 0.35 ? 0.35 + R() * 0.25 : 0;
     const overlap = 0.3;
-    const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = -0.2 - R() * 0.3;
-    const rh2 = Math.min(rh * 0.8, Math.max(0.7, h - h2 + (shape === 'hip' ? 0.2 : 0.35)));
+    const cx = wingSide * (w / 2 + w2 / 2 - overlap), cz = d / 2 - d2 / 2 - setback;
+    const rh2 = Math.min(rh * (d2 / d) * 0.95, Math.max(0.7, h - h2 + (shape === 'hip' ? 0.2 : 0.35)));
     g.add(box(w2 + 0.2, 1.6, d2 + 0.2, stone, cx, -0.45, cz));
     put(new THREE.Mesh(wallGeometry(w2, h2, d2, mix === 'wing' ? tile2 : wallTileSize), mix === 'wing' ? mat2 : wallMat), cx, 0.35 + h2 / 2, cz);
-    addGable(g, { cx, cz, len: d2, span: w2, base: 0.35 + h2, rh: rh2, ov: 0.15, ends: [0.25, 0.25], yaw: Math.PI / 2, wallMat: mix === 'wing' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: mix === 'wing' ? tile2 : wallTileSize, thick, ridge });
+    // ends are [-x end, +x end]: the end touching the main house has no overhang
+    const wEnds = wingSide > 0 ? [0, 0.3] : [0.3, 0];
+    addGable(g, { cx, cz, len: w2, span: d2, base: 0.35 + h2, rh: rh2, ov: 0.3, ends: wEnds, yaw: 0, wallMat: mix === 'wing' ? plain2 : wallPlain, roofMat, tile: roofTileSize, wallTileSize: mix === 'wing' ? tile2 : wallTileSize, thick, ridge });
     wing = { cx, cz, w2, d2, h2 };
-    radius = Math.max(radius, w / 2 + w2 + 0.8, Math.abs(cz) + d2 / 2 + 1.2);
+    radius = Math.max(radius, w / 2 + w2 + 0.8, d / 2 + 1.2);
   }
 
   // --- window dressing helper
@@ -813,10 +818,28 @@ function makeHouse(R, theme, opts) {
   const backXs = w > 4.4 ? [-w * 0.26, w * 0.26] : [0];
   backXs.forEach((bx, i) => addWindow(g, bx, 1.65, -d / 2 - 0.03, Math.PI, glassMat, trim, shutterMat, dressOpts(i === 0 && R() < 0.6)));
 
+  // --- second storey: a trim band between the floors and a row of upper windows
+  if (tall) {
+    const bandY = 0.35 + h * 0.5;
+    g.add(box(w + 0.16, 0.14, d + 0.16, trim, 0, bandY, 0));
+    const upY = bandY + 1.15;
+    const balcony = R() < 0.5;
+    const frontXs = (w > 4.4 ? [-w * 0.27, 0, w * 0.27] : [-w * 0.22, w * 0.22]).filter((fx) => !balcony || Math.abs(fx - dx) > 0.95);
+    frontXs.forEach((fx) => addWindow(g, fx, upY, d / 2 + 0.03, 0, glassMat, trim, shutterMat, dressOpts(false)));
+    backXs.forEach((bx) => addWindow(g, bx, upY, -d / 2 - 0.03, Math.PI, glassMat, trim, shutterMat, dressOpts(false)));
+    addWindow(g, freeSide * (w / 2 + 0.03), upY, 0, freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
+    if (!hasWing) addWindow(g, -freeSide * (w / 2 + 0.03), upY, 0, -freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
+    if (balcony) {                                                        // a small balcony over the front door
+      const bx0 = dx;
+      g.add(box(1.5, 0.1, 0.7, mat('#8a6a45'), bx0, bandY + 0.05, d / 2 + 0.35));
+      g.add(box(1.5, 0.5, 0.06, trim, bx0, bandY + 0.35, d / 2 + 0.68));
+    }
+  }
+
   // --- dormers on the front slope
   if (dormers) {
     const spots = dormers === 2 ? [-w * 0.24, w * 0.24] : [0];
-    const zRoof = d * 0.2;
+    const zRoof = d * 0.31;                                              // low on the slope, close to the eave
     const roofY = top + rh * (1 - zRoof / (d / 2 + OV));
     spots.forEach((sx) => {
       put(new THREE.Mesh(wallGeometry(0.95, 0.85, 0.8, wallTileSize), wallPlain), sx, roofY + 0.22, zRoof + 0.15);
@@ -877,6 +900,95 @@ function makeHouse(R, theme, opts) {
     g.add(sr);
     radius = Math.max(radius, w / 2 + 1.9);
     extras.push('shed');
+  }
+
+  // --- detached outbuilding on the free side, built parallel to the house with its front in line
+  if (!low && !opts.far && R() < 0.62) {
+    const kind = pick(['shed', 'shed', 'greenhouse', 'woodstore', 'stable']);
+    const ow = kind === 'stable' ? 2.7 : 1.9, od = kind === 'stable' ? 2.2 : 1.7, oh = kind === 'stable' ? 1.9 : 1.6;
+    const ox = freeSide * (w / 2 + 1.55 + ow / 2), oz = d / 2 - od / 2;
+    const gy = 0.35;
+    const woodHex = pick(['#8f6a42', '#a07c52', '#7a5a3a']);
+    const woodMat = wallMaterial('clap', woodHex, true), woodPlain = wallMaterial('clap', woodHex, false);
+    g.add(box(ow + 0.15, 0.5, od + 0.15, stone, ox, gy - 0.18, oz));
+    if (kind === 'greenhouse') {
+      const frame = mat('#e8e6dc');
+      g.add(box(ow, 1.25, od, glassMat, ox, gy + 0.62, oz));
+      for (const sx of [-1, 0, 1]) for (const sz of [-1, 1]) g.add(box(0.07, 1.3, 0.07, frame, ox + sx * ow / 2, gy + 0.65, oz + sz * od / 2));
+      g.add(box(ow + 0.08, 0.07, 0.07, frame, ox, gy + 1.28, oz + od / 2));
+      g.add(box(ow + 0.08, 0.07, 0.07, frame, ox, gy + 1.28, oz - od / 2));
+      addGable(g, { cx: ox, cz: oz, len: ow, span: od, base: gy + 1.25, rh: 0.5, ov: 0.04, ends: [0.04, 0.04], yaw: 0, roofMat: glassMat, tile: 1.7, thick: 0.05, ridge: '#e8e6dc' });
+      const potCol = pick(['#c0623a', '#d8b34a', '#7a8fc8']);
+      for (let k = 0; k < 3; k++) g.add(box(0.28, 0.22, 0.28, mat(potCol), ox - 0.5 + k * 0.5, gy + 0.2, oz - 0.2));
+    } else if (kind === 'woodstore') {
+      const post = mat('#6a4a2c');
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.1, oh, 0.1, post, ox + sx * (ow / 2 - 0.05), gy + oh / 2, oz + sz * (od / 2 - 0.05)));
+      g.add(box(ow, oh, 0.08, woodMat, ox, gy + oh / 2, oz - od / 2 + 0.05));
+      addGable(g, { cx: ox, cz: oz, len: ow, span: od, base: gy + oh, rh: 0.35, ov: 0.2, ends: [0.2, 0.2], yaw: 0, wallMat: null, roofMat, tile: roofTileSize, thick, ridge });
+      const log = mat('#a0764a');
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 6 - (r > 1 ? 1 : 0); c++) g.add(box(0.26, 0.2, od - 0.5, log, ox - ow / 2 + 0.3 + c * 0.28 + (r % 2) * 0.12, gy + 0.12 + r * 0.21, oz));
+    } else {
+      put(new THREE.Mesh(wallGeometry(ow, oh, od, wallTile('clap')), woodMat), ox, gy + oh / 2, oz);
+      addGable(g, { cx: ox, cz: oz, len: ow, span: od, base: gy + oh, rh: kind === 'stable' ? 0.9 : 0.65, ov: 0.22, ends: [0.2, 0.2], yaw: 0, wallMat: woodPlain, roofMat, tile: roofTileSize, wallTileSize: wallTile('clap'), thick, ridge });
+      const dm = mat(doorHex);
+      if (kind === 'stable') {
+        for (const sx of [-1, 1]) g.add(box(0.55, 1.35, 0.08, dm, ox + sx * 0.32, gy + 0.68, oz + od / 2 + 0.03));
+        g.add(box(1.3, 0.1, 0.1, trim, ox, gy + 1.4, oz + od / 2 + 0.04));
+      } else {
+        g.add(box(0.7, 1.2, 0.08, dm, ox + 0.2 * freeSide, gy + 0.6, oz + od / 2 + 0.03));
+        addWindow(g, ox - 0.5 * freeSide, gy + 0.95, oz + od / 2 + 0.03, 0, glassMat, trim, shutterMat, { shutters: 'none', dress: null, box: false });
+      }
+    }
+    radius = Math.max(radius, Math.abs(ox) + ow / 2 + 0.8);
+    extras.push(kind);
+  }
+
+  // --- yard: one or two small things in front of the house, off the path to the door
+  if (!low && !opts.far) {
+    const yardKinds = ['well', 'haystack', 'woodpile', 'laundry', 'garden', 'bench', 'fence', 'fence'];
+    const yx = -doorSide * (w * 0.18 + 1.4 + R() * 1.0), yz = d / 2 + 2.2 + R() * 0.7, y0 = 0.07;
+    const count = 1 + (R() < 0.45 ? 1 : 0);
+    for (let n = 0; n < count; n++) {
+      const kind = yardKinds[Math.floor(R() * yardKinds.length)];
+      const px = yx + (n ? -doorSide * 2.0 : 0);
+      if (kind === 'well') {
+        g.add(cyl(0.55, 0.7, stone, px, y0 + 0.35, yz, 10));
+        g.add(cyl(0.4, 0.05, mat('#3b7fa8'), px, y0 + 0.7, yz, 10));
+        for (const sx of [-1, 1]) g.add(box(0.07, 1.3, 0.07, mat('#6a4a2c'), px + sx * 0.5, y0 + 1.1, yz));
+        const wr = box(1.5, 0.08, 0.9, roofMat, px, y0 + 1.82, yz); wr.rotation.z = 0; g.add(wr);
+      } else if (kind === 'haystack') {
+        g.add(cyl(0.75, 0.9, mat('#d8b85a'), px, y0 + 0.45, yz, 8));
+        g.add(cyl(0.4, 0.5, mat('#e0c46a'), px, y0 + 1.15, yz, 8));
+      } else if (kind === 'woodpile') {
+        const log = mat('#a0764a');
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 5 - r; c++) g.add(box(0.22, 0.2, 0.9, log, px - 0.5 + c * 0.24 + r * 0.12, y0 + 0.12 + r * 0.21, yz));
+      } else if (kind === 'laundry') {
+        const post = mat('#6a4a2c');
+        for (const sx of [-1, 1]) g.add(box(0.07, 1.7, 0.07, post, px + sx * 1.3, y0 + 0.85, yz));
+        g.add(box(2.6, 0.02, 0.02, mat('#ddd'), px, y0 + 1.6, yz));
+        ['#d95a5a', '#f2f0e8', '#4a7ac8', '#e8c84a'].forEach((c, k) => g.add(box(0.34, 0.5, 0.02, mat(c), px - 0.9 + k * 0.6, y0 + 1.32, yz)));
+      } else if (kind === 'garden') {
+        g.add(box(1.8, 0.16, 0.9, mat('#6a4a2c'), px, y0 + 0.08, yz));
+        const soil = mat('#4a3320');
+        g.add(box(1.64, 0.04, 0.74, soil, px, y0 + 0.17, yz));
+        const veg = [mat('#5fb04a'), mat('#4a9a3f'), mat('#8ad04a')];
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) g.add(box(0.14, 0.2 + ((c + r) % 3) * 0.06, 0.14, veg[r], px - 0.7 + c * 0.28, y0 + 0.28, yz - 0.25 + r * 0.25));
+      } else if (kind === 'bench') {
+        g.add(box(1.2, 0.08, 0.35, mat('#8a6a45'), dx + (doorSide > 0 ? -1.6 : 1.6), y0 + 0.5, d / 2 + 0.6));
+        for (const sx of [-1, 1]) g.add(box(0.08, 0.5, 0.3, mat('#6a4a2c'), dx + (doorSide > 0 ? -1.6 : 1.6) + sx * 0.5, y0 + 0.25, d / 2 + 0.6));
+      } else {                                                           // a picket fence with a gap for the path
+        const fz = d / 2 + 3.4, pk = mat('#f2efe6');
+        const gapL = dx - 0.9, gapR = dx + 0.9, x0 = -w / 2 - 0.8, x1 = w / 2 + 0.8;
+        for (const [a, b] of [[x0, gapL], [gapR, x1]]) {
+          if (b - a < 0.5) continue;
+          for (let x = a; x <= b; x += 0.3) g.add(box(0.07, 0.62, 0.04, pk, x, y0 + 0.31, fz));
+          g.add(box(b - a, 0.06, 0.05, pk, (a + b) / 2, y0 + 0.2, fz));
+          g.add(box(b - a, 0.06, 0.05, pk, (a + b) / 2, y0 + 0.46, fz));
+        }
+        radius = Math.max(radius, d / 2 + 3.9);
+        n = count;                                                       // a fence is the whole yard feature
+      }
+    }
   }
 
   g.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = !o.userData.noShadow; } });
