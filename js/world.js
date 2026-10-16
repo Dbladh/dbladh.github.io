@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015205524';
+import { PAL } from './palette.js?v=20261015205657';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015205524';
+} from './houses.js?v=20261015205657';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -697,8 +697,8 @@ float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
 float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * csN(p); p = p * 2.03 + vec2(4.1, 7.3); a *= 0.5; } return s; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
-  vec2 cp = vCWPos.xz * 0.02 + vec2(uShadowT * 0.09, uShadowT * 0.036);   // patches ~50 units across, drifting ~4.5 units/s   // drifts about 5 units a second
-  float cn = csF(cp) * 0.7 + csF(cp * 2.1 + 11.0 + vec2(-uShadowT * 0.05, uShadowT * 0.02)) * 0.3;
+  vec2 cp = vCWPos.xz * 0.02 - vec2(uShadowT * 0.07, 0.0);   // patches ~50 units across, drifting +x (the sky clouds' direction) at ~3.5 units/s   // drifts about 5 units a second
+  float cn = csF(cp) * 0.7 + csF(cp * 2.1 + 11.0 - vec2(uShadowT * 0.03, 0.0)) * 0.3;
   float cs = smoothstep(0.44, 0.56, cn) * uShadowDay;
   diffuseColor.rgb *= mix(mix(vec3(1.0), vec3(1.06, 1.05, 0.98), uShadowDay), vec3(0.24, 0.34, 0.6), cs);   // sunlit gaps and cool, clear shade under each cloud
 }`);
