@@ -19,6 +19,7 @@ const FRAG = /* glsl */ `
   #include <packing>
   uniform sampler2D tColor;
   uniform sampler2D tDepth;
+  uniform sampler2D tBlur;  // half-resolution blurred colour (HALF_RES only)
   uniform float cameraNear;
   uniform float cameraFar;
   uniform float focus;      // world distance that is perfectly sharp
@@ -40,6 +41,9 @@ const FRAG = /* glsl */ `
     float coc = cocAt(vUv);
     vec4 col = texture2D(tColor, vUv);
 
+#ifdef HALF_RES
+    col = mix(col, texture2D(tBlur, vUv), smoothstep(0.5, 2.5, coc));   // sharp pixels stay full resolution
+#else
     if (coc > 0.6) {
       vec4 sum = col;
       float wsum = 1.0;
@@ -57,6 +61,11 @@ const FRAG = /* glsl */ `
       }
       col = sum / wsum;
     }
+#endif
+#ifdef BLUR_ONLY
+    gl_FragColor = col;
+    return;
+#endif
 
     // The buffer is premultiplied linear; convert the colour to sRGB, then re-premultiply.
     float a = col.a;
@@ -95,7 +104,7 @@ const FRAG = /* glsl */ `
   }
 `;
 
-export function createDOF(renderer) {
+export function createDOF(renderer, { half = false } = {}) {
   if (!renderer.capabilities.isWebGL2) return null;
 
   let target;
@@ -110,10 +119,12 @@ export function createDOF(renderer) {
     return null;
   }
 
-  const material = new THREE.ShaderMaterial({
-    vertexShader: VERT,
-    fragmentShader: FRAG,
-    uniforms: {
+  let halfRes = half;
+  let blurTarget = null;
+  try {
+    blurTarget = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: false });
+  } catch (err) { halfRes = false; }
+  const uniforms = {
       tColor: { value: target.texture },
       tDepth: { value: target.depthTexture },
       cameraNear: { value: 0.5 },
@@ -125,11 +136,22 @@ export function createDOF(renderer) {
       hazeColor: { value: new THREE.Color('#bfe8ff') },
       hazeAmt: { value: 1 },
       bloom: { value: 1 },
-    },
-    depthTest: false,
-    depthWrite: false,
-    blending: THREE.NoBlending,
+      tBlur: { value: blurTarget ? blurTarget.texture : null },
+  };
+  const material = new THREE.ShaderMaterial({
+    vertexShader: VERT, fragmentShader: FRAG, uniforms,
+    defines: halfRes ? { HALF_RES: 1 } : {},
+    depthTest: false, depthWrite: false, blending: THREE.NoBlending,
   });
+  // Half-resolution pass: only the blurred colour, drawn into a target a quarter of the pixel count.
+  const blurMaterial = new THREE.ShaderMaterial({
+    vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { BLUR_ONLY: 1 },
+    depthTest: false, depthWrite: false, blending: THREE.NoBlending,
+  });
+  const blurScene = new THREE.Scene();
+  const blurQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), blurMaterial);
+  blurQuad.frustumCulled = false;
+  blurScene.add(blurQuad);
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
   quad.frustumCulled = false;
   const quadScene = new THREE.Scene();
@@ -164,6 +186,16 @@ export function createDOF(renderer) {
     get enabled() { return enabled; },
     set enabled(v) { enabled = v; },
 
+    /** Blur at half resolution (cheaper, slightly softer). Can be flipped at runtime by the watchdog. */
+    get half() { return halfRes; },
+    set half(v) {
+      v = !!v && !!blurTarget;
+      if (v === halfRes) return;
+      halfRes = v;
+      material.defines = v ? { HALF_RES: 1 } : {};
+      material.needsUpdate = true;
+    },
+
     /** Time-of-day inputs for the composite: horizon colour for haze, and bloom on/off (0..1). */
     setLook(horizon, bloom) {
       if (horizon) material.uniforms.hazeColor.value.copy(horizon);
@@ -174,6 +206,7 @@ export function createDOF(renderer) {
     resize() {
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
+      blurTarget?.setSize(Math.max(1, Math.round(size.x / 2)), Math.max(1, Math.round(size.y / 2)));
       material.uniforms.texel.value.set(1 / size.x, 1 / size.y);
       const k = size.y / 900;
       material.uniforms.aperture.value = 250 * k;
@@ -200,6 +233,11 @@ export function createDOF(renderer) {
       renderer.clear();
       renderer.render(scene, camera);
       ghosts.forEach((m, i) => { m.colorWrite = saved[i][0]; m.depthWrite = saved[i][1]; });
+      if (halfRes) {
+        renderer.setRenderTarget(blurTarget);
+        renderer.clear();
+        renderer.render(blurScene, quadCam);
+      }
       renderer.setRenderTarget(null);
       renderer.clear();
       renderer.render(quadScene, quadCam);

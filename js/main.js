@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015182854';
-import { createSky } from './sky.js?v=20261015182854';
-import { createDOF } from './dof.js?v=20261015182854';
+import { buildWorld } from './world.js?v=20261015183004';
+import { createSky } from './sky.js?v=20261015183004';
+import { createDOF } from './dof.js?v=20261015183004';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -94,7 +94,7 @@ function start() {
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
   const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed });
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
-  const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
+  const dof = reduceMotion ? null : createDOF(renderer, { half: lowEnd }); // soft focus is skipped for reduced motion
   let focus = 60;
 
   // ---- Camera stops ----
@@ -595,7 +595,9 @@ function start() {
       const now = performance.now();
       if (slow.strikes >= 3) { // genuinely slow for ~9s in a row
         slow.strikes = 0;
-        if (quality.scale > 0.71) {                   // 1) draw fewer pixels first (1 -> 0.85 -> 0.7)...
+        if (dof && !dof.half) {                       // 0) blur at half resolution before touching the scene's
+          dof.half = true;
+        } else if (quality.scale > 0.71) {            // 1) draw fewer pixels first (1 -> 0.85 -> 0.7)...
           quality.scale = Math.max(0.7, quality.scale - 0.15);
           onResize();
         } else if (dof?.enabled) {                    // 2) ...then drop soft focus, but only for a while.
