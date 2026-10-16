@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015203654';
+import { PAL } from './palette.js?v=20261015203926';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015203654';
+} from './houses.js?v=20261015203926';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -930,6 +930,7 @@ export function buildWorld(scene, sections, opts = {}) {
     smoke.frustumCulled = false;
     smoke.castShadow = false;
     smoke.renderOrder = 3;
+    smoke.layers.set(1);   // drawn in the sharp pass after the billboards, so it can pass in front of them
     scene.add(smoke);
   }
   const _sd = new THREE.Object3D();
@@ -2156,7 +2157,7 @@ export function buildWorld(scene, sections, opts = {}) {
               src.y + ph * 5.2,
               src.z + Math.cos(time * 0.45 + si + ph * 5) * 0.45 * ph,
             );
-            _sd.scale.setScalar(blockedBy(_sd.position) ? 0.0001 : 0.7 + ph * 2.6);
+            _sd.scale.setScalar(0.7 + ph * 2.6);                               // smoke may drift across the signs
             _sd.updateMatrix();
             smoke.setMatrixAt(si * PUFFS + k, _sd.matrix);
             smokeAge[si * PUFFS + k] = ph;
