@@ -812,7 +812,22 @@ function makeHouse(R, theme, opts) {
     chimneys.push([cxx, top2 + 0.7, cz]);
     radius = Math.max(radius, w / 2 + 1.1);
   }
-  addWindow(g, -doorSide * w * 0.27, 1.65, front + 0.03, 0, glassMat, trim, shutterMat, dressOpts(R() < 0.6));
+  const bay = !low && R() < 0.42;                                       // a projecting bay window instead of the flat one
+  if (bay) {
+    const bx = -doorSide * w * 0.27, bw = 1.5, bd = 0.6, bh = 1.7;
+    g.add(box(bw + 0.2, 0.3, bd + 0.2, stone, bx, 0.3, front + bd / 2));
+    put(new THREE.Mesh(wallGeometry(bw, bh, bd, wallTileSize), wallMat), bx, 0.35 + bh / 2, front + bd / 2 - 0.02);
+    const bz = front + bd - 0.02;
+    addWindow(g, bx, 1.55, bz + 0.03, 0, glassMat, trim, shutterMat, { shutters: 'none', dress: R() < 0.5 ? 'curtain' : null, curtain: '#e8e0d0', box: R() < 0.5, flowers: FL });
+    for (const sx of [-1, 1]) addWindow(g, bx + sx * (bw / 2 + 0.03), 1.55, front + bd / 2, sx * Math.PI / 2, glassMat, trim, shutterMat, { shutters: 'none', dress: null, box: false });
+    const br = box(bw + 0.5, 0.1, bd + 0.6, roofMat, bx, 0.35 + bh + 0.12, front + bd / 2 + 0.05);
+    br.rotation.x = 0.3;
+    g.add(br);
+    g.add(box(bw + 0.1, 0.1, bd + 0.1, trim, bx, 0.35 + bh + 0.02, front + bd / 2));
+    radius = Math.max(radius, d / 2 + 1.6);
+  } else {
+    addWindow(g, -doorSide * w * 0.27, 1.65, front + 0.03, 0, glassMat, trim, shutterMat, dressOpts(R() < 0.6));
+  }
   addWindow(g, freeSide * (w / 2 + 0.03), 1.65, 0, freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
   if (!hasWing) addWindow(g, -freeSide * (w / 2 + 0.03), 1.65, 0, -freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
   const backXs = w > 4.4 ? [-w * 0.26, w * 0.26] : [0];

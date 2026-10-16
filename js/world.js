@@ -528,6 +528,36 @@ export function buildWorld(scene, sections, opts = {}) {
       if (tryBranchSite(bi, 0.3 + TR() * 0.58, TR() < 0.5 ? -1 : 1)) got++;
     }
   }
+  // Farmsteads: up to two main houses get a companion beside them, facing the same way and sharing the yard:
+  // the first a barn, the second a smaller cottage. They keep the same sign-sight-line rules as any house.
+  {
+    let steads = 0;
+    for (const st of sites.filter((q) => !q.hamlet)) {
+      if (steads >= 2) break;
+      const lx = st.fz, lz = -st.fx;                           // lateral direction (along the house's front)
+      let done = false;
+      for (const sgn of TR() < 0.5 ? [1, -1] : [-1, 1]) {
+        const gap = 10.8 + TR() * 1.6;
+        const x = st.x + lx * sgn * gap, zz = st.z + lz * sgn * gap;
+        const along = Math.abs(x - pathX(zz));
+        if (nearSign(x, zz) || nearPond(x, zz, 4) || along < 5.5) continue;
+        if (!sites.every((o) => Math.hypot(o.x - x, o.z - zz) >= 9.5)) continue;
+        if (farm.some((f) => Math.hypot(f.x - x, f.z - zz) < 11)) continue;
+        if (branches.some((b) => distToPolyline(x, zz, b) < 6.5)) continue;
+        const y = rawHeight(x, zz);
+        if (blocksSign(x, zz, y + 5.6)) continue;
+        if (steads === 0) {
+          farm.push({ kind: 'barn', x, z: zz, y, rot: Math.atan2(st.fx, st.fz) + (TR() - 0.5) * 0.12, steading: true });
+          PADS.push({ x, z: zz, r: 5.8, y });
+        } else {
+          sites.push({ x, z: zz, fx: st.fx, fz: st.fz, perp: st.perp, y, companion: true });
+          PADS.push({ x, z: zz, r: 6.4, y });
+        }
+        done = true; break;
+      }
+      if (done) steads++;
+    }
+  }
   { // windmill hilltop and barn at the end of the right path: fixed.
     const bb = branches[1][branches[1].length - 1];
     const by = rawHeight(bb[0] + 2, bb[1] - 1);
@@ -540,7 +570,7 @@ export function buildWorld(scene, sections, opts = {}) {
   sites.sort((p, q) => q.z - p.z);                           // nearest the camera first (they get the real lights)
   // Up to two houses on the flanks or at the back are two storeys, and only where they cannot hide a sign.
   {
-    const cand = sites.filter((st) => (Math.abs(st.x) > 15 || st.z < -34) && !blocksSign(st.x, st.z, st.y + 9.6));
+    const cand = sites.filter((st) => !st.companion && (Math.abs(st.x) > 15 || st.z < -34) && !blocksSign(st.x, st.z, st.y + 9.6));
     for (let k = 0; k < 2 && cand.length; k++) {
       const pick = cand.splice(Math.floor(TR() * cand.length), 1)[0];
       if (TR() < 0.85) pick.tall = true;
@@ -710,10 +740,10 @@ varying vec3 vWPos; varying float vWDist;`)
   const smokeSrc = [];                       // world positions of chimneys that smoke
   const recentSigs = [];                     // neighbouring houses should not be twins
   for (const st of sites) {
-    const hs = buildHouse(TR, theme, { avoid: recentSigs.slice(-2), low, tall: !!st.tall, far: st.z < -42 });
+    const hs = buildHouse(TR, theme, { avoid: recentSigs.slice(-2), low, tall: !!st.tall, far: st.z < -42 || !!st.companion });
     recentSigs.push(hs.sig);
     const sc = 0.95 + TR() * 0.3;
-    hs.group.scale.setScalar(sc);
+    hs.group.scale.setScalar(st.companion ? sc * 0.85 : sc);
     hs.group.position.set(st.x, st.y, st.z);
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (TR() - 0.5) * 0.16; // front door faces the path
     scene.add(hs.group);
@@ -748,8 +778,10 @@ varying vec3 vWPos; varying float vWDist;`)
       const bn = buildBarn();
       bn.group.position.set(f.x, f.y, f.z);
       bn.group.rotation.y = f.rot;
+      const bsc = f.steading ? 0.78 : 1;
+      bn.group.scale.setScalar(bsc);
       scene.add(bn.group);
-      houses.push({ x: f.x, z: f.z, r: bn.radius, w: bn.w, d: bn.d, rot: f.rot });
+      houses.push({ x: f.x, z: f.z, r: bn.radius * bsc, w: bn.w * bsc, d: bn.d * bsc, rot: f.rot });
       const bale = new THREE.CylinderGeometry(0.55, 0.55, 0.9, 12);
       const baleMat = mat('#d8b85a');
       for (let k = 0; k < 4; k++) {
