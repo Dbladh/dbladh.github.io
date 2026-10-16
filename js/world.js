@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015193948';
+} from './houses.js?v=20261015194132';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -82,7 +82,7 @@ export function pathX(z) {
 }
 
 /** Ground height at (x, z). */
-function rawBase(x, z) {
+function rawHeight(x, z) {
   const calm = 0.2 + 0.8 * smooth(12, 46, Math.hypot(x, z - 22)); // gentle meadow near the camera
   let h = (fbm(x * 0.016, z * 0.016) - 0.45) * 15 * calm;
   h += (fbm(x * 0.06 + 9, z * 0.06 + 3) - 0.5) * 3 * calm;
@@ -102,71 +102,6 @@ function rawBase(x, z) {
     h += f.h * Math.exp(-0.5 * (dx * dx + dz * dz));
   }
   h -= 0.35 * (1 - smooth(0, 4, Math.abs(x - pathX(z)))); // path sits in a shallow trough
-  return h;
-}
-
-// ---------------------------------------------------------------- the river
-// A fixed river leaves the back of the pond, winds out to the right and runs back toward the horizon.
-// The terrain is carved along it (so nothing can stand in the channel) and the water follows the ground.
-const RIVER_CTRL = [[17, -9.5], [22, -14], [29, -21], [40, -29], [51, -38], [61, -48], [66, -60], [67, -73],
-  [62, -88], [54, -103], [44, -118], [33, -133], [23, -150], [16, -170]];
-export const RIVER = (() => {
-  const pts = new THREE.CatmullRomCurve3(RIVER_CTRL.map(([x, z]) => new THREE.Vector3(x, 0, z))).getPoints(150);
-  const n = pts.length;
-  {                                                                  // meanders: swing the line from side to side
-    const orig = pts.map((p) => p.clone());
-    let len = 0;
-    for (let i = 0; i < n; i++) {
-      if (i) len += Math.hypot(orig[i].x - orig[i - 1].x, orig[i].z - orig[i - 1].z);
-      const a = orig[Math.max(0, i - 1)], b = orig[Math.min(n - 1, i + 1)];
-      let tx = b.x - a.x, tz = b.z - a.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const t = i / (n - 1);
-      const fade = smooth(0.0, 0.1, t) * (1 - smooth(0.92, 1.0, t));
-      const off = (4.4 * Math.sin(len * 0.075) + 1.7 * Math.sin(len * 0.19 + 1.3)) * fade;
-      pts[i].x = orig[i].x - tz * off; pts[i].z = orig[i].z + tx * off;
-    }
-  }
-  let ring = 0;
-  for (let k = 0; k < 8; k++) ring += rawBase(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
-  const waterC = ring / 8 - 0.5;                                   // the pond's water level
-  const base = pts.map((p) => rawBase(p.x, p.z));
-  const surf = [], hw = [], x = [], z = [];
-  for (let i = 0; i < n; i++) {
-    let s = 0, c = 0;
-    for (let k = -4; k <= 4; k++) { const q = base[Math.min(n - 1, Math.max(0, i + k))]; s += q; c++; }
-    const t = i / (n - 1);
-    surf.push(lerp(waterC, s / c - 0.75, smooth(0, 0.12, t)));
-    hw.push(lerp(1.5, 2.7, t));
-    x.push(pts[i].x); z.push(pts[i].z);
-  }
-  // keep the surface from rising uphill too steeply between neighbours (rapids, not a wall)
-  for (let i = 1; i < n; i++) surf[i] = Math.min(surf[i], surf[i - 1] + 0.35);
-  const bx0 = Math.min(...x) - 12, bx1 = Math.max(...x) + 12, bz0 = Math.min(...z) - 12, bz1 = Math.max(...z) + 12;
-  return { n, x, z, surf, hw, waterC, bx0, bx1, bz0, bz1 };
-})();
-
-/** Closest point of the river's centre line: { d, i, surf, hw } or null if clearly away from it. */
-export function riverQuery(px, pz) {
-  const R = RIVER;
-  if (px < R.bx0 || px > R.bx1 || pz < R.bz0 || pz > R.bz1) return null;
-  let best = 1e9, bi = 0, bt = 0;
-  for (let i = 0; i < R.n - 1; i++) {
-    const ax = R.x[i], az = R.z[i], abx = R.x[i + 1] - ax, abz = R.z[i + 1] - az;
-    const t = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / (abx * abx + abz * abz || 1)));
-    const d = Math.hypot(px - (ax + abx * t), pz - (az + abz * t));
-    if (d < best) { best = d; bi = i; bt = t; }
-  }
-  return { d: best, i: bi, surf: lerp(R.surf[bi], R.surf[bi + 1], bt), hw: lerp(R.hw[bi], R.hw[bi + 1], bt) };
-}
-
-/** Ground height at (x, z) before the house plots: base terrain with the river channel cut into it. */
-function rawHeight(x, z) {
-  let h = rawBase(x, z);
-  const q = riverQuery(x, z);
-  if (q && q.d < q.hw * 3) {
-    const m = 1 - smooth(q.hw * 0.7, q.hw * 2.8, q.d);
-    h = lerp(h, q.surf - 0.9, m);
-  }
   return h;
 }
 
@@ -497,14 +432,7 @@ export function buildWorld(scene, sections, opts = {}) {
     return { pts, r: 9.5 * Math.max(s.scale * 1.25, 0.8) };
   });
   const nearSign = (x, z, pad = 0) => signSpots.some((sp) => sp.pts.some(([px, pz]) => Math.hypot(x - px, z - pz) < sp.r + pad));
-  // "Wet" ground: the pond (and any ground lower than its water level beside it) and the river channel.
-  const nearPond = (x, z, pad = 0) => {
-    const dp = Math.hypot(x - POND.x, z - POND.z);
-    if (dp < POND.r * 1.3 + pad) return true;
-    if (dp < 18 && rawHeight(x, z) < RIVER.waterC + 0.3 + pad * 0.2) return true;
-    const q = riverQuery(x, z);
-    return !!q && q.d < q.hw * 1.9 + 1.0 + pad;
-  };
+  const nearPond = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r * 1.3 + pad;
   PADS.length = 0;
 
   // ---- The village: seeded per visit (townRand); everything else in the scene is fixed ----
@@ -514,16 +442,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const theme = pickTheme(TR);
 
   // Hamlet branch paths (fixed curves) are defined first so houses can keep clear of them.
-  const curve = (pts) => {
-    const raw = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z))).getPoints(120);
-    return raw.map((v, i) => {                                     // add gentle meanders, pinned at both ends
-      const a = raw[Math.max(0, i - 1)], b = raw[Math.min(raw.length - 1, i + 1)];
-      let tx = b.x - a.x, tz = b.z - a.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const t = i / (raw.length - 1), env = Math.sin(Math.PI * t);
-      const off = (1.6 * Math.sin(i * 0.21 + pts[0][0]) + 0.7 * Math.sin(i * 0.52)) * env;
-      return [v.x - tz * off, v.z + tx * off];
-    });
-  };
+  const curve = (pts) => new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z))).getPoints(80).map((v) => [v.x, v.z]);
   const branches = [
     curve([[pathX(4), 4], [-9, 2], [-17, -2], [-23, -7], [-29, -12], [-36, -17], [-43, -23]]),   // left, ends at the windmill hill
     curve([[pathX(2), 2], [9, 1], [17, -2], [24, -6], [30, -11], [36, -9], [41, -5]]),             // right, ends at the barn
@@ -677,7 +596,9 @@ export function buildWorld(scene, sections, opts = {}) {
   }
 
   // Water level: a little below the average ground height on a ring around the pond.
-  const WATER_Y = RIVER.waterC;
+  let ringSum = 0;
+  for (let k = 0; k < 8; k++) ringSum += rawHeight(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
+  const WATER_Y = ringSum / 8 - 0.5;
 
   // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
   const SEG = low ? [152, 100] : [304, 200];
@@ -701,302 +622,53 @@ export function buildWorld(scene, sections, opts = {}) {
     c.lerp(cDeep, smooth(0.25, 0, t) * 0.5);
     c.lerp(cWarm, smooth(0.52, 0.78, fbm(x * 0.05 + 40, z * 0.05)) * 0.65);
 
-    // Dirt patches, fields, rock, shores and paths are painted per pixel in the terrain shader (crisp, smooth edges).
+    // Patchwork fields on gentle ground in the middle distance, with mown stripes.
+    const gx = Math.floor((x + 300) / 15), gz = Math.floor((z + 300) / 19);
+    if (z < -14 && z > -92 && hash(gx * 3.1, gz * 1.7) > 0.58 && Math.abs(x - pathX(z)) > 6) {
+      const stripe = 0.5 + 0.5 * Math.sin(x * 1.9 + gz * 2.0);
+      c.lerp(hash(gx, gz) > 0.78 ? cGold : cCrop, (0.3 + 0.25 * stripe) * (1 - smooth(0.3, 0.7, slope)));
+    }
+    c.lerp(cDirt, smooth(0.78, 0.9, vnoise(x * 0.3 + 90, z * 0.3)) * 0.55);  // bare earth patches
+    c.lerp(cRock, smooth(0.5, 1.1, slope) * 0.75);                           // steep ground is rocky
     c.offsetHSL(0, 0, (hash(x * 7.1, z * 5.3) - 0.5) * 0.06);                // fine grass grain
 
+    // Pond shore: sand above the waterline, dark bed below it.
+    const dp = Math.hypot(x - POND.x, z - POND.z);
+    c.lerp(cSand, (1 - smooth(WATER_Y + 0.1, WATER_Y + 0.9, h)) * (1 - smooth(POND.r * 1.3, POND.r * 2.1, dp)) * 0.9);
+    c.lerp(cBed, smooth(WATER_Y, WATER_Y - 1.4, h) * 0.7);
+
+    const onPath = 1 - smooth(1.5, 3.1, Math.abs(x - pathX(z)));
+    let walk = 0; // short footpath from each front door to the main path
+    for (const st of sites) {
+      const ax = st.x + st.fx * 3.2, az = st.z + st.fz * 3.2;
+      const bx = st.x + st.fx * st.perp, bz = st.z + st.fz * st.perp;
+      const abx = bx - ax, abz = bz - az;
+      const tt = THREE.MathUtils.clamp(((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz), 0, 1);
+      walk = Math.max(walk, 1 - smooth(0.6, 1.5, Math.hypot(x - (ax + abx * tt), z - (az + abz * tt))));
+    }
+    let branch = 0;
+    branches.forEach((b, bi) => {
+      const bx = branchBox[bi];
+      if (x < bx.x0 || x > bx.x1 || z < bx.z0 || z > bx.z1) return;
+      branch = Math.max(branch, 1 - smooth(0.8, 1.9, distToPolyline(x, z, b)));
+    });
+    c.lerp(cPath, Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  // Wind and cloud shadows are painted in the terrain's own shader (no extra geometry): long grass
-  // strokes that stream along the wind, and big soft cloud shadows that drift over the hills.
-  const noiseData = new Uint8Array(128 * 128 * 4);
-  for (let i = 0; i < 128 * 128; i++) {
-    const v = Math.floor(hash(i % 128, Math.floor(i / 128)) * 255);
-    noiseData[i * 4] = v; noiseData[i * 4 + 1] = Math.floor(hash(i * 0.37, 11) * 255); noiseData[i * 4 + 2] = v; noiseData[i * 4 + 3] = 255;
-  }
-  const windTex = new THREE.DataTexture(noiseData, 128, 128, THREE.RGBAFormat);
-  windTex.wrapS = windTex.wrapT = THREE.RepeatWrapping;
-  windTex.magFilter = THREE.LinearFilter;
-  windTex.minFilter = THREE.LinearMipmapLinearFilter;
-  windTex.generateMipmaps = true;
-  windTex.needsUpdate = true;
-  // Ground masks painted at high resolution on a canvas (paths, river banks and bed, pond shore): curves come
-  // out smooth and anti-aliased however coarse the terrain mesh is. The shader sharpens them into crisp edges.
-  const MW = 2048, MH = 1346, msx = MW / 380, msz = MH / 250;
-  const mkCanvas = () => { const cv = document.createElement('canvas'); cv.width = MW; cv.height = MH; const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, MW, MH); g.strokeStyle = '#fff'; g.lineCap = 'round'; g.lineJoin = 'round'; return [cv, g]; };
-  const [cvP, gP] = mkCanvas(), [cvS, gS] = mkCanvas(), [cvB, gB] = mkCanvas();
-  const mp = (x, z) => [(x + 190) * msx, (z + 200) * msz];
-  const line = (g, pts, width) => { g.lineWidth = width * msx; g.beginPath(); pts.forEach(([x, z], k) => { const [a, b] = mp(x, z); if (k) g.lineTo(a, b); else g.moveTo(a, b); }); g.stroke(); };
-  for (let z = 50; z > -200; z -= 0.5) {                                  // the main path, tapering away on the AI hill
-    const wd = 4.6 * (1 - smooth(-60, -80, z));
-    if (wd < 0.25) continue;
-    line(gP, [[pathX(z), z], [pathX(z - 0.5), z - 0.5]], wd);
-  }
-  for (const st of sites) {                                               // short footpaths from the front doors
-    line(gP, [[st.x + st.fx * 3.2, st.z + st.fz * 3.2], [st.x + st.fx * st.perp, st.z + st.fz * st.perp]], 2.1);
-  }
-  for (const b of branches) line(gP, b, 2.7);                              // hamlet branch paths
-  for (let i2 = 0; i2 < RIVER.n - 1; i2++) {                              // river: sandy banks and the darker bed
-    const a = [RIVER.x[i2], RIVER.z[i2]], b = [RIVER.x[i2 + 1], RIVER.z[i2 + 1]];
-    line(gS, [a, b], RIVER.hw[i2] * 2 * 2.35);
-    line(gB, [a, b], RIVER.hw[i2] * 2 * 1.1);
-  }
-  {                                                                         // pond shore from the actual ground heights
-    const R0 = 16, x0 = Math.floor((POND.x - R0 + 190) * msx), z0 = Math.floor((POND.z - R0 + 200) * msz);
-    const rw = Math.ceil(2 * R0 * msx), rh = Math.ceil(2 * R0 * msz);
-    const dS = gS.getImageData(x0, z0, rw, rh), dB = gB.getImageData(x0, z0, rw, rh);
-    for (let py = 0; py < rh; py++) for (let px = 0; px < rw; px++) {
-      const x = (x0 + px) / msx - 190, z = (z0 + py) / msz - 200;
-      const dp = Math.hypot(x - POND.x, z - POND.z);
-      if (dp > R0) continue;
-      const h = heightAt(x, z);
-      const s = (1 - smooth(WATER_Y + 0.1, WATER_Y + 0.9, h)) * (1 - smooth(POND.r * 1.3, POND.r * 2.1, dp));
-      const bd = smooth(WATER_Y + 0.2, WATER_Y - 0.6, h);
-      const k = (py * rw + px) * 4;
-      dS.data[k] = Math.max(dS.data[k], s * 255); dB.data[k] = Math.max(dB.data[k], bd * 255);
-    }
-    gS.putImageData(dS, x0, z0); gB.putImageData(dB, x0, z0);
-  }
-  const maskCv = document.createElement('canvas'); maskCv.width = MW; maskCv.height = MH;
-  {
-    const mg = maskCv.getContext('2d');
-    const out = mg.createImageData(MW, MH);
-    const a = gP.getImageData(0, 0, MW, MH).data, b = gS.getImageData(0, 0, MW, MH).data, c2 = gB.getImageData(0, 0, MW, MH).data;
-    for (let k = 0; k < MW * MH * 4; k += 4) { out.data[k] = a[k]; out.data[k + 1] = b[k]; out.data[k + 2] = c2[k]; out.data[k + 3] = 255; }
-    mg.putImageData(out, 0, 0);
-  }
-  const maskTex = new THREE.CanvasTexture(maskCv);
-  maskTex.colorSpace = THREE.NoColorSpace;
-  maskTex.generateMipmaps = true;
-  maskTex.minFilter = THREE.LinearMipmapLinearFilter;
-  maskTex.magFilter = THREE.LinearFilter;
-  maskTex.anisotropy = 8;
-  maskTex.needsUpdate = true;
-  const windU = { uMaskTex: { value: maskTex }, uCPath: { value: cPath }, uCSand: { value: cSand }, uCBed: { value: cBed }, uCDirt: { value: cDirt }, uCCrop: { value: cCrop }, uCGold: { value: cGold }, uCRock: { value: cRock }, uPathAmt: { value: 1 }, uWindTex: { value: windTex }, uWindT: { value: 0 }, uDay: { value: 1 }, uWindAmt: { value: classic ? 0 : 1 } };
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  terrainMat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, windU);
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vNrm;\nvarying float vWDist;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvNrm = objectNormal;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>
-uniform sampler2D uWindTex; uniform sampler2D uMaskTex; uniform float uWindT; uniform float uDay; uniform float uWindAmt;
-uniform vec3 uCPath, uCSand, uCBed, uCDirt, uCCrop, uCGold, uCRock;
-varying vec3 vWPos; varying vec3 vNrm; varying float vWDist;
-float crisp(float m) { float w = max(fwidth(m) * 0.7, 0.015); return smoothstep(0.5 - w, 0.5 + w, m); }
-float sm(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
-float hs(vec2 p) { return fract(sin(p.x * 127.1 + p.y * 311.7) * 43758.5453); }
-float vn(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), u.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + vec2(1.0, 1.0)), u.x), u.y); }
-float pathXg(float z) {
-  float amp = 13.0 * (1.0 - 0.92 * sm(-30.0, -66.0, z));
-  return sin((z - 22.0) * 0.082) * amp + sin((z - 22.0) * 0.21) * 1.8 * (1.0 - sm(-20.0, -60.0, z));
-}
-vec2 fieldAt(vec2 p) {                                                  // (crop, gold) patchwork cells, 15 x 19 units
-  float gx = floor((p.x + 300.0) / 15.0), gz = floor((p.y + 300.0) / 19.0);
-  float ok = step(0.58, hs(vec2(gx * 3.1, gz * 1.7))) * step(p.y, -14.0) * step(-92.0, p.y) * step(6.0, abs(p.x - pathXg(p.y)));
-  float gold = step(0.78, hs(vec2(gx, gz)));
-  return vec2(ok * (1.0 - gold), ok * gold);
-}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
-  // ---- ground types, painted per pixel so every edge is smooth, anti-aliased and crisp ----
-  vec2 gp = vWPos.xz;
-  vec3 nrm = normalize(vNrm);
-  float slope = sqrt(max(0.0, 1.0 - nrm.y * nrm.y)) / max(nrm.y, 0.2);
-  vec2 fd = fwidth(gp) * 0.35;
-  vec2 ff = (fieldAt(gp + vec2(fd.x, fd.y)) + fieldAt(gp + vec2(-fd.x, fd.y)) + fieldAt(gp + vec2(fd.x, -fd.y)) + fieldAt(gp + vec2(-fd.x, -fd.y))) * 0.25;
-  float gentle = 1.0 - crisp(smoothstep(0.3, 0.7, slope));
-  float stripe = 0.5 + 0.5 * sin(gp.x * 1.9 + floor((gp.y + 300.0) / 19.0) * 2.0);
-  float kCrop = ff.x * gentle, kGold = ff.y * gentle;
-  float kRock = crisp(smoothstep(0.5, 1.1, slope));
-  float kDirt = crisp(smoothstep(0.74, 0.94, vn(gp * 0.3 + 90.0)));
-  vec3 mk = texture2D(uMaskTex, vec2((gp.x + 190.0) / 380.0, 1.0 - (gp.y + 200.0) / 250.0)).rgb;
-  float kPath = crisp(mk.r), kSand = crisp(mk.g), kBed = crisp(mk.b);
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCCrop, kCrop * (0.55 + 0.3 * stripe));
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCGold, kGold * (0.55 + 0.3 * stripe));
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCRock * (0.9 + 0.2 * texture2D(uWindTex, gp * 0.2).r), kRock);
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCDirt * (0.92 + 0.16 * texture2D(uWindTex, gp * 0.35).r), kDirt);
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCSand, kSand);
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCBed, kBed);
-  diffuseColor.rgb = mix(diffuseColor.rgb, uCPath * (0.94 + 0.12 * texture2D(uWindTex, gp * 0.5).g), kPath);
-  // grass is whatever is left: the wind never touches paths, river banks, beds, dirt, rock or fields
-  float gGrass = (1.0 - max(max(kPath, kSand), max(kBed, max(kDirt, kRock)))) * (1.0 - max(kCrop, kGold));
-{
-  // only green grass: dirt, sand, path and rock are redder than they are green, so they are left alone
-  float grass = gGrass;
-  // wind direction wanders a little from place to place so the strokes never line up into stripes
-  float wob = texture2D(uWindTex, vWPos.xz * 0.011 + 0.2).r - 0.5;
-  float ang = 0.3 + wob * 1.5;
-  vec2 dir = vec2(cos(ang), sin(ang)), side = vec2(-dir.y, dir.x);
-  vec2 dir0 = normalize(vec2(1.0, 0.3)), side0 = vec2(-dir0.y, dir0.x);
-  // gusts: fronts that travel along the wind, with calm spells in between
-  float front = sin(dot(vWPos.xz, dir0) * 0.032 - uWindT * 0.85 + sin(dot(vWPos.xz, side0) * 0.018) * 2.2);
-  float gate = sin(uWindT * 0.33) * 0.5 + 0.5;                       // slow breathing: wind rises and falls
-  float env = smoothstep(0.5, 0.92, front * 0.5 + 0.5) * (0.04 + 0.96 * smoothstep(0.3, 0.8, gate));   // distinct bands that travel
-  // short painted strokes (about 6:1), flowing with the wind and broken up by a second mask
-  float sway = uWindT * 1.2;                                          // the strokes themselves flow with the wind
-  float u = dot(vWPos.xz, dir) - sway, v = dot(vWPos.xz, side);
-  float s1 = texture2D(uWindTex, vec2(u * 0.012, v * 0.085)).r;
-  float s2 = texture2D(uWindTex, vec2(u * 0.031 + 0.31, v * 0.21)).g;
-  float brk = texture2D(uWindTex, vWPos.xz * 0.045 + 0.55).g;
-  float streak = (s1 * 0.55 + s2 * 0.45) * smoothstep(0.25, 0.65, brk);
-  float near = 1.0 - smoothstep(70.0, 170.0, vWDist);
-  float k = clamp((streak - 0.3) * 3.0, -1.0, 1.0) * env;
-  vec3 lit = diffuseColor.rgb * vec3(1.2, 1.15, 0.78) + vec3(0.03, 0.04, 0.0);
-  vec3 dark = diffuseColor.rgb * vec3(0.74, 0.88, 0.92);
-  vec3 painted = k > 0.0 ? mix(diffuseColor.rgb, lit, k * 0.9) : mix(diffuseColor.rgb, dark, -k * 0.9);
-  diffuseColor.rgb = mix(diffuseColor.rgb, painted, grass * near * uWindAmt);
-  // the gust front itself brightens the grass a touch
-  diffuseColor.rgb *= 1.0 + 0.1 * env * grass * uWindAmt;
-  float cn = texture2D(uWindTex, vWPos.xz * 0.0055 + vec2(uWindT * 0.0018, uWindT * 0.0007)).r * 0.65
-           + texture2D(uWindTex, vWPos.xz * 0.013 + vec2(uWindT * 0.003, 0.4)).g * 0.35;
-  float cs = smoothstep(0.52, 0.72, cn) * uDay * uWindAmt;
-  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.74, 0.82, 0.98), cs * 0.75);
-}`);
-  };
   const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
   scene.add(terrain);
 
-  // Ground heights around the water, sampled finely into a texture: the water shader uses it to find the
-  // shoreline per pixel, so the water's edge is a smooth curve instead of following terrain mesh triangles.
-  const HT = { x0: 0, x1: 86, z0: -194, z1: 8, ppu: 2.5 };
-  const HTW = Math.ceil((HT.x1 - HT.x0) * HT.ppu), HTH = Math.ceil((HT.z1 - HT.z0) * HT.ppu);
-  const htData = new Uint16Array(HTW * HTH);
-  for (let jj = 0; jj < HTH; jj++) for (let ii = 0; ii < HTW; ii++) {
-    htData[jj * HTW + ii] = THREE.DataUtils.toHalfFloat(heightAt(HT.x0 + (ii + 0.5) / HT.ppu, HT.z0 + (jj + 0.5) / HT.ppu));
-  }
-  const heightTex = new THREE.DataTexture(htData, HTW, HTH, THREE.RedFormat, THREE.HalfFloatType);
-  heightTex.magFilter = heightTex.minFilter = THREE.LinearFilter;
-  heightTex.generateMipmaps = false;
-  heightTex.needsUpdate = true;
-
-  // Water (pond and river): one shader with moving ripples, a fresnel sky reflection, depth colour,
-  // sun glints and shoreline foam. Per-vertex depth comes from the terrain, so shallows go light and foamy.
-  const waterU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: heightTex }, uNoise: { value: windTex },
-    uHT: { value: new THREE.Vector4(HT.x0, HT.z0, 1 / (HT.x1 - HT.x0), 1 / (HT.z1 - HT.z0)) },
-    uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
-    uSunDir: { value: new THREE.Vector3(0.45, 0.7, -0.55).normalize() },
-  }]);
-  const waterMat = new THREE.ShaderMaterial({
-    uniforms: waterU, fog: true, transparent: true, depthWrite: true, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
-    vertexShader: /* glsl */ `
-      attribute float aDepth; attribute vec2 aFlow; attribute float aEdge;
-      varying vec3 vW; varying float vDepth; varying vec2 vFlow; varying float vEdge;
-      #include <fog_pars_vertex>
-      void main() {
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vW = wp.xyz; vDepth = aDepth; vFlow = aFlow; vEdge = aEdge;
-        vec4 mvPosition = viewMatrix * wp;
-        gl_Position = projectionMatrix * mvPosition;
-        #include <fog_vertex>
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uTime, uDay; uniform vec3 uHorizon, uSkyTop, uSunDir;
-      uniform sampler2D uHeightTex, uNoise; uniform vec4 uHT;
-      varying vec3 vW; varying float vDepth; varying vec2 vFlow; varying float vEdge;
-      #include <fog_pars_fragment>
-      vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
-      // ripple height: noise stretched along the flow and scrolling downstream
-      float ripple(vec2 pq, float sp) {
-        float a = texture2D(uNoise, vec2(pq.x * 0.045 - uTime * sp * 0.045, pq.y * 0.2)).r;
-        float b = texture2D(uNoise, vec2(pq.x * 0.1 - uTime * sp * 0.1 + 0.37, pq.y * 0.42 + 0.2)).g;
-        return a * 0.6 + b * 0.4;
-      }
-      void main() {
-        float gh = texture2D(uHeightTex, (vW.xz - uHT.xy) * uHT.zw).r;
-        float depthW = vW.y - gh;
-        if (depthW < 0.0) discard;                                        // ground is above the water here
-        float fm = length(vFlow);
-        vec2 fdir = fm > 0.01 ? vFlow / fm : vec2(0.8, 0.6);
-        vec2 fside = vec2(-fdir.y, fdir.x);
-        float sp = fm > 0.01 ? 2.4 : 0.45;                                 // the river rushes, the pond drifts
-        vec2 pq = vec2(dot(vW.xz, fdir), dot(vW.xz, fside));
-        float e = 0.18;
-        float h0 = ripple(pq, sp), hx = ripple(pq + vec2(e, 0.0), sp), hz = ripple(pq + vec2(0.0, e), sp);
-        float dist = length(cameraPosition - vW);
-        float amp = 7.0 / (1.0 + dist * 0.03);
-        vec3 N = normalize(vec3(-(hx - h0) / e * amp * 0.5, 1.0, -(hz - h0) / e * amp * 0.5));
-        // a slow swell for the pond so still water still moves
-        float sw = fm > 0.01 ? 0.0 : 1.0;
-        N = normalize(N + sw * vec3(0.06 * sin(vW.x * 0.9 + uTime * 0.8) + 0.04 * sin(vW.z * 1.4 - uTime * 0.6), 0.0, 0.05 * sin(vW.z * 0.8 + uTime * 0.7)));
-        vec3 V = normalize(cameraPosition - vW);
-        float fres = 0.05 + 0.95 * pow(1.0 - max(dot(N, V), 0.0), 4.0);
-        vec3 R = reflect(-V, N);
-        vec3 sky = mix(uHorizon, uSkyTop, smoothstep(0.0, 0.7, R.y));
-        float depth = clamp(depthW / 1.6, 0.0, 1.0);
-        vec3 body = mix(lin(vec3(0.34, 0.76, 0.66)), lin(vec3(0.08, 0.36, 0.58)), smoothstep(0.0, 1.0, depth));
-        body *= 0.35 + 0.65 * uDay;
-        vec3 col = mix(body, sky, clamp(fres * 0.85 + 0.1, 0.0, 1.0));
-        // moving highlights: crests of the ripples catch the light and slide downstream
-        float crest = smoothstep(0.58, 0.78, h0 + (hx - h0) * 2.0);
-        col += mix(lin(vec3(0.75, 0.9, 0.95)), vec3(1.0), 0.5) * crest * (0.12 + 0.28 * uDay);
-        float spec = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.0), 70.0) * uDay;
-        col += vec3(1.0, 0.92, 0.75) * spec * 1.8;
-        // shoreline foam: a thin bright line right at the edge, shredded by the moving ripples
-        float shore = 1.0 - smoothstep(0.0, 0.16, depthW);
-        float foam = shore * smoothstep(0.3, 0.55, 0.55 + (h0 - 0.5) * 1.2 + shore * 0.3);
-        col = mix(col, lin(vec3(0.95, 0.98, 1.0)) * (0.35 + 0.65 * uDay), foam * 0.85);
-        float alpha = mix(0.82, 0.95, smoothstep(0.05, 0.6, depthW)) * (1.0 - smoothstep(0.82, 1.0, vEdge));
-        gl_FragColor = vec4(col, alpha);
-        #include <fog_fragment>
-      }`,
-  });
-  // pond: concentric rings so each vertex can take its own depth
-  {
-    const geo = new THREE.RingGeometry(0.05, POND.r * 1.6, 64, 16).rotateX(-Math.PI / 2);
-    const p2 = geo.attributes.position, n2 = p2.count;
-    const dep = new Float32Array(n2), flow = new Float32Array(n2 * 2), edge = new Float32Array(n2);
-    for (let i = 0; i < n2; i++) {
-      const wx = POND.x + p2.getX(i), wz = POND.z + p2.getZ(i);
-      dep[i] = WATER_Y - heightAt(wx, wz);
-      edge[i] = Math.hypot(p2.getX(i), p2.getZ(i)) / (POND.r * 1.6);
-    }
-    geo.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1));
-    geo.setAttribute('aFlow', new THREE.BufferAttribute(flow, 2));
-    geo.setAttribute('aEdge', new THREE.BufferAttribute(edge, 1));
-    const water = new THREE.Mesh(geo, waterMat);
-    water.position.set(POND.x, WATER_Y, POND.z);
-    water.renderOrder = 2;
-    scene.add(water);
-  }
-  // river: a ribbon that follows the channel, flowing away from the pond
-  {
-    const K = 10, N = RIVER.n;
-    const pos = new Float32Array(N * (K + 1) * 3), dep = new Float32Array(N * (K + 1)), flow = new Float32Array(N * (K + 1) * 2), edge = new Float32Array(N * (K + 1));
-    for (let i = 0; i < N; i++) {
-      const a = Math.max(0, i - 1), b = Math.min(N - 1, i + 1);
-      let tx = RIVER.x[b] - RIVER.x[a], tz = RIVER.z[b] - RIVER.z[a];
-      const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const nx = -tz, nz = tx, W = RIVER.hw[i] * 1.55;
-      for (let j = 0; j <= K; j++) {
-        const u = (j / K) * 2 - 1, k = i * (K + 1) + j;
-        const x = RIVER.x[i] + nx * u * W, z = RIVER.z[i] + nz * u * W;
-        pos[k * 3] = x; pos[k * 3 + 1] = RIVER.surf[i]; pos[k * 3 + 2] = z;
-        dep[k] = Math.max(-0.5, RIVER.surf[i] - heightAt(x, z));
-        flow[k * 2] = tx * 1.1; flow[k * 2 + 1] = tz * 1.1;
-        edge[k] = 0;
-      }
-    }
-    const idx = [];
-    for (let i = 0; i < N - 1; i++) for (let j = 0; j < K; j++) {
-      const a = i * (K + 1) + j, b = a + 1, c = a + K + 1, d = c + 1;
-      idx.push(a, c, b, b, c, d);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1));
-    geo.setAttribute('aFlow', new THREE.BufferAttribute(flow, 2));
-    geo.setAttribute('aEdge', new THREE.BufferAttribute(edge, 1));
-    geo.setIndex(idx);
-    const river = new THREE.Mesh(geo, waterMat);
-    river.frustumCulled = false;
-    river.renderOrder = 2;
-    scene.add(river);
-  }
+  // Pond water: glossy, picks up the sky through the environment map.
+  const water = new THREE.Mesh(
+    new THREE.CircleGeometry(POND.r * 1.6, 48).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x4fb0d4, roughness: 0.05, metalness: 0.05, transparent: true, opacity: 0.8, envMapIntensity: 1.8 }),
+  );
+  water.position.set(POND.x, WATER_Y, POND.z);
+  scene.add(water);
 
   // ---- Village: cottages along the path ----
   const houses = []; // { x, z, r }
@@ -1514,42 +1186,30 @@ vec2 fieldAt(vec2 p) {                                                  // (crop
         if (++n >= 6) break;
       }
     }
-    // an arched footbridge across the river, reaching solid ground on both banks
+    // a small arched footbridge across the pond's narrow side
     {
-      const bi = 14, N = RIVER.n;
-      const a2 = Math.max(0, bi - 1), b2 = Math.min(N - 1, bi + 1);
-      let tx = RIVER.x[b2] - RIVER.x[a2], tz = RIVER.z[b2] - RIVER.z[a2];
-      const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const nx = -tz, nz = tx;                                               // across the river
-      const half = RIVER.hw[bi] * 2.3 + 1.4;                                 // beyond the sandy banks
-      const cx = RIVER.x[bi], cz = RIVER.z[bi], sy = RIVER.surf[bi];
-      const ax = cx - nx * half, az = cz - nz * half, bx = cx + nx * half, bz = cz + nz * half;
-      const gA = heightAt(ax, az), gB = heightAt(bx, bz);
-      const yA = Math.max(gA, sy) + 0.12, yB = Math.max(gB, sy) + 0.12;
-      const L = half * 2, SEG = 18, rise = 0.7;
-      const grp = new THREE.Group();
-      grp.position.set(ax, 0, az);
-      grp.rotation.y = -Math.atan2(nz, nx);                                  // local +x runs across the river
-      const planks = mat('#9a7448'), rail = mat('#6a4a2c'), stoneM = mat('#9c9a8e');
-      const deck = (t) => lerp(yA, yB, t) + Math.sin(t * Math.PI) * rise;     // deck height along the span
-      for (let k = 0; k < SEG; k++) {
-        const t0 = k / SEG, t1 = (k + 1) / SEG, tm = (t0 + t1) / 2;
-        const y0 = deck(t0), y1 = deck(t1), len = Math.hypot(L / SEG, y1 - y0);
-        const seg = box(len + 0.05, 0.14, 1.5, planks, L * tm, (y0 + y1) / 2, 0);
-        seg.rotation.z = Math.atan2(y1 - y0, L / SEG);
-        grp.add(seg);
-        for (const sz of [-1, 1]) {
-          grp.add(box(0.09, 0.85, 0.09, rail, L * tm, (y0 + y1) / 2 + 0.5, sz * 0.7));
-          const r2 = box(len + 0.05, 0.07, 0.07, rail, L * tm, (y0 + y1) / 2 + 0.92, sz * 0.7);
-          r2.rotation.z = Math.atan2(y1 - y0, L / SEG);
-          grp.add(r2);
+      const bz = POND.z - 0.8;
+      {
+        const xl = POND.x - POND.r * 0.95, xr = POND.x + POND.r * 0.95;
+        const x0 = xl - 0.6, x1 = xr + 0.6, N = 16, planks = mat('#9a7448'), rail = mat('#6a4a2c');
+        const baseY = (a) => Math.max(heightAt(a, bz), WATER_Y) + 0.12;
+        const yEnd0 = baseY(x0), yEnd1 = baseY(x1);
+        for (let k = 0; k < N; k++) {
+          const t0 = k / N, t1 = (k + 1) / N, tm = (t0 + t1) / 2;
+          const arch = Math.sin(tm * Math.PI) * 0.75;
+          const yy = yEnd0 + (yEnd1 - yEnd0) * tm + arch + 0.35;
+          const xx = x0 + (x1 - x0) * tm;
+          const slope = ((yEnd1 - yEnd0) / (x1 - x0)) + Math.cos(tm * Math.PI) * 0.75 * Math.PI / (x1 - x0);
+          const seg = box((x1 - x0) / N + 0.06, 0.1, 1.2, planks, xx, yy, bz);
+          seg.rotation.z = Math.atan(slope);
+          street.add(seg);
+          for (const sz of [-1, 1]) {
+            street.add(box(0.07, 0.75, 0.07, rail, xx, yy + 0.4, bz + sz * 0.58));
+            const r = box((x1 - x0) / N + 0.06, 0.06, 0.06, rail, xx, yy + 0.78, bz + sz * 0.58);
+            r.rotation.z = Math.atan(slope); street.add(r);
+          }
         }
       }
-      for (const [t, g0] of [[0, gA], [1, gB]]) {                              // stone abutments that sink into the bank
-        const top = deck(t) - 0.1, bot = g0 - 0.8;
-        grp.add(box(0.7, top - bot, 1.9, stoneM, L * t + (t ? 0.15 : -0.15), (top + bot) / 2, 0));
-      }
-      street.add(grp);
     }
     street.children.forEach((c) => { c.castShadow = true; c.receiveShadow = true; });
     const merged = mergeByMaterial(street);
@@ -2222,8 +1882,6 @@ vec2 fieldAt(vec2 p) {                                                  // (crop
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
     update(dt, camera) {
       time += dt;
-      windU.uWindT.value = time;
-      waterU.uTime.value = time;
       if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
@@ -2294,8 +1952,6 @@ vec2 fieldAt(vec2 p) {                                                  // (crop
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     setClouds(night, horizon) {
       cloudLook.night = night;
-      waterU.uHorizon.value.copy(horizon);
-      waterU.uSkyTop.value.set('#4a8cf0').lerp(new THREE.Color('#16206a'), night);
       // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
       const warm = Math.max(0, horizon.r - horizon.b);                       // how orange the horizon is
       const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.1 + 0.5 * Math.min(1, warm * 2.5));
@@ -2312,8 +1968,6 @@ vec2 fieldAt(vec2 p) {                                                  // (crop
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
       night = n;
-      windU.uDay.value = 1 - n;
-      waterU.uDay.value = 1 - n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.3;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
       setLanterns(n);
