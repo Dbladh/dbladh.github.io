@@ -141,7 +141,7 @@ const WALL_BUMP = { brick: 1.0, stone: 1.3, plaster: 0.35, clap: 0.9, timber: 0.
 /** A tangent-space normal map derived from a texture's brightness (mortar lines, tile edges and so on read as
  *  relief). Cached per key; wraps like the colour map so tiling stays seamless. */
 const normalCache = new Map();
-function normalMapFrom(tex, key, strength = 4) {
+export function normalMapFrom(tex, key, strength = 4) {
   if (normalCache.has(key)) return normalCache.get(key);
   const src = tex.image, S = src.width;
   const d = src.getContext('2d').getImageData(0, 0, S, S).data;

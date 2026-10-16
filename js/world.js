@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
-  buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015200938';
+  buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
+} from './houses.js?v=20261015201100';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -677,6 +677,35 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  if (!low) {
+    // A tiling grass relief: short blades and soft mottling, turned into a normal map so the ground catches the
+    // light in tiny facets (no extra geometry). One small texture, repeated every ~7 units.
+    const S = 256, gc = document.createElement('canvas');
+    gc.width = gc.height = S;
+    const gg = gc.getContext('2d'), gr = rng(4242);
+    gg.fillStyle = '#808080'; gg.fillRect(0, 0, S, S);
+    for (let i = 0; i < 70; i++) {                                         // broad soft mounds
+      const x = gr() * S, y = gr() * S, r = 14 + gr() * 26, v = 100 + Math.floor(gr() * 60);
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        const g = gg.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, `rgba(${v},${v},${v},0.55)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`);
+        gg.fillStyle = g; gg.beginPath(); gg.arc(x + ox, y + oy, r, 0, 6.3); gg.fill();
+      }
+    }
+    gg.lineCap = 'round';
+    for (let i = 0; i < 1500; i++) {                                       // blades
+      const x = gr() * S, y = gr() * S, len = 5 + gr() * 11, a = -Math.PI / 2 + (gr() - 0.5) * 1.1, v = 70 + Math.floor(gr() * 150);
+      gg.strokeStyle = `rgb(${v},${v},${v})`; gg.lineWidth = 1 + gr() * 1.6;
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        if (Math.abs(ox) + Math.abs(oy) && (x + ox < -20 || x + ox > S + 20 || y + oy < -20 || y + oy > S + 20)) continue;
+        gg.beginPath(); gg.moveTo(x + ox, y + oy); gg.lineTo(x + ox + Math.cos(a) * len, y + oy + Math.sin(a) * len); gg.stroke();
+      }
+    }
+    const nm = normalMapFrom({ image: gc }, 'terrain-grass', 3.2);
+    nm.repeat.set(380 / 7, 250 / 7);
+    terrainMat.normalMap = nm;
+    terrainMat.normalScale = new THREE.Vector2(0.55, 0.55);
+  }
   const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
   scene.add(terrain);
