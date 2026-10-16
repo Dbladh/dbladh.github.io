@@ -3,6 +3,7 @@
 // so the same seed always builds the same village. `mergeByMaterial` then collapses each house into a
 // handful of draw calls.
 import * as THREE from 'three';
+import { PAL } from './palette.js?v=20261015203256';
 
 // ---------------------------------------------------------------- small helpers
 
@@ -495,15 +496,15 @@ export function addWindow(group, x, y, z, yaw, glassMat, trim, shutterMat, o = {
   // Behind the muntins: what is hanging in the window.
   if (o.dress === 'shade') {                                   // roll-down shade, part way down
     const h = 0.22 + (o.shadeAmt ?? 0.4) * 0.45;
-    w.add(box(0.72, h, 0.03, mat('#efe6cf'), 0, 0.36 - h / 2, 0.02));
-    w.add(box(0.72, 0.04, 0.045, mat('#8a7a5a'), 0, 0.36 - h, 0.03));
+    w.add(box(0.72, h, 0.03, mat(PAL.cream), 0, 0.36 - h / 2, 0.02));
+    w.add(box(0.72, 0.04, 0.045, mat(PAL.weathered), 0, 0.36 - h, 0.03));
   } else if (o.dress === 'curtain') {
-    const c = mat(o.curtain || '#c85a5a');
+    const c = mat(o.curtain || PAL.coral);
     w.add(box(0.2, 0.72, 0.04, c, -0.26, 0, 0.02));
     w.add(box(0.2, 0.72, 0.04, c, 0.26, 0, 0.02));
-    w.add(box(0.72, 0.05, 0.05, mat('#6a5030'), 0, 0.36, 0.03));
+    w.add(box(0.72, 0.05, 0.05, mat(PAL.timberDeep), 0, 0.36, 0.03));
   } else if (o.dress === 'blind') {
-    const sl = mat('#d9d2c0');
+    const sl = mat(PAL.paleWood);
     for (let k = 0; k < 5; k++) w.add(box(0.72, 0.045, 0.03, sl, 0, 0.33 - k * 0.075, 0.02));
   }
 
@@ -511,15 +512,15 @@ export function addWindow(group, x, y, z, yaw, glassMat, trim, shutterMat, o = {
   if (sh === 'open') for (const s of [-1, 1]) w.add(box(0.3, 0.98, 0.07, shutterMat, s * 0.68, 0, 0.03));
   else if (sh === 'closed') for (const s of [-1, 1]) w.add(box(0.5, 0.98, 0.07, shutterMat, s * 0.26, 0, 0.1));
   if (o.box) {
-    w.add(box(0.9, 0.2, 0.2, mat('#7a4a2c'), 0, -0.74, 0.14));
-    const fc = o.flowers || ['#ff6f91', '#ffd23f', '#ffffff'];
+    w.add(box(0.9, 0.2, 0.2, mat(PAL.timberDeep), 0, -0.74, 0.14));
+    const fc = o.flowers || [PAL.coral, PAL.gold, PAL.cream];
     for (let k = 0; k < 5; k++) w.add(box(0.1, 0.1, 0.1, mat(fc[k % fc.length]), -0.34 + k * 0.17, -0.58, 0.14));
   }
   if (o.awning) {
     const a = box(1.2, 0.05, 0.5, mat(o.awning), 0, 0.62, 0.3);
     a.rotation.x = 0.5;
     w.add(a);
-    w.add(box(1.2, 0.08, 0.04, mat('#fff8ea'), 0, 0.5, 0.52));
+    w.add(box(1.2, 0.08, 0.04, mat(PAL.cream), 0, 0.5, 0.52));
   }
   group.add(w);
 
@@ -545,46 +546,46 @@ export function addWindow(group, x, y, z, yaw, glassMat, trim, shutterMat, o = {
  */
 export const THEMES = [
   {
-    name: 'Brick & terracotta',
-    walls: [{ kind: 'brick', hex: '#b5543a', w: 3 }, { kind: 'brick', hex: '#9c4a38', w: 2 }, { kind: 'plaster', hex: '#f1e2c4', w: 3 }, { kind: 'stone', hex: '#b9ae98', w: 1 }],
-    roofs: [{ kind: 'tile', hex: '#c8512b', w: 4 }, { kind: 'tile', hex: '#a8442a', w: 2 }, { kind: 'slate', hex: '#59616b', w: 1 }, { kind: 'metal', hex: '#4c5560', w: 1 }],
-    trims: ['#fff8ea', '#f3e6cc'], shutters: ['#3e7d5c', '#2f5d8a', '#7a3b3b', '#d8b34a'], doors: ['#6a3a22', '#2f5d8a', '#3e7d5c', '#8a2f2f'],
-    chimneys: [['brick', 4], ['corbel', 2], ['pots', 2], ['double', 1]], plinth: '#b8b0a0', ridge: '#8a3a22',
+    name: 'Cream & coral',
+    walls: [{ kind: 'plaster', hex: PAL.cream, w: 5 }, { kind: 'plaster', hex: PAL.softBlue, w: 1 }, { kind: 'brick', hex: PAL.softBrick, w: 1 }, { kind: 'stone', hex: PAL.stoneWarm, w: 1 }],
+    roofs: [{ kind: 'tile', hex: PAL.terracotta, w: 5 }, { kind: 'tile', hex: PAL.terracottaDeep, w: 2 }, { kind: 'slate', hex: PAL.slate, w: 1 }],
+    trims: [PAL.cream, '#F7F6EF'], shutters: [PAL.blueGreen, PAL.softBlue, PAL.moss, PAL.sage], doors: [PAL.coral, PAL.coral, PAL.marigold, PAL.ink],
+    chimneys: [['brick', 4], ['corbel', 2], ['pots', 2], ['double', 1]], plinth: PAL.stoneWarm, ridge: PAL.terracottaDeep,
   },
   {
-    name: 'Cool stone & slate',
-    walls: [{ kind: 'stone', hex: '#9b9a93', w: 4 }, { kind: 'stone', hex: '#8c8f93', w: 2 }, { kind: 'plaster', hex: '#d9d6cc', w: 2 }, { kind: 'clap', hex: '#7f8b94', w: 1 }],
-    roofs: [{ kind: 'slate', hex: '#4a5560', w: 4 }, { kind: 'slate', hex: '#5d6a74', w: 3 }, { kind: 'shingle', hex: '#5b4a40', w: 1 }, { kind: 'metal', hex: '#3b434b', w: 2 }, { kind: 'metal', hex: '#6b4a3a', w: 1 }],
-    trims: ['#f4f4ef', '#dfe3e6'], shutters: ['#2d4a6b', '#4a5560', '#7a2f35', '#3e6a5a'], doors: ['#2d4a6b', '#6a2f35', '#3a4a3a', '#1f2a36'],
-    chimneys: [['stone', 3], ['bigstone', 3], ['tall', 2], ['pots', 1]], plinth: '#8d8c85', ridge: '#2f3740',
+    name: 'Sage garden',
+    walls: [{ kind: 'plaster', hex: PAL.sage, w: 4 }, { kind: 'plaster', hex: PAL.cream, w: 2 }, { kind: 'clap', hex: PAL.blueGreen, w: 1 }, { kind: 'stone', hex: PAL.stoneCool, w: 1 }],
+    roofs: [{ kind: 'slate', hex: PAL.slate, w: 4 }, { kind: 'slate', hex: PAL.charcoal, w: 2 }, { kind: 'tile', hex: PAL.terracotta, w: 1 }, { kind: 'metal', hex: PAL.charcoal, w: 1 }],
+    trims: [PAL.cream, '#F7F6EF'], shutters: [PAL.cream, PAL.softBlue, PAL.moss, PAL.blueGreen], doors: [PAL.coral, PAL.gold, PAL.ink, PAL.coral],
+    chimneys: [['stone', 3], ['bigstone', 2], ['tall', 2], ['pots', 1]], plinth: PAL.stoneCool, ridge: PAL.charcoal,
   },
   {
-    name: 'Whitewash & blue',
-    walls: [{ kind: 'plaster', hex: '#f6f3ea', w: 5 }, { kind: 'plaster', hex: '#efe9d9', w: 2 }, { kind: 'plaster', hex: '#e8f0f4', w: 1 }],
-    roofs: [{ kind: 'tile', hex: '#d9622e', w: 4 }, { kind: 'tile', hex: '#c24a28', w: 2 }, { kind: 'tile', hex: '#e08a4a', w: 1 }],
-    trims: ['#ffffff', '#e8f0f8'], shutters: ['#2f6fb0', '#2aa5b5', '#1f4f8a', '#3a9d8f'], doors: ['#2f6fb0', '#2aa5b5', '#c0502f', '#f2c14a'],
-    chimneys: [['brick', 3], ['pots', 3], ['tall', 1]], plinth: '#cfc9bb', ridge: '#8a3a22',
+    name: 'Sunny cottage',
+    walls: [{ kind: 'plaster', hex: PAL.gold, w: 4 }, { kind: 'plaster', hex: PAL.cream, w: 3 }, { kind: 'timber', hex: PAL.cream, w: 1 }],
+    roofs: [{ kind: 'tile', hex: PAL.terracotta, w: 3 }, { kind: 'thatch', hex: PAL.thatch, w: 2 }, { kind: 'shingle', hex: PAL.weathered, w: 1 }],
+    trims: [PAL.cream, '#F7F6EF'], shutters: [PAL.sage, PAL.blueGreen, PAL.moss, PAL.softBlue], doors: [PAL.coral, PAL.coral, PAL.ink, PAL.softBlue],
+    chimneys: [['brick', 3], ['pots', 3], ['corbel', 2], ['tall', 1]], plinth: PAL.stoneWarm, ridge: PAL.terracottaDeep,
   },
   {
-    name: 'Timber & thatch',
-    walls: [{ kind: 'timber', hex: '#efe3c2', w: 4 }, { kind: 'clap', hex: '#b99b6a', w: 2 }, { kind: 'plaster', hex: '#e6d9b8', w: 2 }, { kind: 'stone', hex: '#a39a84', w: 1 }],
-    roofs: [{ kind: 'thatch', hex: '#c9ab62', w: 4 }, { kind: 'thatch', hex: '#b39455', w: 3 }, { kind: 'shingle', hex: '#6a4a38', w: 1 }],
-    trims: ['#5a3f28', '#6a4a30'], shutters: ['#3f6a3a', '#7a3b2a', '#4a5a7a', '#6a4a30'], doors: ['#5a3a22', '#3f6a3a', '#7a3b2a', '#2f2f3a'],
-    chimneys: [['stone', 3], ['bigstone', 2], ['corbel', 2], ['none', 1]], plinth: '#8f8574', ridge: '#7a6535',
+    name: 'Cool blues',
+    walls: [{ kind: 'plaster', hex: PAL.softBlue, w: 4 }, { kind: 'plaster', hex: PAL.cream, w: 2 }, { kind: 'plaster', hex: PAL.blueGreen, w: 2 }, { kind: 'clap', hex: PAL.softBlue, w: 1 }],
+    roofs: [{ kind: 'slate', hex: PAL.slate, w: 3 }, { kind: 'slate', hex: PAL.charcoal, w: 2 }, { kind: 'tile', hex: PAL.terracotta, w: 1 }, { kind: 'metal', hex: PAL.charcoal, w: 1 }],
+    trims: [PAL.cream, '#F7F6EF'], shutters: [PAL.blueGreen, PAL.cream, PAL.moss, PAL.sage], doors: [PAL.coral, PAL.marigold, PAL.ink, PAL.coral],
+    chimneys: [['brick', 3], ['stone', 2], ['pots', 2], ['double', 1]], plinth: PAL.stoneCool, ridge: PAL.charcoal,
   },
   {
-    name: 'Pastel storybook',
-    walls: [{ kind: 'plaster', hex: '#f4c9d4', w: 2 }, { kind: 'plaster', hex: '#cfe8d5', w: 2 }, { kind: 'plaster', hex: '#f7e7a6', w: 2 }, { kind: 'plaster', hex: '#c9def2', w: 2 }, { kind: 'plaster', hex: '#e8d4f2', w: 1 }],
-    roofs: [{ kind: 'shingle', hex: '#4f9a9a', w: 2 }, { kind: 'shingle', hex: '#8a5a8a', w: 2 }, { kind: 'tile', hex: '#d9622e', w: 2 }, { kind: 'slate', hex: '#6a7a9a', w: 1 }],
-    trims: ['#ffffff', '#fff8ea'], shutters: ['#ffffff', '#6aa0c8', '#d98a9a', '#7bb88a'], doors: ['#d98a9a', '#6aa0c8', '#7bb88a', '#e0b84a'],
-    chimneys: [['brick', 3], ['pots', 2], ['double', 2], ['tall', 1]], plinth: '#d6cfc0', ridge: '#5a4a6a',
+    name: 'Stone & thatch',
+    walls: [{ kind: 'stone', hex: PAL.stoneWarm, w: 3 }, { kind: 'timber', hex: PAL.cream, w: 3 }, { kind: 'plaster', hex: PAL.cream, w: 2 }, { kind: 'clap', hex: PAL.paleWood, w: 1 }],
+    roofs: [{ kind: 'thatch', hex: PAL.thatch, w: 4 }, { kind: 'thatch', hex: PAL.thatchDeep, w: 2 }, { kind: 'shingle', hex: PAL.weathered, w: 1 }],
+    trims: [PAL.cream, '#F7F6EF'], shutters: [PAL.moss, PAL.sage, PAL.blueGreen, PAL.weathered], doors: [PAL.gold, PAL.coral, PAL.moss, PAL.ink],
+    chimneys: [['stone', 3], ['bigstone', 2], ['corbel', 2], ['none', 1]], plinth: PAL.stoneCool, ridge: '#8A7648',
   },
   {
-    name: 'Autumn cottage',
-    walls: [{ kind: 'clap', hex: '#b86a3c', w: 3 }, { kind: 'plaster', hex: '#e2b86a', w: 3 }, { kind: 'brick', hex: '#a85a3a', w: 2 }, { kind: 'stone', hex: '#a89a7a', w: 1 }],
-    roofs: [{ kind: 'shingle', hex: '#6a4a38', w: 3 }, { kind: 'slate', hex: '#4a5a4a', w: 2 }, { kind: 'tile', hex: '#8a3a22', w: 2 }, { kind: 'metal', hex: '#4a4f52', w: 2 }, { kind: 'metal', hex: '#6a3a2c', w: 1 }],
-    trims: ['#f6ecd2', '#e8d9b0'], shutters: ['#d8a72a', '#3f5a3a', '#7a2f25', '#4a3a2a'], doors: ['#3f5a3a', '#7a2f25', '#d8a72a', '#4a3a2a'],
-    chimneys: [['brick', 3], ['stone', 2], ['bigstone', 2], ['corbel', 2]], plinth: '#a09882', ridge: '#4a3322',
+    name: 'Mixed row',
+    walls: [{ kind: 'plaster', hex: PAL.cream, w: 3 }, { kind: 'plaster', hex: PAL.sage, w: 2 }, { kind: 'plaster', hex: PAL.gold, w: 2 }, { kind: 'plaster', hex: PAL.blueGreen, w: 1 }, { kind: 'plaster', hex: PAL.softBlue, w: 1 }, { kind: 'stone', hex: PAL.stoneWarm, w: 1 }],
+    roofs: [{ kind: 'tile', hex: PAL.terracotta, w: 3 }, { kind: 'slate', hex: PAL.slate, w: 3 }, { kind: 'thatch', hex: PAL.thatch, w: 1 }, { kind: 'metal', hex: PAL.charcoal, w: 1 }],
+    trims: [PAL.cream, '#F7F6EF'], shutters: [PAL.blueGreen, PAL.moss, PAL.cream, PAL.softBlue], doors: [PAL.coral, PAL.marigold, PAL.ink, PAL.gold],
+    chimneys: [['brick', 3], ['pots', 2], ['double', 2], ['tall', 1]], plinth: PAL.stoneWarm, ridge: PAL.terracottaDeep,
   },
 ];
 
@@ -600,7 +601,7 @@ export const pickTheme = (R) => THEMES[Math.floor(R() * THEMES.length)];
 
 // ---------------------------------------------------------------- the house
 
-const FLOWERS = [['#ff6f91', '#ffd23f', '#ffffff'], ['#c59bff', '#ffffff', '#ff9fc2'], ['#ff8a3c', '#ffd23f', '#e8402f']];
+const FLOWERS = [[PAL.coral, PAL.gold, PAL.cream], [PAL.softBlue, PAL.cream, PAL.marigold], [PAL.coral, PAL.cream, PAL.blueGreen], [PAL.marigold, PAL.cream, PAL.coral]];
 
 /**
  * @param {() => number} R   random function (seeded per village)
@@ -648,7 +649,7 @@ function makeHouse(R, theme, opts) {
   const roofMat = roofMaterial(roofSpec.kind, roofSpec.hex);
   let upperTile = wallTileSize;
   if (mix === 'upper') {                                              // stone ground floor, timber boarding above
-    const hex = pick(['#a9784a', '#8a6a45', '#c9a46a', '#7a5a3a']);
+    const hex = pick([PAL.timber, PAL.weathered, PAL.paleWood, PAL.timberDeep]);
     wallMat = wallMaterial('clap', hex, true); wallPlain = wallMaterial('clap', hex, false); upperTile = wallTile('clap');
   }
   const trim = mat(trimHex), shutterMat = mat(shutterHex);
@@ -656,7 +657,7 @@ function makeHouse(R, theme, opts) {
   const stone = mat(theme.plinth);
   const thatch = roofSpec.kind === 'thatch';
   const roofTileSize = ROOF_TILE[roofSpec.kind];
-  const ridge = thatch ? '#7a6535' : roofSpec.kind === 'slate' ? '#2f3740' : theme.ridge;
+  const ridge = thatch ? '#8A7648' : roofSpec.kind === 'slate' ? PAL.charcoal : theme.ridge;
   const OV = thatch ? 0.55 : 0.35;
   const thick = thatch ? 0.3 : 0.16;
 
@@ -727,8 +728,8 @@ function makeHouse(R, theme, opts) {
     const dress = low ? null : (R() < 0.62 ? pick(['shade', 'shade', 'curtain', 'blind']) : null);
     const sh = R() < 0.12 ? 'closed' : R() < 0.18 ? 'none' : 'open';
     return {
-      box: withBox, flowers: FL, shutters: sh, dress, shadeAmt: R(), curtain: pick(['#c85a5a', '#d9b84a', '#5a7ac8', '#e8e0d0']),
-      awning: !low && R() < 0.16 ? pick(['#c85a5a', '#2f6fb0', '#d9b84a', '#3f8a5a']) : null,
+      box: withBox, flowers: FL, shutters: sh, dress, shadeAmt: R(), curtain: pick([PAL.coral, PAL.gold, PAL.softBlue, PAL.cream]),
+      awning: !low && R() < 0.16 ? pick([PAL.coral, PAL.blueGreen, PAL.gold, PAL.moss]) : null,
     };
   };
 
@@ -747,10 +748,10 @@ function makeHouse(R, theme, opts) {
   const chTop = top + rh + 0.95;
   if (chStyle !== 'none' && chStyle !== 'bigstone') {
     const bh = chTop - chBase + 0.2, my = chBase - 0.2 + bh / 2;
-    const brick = wallMaterial('brick', chStyle === 'stone' ? '#8f8b82' : '#a8523a', false);
-    const stoneMat = wallMaterial('stone', '#8f8b82', false);
+    const brick = wallMaterial('brick', chStyle === 'stone' ? PAL.stoneCool : PAL.softBrick, false);
+    const stoneMat = wallMaterial('stone', PAL.stoneCool, false);
     const body = chStyle === 'stone' ? stoneMat : brick;
-    const cap = mat(chStyle === 'stone' ? '#6a675f' : '#7a3a2a');
+    const cap = mat(chStyle === 'stone' ? PAL.charcoal : PAL.terracottaDeep);
     const addBody = (bw, bd, cxo) => {
       const m = new THREE.Mesh(wallGeometry(bw, bh, bd, 1.4), body);
       m.position.set(chX + cxo, my, chZ);
@@ -775,7 +776,7 @@ function makeHouse(R, theme, opts) {
         g.add(box(0.74, 0.14, 0.74, cap, chX, chTop + 0.05, chZ));
       }
       if (chStyle === 'pots') {
-        const pot = mat('#c0623a');
+        const pot = mat(PAL.terracotta);
         g.add(cyl(0.12, 0.38, pot, chX - 0.15, chTop + 0.32, chZ, 8));
         g.add(cyl(0.12, 0.32, pot, chX + 0.15, chTop + 0.29, chZ, 8));
       }
@@ -800,9 +801,9 @@ function makeHouse(R, theme, opts) {
   } else if (doorStyle === 'plank') {
     g.add(box(1.0, doorH + 0.12, 0.1, trim, dx, doorBase + (doorH + 0.12) / 2, front + 0.02));
     g.add(box(0.8, doorH, 0.12, doorMat, dx, doorBase + doorH / 2, front + 0.03));
-    const band = mat('#2a2a2a');
+    const band = mat(PAL.ink);
     for (const yy of [0.3, doorH - 0.3]) g.add(box(0.8, 0.07, 0.14, band, dx, doorBase + yy, front + 0.04));
-    g.add(box(0.07, 0.07, 0.16, mat('#d9b84a'), dx + 0.25, doorBase + doorH * 0.5, front + 0.06));
+    g.add(box(0.07, 0.07, 0.16, mat(PAL.gold), dx + 0.25, doorBase + doorH * 0.5, front + 0.06));
   } else {
     g.add(box(1.4, doorH + 0.3, 0.1, trim, dx, doorBase + (doorH + 0.3) / 2, front + 0.02));
     for (const s of [-1, 1]) g.add(box(0.6, doorH, 0.12, doorMat, dx + s * 0.32, doorBase + doorH / 2, front + 0.03));
@@ -824,7 +825,7 @@ function makeHouse(R, theme, opts) {
       radius = Math.max(radius, d / 2 + 2.0);
     } else if (kind === 'veranda') {
       const vw = w * 0.9, vd = 1.7, deckY = 0.4;
-      g.add(box(vw, 0.18, vd, mat('#8a6a45'), 0, deckY - 0.05, front + vd / 2 - 0.05));
+      g.add(box(vw, 0.18, vd, mat(PAL.timber), 0, deckY - 0.05, front + vd / 2 - 0.05));
       const px = [-vw / 2 + 0.12, vw / 2 - 0.12, dx - 0.85, dx + 0.85].filter((x) => Math.abs(x) <= vw / 2);
       for (const x of px) g.add(box(0.12, 2.1, 0.12, post, x, deckY + 1.05, front + vd - 0.1));
       const eaveY = top - 0.35, lowY = 2.5, run = vd + 0.25;
@@ -840,7 +841,7 @@ function makeHouse(R, theme, opts) {
       for (const sx of [-1, 1]) for (const sz of [0.2, pd]) g.add(box(0.12, y0 - 0.3, 0.12, post, dx + sx * pw / 2, 0.35 + (y0 - 0.3) / 2, front + sz));
       for (const sx of [-1, 1]) g.add(box(0.12, 0.16, pd + 0.4, post, dx + sx * pw / 2, y0, front + pd / 2 + 0.15));
       for (let k = 0; k < 6; k++) g.add(box(pw + 0.5, 0.07, 0.1, post, dx, y0 + 0.11, front + 0.1 + k * (pd / 5)));
-      const leaf = mat('#5fa04a');
+      const leaf = mat(PAL.leaf);
       for (let k = 0; k < 7; k++) {
         const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2 + (k % 3) * 0.04, 0), leaf);
         m.position.set(dx + (k - 3) * 0.32, y0 + 0.2, front + 0.2 + (k * 0.47) % pd);
@@ -852,14 +853,14 @@ function makeHouse(R, theme, opts) {
   // lantern beside the door
   if (!low && R() < 0.65) {
     const lx = dx + (doorSide > 0 ? -1 : 1) * 0.78;
-    g.add(box(0.07, 0.07, 0.18, mat('#2a2a2a'), lx, 2.05, front + 0.1));
+    g.add(box(0.07, 0.07, 0.18, mat(PAL.ink), lx, 2.05, front + 0.1));
     g.add(box(0.2, 0.26, 0.2, lanternMat, lx, 1.85, front + 0.22));
   }
 
   // --- front and side windows
   const freeSide = hasWing ? -wingSide : (R() < 0.5 ? -1 : 1);
   if (chStyle === 'bigstone') {                                       // a broad external stack up the free gable wall
-    const sm = wallMaterial('stone', '#8f8b82', false), capm = mat('#6a675f');
+    const sm = wallMaterial('stone', PAL.stoneCool, false), capm = mat('#6a675f');
     const cz = -d * 0.28, top2 = top + rh + 0.75, base = -0.3, bh2 = top2 - base;
     const cxx = freeSide * (w / 2 + 0.22);
     const body2 = new THREE.Mesh(wallGeometry(0.6, bh2, 0.95, 1.4), sm);
@@ -905,7 +906,7 @@ function makeHouse(R, theme, opts) {
     if (!hasWing) addWindow(g, -freeSide * (w / 2 + 0.03), upY, 0, -freeSide * Math.PI / 2, glassMat, trim, shutterMat, dressOpts(false));
     if (balcony) {                                                        // a small balcony over the front door
       const bx0 = dx;
-      g.add(box(1.5, 0.1, 0.7, mat('#8a6a45'), bx0, bandY + 0.05, d / 2 + 0.35));
+      g.add(box(1.5, 0.1, 0.7, mat(PAL.timber), bx0, bandY + 0.05, d / 2 + 0.35));
       g.add(box(1.5, 0.5, 0.06, trim, bx0, bandY + 0.35, d / 2 + 0.68));
     }
   }
@@ -940,15 +941,15 @@ function makeHouse(R, theme, opts) {
   if (!low && R() < 0.4) {                                   // weather vane
     const vx = (hasWing ? wingSide : -1) * -w * 0.2;
     const vy = top + rh + 0.2;
-    const m = mat('#2a2a2a');
+    const m = mat(PAL.ink);
     g.add(box(0.05, 0.6, 0.05, m, vx, vy + 0.3, 0));
     g.add(box(0.5, 0.05, 0.05, m, vx, vy + 0.45, 0));
     g.add(box(0.05, 0.05, 0.5, m, vx, vy + 0.45, 0));
-    g.add(box(0.36, 0.14, 0.04, mat('#c8a52a'), vx + 0.1, vy + 0.62, 0));
+    g.add(box(0.36, 0.14, 0.04, mat(PAL.marigold), vx + 0.1, vy + 0.62, 0));
     extras.push('vane');
   }
   if (!low && R() < 0.45) {                                  // ivy on the free side wall
-    const leaf = [mat('#3f7a3a'), mat('#4f9a46'), mat('#2f6a30')];
+    const leaf = [mat(PAL.moss), mat(PAL.leaf), mat(PAL.leaf2)];
     const wx = freeSide * (w / 2 + 0.03);
     for (let i = 0; i < 16; i++) {
       const yy = 0.7 + hash(i, 31) * 2.1, zz = -d / 2 + 0.3 + hash(i, 32) * (d - 0.6);
@@ -961,14 +962,14 @@ function makeHouse(R, theme, opts) {
   }
   if (!low && R() < 0.5) {                                   // barrel and a small woodpile near the door
     const bx = dx + (doorSide > 0 ? 1 : -1) * 1.35;
-    g.add(cyl(0.3, 0.7, mat('#7a5230'), bx, 0.35, front + 0.55, 10));
-    g.add(cyl(0.31, 0.06, mat('#3a3a3a'), bx, 0.55, front + 0.55, 10));
-    g.add(cyl(0.31, 0.06, mat('#3a3a3a'), bx, 0.2, front + 0.55, 10));
+    g.add(cyl(0.3, 0.7, mat(PAL.timberDeep), bx, 0.35, front + 0.55, 10));
+    g.add(cyl(0.31, 0.06, mat(PAL.ink), bx, 0.55, front + 0.55, 10));
+    g.add(cyl(0.31, 0.06, mat(PAL.ink), bx, 0.2, front + 0.55, 10));
     extras.push('barrel');
   }
   if (!low && !hasWing && R() < 0.5) {                       // lean-to shed on the back corner
     const sx = freeSide * (w / 2 + 0.7), sz = -d / 2 + 0.2;
-    put(new THREE.Mesh(wallGeometry(1.5, 1.5, 1.6, wallTileSize), wallMaterial('clap', '#8f6a42', true)), sx, 0.35 + 0.75, sz);
+    put(new THREE.Mesh(wallGeometry(1.5, 1.5, 1.6, wallTileSize), wallMaterial('clap', PAL.timber, true)), sx, 0.35 + 0.75, sz);
     const sr = box(1.9, 0.12, 2.0, roofMat, sx, 2.2, sz);
     sr.rotation.z = freeSide * 0.18;
     g.add(sr);
@@ -985,7 +986,7 @@ function makeHouse(R, theme, opts) {
     g.add(cyl(tr + 0.14, 0.5, stone, tx, 0.15, tz, 14));
     const cone = new THREE.Mesh(new THREE.ConeGeometry(tr + 0.35, 1.5, 14), roofMat);
     put(cone, tx, 0.35 + th + 0.7, tz);
-    g.add(cyl(0.05, 0.5, mat('#3a3a40'), tx, 0.35 + th + 1.6, tz, 6));
+    g.add(cyl(0.05, 0.5, mat(PAL.ink), tx, 0.35 + th + 1.6, tz, 6));
     for (const [yy, ang] of [[0.35 + th * 0.35, 0.0], [0.35 + th * 0.78, 0.0]]) {
       addWindow(g, tx, yy + 0.5, tz + tr + 0.03, ang, glassMat, trim, shutterMat, { shutters: 'none', dress: R() < 0.5 ? 'curtain' : null, curtain: '#e8e0d0', box: false });
     }
@@ -997,10 +998,10 @@ function makeHouse(R, theme, opts) {
   // --- trellis with a climbing plant on the free side wall
   if (!low && !compact && !opts.far && chStyle !== 'bigstone' && R() < 0.3) {
     const tz2 = -d * 0.28, tx2 = freeSide * (w / 2 + 0.05);
-    const lat = mat('#e8e2d0'), leaf = mat('#4f9a3f'), leaf2 = mat('#6cb84f');
+    const lat = mat(PAL.cream), leaf = mat(PAL.leaf), leaf2 = mat(PAL.leaf2);
     for (let k = 0; k < 4; k++) g.add(box(0.04, 1.9, 0.05, lat, tx2, 1.4, tz2 - 0.6 + k * 0.4));
     for (let k = 0; k < 4; k++) g.add(box(0.04, 0.05, 1.3, lat, tx2, 0.7 + k * 0.5, tz2));
-    const blossom = pick(['#f2a8c8', '#f4f1e8', '#e8c84a', '#d95a5a']);
+    const blossom = pick([PAL.coral, PAL.cream, PAL.marigold, PAL.softBlue]);
     for (let k = 0; k < 11; k++) {
       const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.17 + (k % 3) * 0.04, 0), k % 4 === 0 ? mat(blossom) : (k % 2 ? leaf : leaf2));
       m.position.set(tx2 + freeSide * 0.09, 0.55 + (k * 0.17) % 1.8, tz2 - 0.5 + ((k * 0.37) % 1.0));
@@ -1015,24 +1016,24 @@ function makeHouse(R, theme, opts) {
     const ow = kind === 'stable' ? 2.7 : 1.9, od = kind === 'stable' ? 2.2 : 1.7, oh = kind === 'stable' ? 1.9 : 1.6;
     const ox = freeSide * (w / 2 + 1.55 + ow / 2), oz = d / 2 - od / 2;
     const gy = 0.35;
-    const woodHex = pick(['#8f6a42', '#a07c52', '#7a5a3a']);
+    const woodHex = pick([PAL.timber, PAL.weathered, PAL.timberDeep]);
     const woodMat = wallMaterial('clap', woodHex, true), woodPlain = wallMaterial('clap', woodHex, false);
     g.add(box(ow + 0.15, 0.5, od + 0.15, stone, ox, gy - 0.18, oz));
     if (kind === 'greenhouse') {
-      const frame = mat('#e8e6dc');
+      const frame = mat(PAL.cream);
       g.add(box(ow, 1.25, od, glassMat, ox, gy + 0.62, oz));
       for (const sx of [-1, 0, 1]) for (const sz of [-1, 1]) g.add(box(0.07, 1.3, 0.07, frame, ox + sx * ow / 2, gy + 0.65, oz + sz * od / 2));
       g.add(box(ow + 0.08, 0.07, 0.07, frame, ox, gy + 1.28, oz + od / 2));
       g.add(box(ow + 0.08, 0.07, 0.07, frame, ox, gy + 1.28, oz - od / 2));
       addGable(g, { cx: ox, cz: oz, len: ow, span: od, base: gy + 1.25, rh: 0.5, ov: 0.04, ends: [0.04, 0.04], yaw: 0, roofMat: glassMat, tile: 1.7, thick: 0.05, ridge: '#e8e6dc' });
-      const potCol = pick(['#c0623a', '#d8b34a', '#7a8fc8']);
+      const potCol = pick([PAL.terracotta, PAL.gold, PAL.softBlue]);
       for (let k = 0; k < 3; k++) g.add(box(0.28, 0.22, 0.28, mat(potCol), ox - 0.5 + k * 0.5, gy + 0.2, oz - 0.2));
     } else if (kind === 'woodstore') {
-      const post = mat('#6a4a2c');
+      const post = mat(PAL.timberDeep);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.1, oh, 0.1, post, ox + sx * (ow / 2 - 0.05), gy + oh / 2, oz + sz * (od / 2 - 0.05)));
       g.add(box(ow, oh, 0.08, woodMat, ox, gy + oh / 2, oz - od / 2 + 0.05));
       addGable(g, { cx: ox, cz: oz, len: ow, span: od, base: gy + oh, rh: 0.35, ov: 0.2, ends: [0.2, 0.2], yaw: 0, wallMat: null, roofMat, tile: roofTileSize, thick, ridge });
-      const log = mat('#a0764a');
+      const log = mat(PAL.timber);
       for (let r = 0; r < 4; r++) for (let c = 0; c < 6 - (r > 1 ? 1 : 0); c++) g.add(box(0.26, 0.2, od - 0.5, log, ox - ow / 2 + 0.3 + c * 0.28 + (r % 2) * 0.12, gy + 0.12 + r * 0.21, oz));
     } else {
       put(new THREE.Mesh(wallGeometry(ow, oh, od, wallTile('clap')), woodMat), ox, gy + oh / 2, oz);
@@ -1060,31 +1061,31 @@ function makeHouse(R, theme, opts) {
       const px = yx + (n ? -doorSide * 2.0 : 0);
       if (kind === 'well') {
         g.add(cyl(0.55, 0.7, stone, px, y0 + 0.35, yz, 10));
-        g.add(cyl(0.4, 0.05, mat('#3b7fa8'), px, y0 + 0.7, yz, 10));
-        for (const sx of [-1, 1]) g.add(box(0.07, 1.3, 0.07, mat('#6a4a2c'), px + sx * 0.5, y0 + 1.1, yz));
+        g.add(cyl(0.4, 0.05, mat(PAL.blueGreen), px, y0 + 0.7, yz, 10));
+        for (const sx of [-1, 1]) g.add(box(0.07, 1.3, 0.07, mat(PAL.timberDeep), px + sx * 0.5, y0 + 1.1, yz));
         const wr = box(1.5, 0.08, 0.9, roofMat, px, y0 + 1.82, yz); wr.rotation.z = 0; g.add(wr);
       } else if (kind === 'haystack') {
-        g.add(cyl(0.75, 0.9, mat('#d8b85a'), px, y0 + 0.45, yz, 8));
-        g.add(cyl(0.4, 0.5, mat('#e0c46a'), px, y0 + 1.15, yz, 8));
+        g.add(cyl(0.75, 0.9, mat(PAL.gold), px, y0 + 0.45, yz, 8));
+        g.add(cyl(0.4, 0.5, mat(PAL.thatch), px, y0 + 1.15, yz, 8));
       } else if (kind === 'woodpile') {
-        const log = mat('#a0764a');
+        const log = mat(PAL.timber);
         for (let r = 0; r < 3; r++) for (let c = 0; c < 5 - r; c++) g.add(box(0.22, 0.2, 0.9, log, px - 0.5 + c * 0.24 + r * 0.12, y0 + 0.12 + r * 0.21, yz));
       } else if (kind === 'laundry') {
-        const post = mat('#6a4a2c');
+        const post = mat(PAL.timberDeep);
         for (const sx of [-1, 1]) g.add(box(0.07, 1.7, 0.07, post, px + sx * 1.3, y0 + 0.85, yz));
         g.add(box(2.6, 0.02, 0.02, mat('#ddd'), px, y0 + 1.6, yz));
-        ['#d95a5a', '#f2f0e8', '#4a7ac8', '#e8c84a'].forEach((c, k) => g.add(box(0.34, 0.5, 0.02, mat(c), px - 0.9 + k * 0.6, y0 + 1.32, yz)));
+        [PAL.coral, PAL.cream, PAL.softBlue, PAL.gold].forEach((c, k) => g.add(box(0.34, 0.5, 0.02, mat(c), px - 0.9 + k * 0.6, y0 + 1.32, yz)));
       } else if (kind === 'garden') {
-        g.add(box(1.8, 0.16, 0.9, mat('#6a4a2c'), px, y0 + 0.08, yz));
-        const soil = mat('#4a3320');
+        g.add(box(1.8, 0.16, 0.9, mat(PAL.timberDeep), px, y0 + 0.08, yz));
+        const soil = mat(PAL.timberDeep);
         g.add(box(1.64, 0.04, 0.74, soil, px, y0 + 0.17, yz));
-        const veg = [mat('#5fb04a'), mat('#4a9a3f'), mat('#8ad04a')];
+        const veg = [mat(PAL.leaf), mat(PAL.moss), mat(PAL.leaf2)];
         for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) g.add(box(0.14, 0.2 + ((c + r) % 3) * 0.06, 0.14, veg[r], px - 0.7 + c * 0.28, y0 + 0.28, yz - 0.25 + r * 0.25));
       } else if (kind === 'bench') {
-        g.add(box(1.2, 0.08, 0.35, mat('#8a6a45'), dx + (doorSide > 0 ? -1.6 : 1.6), y0 + 0.5, d / 2 + 0.6));
-        for (const sx of [-1, 1]) g.add(box(0.08, 0.5, 0.3, mat('#6a4a2c'), dx + (doorSide > 0 ? -1.6 : 1.6) + sx * 0.5, y0 + 0.25, d / 2 + 0.6));
+        g.add(box(1.2, 0.08, 0.35, mat(PAL.timber), dx + (doorSide > 0 ? -1.6 : 1.6), y0 + 0.5, d / 2 + 0.6));
+        for (const sx of [-1, 1]) g.add(box(0.08, 0.5, 0.3, mat(PAL.timberDeep), dx + (doorSide > 0 ? -1.6 : 1.6) + sx * 0.5, y0 + 0.25, d / 2 + 0.6));
       } else {                                                           // a picket fence with a gap for the path
-        const fz = d / 2 + 3.4, pk = mat('#f2efe6');
+        const fz = d / 2 + 3.4, pk = mat(PAL.cream);
         const gapL = dx - 0.9, gapR = dx + 0.9, x0 = -w / 2 - 0.8, x1 = w / 2 + 0.8;
         for (const [a, b] of [[x0, gapL], [gapR, x1]]) {
           if (b - a < 0.5) continue;

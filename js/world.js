@@ -3,10 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
+import { PAL } from './palette.js?v=20261015203256';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015202537';
+} from './houses.js?v=20261015203256';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -367,14 +368,14 @@ function lampWashTexture() {
 function buildBarn() {
   const g = new THREE.Group();
   const w = 5.6, d = 3.9, h = 3.0, top = 0.35 + h, rh = 1.7;
-  const red = '#b5402f';
-  const wallMat = mat(red, { vertexColors: true }), plain = mat(red), trim = mat('#f6efdc'), stone = mat('#9c9588');
+  const red = PAL.terracotta;
+  const wallMat = mat(red, { vertexColors: true }), plain = mat(red), trim = mat(PAL.cream), stone = mat(PAL.stoneCool);
   g.add(box(w + 0.2, 1.6, d + 0.2, stone, 0, -0.45, 0));
   g.add(wallBox(w, h, d, wallMat, 0, 0.35 + h / 2, 0));
   addGable(g, { cx: 0, cz: 0, len: w, span: d, base: top, rh, ov: 0.4, yaw: 0, wallMat: plain, roofMat: roofMaterial('#4a3a36') });
   const fz = d / 2 + 0.03;
   g.add(box(2.3, 2.3, 0.1, trim, 0, 0.35 + 1.15, fz));                      // door frame
-  g.add(box(2.0, 2.05, 0.12, mat('#8f3226'), 0, 0.35 + 1.05, fz + 0.02));   // doors
+  g.add(box(2.0, 2.05, 0.12, mat(PAL.terracottaDeep), 0, 0.35 + 1.05, fz + 0.02));   // doors
   for (const a of [0.74, -0.74]) {                                            // white X bracing
     const x = new THREE.Mesh(UNIT_BOX, trim);
     x.scale.set(2.5, 0.12, 0.05); x.rotation.z = a; x.position.set(0, 0.35 + 1.05, fz + 0.1);
@@ -382,7 +383,7 @@ function buildBarn() {
   }
   g.add(box(1.9, 0.1, 0.06, trim, 0, 0.35 + 1.05, fz + 0.1));
   g.add(box(0.9, 0.7, 0.08, trim, 0, top + 0.5, fz - 0.03));                 // hatch frame in the gable
-  g.add(box(0.7, 0.5, 0.1, mat('#3b2018'), 0, top + 0.5, fz));
+  g.add(box(0.7, 0.5, 0.1, mat(PAL.timberDeep), 0, top + 0.5, fz));
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return { group: g, radius: Math.max(w, d) / 2 + 1.4, w, d };
 }
@@ -390,13 +391,13 @@ function buildBarn() {
 /** A small windmill: tapered tower, red cap, and a four-bladed rotor that turns (see `rotor`). */
 function buildWindmill() {
   const g = new THREE.Group();
-  const stone = mat('#9c9588'), wall = mat('#f1e7cf'), roof = mat('#b5402f'), wood = mat('#8a6a46'), cloth = mat('#fbf6e6');
+  const stone = mat(PAL.stoneCool), wall = mat(PAL.cream), roof = mat(PAL.terracotta), wood = mat(PAL.timber), cloth = mat(PAL.cream);
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 1.2, 8), stone)).position.y = 0.2;
   const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.45, 5.2, 8), wall);
   tower.position.y = 3.4; g.add(tower);
   const cap = new THREE.Mesh(new THREE.ConeGeometry(1.25, 1.7, 8), roof);
   cap.position.y = 6.85; g.add(cap);
-  const door = box(0.7, 1.2, 0.12, mat('#6b3a22'), 0, 1.2, 1.5); g.add(door);
+  const door = box(0.7, 1.2, 0.12, mat(PAL.timberDeep), 0, 1.2, 1.5); g.add(door);
   const rotor = new THREE.Group();
   rotor.position.set(0, 5.9, 1.2);
   rotor.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 8).rotateX(Math.PI / 2), wood));
@@ -627,6 +628,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const p = geo.attributes.position;
   const colors = new Float32Array(p.count * 3);
   const cLow = new THREE.Color(classic ? '#55ad5a' : '#4cbf4f'), cHigh = new THREE.Color(classic ? '#c9ee9a' : '#d6f48a');
+  if (!classic) { cLow.lerp(new THREE.Color(PAL.sage), 0.13); cHigh.lerp(new THREE.Color(PAL.sage), 0.1); }
   const cWarm = new THREE.Color(classic ? '#e2ea8a' : '#f0ee80'), cPath = new THREE.Color('#f1e5c6'), cDeep = new THREE.Color('#3f9a58');
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
@@ -897,7 +899,7 @@ export function buildWorld(scene, sections, opts = {}) {
       scene.add(bn.group);
       houses.push({ x: f.x, z: f.z, r: bn.radius * bsc, w: bn.w * bsc, d: bn.d * bsc, rot: f.rot });
       const bale = new THREE.CylinderGeometry(0.55, 0.55, 0.9, 12);
-      const baleMat = mat('#d8b85a');
+      const baleMat = mat(PAL.gold);
       for (let k = 0; k < 4; k++) {
         const m = new THREE.Mesh(bale, baleMat);
         const a = f.rot + 0.9 + k * 0.5, r = bn.radius + 0.6 + (k % 2) * 0.7;
@@ -924,9 +926,10 @@ export function buildWorld(scene, sections, opts = {}) {
     rock: [], grass: [], stem: [], head: [], dot: [], spike: [], fern: [], mushStem: [], mushCap: [],
     log: [], reed: [], reedTop: [], lily: [], post: [], rail: [],
   };
-  const GREENS = (classic ? ['#5cb85c', '#6cc96a', '#4aa857', '#7fd070', '#8fcf5a'] : ['#4fcf5a', '#6ed84f', '#3ec46a', '#8ee05a', '#a4e04a']).map((h) => new THREE.Color(h));
+  const SAGE_C = new THREE.Color(PAL.sage);
+  const GREENS = (classic ? ['#5cb85c', '#6cc96a', '#4aa857', '#7fd070', '#8fcf5a'] : ['#4fcf5a', '#6ed84f', '#3ec46a', '#8ee05a', '#a4e04a']).map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.14));
   const FALL = ['#ff9a4a', '#ffc94a', '#f2703c', '#ffd966'].map((h) => new THREE.Color(h));
-  const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h));
+  const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.1));
   const BLOSSOM = new THREE.Color('#ffb3c8');
   const BARK = new THREE.Color('#8a5a3c'), BIRCH = new THREE.Color('#e8e2d2');
   const free = (x, z, pad = 0) => !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5);
@@ -1186,12 +1189,12 @@ export function buildWorld(scene, sections, opts = {}) {
       const x = pathX(z) + side * 3.9;
       if (!free(x, z, -0.5)) { prev = null; continue; }
       const P = [x, heightAt(x, z), z];
-      items.post.push({ p: [P[0], P[1] + 0.45, P[2]], s: [1, 1, 1], c: new THREE.Color('#a9835a') });
+      items.post.push({ p: [P[0], P[1] + 0.45, P[2]], s: [1, 1, 1], c: new THREE.Color(PAL.timber) });
       if (prev) {
         const dxp = P[0] - prev[0], dzp = P[2] - prev[2], len = Math.hypot(dxp, dzp);
         const ang = Math.atan2(-dzp, dxp);
         for (const yy of [0.35, 0.7]) {
-          items.rail.push({ p: [(P[0] + prev[0]) / 2, (P[1] + prev[1]) / 2 + yy, (P[2] + prev[2]) / 2], s: [len, 1, 1], ry: ang, c: new THREE.Color('#b8956a') });
+          items.rail.push({ p: [(P[0] + prev[0]) / 2, (P[1] + prev[1]) / 2 + yy, (P[2] + prev[2]) / 2], s: [len, 1, 1], ry: ang, c: new THREE.Color(PAL.paleWood) });
         }
       }
       prev = P;
@@ -1208,10 +1211,10 @@ export function buildWorld(scene, sections, opts = {}) {
         const x = b[i][0] + side * nx * 2.3, z = b[i][1] + side * nz * 2.3;
         if (!inRun || !free(x, z, -0.5)) { prev = null; continue; }
         const P = [x, heightAt(x, z), z];
-        items.post.push({ p: [P[0], P[1] + 0.45, P[2]], s: [1, 1, 1], c: new THREE.Color('#a9835a') });
+        items.post.push({ p: [P[0], P[1] + 0.45, P[2]], s: [1, 1, 1], c: new THREE.Color(PAL.timber) });
         if (prev) {
           const dxp = P[0] - prev[0], dzp = P[2] - prev[2], len = Math.hypot(dxp, dzp), ang = Math.atan2(-dzp, dxp);
-          for (const yy of [0.35, 0.7]) items.rail.push({ p: [(P[0] + prev[0]) / 2, (P[1] + prev[1]) / 2 + yy, (P[2] + prev[2]) / 2], s: [len, 1, 1], ry: ang, c: new THREE.Color('#b8956a') });
+          for (const yy of [0.35, 0.7]) items.rail.push({ p: [(P[0] + prev[0]) / 2, (P[1] + prev[1]) / 2 + yy, (P[2] + prev[2]) / 2], s: [len, 1, 1], ry: ang, c: new THREE.Color(PAL.paleWood) });
         }
         prev = P;
       }
@@ -1286,7 +1289,7 @@ export function buildWorld(scene, sections, opts = {}) {
   // ---- Street life: lamp posts along the path, a signpost at the fork, and a market stall ----
   {
     const street = new THREE.Group();
-    const dark = mat('#3a3a40'), wood = mat('#8a6a45'), woodDark = mat('#6a4a2c');
+    const dark = mat(PAL.ink), wood = mat(PAL.timber), woodDark = mat(PAL.timberDeep);
     const clear = (x, z, pad = 1.2) => !nearHouse(x, z, pad) && !nearSign(x, z) && !nearPond(x, z, 1.5)
       && !branches.some((b) => distToPolyline(x, z, b) < 1.6);
     const lamp = (x, z) => {
@@ -1318,12 +1321,12 @@ export function buildWorld(scene, sections, opts = {}) {
       st.position.set(sx, y, z); st.rotation.y = -side * Math.PI / 2;
       st.add(box(2.0, 0.08, 0.9, wood, 0, 0.9, 0));
       for (const px of [-1, 1]) for (const pz of [-0.4, 0.4]) st.add(box(0.07, 2.0, 0.07, woodDark, px * 0.95, 1.0, pz));
-      const stripes = ['#d9534f', '#f4f1e8'];
+      const stripes = [PAL.coral, PAL.cream];
       for (let k = 0; k < 6; k++) {
         const s = box(0.34, 0.05, 1.2, mat(stripes[k % 2]), -0.85 + k * 0.34, 2.05 - 0.0, 0.1);
         s.rotation.x = -0.25; st.add(s);
       }
-      for (let k = 0; k < 3; k++) st.add(box(0.28, 0.2, 0.28, mat(['#e8402f', '#f0a030', '#7ac04a'][k]), -0.5 + k * 0.5, 1.04, 0));
+      for (let k = 0; k < 3; k++) st.add(box(0.28, 0.2, 0.28, mat([PAL.coral, PAL.marigold, PAL.leaf][k]), -0.5 + k * 0.5, 1.04, 0));
       st.add(box(0.7, 0.45, 0.5, woodDark, 1.5, 0.22, 0.2));
       st.updateMatrixWorld(true);
       st.children.forEach((c) => street.add(c.clone()));
@@ -1336,7 +1339,7 @@ export function buildWorld(scene, sections, opts = {}) {
     }
     // stepping stones from some front doors toward the path
     {
-      const stone2 = mat('#a8a698'), stone3 = mat('#b9b7a8');
+      const stone2 = mat(PAL.stoneCool), stone3 = mat(PAL.stoneWarm);
       let n = 0;
       for (const st of sites) {
         if (st.companion || TR() < 0.45) continue;
@@ -1358,7 +1361,7 @@ export function buildWorld(scene, sections, opts = {}) {
       const bz = POND.z - 0.8;
       {
         const xl = POND.x - POND.r * 0.95, xr = POND.x + POND.r * 0.95;
-        const x0 = xl - 0.6, x1 = xr + 0.6, N = 16, planks = mat('#9a7448'), rail = mat('#6a4a2c');
+        const x0 = xl - 0.6, x1 = xr + 0.6, N = 16, planks = mat(PAL.timber), rail = mat(PAL.timberDeep);
         const baseY = (a) => Math.max(heightAt(a, bz), WATER_Y) + 0.12;
         const yEnd0 = baseY(x0), yEnd1 = baseY(x1);
         for (let k = 0; k < N; k++) {

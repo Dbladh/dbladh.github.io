@@ -41,3 +41,7 @@ Push this folder to a repo named `dbladh.github.io` on the `main` branch; Pages 
 - `?look=classic` shows the original, dimmer look (no grade, haze, bloom or rim light) for A/B comparison.
 - `?perf=1` / `?debug=1` show a viewport, seed and frame-cost readout.
 - `?detail=low|high` forces the detail level.
+
+## Colour scheme
+
+The town's colours live in `js/palette.js` (cream, sage, gold, blue-green, soft blue, coral plus supporting stone, roof and wood tones). The six village themes in `js/houses.js` are different arrangements of that palette; edit a hex in `palette.js` and it changes everywhere.
