@@ -40,10 +40,10 @@ const FRAG = /* glsl */ `
     if (coc > 0.6) {
       vec4 sum = col;
       float wsum = 1.0;
-      // Golden-angle disc: 20 taps spread over the blur radius.
-      for (int i = 1; i < 20; i++) {
+      // Golden-angle disc: 14 taps spread over the blur radius.
+      for (int i = 1; i < 14; i++) {
         float fi = float(i);
-        float r = sqrt(fi / 20.0) * coc;
+        float r = sqrt(fi / 14.0) * coc;
         float a = fi * 2.399963;
         vec2 uv = vUv + vec2(cos(a), sin(a)) * r * texel;
         // A neighbour only contributes if its own blur reaches this far. That stops a sharp,

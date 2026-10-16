@@ -562,7 +562,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const WATER_Y = ringSum / 8 - 0.5;
 
   // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
-  const SEG = low ? [190, 125] : [380, 250];
+  const SEG = low ? [152, 100] : [304, 200];
   const geo = new THREE.PlaneGeometry(380, 250, SEG[0], SEG[1]);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, -75);
@@ -1071,20 +1071,38 @@ export function buildWorld(scene, sections, opts = {}) {
   }
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
-  function instanced(geometry, material, list, { shadow = true, defaultColor } = {}) {
+  // Instances are split into square cells so the renderer can cull (and skip shadows for) cells
+  // that are off screen; one big mesh per kind would always be drawn in full.
+  const CELL = 44;
+  // `farGeometry` (optional) replaces the geometry for instances beyond FAR_Z: that far away they are
+  // heavily out of focus, so the coarser shape is never noticed.
+  const FAR_Z = -42;
+  function instanced(geometry, material, list, { shadow = true, defaultColor, farGeometry } = {}) {
     if (!list.length) return null;
-    const mesh = new THREE.InstancedMesh(geometry, material, list.length);
-    list.forEach((it, i) => {
-      _e.set(it.rx || 0, it.ry ?? rand() * 6.28, it.rz || 0);
-      _m.compose(_v.set(...it.p), _q.setFromEuler(_e), _s.set(...it.s));
-      mesh.setMatrixAt(i, _m);
-      const col = it.c ?? defaultColor;
-      if (col) mesh.setColorAt(i, col);
-    });
-    mesh.castShadow = shadow;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-    return mesh;
+    const cells = new Map();
+    for (const it of list) {
+      const far = farGeometry && it.p[2] < FAR_Z ? 'f' : '';
+      const key = far + Math.floor(it.p[0] / CELL) + ',' + Math.floor(it.p[2] / CELL);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(it);
+    }
+    let first = null;
+    for (const [key, part] of cells) {
+      const mesh = new THREE.InstancedMesh(key[0] === 'f' ? farGeometry : geometry, material, part.length);
+      part.forEach((it, i) => {
+        _e.set(it.rx || 0, it.ry ?? rand() * 6.28, it.rz || 0);
+        _m.compose(_v.set(...it.p), _q.setFromEuler(_e), _s.set(...it.s));
+        mesh.setMatrixAt(i, _m);
+        const col = it.c ?? defaultColor;
+        if (col) mesh.setColorAt(i, col);
+      });
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = true;
+      mesh.computeBoundingSphere();
+      scene.add(mesh);
+      first = first || mesh;
+    }
+    return first;
   }
   const white = (extra = {}) => new THREE.MeshLambertMaterial({ color: 0xffffff, ...extra });
   // Faceted, flat-shaded low-poly forms (not smooth spheres): jittered icosahedra for foliage,
@@ -1096,14 +1114,15 @@ export function buildWorld(scene, sections, opts = {}) {
   const trunkGeo = shade(jitter(new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 2), 0.18, 5), 0.75, 1.05);
   instanced(trunkGeo, flat(), items.trunk, { defaultColor: BARK });
   instanced(shade(new THREE.ConeGeometry(0.75, 1, 6), 0.7, 1.0), flat(), items.flare, { defaultColor: BARK });
-  lobeLists.forEach((list, i) => instanced(blobGeos[i], flat(), list));
+  const farBlobs = [0, 1, 2].map((i) => shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, i * 7.3), 0.7, 1.1));
+  lobeLists.forEach((list, i) => instanced(blobGeos[i], flat(), list, { farGeometry: farBlobs[i] }));
   instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.35, 3), 0.8, 1.12), flat(), items.leaf, { shadow: false });
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.fruit, { shadow: false });
   // cypress: a faceted flame, widest a little below the middle
   instanced(shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1), flat(), items.cypress);
   // pine: drooping jagged tiers, two-sided so it never turns see-through
-  instanced(pineGeometry(5, 9), flat({ side: THREE.DoubleSide }), items.pine);
-  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), flat(), items.bush);
+  instanced(pineGeometry(5, 9), flat({ side: THREE.DoubleSide }), items.pine, { farGeometry: pineGeometry(3, 6) });
+  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), flat(), items.bush, { farGeometry: shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, 11), 0.65, 1.08) });
   instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.berry, { shadow: false });
   instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
   instanced(tuftGeometry(), flat({ side: THREE.DoubleSide }), items.grass, { shadow: false });

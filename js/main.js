@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261014191306';
-import { createSky } from './sky.js?v=20261014191306';
-import { createDOF } from './dof.js?v=20261014191306';
+import { buildWorld } from './world.js?v=20261015182100';
+import { createSky } from './sky.js?v=20261015182100';
+import { createDOF } from './dof.js?v=20261015182100';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -66,6 +66,13 @@ function start() {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // The sun barely moves, so the shadow map is refreshed a few times a second instead of every frame
+  // (see frame()); the DOF pass's second render never re-renders it either.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
+  renderer.info.autoReset = false;                 // several renders per frame: reset once, in draw()
+  const perf = { cpu: 0, fps: 60 };
+  let shadowTick = 0;
 
   // Weaker machines get fewer real lights (each one costs every pixel).
   const forced = new URLSearchParams(location.search).get('detail'); // ?detail=high|low, handy for testing
@@ -85,7 +92,7 @@ function start() {
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
-  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 6 : 14, skyScene, low: lowEnd, seed });
+  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed });
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
   const dof = reduceMotion ? null : createDOF(renderer); // soft focus is skipped for reduced motion
   let focus = 60;
@@ -308,7 +315,7 @@ function start() {
   const VW = () => probe.offsetWidth || window.innerWidth;
   const VH = () => probe.offsetHeight || window.innerHeight;
   // ?debug=1 shows a small readout of the viewport numbers (for diagnosing mobile browser toolbars).
-  if (new URLSearchParams(location.search).has('debug')) {
+  if (/[?&](debug|perf)\b/.test(location.search)) {
     const mk = (u) => { const d = document.createElement('div'); d.style.cssText = `position:fixed;left:0;top:0;width:1px;height:100${u};visibility:hidden;pointer-events:none`; document.body.appendChild(d); return d; };
     const probes = { svh: mk('svh'), dvh: mk('dvh'), lvh: mk('lvh'), vh: mk('vh') };
     const out = document.createElement('pre');
@@ -326,6 +333,7 @@ function start() {
         `scene css ${Math.round(cv.top)}..${Math.round(cv.bottom)}  sky ${Math.round(sk.top)}..${Math.round(sk.bottom)}`,
         `nav ${Math.round(nv.top)}..${Math.round(nv.bottom)}`,
         `html ${document.documentElement.clientHeight}  body ${document.body.clientHeight}  scrollY ${Math.round(scrollY)}`,
+        `perf ${perf.fps.toFixed(0)}fps  cpu ${perf.cpu.toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k  geo ${renderer.info.memory.geometries}`,
         `village seed ${seed} (${world.themeName})`,
         `css ${css}`,
         `ua ${navigator.userAgent.replace(/^Mozilla\/5.0 /, '').slice(0, 70)}`,
@@ -500,6 +508,8 @@ function start() {
   const look = new THREE.Vector3();
   /** Render both layers. `dt` only drives the focus easing, so 0 means "repaint as is". */
   function draw(dt) {
+    renderer.info.reset();
+    const t0 = performance.now();
     skyRenderer.render(skyScene, camera);
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
@@ -511,6 +521,7 @@ function start() {
       world.setView({ height: canvas.height, focus, aperture: 0, maxBlur: 0 });
       renderer.render(scene, camera);
     }
+    perf.cpu += (performance.now() - t0 - perf.cpu) * 0.1;
   }
 
   function frame() {
@@ -553,6 +564,8 @@ function start() {
     camera.lookAt(look);
 
     if (!reduceMotion) world.update(dt);
+    if (shadowTick++ % 4 === 0) renderer.shadowMap.needsUpdate = true;
+    if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back
     // to the overview they fade in with its progress (the name first, the tagline a little after).
