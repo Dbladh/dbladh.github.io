@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015201100';
+} from './houses.js?v=20261015201213';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -705,6 +705,41 @@ export function buildWorld(scene, sections, opts = {}) {
     nm.repeat.set(380 / 7, 250 / 7);
     terrainMat.normalMap = nm;
     terrainMat.normalScale = new THREE.Vector2(0.55, 0.55);
+    // Dirt, paths, sand and rock (the redder ground colours) get their own pebbly relief instead of grass blades.
+    const pc = document.createElement('canvas');
+    pc.width = pc.height = S;
+    const pg = pc.getContext('2d'), pr = rng(777);
+    pg.fillStyle = '#7a7a7a'; pg.fillRect(0, 0, S, S);
+    for (let i = 0; i < 2600; i++) {                                        // fine grit
+      const v = 90 + Math.floor(pr() * 110);
+      pg.fillStyle = `rgb(${v},${v},${v})`;
+      pg.fillRect(pr() * S, pr() * S, 1 + pr() * 2, 1 + pr() * 2);
+    }
+    for (let i = 0; i < 180; i++) {                                         // pebbles: small domes with a lit top
+      const x = pr() * S, y = pr() * S, r = 2 + pr() * 6, v = 150 + Math.floor(pr() * 80);
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        if ((x + ox < -10 || x + ox > S + 10 || y + oy < -10 || y + oy > S + 10)) continue;
+        const g = pg.createRadialGradient(x + ox - r * 0.2, y + oy - r * 0.2, 0, x + ox, y + oy, r);
+        g.addColorStop(0, `rgb(${v},${v},${v})`); g.addColorStop(1, 'rgba(110,110,110,0)');
+        pg.fillStyle = g; pg.beginPath(); pg.arc(x + ox, y + oy, r, 0, 6.3); pg.fill();
+      }
+    }
+    const gn = normalMapFrom({ image: pc }, 'terrain-ground', 3.6);
+    terrainMat.normalMap = nm;
+    terrainMat.normalScale = new THREE.Vector2(0.55, 0.55);
+    terrainMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uGroundNormal = { value: gn };
+      sh.uniforms.uGroundScale = { value: 1.0 };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <normalmap_pars_fragment>', '#include <normalmap_pars_fragment>\nuniform sampler2D uGroundNormal; uniform float uGroundScale;')
+        .replace('#include <normal_fragment_maps>', `
+          // grass relief on green ground, pebbly relief where the ground colour turns red/tan (dirt, path, sand, rock)
+          vec3 nGr = texture2D(normalMap, vNormalMapUv).xyz * 2.0 - 1.0;
+          vec3 nGd = texture2D(uGroundNormal, vNormalMapUv * 2.4).xyz * 2.0 - 1.0;
+          float wGd = smoothstep(-0.02, 0.1, vColor.r - vColor.g);
+          vec3 mapN = mix(vec3(nGr.xy * normalScale, nGr.z), vec3(nGd.xy * uGroundScale, nGd.z), wGd);
+          normal = normalize(tbn * mapN);`);
+    };
   }
   const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
