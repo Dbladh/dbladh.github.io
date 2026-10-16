@@ -1583,10 +1583,20 @@ export function buildWorld(scene, sections, opts = {}) {
       const tanHalf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
       const t = smooth(1.1, 0.65, aspect);                                   // 0 on wide screens, 1 in portrait
       const mult = lerp(SIGN_BIG, 1, t);                                     // signs are larger on big screens, easier to read from afar
+      // Signs further back get bigger so every main sign takes a similar share of the screen width
+      // (the roadside About sign keeps its deliberately small size). Capped so they never crowd each other.
+      const share = (s) => {
+        const z = lerp(s.desk.z, s.stagger.z, t);
+        return (BOARD_W * s.scale * mult) / (2 * tanHalf * Math.max(1, cam.z - z) * aspect);
+      };
+      const mains = Object.values(STOPS).filter((s) => s.scale >= 0.6);
+      const refShare = Math.max(...mains.map(share));
       for (const b of boards) {
         const s = STOPS[b.id];
-        const sc = s.scale * mult;
         const z = lerp(s.desk.z, s.stagger.z, t);
+        const far = s.scale < 0.6 ? 1 : THREE.MathUtils.clamp(Math.pow(refShare / share(s), 0.7), 1, 1.2);
+        const m2 = mult * far;
+        const sc = s.scale * m2;
         const hw = tanHalf * Math.max(1, cam.z - z) * aspect;               // half the visible width at its depth
         const fit = hw - (BOARD_W / 2) * sc - 2.2;                     // leave room for the frame and parallax
         const xMag = Math.max(Math.abs(s.hill.x), Math.min(Math.abs(s.desk.x), fit));
@@ -1612,7 +1622,7 @@ export function buildWorld(scene, sections, opts = {}) {
         }
         void bottomAt0;
         // In portrait some signs stand on taller stilts so neighbours that share screen width don't overlap.
-        b.place(x, z, Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t, mult);
+        b.place(x, z, Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t / far, m2);
       }
     },
     /** The village seed and theme in use (see ?seed=). */
