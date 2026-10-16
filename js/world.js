@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015203256';
+import { PAL } from './palette.js?v=20261015203654';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015203256';
+} from './houses.js?v=20261015203654';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -875,14 +875,61 @@ export function buildWorld(scene, sections, opts = {}) {
     }
   }
 
-  // Chimney smoke: a few soft puffs per smoking chimney, rising and drifting on the breeze.
-  const PUFFS = 5;
+  // Chimney smoke: soft, wispy plumes. Each puff is a camera-facing quad drawn with evolving noise, so it
+  // curls, thins and breaks apart as it rises and drifts, like the clouds.
+  const PUFFS = 8;
   let smoke = null;
-  const smokeMat = new THREE.MeshBasicMaterial({ color: 0xe6eaf0, transparent: true, opacity: 0.55, depthWrite: false });
+  const smokeColor = new THREE.Color(0xe6eaf0);
+  const smokeMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false,
+    uniforms: { uColor: { value: smokeColor }, uTime: { value: 0 } },
+    vertexShader: `
+      attribute float aAge; attribute float aSeed;
+      varying vec2 vUv; varying float vAge; varying float vSeed;
+      void main() {
+        vUv = uv; vAge = aAge; vSeed = aSeed;
+        vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        float s = length(instanceMatrix[0].xyz);
+        c.xy += position.xy * s;
+        gl_Position = projectionMatrix * c;
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uTime;
+      varying vec2 vUv; varying float vAge; varying float vSeed;
+      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * n(p); p = p * 2.07 + vec2(5.3, 1.7); a *= 0.5; } return s; }
+      void main() {
+        vec2 p = vUv * 2.0 - 1.0;
+        float t = uTime * 0.35 + vSeed * 20.0;
+        float ca = cos(vAge * 2.2 + vSeed * 6.0), sa = sin(vAge * 2.2 + vSeed * 6.0);   // each puff slowly turns
+        p = mat2(ca, -sa, sa, ca) * p;
+        vec2 wp = vec2(fbm(p * 1.6 + vSeed * 9.0 + t), fbm(p * 1.6 - vSeed * 5.0 - t * 0.7));
+        float d = fbm(p * 2.0 + (wp - 0.5) * 1.8 + vec2(t * 0.5, vAge * 1.5));
+        float env = 1.0 - smoothstep(0.25, 1.0, length(p * vec2(0.95, 1.05)));
+        float thr = 0.3 + vAge * 0.28;                                  // the plume thins out as it rises
+        float dens = smoothstep(thr, thr + 0.22, d * (0.55 + 0.9 * env)) * env;
+        float a = smoothstep(0.0, 0.1, vAge) * (1.0 - smoothstep(0.5, 1.0, vAge));
+        float lit = 0.72 + 0.28 * smoothstep(-0.5, 0.7, -p.y + (d - 0.5));
+        gl_FragColor = vec4(uColor * lit, dens * a * 0.62);
+        #include <colorspace_fragment>
+      }`,
+  });
+  smokeMat.color = smokeColor;
+  const smokeAge = new Float32Array(Math.max(1, smokeSrc.length) * PUFFS);
   if (smokeSrc.length && !low) {
-    smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), smokeMat, smokeSrc.length * PUFFS);
+    const q = new THREE.PlaneGeometry(1, 1);
+    const ageAttr = new THREE.InstancedBufferAttribute(smokeAge, 1);
+    ageAttr.setUsage(THREE.DynamicDrawUsage);
+    q.setAttribute('aAge', ageAttr);
+    const seeds = new Float32Array(smokeSrc.length * PUFFS);
+    for (let i = 0; i < seeds.length; i++) seeds[i] = (Math.sin(i * 12.9898) * 43758.5453) % 1;
+    q.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds.map((v) => Math.abs(v)), 1));
+    smoke = new THREE.InstancedMesh(q, smokeMat, smokeSrc.length * PUFFS);
     smoke.frustumCulled = false;
     smoke.castShadow = false;
+    smoke.renderOrder = 3;
     scene.add(smoke);
   }
   const _sd = new THREE.Object3D();
@@ -2099,17 +2146,24 @@ export function buildWorld(scene, sections, opts = {}) {
       pondU.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       if (smoke) {
+        smokeMat.uniforms.uTime.value = time;
         smokeSrc.forEach((src, si) => {
           for (let k = 0; k < PUFFS; k++) {
-            const ph = (time * 0.17 + k / PUFFS + si * 0.37) % 1;
-            const fade = ph > 0.8 ? (1 - ph) / 0.2 : 1;
-            _sd.position.set(src.x + ph * 1.1 + Math.sin(time * 0.7 + si * 2 + ph * 5) * 0.28 * ph, src.y + ph * 3.6, src.z + Math.cos(time * 0.5 + si) * 0.2 * ph);
-            _sd.scale.setScalar(blockedBy(_sd.position) ? 0.0001 : (0.1 + ph * 0.5) * fade);
+            const ph = (time * 0.09 + k / PUFFS + si * 0.37) % 1;          // 0 at the chimney, 1 when it has dissolved
+            // rises, bends with the breeze and meanders side to side more as it climbs
+            _sd.position.set(
+              src.x + ph * 2.4 + Math.sin(time * 0.6 + si * 2 + ph * 6) * 0.55 * ph,
+              src.y + ph * 5.2,
+              src.z + Math.cos(time * 0.45 + si + ph * 5) * 0.45 * ph,
+            );
+            _sd.scale.setScalar(blockedBy(_sd.position) ? 0.0001 : 0.7 + ph * 2.6);
             _sd.updateMatrix();
             smoke.setMatrixAt(si * PUFFS + k, _sd.matrix);
+            smokeAge[si * PUFFS + k] = ph;
           }
         });
         smoke.instanceMatrix.needsUpdate = true;
+        smoke.geometry.attributes.aAge.needsUpdate = true;
       }
       for (const cl of clouds) {
         cl.position.x += cl.userData.speed * dt;
