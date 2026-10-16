@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015195819';
+} from './houses.js?v=20261015200425';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -82,7 +82,7 @@ export function pathX(z) {
 }
 
 /** Ground height at (x, z). */
-function rawHeight(x, z) {
+function rawBase(x, z) {
   const calm = 0.2 + 0.8 * smooth(12, 46, Math.hypot(x, z - 22)); // gentle meadow near the camera
   let h = (fbm(x * 0.016, z * 0.016) - 0.45) * 15 * calm;
   h += (fbm(x * 0.06 + 9, z * 0.06 + 3) - 0.5) * 3 * calm;
@@ -102,6 +102,27 @@ function rawHeight(x, z) {
     h += f.h * Math.exp(-0.5 * (dx * dx + dz * dz));
   }
   h -= 0.35 * (1 - smooth(0, 4, Math.abs(x - pathX(z)))); // path sits in a shallow trough
+  return h;
+}
+
+/** The pond's water level: a little below the average ground height on a ring around it. */
+const POND_WATER = (() => {
+  let s = 0;
+  for (let k = 0; k < 8; k++) s += rawBase(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
+  return s / 8 - 0.5;
+})();
+
+/** Ground height before the house plots: the base terrain with the pond's bowl cut into it, so the water always
+ *  sits in a real basin (its bed reaches the water level exactly at the pond's radius and the bank rises beyond). */
+function rawHeight(x, z) {
+  let h = rawBase(x, z);
+  const d = Math.hypot(x - POND.x, z - POND.z), R = POND.r;
+  if (d < R * 1.8) {
+    const bowl = d < R ? POND_WATER - 1.7 * (1 - smooth(0, R, d)) : POND_WATER + 0.02;
+    const bank = Math.max(h, POND_WATER + 0.05);
+    const m = 1 - smooth(R * 0.9, R * 1.8, d);
+    h = lerp(bank, bowl, m);
+  }
   return h;
 }
 
@@ -596,9 +617,7 @@ export function buildWorld(scene, sections, opts = {}) {
   }
 
   // Water level: a little below the average ground height on a ring around the pond.
-  let ringSum = 0;
-  for (let k = 0; k < 8; k++) ringSum += rawHeight(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
-  const WATER_Y = ringSum / 8 - 0.5;
+  const WATER_Y = POND_WATER;
 
   // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
   const SEG = low ? [152, 100] : [304, 200];
@@ -662,12 +681,85 @@ export function buildWorld(scene, sections, opts = {}) {
   terrain.receiveShadow = true;
   scene.add(terrain);
 
-  // Pond water: glossy, picks up the sky through the environment map.
+  // Pond water: a soft cartoon look. Gentle drifting ripples, a sky reflection, shallows that go light, a thin
+  // foam line at the shore, glints, and rings spreading from the odd raindrop or fish. The shoreline is found per
+  // pixel from a fine ground-height map, so the water can never hang over land or objects.
+  const PB = { r: 15, ppu: 8 };
+  const PW = Math.ceil(PB.r * 2 * PB.ppu);
+  const pData = new Uint16Array(PW * PW);
+  for (let jj = 0; jj < PW; jj++) for (let ii = 0; ii < PW; ii++) {
+    pData[jj * PW + ii] = THREE.DataUtils.toHalfFloat(heightAt(POND.x - PB.r + (ii + 0.5) / PB.ppu, POND.z - PB.r + (jj + 0.5) / PB.ppu));
+  }
+  const pondHeight = new THREE.DataTexture(pData, PW, PW, THREE.RedFormat, THREE.HalfFloatType);
+  pondHeight.magFilter = pondHeight.minFilter = THREE.LinearFilter;
+  pondHeight.generateMipmaps = false;
+  pondHeight.needsUpdate = true;
+  const pondU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight },
+    uHT: { value: new THREE.Vector4(POND.x - PB.r, POND.z - PB.r, 1 / (PB.r * 2), 1 / (PB.r * 2)) },
+    uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
+    uCenter: { value: new THREE.Vector2(POND.x, POND.z) }, uR: { value: POND.r },
+  }]);
   const water = new THREE.Mesh(
-    new THREE.CircleGeometry(POND.r * 1.6, 48).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x4fb0d4, roughness: 0.05, metalness: 0.05, transparent: true, opacity: 0.8, envMapIntensity: 1.8 }),
+    new THREE.RingGeometry(0.05, POND.r * 1.12, 64, 10).rotateX(-Math.PI / 2),
+    new THREE.ShaderMaterial({
+      uniforms: pondU, fog: true, transparent: true, depthWrite: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      vertexShader: `
+        varying vec3 vW;
+        #include <fog_pars_vertex>
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vW = wp.xyz;
+          vec4 mvPosition = viewMatrix * wp;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `
+        uniform float uTime, uDay, uR; uniform vec3 uHorizon, uSkyTop; uniform vec2 uCenter;
+        uniform sampler2D uHeightTex; uniform vec4 uHT;
+        varying vec3 vW;
+        #include <fog_pars_fragment>
+        vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
+        float ringAt(vec2 p, vec2 c, float phase, float rmax) {
+          float t = fract(uTime * 0.11 + phase);
+          float r = t * rmax, d = abs(length(p - c) - r);
+          return smoothstep(0.16, 0.0, d) * (1.0 - t) * smoothstep(0.0, 0.08, t);
+        }
+        void main() {
+          float gh = texture2D(uHeightTex, (vW.xz - uHT.xy) * uHT.zw).r;
+          float depthW = vW.y - gh;
+          if (depthW < 0.0) discard;                                       // ground is above the water here
+          vec2 p = vW.xz;
+          vec2 g = vec2(0.0);
+          g += vec2(0.8, 0.6) * cos(dot(p, vec2(0.8, 0.6)) * 1.5 + uTime * 0.9) * 0.45;
+          g += vec2(-0.5, 0.86) * cos(dot(p, vec2(-0.5, 0.86)) * 2.3 - uTime * 1.1) * 0.32;
+          g += vec2(0.95, -0.3) * cos(dot(p, vec2(0.95, -0.3)) * 3.7 + uTime * 1.5) * 0.18;
+          vec3 N = normalize(vec3(-g.x * 0.22, 1.0, -g.y * 0.22));
+          vec3 V = normalize(cameraPosition - vW);
+          float fres = 0.06 + 0.94 * pow(1.0 - max(dot(N, V), 0.0), 4.0);
+          vec3 R = reflect(-V, N);
+          vec3 sky = mix(uHorizon, uSkyTop, smoothstep(0.0, 0.7, R.y));
+          float depth = clamp(depthW / 1.5, 0.0, 1.0);
+          vec3 body = mix(lin(vec3(0.42, 0.82, 0.78)), lin(vec3(0.18, 0.55, 0.78)), smoothstep(0.0, 1.0, depth));
+          body *= 0.4 + 0.6 * uDay;
+          vec3 col = mix(body, sky, clamp(fres * 0.8 + 0.08, 0.0, 1.0));
+          float band = smoothstep(0.82, 0.95, sin(dot(p, vec2(0.9, 0.4)) * 1.1 - uTime * 0.6 + sin(dot(p, vec2(-0.4, 0.9)) * 0.7) * 1.6));
+          col += lin(vec3(0.85, 0.95, 1.0)) * band * (0.1 + 0.2 * uDay);
+          float tw = sin(dot(p, vec2(2.6, 1.9)) + uTime * 1.4) * sin(dot(p, vec2(-1.7, 3.1)) - uTime * 1.1);
+          col += vec3(1.0) * smoothstep(0.9, 1.0, tw) * (0.12 + 0.3 * uDay);
+          float rings = ringAt(p, uCenter + vec2(-1.6, 1.2), 0.0, 2.6) + ringAt(p, uCenter + vec2(2.0, -0.8), 0.37, 2.2) + ringAt(p, uCenter + vec2(0.4, -2.4), 0.71, 2.0);
+          col = mix(col, lin(vec3(0.95, 0.99, 1.0)), clamp(rings, 0.0, 1.0) * 0.55 * (0.4 + 0.6 * uDay));
+          float shore = 1.0 - smoothstep(0.0, 0.14, depthW);
+          float fn = 0.5 + 0.5 * sin(dot(p, vec2(4.0, 3.0)) + uTime * 0.8) * sin(dot(p, vec2(-3.0, 4.5)) - uTime * 0.6);
+          col = mix(col, lin(vec3(0.97, 0.99, 1.0)) * (0.4 + 0.6 * uDay), shore * smoothstep(0.25, 0.6, fn + 0.35) * 0.8);
+          float alpha = mix(0.78, 0.95, smoothstep(0.0, 0.5, depthW));
+          gl_FragColor = vec4(col, alpha);
+          #include <fog_fragment>
+        }`,
+    }),
   );
   water.position.set(POND.x, WATER_Y, POND.z);
+  water.renderOrder = 2;
   scene.add(water);
 
   // ---- Village: cottages along the path ----
@@ -1215,6 +1307,11 @@ export function buildWorld(scene, sections, opts = {}) {
     const merged = mergeByMaterial(street);
     merged.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     scene.add(merged);
+  }
+
+  for (const k of Object.keys(items)) {                          // nothing may stand on the water (reeds and lily pads are the water's own)
+    if (k === 'lily' || k === 'reed' || k === 'reedTop') continue;
+    items[k] = items[k].filter((it) => Math.hypot(it.p[0] - POND.x, it.p[2] - POND.z) > POND.r * 1.04);
   }
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -1920,6 +2017,7 @@ export function buildWorld(scene, sections, opts = {}) {
       time += dt;
       if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
+      pondU.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       if (smoke) {
         smokeSrc.forEach((src, si) => {
@@ -1989,6 +2087,8 @@ export function buildWorld(scene, sections, opts = {}) {
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     setClouds(night, horizon) {
       cloudLook.night = night;
+      pondU.uHorizon.value.copy(horizon);
+      pondU.uSkyTop.value.set('#4a8cf0').lerp(new THREE.Color('#16206a'), night);
       // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
       const warm = Math.max(0, horizon.r - horizon.b);                       // how orange the horizon is
       // By day the clouds are white against the blue. When the horizon goes cream or peach (golden hour) a
@@ -2008,6 +2108,7 @@ export function buildWorld(scene, sections, opts = {}) {
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
       night = n;
+      pondU.uDay.value = 1 - n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.3;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
       setLanterns(n);
