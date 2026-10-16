@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015201213';
+} from './houses.js?v=20261015201704';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -677,6 +677,7 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const terrainWind = { uWindTime: { value: 0 } };   // drives the grass relief's sway (desktop only)
   if (!low) {
     // A tiling grass relief: short blades and soft mottling, turned into a normal map so the ground catches the
     // light in tiny facets (no extra geometry). One small texture, repeated every ~7 units.
@@ -730,14 +731,22 @@ export function buildWorld(scene, sections, opts = {}) {
     terrainMat.onBeforeCompile = (sh) => {
       sh.uniforms.uGroundNormal = { value: gn };
       sh.uniforms.uGroundScale = { value: 1.0 };
+      sh.uniforms.uWindTime = terrainWind.uWindTime;
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <normalmap_pars_fragment>', '#include <normalmap_pars_fragment>\nuniform sampler2D uGroundNormal; uniform float uGroundScale;')
+        .replace('#include <normalmap_pars_fragment>', '#include <normalmap_pars_fragment>\nuniform sampler2D uGroundNormal; uniform float uGroundScale; uniform float uWindTime;')
         .replace('#include <normal_fragment_maps>', `
           // grass relief on green ground, pebbly relief where the ground colour turns red/tan (dirt, path, sand, rock)
-          vec3 nGr = texture2D(normalMap, vNormalMapUv).xyz * 2.0 - 1.0;
+          // wind: the grass relief streams along the breeze and bends back and forth, stronger in passing gusts
+          vec2 wd = vec2(0.82, 0.57);
+          float gust = 0.5 + 0.5 * sin(dot(vNormalMapUv, wd) * 9.0 - uWindTime * 0.55 + sin(uWindTime * 0.23) * 2.0);
+          gust = smoothstep(0.25, 0.95, gust) * (0.45 + 0.55 * (0.5 + 0.5 * sin(uWindTime * 0.31)));
+          vec2 sway = wd * (uWindTime * 0.012) + vec2(sin(uWindTime * 1.7 + vNormalMapUv.y * 60.0), cos(uWindTime * 1.3 + vNormalMapUv.x * 55.0)) * (0.0025 + 0.006 * gust);
+          vec3 nA = texture2D(normalMap, vNormalMapUv + sway).xyz * 2.0 - 1.0;
+          vec3 nB = texture2D(normalMap, vNormalMapUv * 1.37 + vec2(0.31, 0.17) - sway * 1.6).xyz * 2.0 - 1.0;
+          vec3 nGr = normalize(vec3((nA.xy + nB.xy) * 0.75, 0.5 * (nA.z + nB.z)));
           vec3 nGd = texture2D(uGroundNormal, vNormalMapUv * 2.4).xyz * 2.0 - 1.0;
           float wGd = smoothstep(-0.02, 0.1, vColor.r - vColor.g);
-          vec3 mapN = mix(vec3(nGr.xy * normalScale, nGr.z), vec3(nGd.xy * uGroundScale, nGd.z), wGd);
+          vec3 mapN = mix(vec3(nGr.xy * normalScale * (1.0 + 0.9 * gust), nGr.z), vec3(nGd.xy * uGroundScale, nGd.z), wGd);
           normal = normalize(tbn * mapN);`);
     };
   }
@@ -2082,6 +2091,7 @@ export function buildWorld(scene, sections, opts = {}) {
       time += dt;
       if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
+      terrainWind.uWindTime.value = time;
       pondU.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       if (smoke) {
