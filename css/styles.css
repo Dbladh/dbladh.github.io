@@ -205,6 +205,7 @@ body.scene-mode .stop { display: none; margin: 0; }
    left/top/width/height/font-size from the sign's projected corners; the 3D face supplies the colour. */
 body.scene-mode #content { place-items: stretch; }
 body.scene-mode .stop.is-open {
+  --ink: #33424C;   /* the billboards' lettering: deep blue-slate (about 10:1 on white), from the town palette */
   display: block; pointer-events: auto;
   position: absolute; inset: auto;
   overflow-y: auto; border: 0; border-radius: 0; box-shadow: none; background: transparent;

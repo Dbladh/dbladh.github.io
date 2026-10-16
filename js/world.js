@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015205657';
+import { PAL } from './palette.js?v=20261015210017';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015205657';
+} from './houses.js?v=20261015210017';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -191,7 +191,7 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
   while (size > 40 && (!lines || lines.length > maxLines || lines.length * size * 1.0 > areaH)) { size -= 4; lines = wrap(size); }
   const fitted = size;                                      // the largest size this title fits at
   if (forceSize && forceSize < fitted) { size = forceSize; lines = wrap(size) || lines; }
-  g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
+  g.fillStyle = PAL.inkSign; g.textBaseline = 'alphabetic';
   g.font = `800 ${size}px ${FACE_FONT}`;
   const lh = size * 1.0, total = lines.length * lh, top = areaY + (areaH - total) / 2;
   lines.forEach((ln, i) => g.fillText(ln, textX, top + i * lh + size * 0.8));
@@ -204,7 +204,7 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
     const sx = (iw - side) / 2, sy = (ih - side) * 0.28;
     g.drawImage(photo, sx, sy, side, side, x, y, pic, pic);
     g.restore();
-    g.lineWidth = 6; g.strokeStyle = '#111';
+    g.lineWidth = 6; g.strokeStyle = PAL.inkSign;
     g.beginPath(); g.roundRect(x, y, pic, pic, r); g.stroke();
   }
   return fitted;

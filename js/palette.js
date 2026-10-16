@@ -19,6 +19,7 @@ export const PAL = {
   charcoal: '#454C55',     // ridges, metal roofs
   thatch: '#C6AE78',
   thatchDeep: '#B39A68',
+  inkSign: '#33424C',      // billboard lettering: a deep blue-slate, ~10:1 on white (AAA) without being black
   ink: '#3F4F5A',          // frames, doors on pale houses, ironwork
   marigold: '#E3B04B',     // an occasional door or awning pop
   timber: '#A8815A',       // fences, decks, the bridge
