@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015183004';
-import { createSky } from './sky.js?v=20261015183004';
-import { createDOF } from './dof.js?v=20261015183004';
+import { buildWorld } from './world.js?v=20261015183108';
+import { createSky } from './sky.js?v=20261015183108';
+import { createDOF } from './dof.js?v=20261015183108';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -88,13 +88,14 @@ function start() {
   const skyScene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 600);
   camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
-  const sky = createSky(scene, skyScene, renderer);
+  const classic = new URLSearchParams(location.search).get('look') === 'classic'; // A/B: the original look
+  const sky = createSky(scene, skyScene, renderer, { classic });
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
-  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed });
+  const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed, classic });
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
-  const dof = reduceMotion ? null : createDOF(renderer, { half: lowEnd }); // soft focus is skipped for reduced motion
+  const dof = reduceMotion ? null : createDOF(renderer, { half: lowEnd, classic }); // soft focus is skipped for reduced motion
   let focus = 60;
 
   // ---- Camera stops ----

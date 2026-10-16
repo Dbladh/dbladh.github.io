@@ -29,6 +29,7 @@ const FRAG = /* glsl */ `
   uniform vec3 hazeColor;   // linear horizon colour
   uniform float hazeAmt;    // 0 = off
   uniform float bloom;      // 0 = off
+  uniform float gradeAmt;   // 0 = classic (ungraded)
   varying vec2 vUv;
 
   float cocAt(vec2 uv) {
@@ -89,6 +90,7 @@ const FRAG = /* glsl */ `
         c += glow * bloom * 0.09;
       }
     }
+    vec3 c0 = c;
     // Grade: filmic tone curve, a little more saturation, warm highlights over cool shadows, soft vignette.
     c *= 1.18;
     c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
@@ -98,13 +100,14 @@ const FRAG = /* glsl */ `
     c *= mix(vec3(1.0), vec3(1.05, 1.0, 0.93), smoothstep(0.45, 1.0, luma));
     float vig = smoothstep(1.05, 0.35, length((vUv - 0.5) * vec2(1.0, 0.9)));
     c *= mix(0.8, 1.0, vig);
+    c = mix(c0, c, gradeAmt);
     gl_FragColor = vec4(c, a);
     #include <colorspace_fragment>
     gl_FragColor.rgb *= a;
   }
 `;
 
-export function createDOF(renderer, { half = false } = {}) {
+export function createDOF(renderer, { half = false, classic = false } = {}) {
   if (!renderer.capabilities.isWebGL2) return null;
 
   let target;
@@ -136,8 +139,10 @@ export function createDOF(renderer, { half = false } = {}) {
       hazeColor: { value: new THREE.Color('#bfe8ff') },
       hazeAmt: { value: 1 },
       bloom: { value: 1 },
+      gradeAmt: { value: 1 },
       tBlur: { value: blurTarget ? blurTarget.texture : null },
   };
+  if (classic) { uniforms.gradeAmt.value = 0; uniforms.hazeAmt.value = 0; uniforms.bloom.value = 0; }
   const material = new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, uniforms,
     defines: halfRes ? { HALF_RES: 1 } : {},
@@ -198,6 +203,7 @@ export function createDOF(renderer, { half = false } = {}) {
 
     /** Time-of-day inputs for the composite: horizon colour for haze, and bloom on/off (0..1). */
     setLook(horizon, bloom) {
+      if (classic) return;
       if (horizon) material.uniforms.hazeColor.value.copy(horizon);
       if (bloom !== undefined) material.uniforms.bloom.value = bloom;
     },

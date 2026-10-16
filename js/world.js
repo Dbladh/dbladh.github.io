@@ -416,6 +416,7 @@ function drawOpenBoard(paper, accent) {
 export function buildWorld(scene, sections, opts = {}) {
   const maxLights = opts.maxLights ?? 14;
   const skyScene = opts.skyScene ?? scene; // clouds live on the layer behind the title text
+  const classic = !!opts.classic;          // ?look=classic: the original, dimmer palette
   const low = !!opts.low;                  // weaker machine: fewer plants, coarser terrain
   const rand = rng(11);
   const pick = (a) => a[Math.floor(rand() * a.length)];
@@ -568,8 +569,8 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.translate(0, 0, -75);
   const p = geo.attributes.position;
   const colors = new Float32Array(p.count * 3);
-  const cLow = new THREE.Color('#4cbf4f'), cHigh = new THREE.Color('#d6f48a');
-  const cWarm = new THREE.Color('#f0ee80'), cPath = new THREE.Color('#f1e5c6'), cDeep = new THREE.Color('#3f9a58');
+  const cLow = new THREE.Color(classic ? '#55ad5a' : '#4cbf4f'), cHigh = new THREE.Color(classic ? '#c9ee9a' : '#d6f48a');
+  const cWarm = new THREE.Color(classic ? '#e2ea8a' : '#f0ee80'), cPath = new THREE.Color('#f1e5c6'), cDeep = new THREE.Color('#3f9a58');
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
   const c = new THREE.Color();
@@ -711,7 +712,7 @@ export function buildWorld(scene, sections, opts = {}) {
     rock: [], grass: [], stem: [], head: [], dot: [], spike: [], fern: [], mushStem: [], mushCap: [],
     log: [], reed: [], reedTop: [], lily: [], post: [], rail: [],
   };
-  const GREENS = ['#4fcf5a', '#6ed84f', '#3ec46a', '#8ee05a', '#a4e04a'].map((h) => new THREE.Color(h));
+  const GREENS = (classic ? ['#5cb85c', '#6cc96a', '#4aa857', '#7fd070', '#8fcf5a'] : ['#4fcf5a', '#6ed84f', '#3ec46a', '#8ee05a', '#a4e04a']).map((h) => new THREE.Color(h));
   const FALL = ['#ff9a4a', '#ffc94a', '#f2703c', '#ffd966'].map((h) => new THREE.Color(h));
   const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h));
   const BLOSSOM = new THREE.Color('#ffb3c8');

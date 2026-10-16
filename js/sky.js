@@ -17,13 +17,27 @@ const KEYS = [
   { h: 24,   top: '#16206a', bot: '#5a4a9a', sun: '#9fb8ff', sunI: 0.0, hemi: 0.55 },
 ];
 
+// The original, dimmer look, kept for A/B comparison with ?look=classic.
+const KEYS_CLASSIC = [
+  { h: 0,    top: '#0b1030', bot: '#2a2f66', sun: '#8fa8ff', sunI: 0.0, hemi: 0.35 },
+  { h: 5,    top: '#2a2f78', bot: '#7a5aa8', sun: '#b9a0ff', sunI: 0.1, hemi: 0.4 },
+  { h: 6.5,  top: '#6a7fe0', bot: '#ffb0a0', sun: '#ffb27a', sunI: 0.6, hemi: 0.55 },
+  { h: 9,    top: '#5aa0f0', bot: '#d6ecfa', sun: '#fff3d6', sunI: 1.1, hemi: 0.75 },
+  { h: 13,   top: '#3f8cf0', bot: '#cfe9fb', sun: '#fff8e8', sunI: 1.25, hemi: 0.85 },
+  { h: 17,   top: '#5a8fe0', bot: '#ffd9a6', sun: '#ffcf8a', sunI: 1.0, hemi: 0.7 },
+  { h: 19,   top: '#6a4fb8', bot: '#ff8f6a', sun: '#ff8a5c', sunI: 0.55, hemi: 0.5 },
+  { h: 20.5, top: '#1c2058', bot: '#5a3c78', sun: '#8f7fd0', sunI: 0.05, hemi: 0.38 },
+  { h: 24,   top: '#0b1030', bot: '#2a2f66', sun: '#8fa8ff', sunI: 0.0, hemi: 0.35 },
+];
+let KEYS_ACTIVE = KEYS;
+
 const _a = new THREE.Color();
 const _b = new THREE.Color();
 
 function sample(hour) {
   let i = 0;
-  while (i < KEYS.length - 2 && hour > KEYS[i + 1].h) i++;
-  const k0 = KEYS[i], k1 = KEYS[i + 1];
+  while (i < KEYS_ACTIVE.length - 2 && hour > KEYS_ACTIVE[i + 1].h) i++;
+  const k0 = KEYS_ACTIVE[i], k1 = KEYS_ACTIVE[i + 1];
   const f = THREE.MathUtils.clamp((hour - k0.h) / (k1.h - k0.h), 0, 1);
   const mix = (key) => _a.set(k0[key]).lerp(_b.set(k1[key]), f).clone();
   return {
@@ -38,12 +52,13 @@ function sample(hour) {
  * @param {THREE.Scene} skyScene  separate scene drawn on a canvas *behind* the title text:
  *                                 sun, moon, stars and clouds
  */
-export function createSky(scene, skyScene, renderer) {
-  const fog = new THREE.Fog(0xcfe9fb, 48, 215);
+export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
+  if (classic) KEYS_ACTIVE = KEYS_CLASSIC;
+  const fog = classic ? new THREE.Fog(0xcfe9fb, 60, 230) : new THREE.Fog(0xcfe9fb, 48, 215);
   scene.fog = fog;
 
   // Sky-tinted fill from above, warm grass bounce from below.
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xa8c470, 0.8);
+  const hemi = new THREE.HemisphereLight(0xffffff, classic ? 0x8aa860 : 0xa8c470, 0.8);
   const sunLight = new THREE.DirectionalLight(0xffffff, 1);
   const moonLight = new THREE.DirectionalLight(0x9fb4ff, 0);
   scene.add(hemi, sunLight, sunLight.target, moonLight, moonLight.target);
@@ -224,18 +239,19 @@ export function createSky(scene, skyScene, renderer) {
     const night = THREE.MathUtils.clamp(1 - (sy + 8) / 18, 0, 1);
     sunLight.color.copy(s.sun);
     sunLight.intensity = s.sunI * 1.75;
-    moonLight.intensity = 0.6 * night;
+    moonLight.intensity = (classic ? 0.35 : 0.6) * night;
     hemi.intensity = s.hemi * 1.45; // soft fill, kept low enough that shadows still read
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
     skyHemi.intensity = hemi.intensity;
     rimLight.position.set(-sx * 0.7, 38, -150);
     rimLight.color.copy(s.sun).lerp(s.top, 0.35);
-    rimLight.intensity = 0.55 * (1 - night) * Math.min(1, s.sunI + 0.3);
+    rimLight.intensity = classic ? 0 : 0.55 * (1 - night) * Math.min(1, s.sunI + 0.3);
     skyHemi.color.copy(hemi.color);
     skySun.intensity = sunLight.intensity * 0.8;
     skySun.color.copy(sunLight.color);
     skySun.position.set(sx * 1.25, Math.max(sy, 26), 20);
-    fog.color.copy(s.bot).lerp(s.sun, 0.12);
+    fog.color.copy(s.bot);
+    if (!classic) fog.color.lerp(s.sun, 0.12);
     starMat.uniforms.uNight.value = night * night;
     sunMesh.visible = sy > -6;
     moonMesh.visible = -sy > -6;

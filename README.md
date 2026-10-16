@@ -38,5 +38,6 @@ Push this folder to a repo named `dbladh.github.io` on the `main` branch; Pages 
 ## URL options
 
 - `?seed=NN` pins the village's look (theme, house designs, layout). Without it every visit gets a new village; the console prints the seed in use. Billboards, terrain, hills, forest and pond never change.
-- `?debug=1` shows a viewport/seed readout.
+- `?look=classic` shows the original, dimmer look (no grade, haze, bloom or rim light) for A/B comparison.
+- `?perf=1` / `?debug=1` show a viewport, seed and frame-cost readout.
 - `?detail=low|high` forces the detail level.
