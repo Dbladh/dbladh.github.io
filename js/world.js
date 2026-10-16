@@ -619,7 +619,53 @@ export function buildWorld(scene, sections, opts = {}) {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  // Wind and cloud shadows are painted in the terrain's own shader (no extra geometry): long grass
+  // strokes that stream along the wind, and big soft cloud shadows that drift over the hills.
+  const noiseData = new Uint8Array(128 * 128 * 4);
+  for (let i = 0; i < 128 * 128; i++) {
+    const v = Math.floor(hash(i % 128, Math.floor(i / 128)) * 255);
+    noiseData[i * 4] = v; noiseData[i * 4 + 1] = Math.floor(hash(i * 0.37, 11) * 255); noiseData[i * 4 + 2] = v; noiseData[i * 4 + 3] = 255;
+  }
+  const windTex = new THREE.DataTexture(noiseData, 128, 128, THREE.RGBAFormat);
+  windTex.wrapS = windTex.wrapT = THREE.RepeatWrapping;
+  windTex.magFilter = THREE.LinearFilter;
+  windTex.minFilter = THREE.LinearMipmapLinearFilter;
+  windTex.generateMipmaps = true;
+  windTex.needsUpdate = true;
+  const windU = { uWindTex: { value: windTex }, uWindT: { value: 0 }, uDay: { value: 1 }, uWindAmt: { value: classic ? 0 : 1 } };
+  const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  terrainMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, windU);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying float vWDist;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform sampler2D uWindTex; uniform float uWindT; uniform float uDay; uniform float uWindAmt;
+varying vec3 vWPos; varying float vWDist;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  float grass = smoothstep(0.0, 0.1, diffuseColor.g - diffuseColor.r * 0.9) * (1.0 - smoothstep(0.55, 0.8, diffuseColor.b));
+  vec2 dir = normalize(vec2(1.0, 0.3)), side = vec2(-dir.y, dir.x);
+  float u = dot(vWPos.xz, dir) - uWindT * 1.1, v = dot(vWPos.xz, side);
+  float s1 = texture2D(uWindTex, vec2(u * 0.0035, v * 0.07)).r;
+  float s2 = texture2D(uWindTex, vec2(u * 0.009 + 0.31, v * 0.17)).g;
+  float streak = s1 * 0.6 + s2 * 0.4;
+  float near = 1.0 - smoothstep(70.0, 170.0, vWDist);
+  float k = clamp((streak - 0.5) * 3.4, -1.0, 1.0);
+  vec3 lit = diffuseColor.rgb * vec3(1.18, 1.14, 0.8) + vec3(0.03, 0.04, 0.0);
+  vec3 dark = diffuseColor.rgb * vec3(0.72, 0.86, 0.9);
+  vec3 painted = k > 0.0 ? mix(diffuseColor.rgb, lit, k * 0.9) : mix(diffuseColor.rgb, dark, -k * 0.9);
+  diffuseColor.rgb = mix(diffuseColor.rgb, painted, grass * near * uWindAmt);
+  float gust = smoothstep(0.55, 1.0, sin(u * 0.045 + v * 0.012 + 1.3) * 0.5 + 0.5);
+  diffuseColor.rgb *= 1.0 + 0.12 * gust * grass * uWindAmt;
+  float cn = texture2D(uWindTex, vWPos.xz * 0.0055 + vec2(uWindT * 0.0018, uWindT * 0.0007)).r * 0.65
+           + texture2D(uWindTex, vWPos.xz * 0.013 + vec2(uWindT * 0.003, 0.4)).g * 0.35;
+  float cs = smoothstep(0.52, 0.72, cn) * uDay * uWindAmt;
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.74, 0.82, 0.98), cs * 0.75);
+}`);
+  };
+  const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
   scene.add(terrain);
 
@@ -1720,6 +1766,7 @@ export function buildWorld(scene, sections, opts = {}) {
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
     update(dt, camera) {
       time += dt;
+      windU.uWindT.value = time;
       if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
@@ -1806,6 +1853,7 @@ export function buildWorld(scene, sections, opts = {}) {
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
       night = n;
+      windU.uDay.value = 1 - n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.7;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
       setLanterns(n);
