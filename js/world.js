@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015192551';
+} from './houses.js?v=20261015193053';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -82,7 +82,7 @@ export function pathX(z) {
 }
 
 /** Ground height at (x, z). */
-function rawHeight(x, z) {
+function rawBase(x, z) {
   const calm = 0.2 + 0.8 * smooth(12, 46, Math.hypot(x, z - 22)); // gentle meadow near the camera
   let h = (fbm(x * 0.016, z * 0.016) - 0.45) * 15 * calm;
   h += (fbm(x * 0.06 + 9, z * 0.06 + 3) - 0.5) * 3 * calm;
@@ -102,6 +102,58 @@ function rawHeight(x, z) {
     h += f.h * Math.exp(-0.5 * (dx * dx + dz * dz));
   }
   h -= 0.35 * (1 - smooth(0, 4, Math.abs(x - pathX(z)))); // path sits in a shallow trough
+  return h;
+}
+
+// ---------------------------------------------------------------- the river
+// A fixed river leaves the back of the pond, winds out to the right and runs back toward the horizon.
+// The terrain is carved along it (so nothing can stand in the channel) and the water follows the ground.
+const RIVER_CTRL = [[17, -9.5], [22, -14], [29, -21], [38, -29], [48, -38], [57, -48], [62, -60], [63, -73],
+  [58, -88], [50, -103], [40, -118], [29, -133], [19, -150], [12, -170]];
+export const RIVER = (() => {
+  const pts = new THREE.CatmullRomCurve3(RIVER_CTRL.map(([x, z]) => new THREE.Vector3(x, 0, z))).getPoints(110);
+  const n = pts.length;
+  let ring = 0;
+  for (let k = 0; k < 8; k++) ring += rawBase(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
+  const waterC = ring / 8 - 0.5;                                   // the pond's water level
+  const base = pts.map((p) => rawBase(p.x, p.z));
+  const surf = [], hw = [], x = [], z = [];
+  for (let i = 0; i < n; i++) {
+    let s = 0, c = 0;
+    for (let k = -4; k <= 4; k++) { const q = base[Math.min(n - 1, Math.max(0, i + k))]; s += q; c++; }
+    const t = i / (n - 1);
+    surf.push(lerp(waterC, s / c - 0.75, smooth(0, 0.12, t)));
+    hw.push(lerp(1.5, 2.7, t));
+    x.push(pts[i].x); z.push(pts[i].z);
+  }
+  // keep the surface from rising uphill too steeply between neighbours (rapids, not a wall)
+  for (let i = 1; i < n; i++) surf[i] = Math.min(surf[i], surf[i - 1] + 0.35);
+  const bx0 = Math.min(...x) - 12, bx1 = Math.max(...x) + 12, bz0 = Math.min(...z) - 12, bz1 = Math.max(...z) + 12;
+  return { n, x, z, surf, hw, waterC, bx0, bx1, bz0, bz1 };
+})();
+
+/** Closest point of the river's centre line: { d, i, surf, hw } or null if clearly away from it. */
+export function riverQuery(px, pz) {
+  const R = RIVER;
+  if (px < R.bx0 || px > R.bx1 || pz < R.bz0 || pz > R.bz1) return null;
+  let best = 1e9, bi = 0, bt = 0;
+  for (let i = 0; i < R.n - 1; i++) {
+    const ax = R.x[i], az = R.z[i], abx = R.x[i + 1] - ax, abz = R.z[i + 1] - az;
+    const t = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / (abx * abx + abz * abz || 1)));
+    const d = Math.hypot(px - (ax + abx * t), pz - (az + abz * t));
+    if (d < best) { best = d; bi = i; bt = t; }
+  }
+  return { d: best, i: bi, surf: lerp(R.surf[bi], R.surf[bi + 1], bt), hw: lerp(R.hw[bi], R.hw[bi + 1], bt) };
+}
+
+/** Ground height at (x, z) before the house plots: base terrain with the river channel cut into it. */
+function rawHeight(x, z) {
+  let h = rawBase(x, z);
+  const q = riverQuery(x, z);
+  if (q && q.d < q.hw * 3) {
+    const m = 1 - smooth(q.hw * 0.7, q.hw * 2.8, q.d);
+    h = lerp(h, q.surf - 0.9, m);
+  }
   return h;
 }
 
@@ -432,7 +484,14 @@ export function buildWorld(scene, sections, opts = {}) {
     return { pts, r: 9.5 * Math.max(s.scale * 1.25, 0.8) };
   });
   const nearSign = (x, z, pad = 0) => signSpots.some((sp) => sp.pts.some(([px, pz]) => Math.hypot(x - px, z - pz) < sp.r + pad));
-  const nearPond = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r * 1.3 + pad;
+  // "Wet" ground: the pond (and any ground lower than its water level beside it) and the river channel.
+  const nearPond = (x, z, pad = 0) => {
+    const dp = Math.hypot(x - POND.x, z - POND.z);
+    if (dp < POND.r * 1.3 + pad) return true;
+    if (dp < 18 && rawHeight(x, z) < RIVER.waterC + 0.3 + pad * 0.2) return true;
+    const q = riverQuery(x, z);
+    return !!q && q.d < q.hw * 1.9 + 1.0 + pad;
+  };
   PADS.length = 0;
 
   // ---- The village: seeded per visit (townRand); everything else in the scene is fixed ----
@@ -596,9 +655,7 @@ export function buildWorld(scene, sections, opts = {}) {
   }
 
   // Water level: a little below the average ground height on a ring around the pond.
-  let ringSum = 0;
-  for (let k = 0; k < 8; k++) ringSum += rawHeight(POND.x + Math.cos(k * 0.785) * POND.r * 1.4, POND.z + Math.sin(k * 0.785) * POND.r * 1.4);
-  const WATER_Y = ringSum / 8 - 0.5;
+  const WATER_Y = RIVER.waterC;
 
   // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
   const SEG = low ? [152, 100] : [304, 200];
@@ -636,6 +693,11 @@ export function buildWorld(scene, sections, opts = {}) {
     const dp = Math.hypot(x - POND.x, z - POND.z);
     c.lerp(cSand, (1 - smooth(WATER_Y + 0.1, WATER_Y + 0.9, h)) * (1 - smooth(POND.r * 1.3, POND.r * 2.1, dp)) * 0.9);
     c.lerp(cBed, smooth(WATER_Y, WATER_Y - 1.4, h) * 0.7);
+    const rq = riverQuery(x, z);
+    if (rq && rq.d < rq.hw * 3.4) {                                           // sandy banks, darker bed
+      c.lerp(cSand, (1 - smooth(rq.hw * 1.5, rq.hw * 3.2, rq.d)) * 0.55);
+      c.lerp(cBed, (1 - smooth(rq.hw * 0.4, rq.hw * 1.6, rq.d)) * 0.75);
+    }
 
     const onPath = 1 - smooth(1.5, 3.1, Math.abs(x - pathX(z)));
     let walk = 0; // short footpath from each front door to the main path
@@ -719,13 +781,113 @@ varying vec3 vWPos; varying float vWDist;`)
   terrain.receiveShadow = true;
   scene.add(terrain);
 
-  // Pond water: glossy, picks up the sky through the environment map.
-  const water = new THREE.Mesh(
-    new THREE.CircleGeometry(POND.r * 1.6, 48).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x4fb0d4, roughness: 0.05, metalness: 0.05, transparent: true, opacity: 0.8, envMapIntensity: 1.8 }),
-  );
-  water.position.set(POND.x, WATER_Y, POND.z);
-  scene.add(water);
+  // Water (pond and river): one shader with moving ripples, a fresnel sky reflection, depth colour,
+  // sun glints and shoreline foam. Per-vertex depth comes from the terrain, so shallows go light and foamy.
+  const waterU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+    uTime: { value: 0 }, uDay: { value: 1 },
+    uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
+    uSunDir: { value: new THREE.Vector3(0.45, 0.7, -0.55).normalize() },
+  }]);
+  const waterMat = new THREE.ShaderMaterial({
+    uniforms: waterU, fog: true, transparent: true, depthWrite: true,
+    vertexShader: /* glsl */ `
+      attribute float aDepth; attribute vec2 aFlow; attribute float aEdge;
+      varying vec3 vW; varying float vDepth; varying vec2 vFlow; varying float vEdge;
+      #include <fog_pars_vertex>
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vW = wp.xyz; vDepth = aDepth; vFlow = aFlow; vEdge = aEdge;
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime, uDay; uniform vec3 uHorizon, uSkyTop, uSunDir;
+      varying vec3 vW; varying float vDepth; varying vec2 vFlow; varying float vEdge;
+      #include <fog_pars_fragment>
+      vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
+      void main() {
+        vec2 q = vW.xz - vFlow * uTime;
+        vec2 g = vec2(0.0);
+        vec2 d1 = vec2(0.8, 0.6), d2 = vec2(-0.5, 0.85), d3 = vec2(0.95, -0.3), d4 = vec2(-0.2, -0.97);
+        g += d1 * cos(dot(q, d1) * 1.7 + uTime * 1.1) * 0.5;
+        g += d2 * cos(dot(q, d2) * 2.6 - uTime * 1.4) * 0.35;
+        g += d3 * cos(dot(q, d3) * 4.4 + uTime * 2.0) * 0.2;
+        g += d4 * cos(dot(q, d4) * 7.2 - uTime * 2.6) * 0.12;
+        vec3 N = normalize(vec3(-g.x * 0.26, 1.0, -g.y * 0.26));
+        vec3 V = normalize(cameraPosition - vW);
+        float fres = 0.05 + 0.95 * pow(1.0 - max(dot(N, V), 0.0), 4.0);
+        vec3 R = reflect(-V, N);
+        vec3 sky = mix(uHorizon, uSkyTop, smoothstep(0.0, 0.7, R.y));
+        float depth = clamp(vDepth / 1.6, 0.0, 1.0);
+        vec3 body = mix(lin(vec3(0.34, 0.76, 0.66)), lin(vec3(0.08, 0.36, 0.58)), smoothstep(0.0, 1.0, depth));
+        body *= 0.35 + 0.65 * uDay;
+        vec3 col = mix(body, sky, clamp(fres * 0.85 + 0.1, 0.0, 1.0));
+        float spec = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.0), 80.0) * uDay;
+        col += vec3(1.0, 0.92, 0.75) * spec * 1.8;
+        float tw = sin(dot(q, vec2(11.0, 7.0)) + uTime * 3.0) * sin(dot(q, vec2(-5.0, 13.0)) - uTime * 2.3);
+        col += vec3(1.0) * smoothstep(0.9, 1.0, tw) * uDay * 0.45;
+        float shore = 1.0 - smoothstep(0.0, 0.32, vDepth);
+        float fn = 0.5 + 0.5 * sin(dot(q, vec2(3.1, 2.3)) + uTime * 0.9) * sin(dot(q, vec2(-2.4, 3.7)) - uTime * 0.7);
+        float foam = shore * smoothstep(0.25, 0.75, fn + shore * 0.6);
+        col = mix(col, lin(vec3(0.95, 0.98, 1.0)) * (0.35 + 0.65 * uDay), foam * 0.75);
+        float alpha = mix(0.5, 0.93, smoothstep(0.0, 0.55, vDepth)) * (1.0 - smoothstep(0.82, 1.0, vEdge));
+        gl_FragColor = vec4(col, alpha);
+        #include <fog_fragment>
+      }`,
+  });
+  // pond: concentric rings so each vertex can take its own depth
+  {
+    const geo = new THREE.RingGeometry(0.05, POND.r * 1.6, 64, 16).rotateX(-Math.PI / 2);
+    const p2 = geo.attributes.position, n2 = p2.count;
+    const dep = new Float32Array(n2), flow = new Float32Array(n2 * 2), edge = new Float32Array(n2);
+    for (let i = 0; i < n2; i++) {
+      const wx = POND.x + p2.getX(i), wz = POND.z + p2.getZ(i);
+      dep[i] = WATER_Y - heightAt(wx, wz);
+      edge[i] = Math.hypot(p2.getX(i), p2.getZ(i)) / (POND.r * 1.6);
+    }
+    geo.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1));
+    geo.setAttribute('aFlow', new THREE.BufferAttribute(flow, 2));
+    geo.setAttribute('aEdge', new THREE.BufferAttribute(edge, 1));
+    const water = new THREE.Mesh(geo, waterMat);
+    water.position.set(POND.x, WATER_Y, POND.z);
+    water.renderOrder = 2;
+    scene.add(water);
+  }
+  // river: a ribbon that follows the channel, flowing away from the pond
+  {
+    const K = 10, N = RIVER.n;
+    const pos = new Float32Array(N * (K + 1) * 3), dep = new Float32Array(N * (K + 1)), flow = new Float32Array(N * (K + 1) * 2), edge = new Float32Array(N * (K + 1));
+    for (let i = 0; i < N; i++) {
+      const a = Math.max(0, i - 1), b = Math.min(N - 1, i + 1);
+      let tx = RIVER.x[b] - RIVER.x[a], tz = RIVER.z[b] - RIVER.z[a];
+      const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+      const nx = -tz, nz = tx, W = RIVER.hw[i] * 1.55;
+      for (let j = 0; j <= K; j++) {
+        const u = (j / K) * 2 - 1, k = i * (K + 1) + j;
+        const x = RIVER.x[i] + nx * u * W, z = RIVER.z[i] + nz * u * W;
+        pos[k * 3] = x; pos[k * 3 + 1] = RIVER.surf[i]; pos[k * 3 + 2] = z;
+        dep[k] = Math.max(-0.5, RIVER.surf[i] - heightAt(x, z));
+        flow[k * 2] = tx * 1.1; flow[k * 2 + 1] = tz * 1.1;
+        edge[k] = 0;
+      }
+    }
+    const idx = [];
+    for (let i = 0; i < N - 1; i++) for (let j = 0; j < K; j++) {
+      const a = i * (K + 1) + j, b = a + 1, c = a + K + 1, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1));
+    geo.setAttribute('aFlow', new THREE.BufferAttribute(flow, 2));
+    geo.setAttribute('aEdge', new THREE.BufferAttribute(edge, 1));
+    geo.setIndex(idx);
+    const river = new THREE.Mesh(geo, waterMat);
+    river.frustumCulled = false;
+    river.renderOrder = 2;
+    scene.add(river);
+  }
 
   // ---- Village: cottages along the path ----
   const houses = []; // { x, z, r }
@@ -1940,6 +2102,7 @@ varying vec3 vWPos; varying float vWDist;`)
     update(dt, camera) {
       time += dt;
       windU.uWindT.value = time;
+      waterU.uTime.value = time;
       if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
@@ -2010,6 +2173,8 @@ varying vec3 vWPos; varying float vWDist;`)
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     setClouds(night, horizon) {
       cloudLook.night = night;
+      waterU.uHorizon.value.copy(horizon);
+      waterU.uSkyTop.value.set('#4a8cf0').lerp(new THREE.Color('#16206a'), night);
       // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
       const warm = Math.max(0, horizon.r - horizon.b);                       // how orange the horizon is
       const day = new THREE.Color(1, 1, 1).lerp(horizon, 0.1 + 0.5 * Math.min(1, warm * 2.5));
@@ -2027,6 +2192,7 @@ varying vec3 vWPos; varying float vWDist;`)
     setNight(n) {
       night = n;
       windU.uDay.value = 1 - n;
+      waterU.uDay.value = 1 - n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.3;
       for (const l of houseLights) l.intensity = n * HOUSE_I;
       setLanterns(n);
