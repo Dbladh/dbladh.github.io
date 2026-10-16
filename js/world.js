@@ -3,25 +3,23 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015213238';
+import { PAL } from './palette.js?v=20261015214457';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015213238';
+} from './houses.js?v=20261015214457';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
 // `hill.x`) and, in portrait, steps to its `stagger` depth so the three signs zig-zag instead of overlapping.
-// `scale` shrinks the sign (the About sign is a small roadside one).
+// `scale` resizes the sign (all three are full size).
 export const STOPS = {
   creativity:  { desk: { x: -38, z: -58 }, stagger: { z: -41 }, hill: { x: -11, z: -54, rx: 26, rz: 18, h: 9 },
                  scale: 1, accent: '#ff9db8', paper: '#ffffff', yaw: 0.28 },
   ai:          { desk: { x: 0, z: -78 },   stagger: { z: -76 }, hill: { x: 0, z: -80, rx: 30, rz: 16, h: 12 }, raise: 13,
                  scale: 1, accent: '#8ec5ff', paper: '#ffffff', yaw: -0.18 },
-  engineering: { desk: { x: 38, z: -58 },  stagger: { z: -58 }, hill: { x: 11, z: -60, rx: 26, rz: 18, h: 9 },
-                 scale: 1, accent: '#ffd36a', paper: '#ffffff', yaw: -0.30 },
-  about:       { desk: { x: -10, z: -14 }, stagger: { z: -14 }, hill: { x: -4, z: -14, rx: 9, rz: 7, h: 2.2 },
-                 scale: 0.45, accent: '#9fdc8c', paper: '#ffffff', yaw: 0.22 },
+  about:       { desk: { x: 38, z: -58 },  stagger: { z: -58 }, hill: { x: 11, z: -60, rx: 26, rz: 18, h: 9 },
+                 scale: 1, accent: '#9fdc8c', paper: '#ffffff', yaw: -0.30 },
 };
 
 // Hills that fill the left and right edges of the view: gentle shoulders near the camera, bigger hills

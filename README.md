@@ -1,7 +1,7 @@
 # Danny Bladh: portfolio
 
 A 3D low-poly landscape portfolio, published with GitHub Pages at https://dbladh.github.io.
-Content is organized by *attributes* (creativity, AI, engineering), with experiences as evidence.
+Content is organized by *attributes* (creativity, AI, about), with experiences as evidence.
 
 ## Run it locally
 

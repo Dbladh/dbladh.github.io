@@ -1,10 +1,10 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015213238';
-import { buildWorld } from './world.js?v=20261015213238';
-import { createSky } from './sky.js?v=20261015213238';
-import { createDOF } from './dof.js?v=20261015213238';
+import { PAL } from './palette.js?v=20261015214457';
+import { buildWorld } from './world.js?v=20261015214457';
+import { createSky } from './sky.js?v=20261015214457';
+import { createDOF } from './dof.js?v=20261015214457';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -43,7 +43,7 @@ const simpleBtn = document.getElementById('simple-toggle');
 const tagline = document.getElementById('tagline');
 
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const ORDER = ['home', 'creativity', 'ai', 'engineering', 'about'];
+const ORDER = ['home', 'creativity', 'ai', 'about'];
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },

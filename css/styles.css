@@ -106,7 +106,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
 /* White sign face with a colored stripe on top (the stripe color matches each billboard's accent). */
 #creativity  { --accent-stripe: #ff9db8; }
 #ai          { --accent-stripe: #8ec5ff; }
-#engineering { --accent-stripe: #ffd36a; }
 #about       { --accent-stripe: #9fdc8c; }
 
 .stop h2 {
