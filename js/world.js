@@ -1206,10 +1206,12 @@ export function buildWorld(scene, sections, opts = {}) {
   const FF = ffData.length;
   const ffGeo = new THREE.BufferGeometry();
   const ffPos = new Float32Array(FF * 3), ffCol = new Float32Array(FF * 3), ffSeed = new Float32Array(FF);
+  const ffVis = new Float32Array(FF).fill(1);   // fades to 0 while a firefly would drift in front of a sign
   ffData.forEach((f, i) => { ffPos.set([f.x, f.y, f.z], i * 3); ffCol.set([f.col.r, f.col.g, f.col.b], i * 3); ffSeed[i] = rand(); });
   ffGeo.setAttribute('position', new THREE.BufferAttribute(ffPos, 3));
   ffGeo.setAttribute('aColor', new THREE.BufferAttribute(ffCol, 3));
   ffGeo.setAttribute('aSeed', new THREE.BufferAttribute(ffSeed, 1));
+  ffGeo.setAttribute('aVis', new THREE.BufferAttribute(ffVis, 1));
   const ffUniforms = {
     uNight: { value: 0 }, uTime: { value: 0 }, uScale: { value: 700 }, uBase: { value: 0.34 },
     uFocus: { value: 55 }, uAperture: { value: 0 }, uMaxBlur: { value: 14 },
@@ -1219,7 +1221,7 @@ export function buildWorld(scene, sections, opts = {}) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */ `
       uniform float uTime, uScale, uBase, uFocus, uAperture, uMaxBlur;
-      attribute vec3 aColor; attribute float aSeed;
+      attribute vec3 aColor; attribute float aSeed; attribute float aVis;
       varying vec3 vColor; varying float vSoft; varying float vTwinkle;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -1233,7 +1235,7 @@ export function buildWorld(scene, sections, opts = {}) {
         gl_Position = projectionMatrix * mv;
         vSoft = coc * 1.8 / size;
         vColor = aColor;
-        vTwinkle = 0.62 + 0.38 * sin(uTime * (1.4 + aSeed) + aSeed * 40.0);
+        vTwinkle = (0.62 + 0.38 * sin(uTime * (1.4 + aSeed) + aSeed * 40.0)) * aVis;
       }`,
     fragmentShader: /* glsl */ `
       uniform float uNight;
@@ -1569,6 +1571,25 @@ export function buildWorld(scene, sections, opts = {}) {
   let time = 0, night = 0;
   const HOUSE_I = 26, FF_I = 9;
   const glow = glowMats();
+  let camPos = null;
+  // Anything drifting between the camera and a sign fades out until it is clear of it again.
+  const blockedBy = (p) => {
+    if (!camPos) return false;
+    for (const b of boards) {
+      const n = b.normal, c = b.center;
+      const dx = p.x - camPos.x, dy = p.y - camPos.y, dz = p.z - camPos.z;
+      const dn = dx * n.x + dz * n.z;
+      if (dn >= -1e-4) continue;                                       // not travelling toward the sign's face
+      const tt = ((c.x - camPos.x) * n.x + (c.z - camPos.z) * n.z) / dn;
+      if (tt <= 0 || tt < 1) continue;                                 // the sign is not behind this object
+      const qx = camPos.x + dx * tt - c.x, qy = camPos.y + dy * tt - c.y, qz = camPos.z + dz * tt - c.z;
+      const across = qx * n.z - qz * n.x;                              // along the sign's width
+      const lw = (b.layout ? b.layout.w : b.width) / 2 + 1.0, lh = (b.layout ? b.layout.h : b.height) / 2 + 1.0;
+      if (Math.abs(across) < lw && Math.abs(qy) < lh) return true;
+    }
+    return false;
+  };
+
   return {
     boards,
     /**
@@ -1579,7 +1600,7 @@ export function buildWorld(scene, sections, opts = {}) {
      * @param {number} fov      vertical field of view in degrees
      * @param {THREE.Vector3} cam  the overview camera position
      */
-    placeBoards(aspect, fov, cam) {
+    placeBoards(aspect, fov, cam, look) {
       const tanHalf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
       const t = smooth(1.1, 0.65, aspect);                                   // 0 on wide screens, 1 in portrait
       const mult = lerp(SIGN_BIG, 1, t);                                     // signs are larger on big screens, easier to read from afar
@@ -1591,47 +1612,115 @@ export function buildWorld(scene, sections, opts = {}) {
       };
       const mains = Object.values(STOPS).filter((s) => s.scale >= 0.6);
       const refShare = Math.max(...mains.map(share));
-      for (const b of boards) {
+      // 1) a starting position and size for every sign
+      const entries = boards.map((b) => {
         const s = STOPS[b.id];
         const z = lerp(s.desk.z, s.stagger.z, t);
         const far = s.scale < 0.6 ? 1 : THREE.MathUtils.clamp(Math.pow(refShare / share(s), 0.7), 1, 1.2);
-        const m2 = mult * far;
-        const sc = s.scale * m2;
+        const e = { b, s, z, far, main: s.scale >= 0.6 };
+        const sc = s.scale * mult * far;
         const hw = tanHalf * Math.max(1, cam.z - z) * aspect;               // half the visible width at its depth
         const fit = hw - (BOARD_W / 2) * sc - 2.2;                     // leave room for the frame and parallax
-        const xMag = Math.max(Math.abs(s.hill.x), Math.min(Math.abs(s.desk.x), fit));
-        const x = (s.desk.x < 0 ? -1 : 1) * xMag;
-        // lift so the face's lower edge clears the terrain between the camera and the sign
-        // (checked for the bottom-left, bottom-centre and bottom-right points of the face)
+        e.xMax = Math.max(Math.abs(s.hill.x), Math.min(Math.abs(s.desk.x), fit));
+        e.sign = s.desk.x < 0 ? -1 : 1;
+        e.x = e.sign * e.xMax;
+        return e;
+      });
+      // lift so the face's lower edge clears the terrain between the camera and the sign
+      // (checked for the bottom-left, bottom-centre and bottom-right points of the face)
+      const solve = (e) => {
+        const s = e.s, sc = s.scale * mult * e.far, x = e.x, z = e.z;
         const theta = Math.atan2(startCam.x - x, startCam.z - z) + (s.yaw || 0);
         const rx = Math.cos(theta), rz = -Math.sin(theta);                    // the sign's local +x in world
         const half = (BOARD_W / 2) * sc;
-        const ground = heightAt(x, z);
-        const bottomAt0 = ground + BOARD_BOTTOM * sc;                  // world y of the face bottom with no lift
+        const tBottom = heightAt(x, z) + BOARD_BOTTOM * sc;
         let lift = 0;
         for (const off of [-1, 0, 1]) {
           const tx = x + rx * half * off, tz = z + rz * half * off;
-          const tBottom = heightAt(x, z) + BOARD_BOTTOM * sc;
           for (let k = 1; k <= 60; k++) {
             const u = k / 61;                                                // fraction of the way from camera to target
             const px = lerp(cam.x, tx, u), pz = lerp(cam.z, tz, u);
             if (Math.hypot(px - tx, pz - tz) < 1.2) continue;               // right under the face
-            const need = (heightAt(px, pz) + 0.6 - cam.y) / u - (tBottom - cam.y);
-            lift = Math.max(lift, need);
+            lift = Math.max(lift, (heightAt(px, pz) + 0.6 - cam.y) / u - (tBottom - cam.y));
           }
         }
-        void bottomAt0;
         // In portrait some signs stand on taller stilts so neighbours that share screen width don't overlap.
-        b.place(x, z, Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t / far, m2);
+        e.lift = Math.min(Math.max(0, lift), 9) + (s.raise || 0) * t / e.far;
+        e.sc = sc;
+        e.theta = theta;
+      };
+      entries.forEach(solve);
+
+      // 2) keep the signs from overlapping on screen: slide overlapping neighbours apart, and if that is not
+      // possible (screen edge, hill limit) fall back to the base size for the one that grew.
+      if (look) {
+        const pc = new THREE.PerspectiveCamera(fov, aspect, 0.5, 600);
+        pc.position.copy(cam); pc.lookAt(look); pc.updateMatrixWorld(); pc.updateProjectionMatrix();
+        const v = new THREE.Vector3();
+        const rect = (e) => {                                                 // screen box of the sign, with its lamps and catwalk
+          const ground = heightAt(e.x, e.z) + e.lift;
+          const rx = Math.cos(e.theta), rz = -Math.sin(e.theta), half = (BOARD_W / 2) * e.sc + 0.6;
+          let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
+          for (const sx of [-1, 1]) for (const yy of [ground + (BOARD_BOTTOM - 1.4) * e.sc, ground + (BOARD_BOTTOM + BOARD_H + 1.8) * e.sc]) {
+            v.set(e.x + rx * half * sx, yy, e.z + rz * half * sx).project(pc);
+            x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+          }
+          return { x0, x1, y0, y1 };
+        };
+        const overlap = (a, b) => {
+          const ra = rect(a), rb = rect(b);
+          const ox = Math.min(ra.x1, rb.x1) - Math.max(ra.x0, rb.x0);
+          const oy = Math.min(ra.y1, rb.y1) - Math.max(ra.y0, rb.y0);
+          return ox > -0.015 && oy > -0.015 ? { ox, ra, rb } : null;
+        };
+        const mains2 = entries;
+        const pairs = [];
+        for (let i2 = 0; i2 < mains2.length; i2++) for (let j2 = i2 + 1; j2 < mains2.length; j2++) pairs.push([mains2[i2], mains2[j2]]);
+        for (let pass = 0; pass < 8; pass++) {
+          let moved = false;
+          for (const [a, b] of pairs) {
+            const o = overlap(a, b);
+            if (!o) continue;
+            // the sign further to the left of the screen goes left, the other right; the centre sign stays put
+            const [lft, rgt] = o.ra.x0 + o.ra.x1 <= o.rb.x0 + o.rb.x1 ? [a, b] : [b, a];
+            const need = o.ox + 0.05;                                         // NDC width to clear
+            const toWorld = (e) => need * 0.5 * tanHalf * aspect * Math.max(1, cam.z - e.z);
+            const fixed = (e) => e.s.desk.x === 0;
+            const step = (e, dir, amt) => {
+              const nx = e.x + dir * amt;
+              const lim = Math.abs(e.s.desk.x) === 0 ? 0 : Math.max(e.xMax, Math.abs(e.s.desk.x));
+              if (Math.abs(nx) > lim + 1e-6 && Math.sign(nx || 1) === e.sign) return false;
+              if (Math.abs(nx) < Math.abs(e.s.hill.x) - 1e-6 && Math.abs(e.s.desk.x) > 0) return false;   // not past the hill's crest
+              e.x = nx; solve(e); return true;
+            };
+            let did = false;
+            if (fixed(lft)) did = step(rgt, 1, toWorld(rgt) * 2);
+            else if (fixed(rgt)) did = step(lft, -1, toWorld(lft) * 2);
+            else did = step(lft, -1, toWorld(lft)) | step(rgt, 1, toWorld(rgt));
+            if (did) moved = true;
+          }
+          if (!moved) break;
+        }
+        for (const [a, b] of pairs) {                                         // still overlapping: stop enlarging the further one
+          if (!overlap(a, b)) continue;
+          const f = a.z < b.z ? a : b;
+          if (f.far > 1) { f.far = 1; solve(f); }
+        }
       }
+      for (const e of entries) e.b.place(e.x, e.z, e.lift, mult * e.far);
     },
     /** The village seed and theme in use (see ?seed=). */
     seed, themeName: theme.name,
+    /** True if `p` is between the camera and a sign's face (so the object would hide part of it). */
+    isBlocked: (p) => blockedBy(p),
+    /** How many fireflies are currently faded out because they sit in front of a sign (debug). */
+    get hiddenFireflies() { let n = 0; for (let i = 0; i < FF; i++) if (ffVis[i] < 0.5) n++; return n; },
     /** Every sign material, so depth of field can render them only in its sharp pass. */
     signMats,
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
-    update(dt) {
+    update(dt, camera) {
       time += dt;
+      if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       if (smoke) {
@@ -1640,7 +1729,7 @@ export function buildWorld(scene, sections, opts = {}) {
             const ph = (time * 0.17 + k / PUFFS + si * 0.37) % 1;
             const fade = ph > 0.8 ? (1 - ph) / 0.2 : 1;
             _sd.position.set(src.x + ph * 1.1 + Math.sin(time * 0.7 + si * 2 + ph * 5) * 0.28 * ph, src.y + ph * 3.6, src.z + Math.cos(time * 0.5 + si) * 0.2 * ph);
-            _sd.scale.setScalar((0.1 + ph * 0.5) * fade);
+            _sd.scale.setScalar(blockedBy(_sd.position) ? 0.0001 : (0.1 + ph * 0.5) * fade);
             _sd.updateMatrix();
             smoke.setMatrixAt(si * PUFFS + k, _sd.matrix);
           }
@@ -1664,7 +1753,10 @@ export function buildWorld(scene, sections, opts = {}) {
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       for (const bf of butterflies) {
         const u = bf.userData, t = time * u.sp + u.ph;
-        bf.visible = night < 0.5;
+        const blk = blockedBy(bf.position);
+        u.vis = (u.vis ?? 1) + ((blk ? 0 : 1) - (u.vis ?? 1)) * Math.min(1, dt * 6);
+        bf.scale.setScalar(Math.max(0.001, u.vis));
+        bf.visible = night < 0.5 && u.vis > 0.03;
         bf.position.set(u.bx + Math.sin(t) * 3.2 + Math.sin(t * 2.3) * 0.8, u.by + Math.sin(t * 1.7) * 0.5, u.bz + Math.cos(t * 0.8) * 3.0);
         bf.rotation.y = t + Math.PI / 2;
         const flap = Math.sin(time * 22 + u.ph) * 0.9;
@@ -1679,15 +1771,20 @@ export function buildWorld(scene, sections, opts = {}) {
           f.x + Math.sin(time * 0.35 + f.ph) * amp,
           f.y + Math.sin(time * 0.8 + f.ph * 2) * 0.7,
           f.z + Math.cos(time * 0.3 + f.ph * 1.3) * amp);
+        pos.fromBufferAttribute(a, i);
+        const tv = blockedBy(pos) ? 0 : 1;
+        ffVis[i] += (tv - ffVis[i]) * Math.min(1, dt * 6);
       }
       a.needsUpdate = true;
+      ffGeo.attributes.aVis.needsUpdate = true;
       ffLights.forEach((fl, k) => {
         pos.fromBufferAttribute(a, fl.idx);
         const flick = 0.75 + 0.25 * Math.sin(time * 2.1 + k * 1.7);
         fl.light.position.copy(pos);
-        fl.light.intensity = night * FF_I * flick;
+        const fv = ffVis[fl.idx];
+        fl.light.intensity = night * FF_I * flick * fv;
         fl.pool.position.set(pos.x, heightAt(pos.x, pos.z) + 0.08, pos.z);
-        fl.pool.material.opacity = night * 0.5 * flick;
+        fl.pool.material.opacity = night * 0.5 * flick * fv;
       });
     },
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */

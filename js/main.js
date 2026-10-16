@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015183750';
-import { createSky } from './sky.js?v=20261015183750';
-import { createDOF } from './dof.js?v=20261015183750';
+import { buildWorld } from './world.js?v=20261015184403';
+import { createSky } from './sky.js?v=20261015184403';
+import { createDOF } from './dof.js?v=20261015184403';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -369,7 +369,7 @@ function start() {
     const compact = matchMedia('(max-height: 600px)').matches;   // short screen: the name moves into the top row
     HOME.look.y = 17 - 8 * (1 - THREE.MathUtils.smoothstep(camera.aspect, 0.55, 1.0)) - (compact ? 13 : 0);
     if (!tween && active === 'home') cur.look.copy(HOME.look);
-    world.placeBoards(camera.aspect, camera.fov, HOME.pos); // slide/stagger the signs for this screen shape
+    world.placeBoards(camera.aspect, camera.fov, HOME.pos, HOME.look); // slide/stagger the signs for this screen shape
     layoutStops();
     if (!simple && active !== 'home' && !tween) { // keep a zoomed-in sign filling the screen
       cur.pos.copy(stops[active].pos); cur.look.copy(stops[active].look);
@@ -565,7 +565,7 @@ function start() {
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
 
-    if (!reduceMotion) world.update(dt);
+    if (!reduceMotion) world.update(dt, camera);
     if (shadowTick++ % 4 === 0) renderer.shadowMap.needsUpdate = true;
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
