@@ -1832,7 +1832,7 @@ varying vec3 vWPos; varying float vWDist;`)
         const theta = Math.atan2(startCam.x - x, startCam.z - z) + (s.yaw || 0);
         const rx = Math.cos(theta), rz = -Math.sin(theta);                    // the sign's local +x in world
         const half = (BOARD_W / 2) * sc;
-        const tBottom = heightAt(x, z) + BOARD_BOTTOM * sc;
+        const tBottom = rawHeight(x, z) + BOARD_BOTTOM * sc;
         let lift = 0;
         for (const off of [-1, 0, 1]) {
           const tx = x + rx * half * off, tz = z + rz * half * off;
@@ -1840,7 +1840,7 @@ varying vec3 vWPos; varying float vWDist;`)
             const u = k / 61;                                                // fraction of the way from camera to target
             const px = lerp(cam.x, tx, u), pz = lerp(cam.z, tz, u);
             if (Math.hypot(px - tx, pz - tz) < 1.2) continue;               // right under the face
-            lift = Math.max(lift, (heightAt(px, pz) + 0.6 - cam.y) / u - (tBottom - cam.y));
+            lift = Math.max(lift, (rawHeight(px, pz) + 0.6 - cam.y) / u - (tBottom - cam.y));
           }
         }
         // In portrait some signs stand on taller stilts so neighbours that share screen width don't overlap.
@@ -1857,7 +1857,7 @@ varying vec3 vWPos; varying float vWDist;`)
         pc.position.copy(cam); pc.lookAt(look); pc.updateMatrixWorld(); pc.updateProjectionMatrix();
         const v = new THREE.Vector3();
         const rect = (e) => {                                                 // screen box of the sign, with its lamps and catwalk
-          const ground = heightAt(e.x, e.z) + e.lift;
+          const ground = rawHeight(e.x, e.z) + e.lift;
           const rx = Math.cos(e.theta), rz = -Math.sin(e.theta), half = (BOARD_W / 2) * e.sc + 0.6;
           let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
           for (const sx of [-1, 1]) for (const yy of [ground + (BOARD_BOTTOM - 1.4) * e.sc, ground + (BOARD_BOTTOM + BOARD_H + 1.8) * e.sc]) {
@@ -1900,6 +1900,10 @@ varying vec3 vWPos; varying float vWDist;`)
           }
           if (!moved) break;
         }
+        for (const e of entries) {                                            // a grown sign that runs off the screen goes back to base size
+          const q = rect(e);
+          if ((q.x1 > 1.0 || q.x0 < -1.0) && e.far > 1) { e.far = 1; solve(e); }
+        }
         for (const [a, b] of pairs) {                                         // still overlapping: stop enlarging the further one
           if (!overlap(a, b)) continue;
           const f = a.z < b.z ? a : b;
@@ -1910,6 +1914,8 @@ varying vec3 vWPos; varying float vWDist;`)
     },
     /** The village seed and theme in use (see ?seed=). */
     seed, themeName: theme.name,
+    /** Footprints of every building { x, z, r, w, d, rot } (for layout checks). */
+    get layout() { return houses.map((h) => ({ x: h.x, z: h.z, r: h.r, w: h.w, d: h.d, rot: h.rot })); },
     /** True if `p` is between the camera and a sign's face (so the object would hide part of it). */
     isBlocked: (p) => blockedBy(p),
     /** How many fireflies are currently faded out because they sit in front of a sign (debug). */
