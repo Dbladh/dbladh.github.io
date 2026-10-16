@@ -646,19 +646,30 @@ varying vec3 vWPos; varying float vWDist;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
   float grass = smoothstep(0.0, 0.1, diffuseColor.g - diffuseColor.r * 0.9) * (1.0 - smoothstep(0.55, 0.8, diffuseColor.b));
-  vec2 dir = normalize(vec2(1.0, 0.3)), side = vec2(-dir.y, dir.x);
-  float u = dot(vWPos.xz, dir) - uWindT * 1.1, v = dot(vWPos.xz, side);
-  float s1 = texture2D(uWindTex, vec2(u * 0.0035, v * 0.07)).r;
-  float s2 = texture2D(uWindTex, vec2(u * 0.009 + 0.31, v * 0.17)).g;
-  float streak = s1 * 0.6 + s2 * 0.4;
+  // wind direction wanders a little from place to place so the strokes never line up into stripes
+  float wob = texture2D(uWindTex, vWPos.xz * 0.011 + 0.2).r - 0.5;
+  float ang = 0.3 + wob * 1.5;
+  vec2 dir = vec2(cos(ang), sin(ang)), side = vec2(-dir.y, dir.x);
+  vec2 dir0 = normalize(vec2(1.0, 0.3)), side0 = vec2(-dir0.y, dir0.x);
+  // gusts: fronts that travel along the wind, with calm spells in between
+  float front = sin(dot(vWPos.xz, dir0) * 0.032 - uWindT * 0.85 + sin(dot(vWPos.xz, side0) * 0.018) * 2.2);
+  float gate = sin(uWindT * 0.33) * 0.5 + 0.5;                       // slow breathing: wind rises and falls
+  float env = smoothstep(0.1, 0.85, front * 0.5 + 0.5) * (0.04 + 0.96 * smoothstep(0.3, 0.8, gate));
+  // short painted strokes (about 6:1), flowing with the wind and broken up by a second mask
+  float sway = uWindT * (0.4 + 1.3 * env);
+  float u = dot(vWPos.xz, dir) - sway, v = dot(vWPos.xz, side);
+  float s1 = texture2D(uWindTex, vec2(u * 0.012, v * 0.085)).r;
+  float s2 = texture2D(uWindTex, vec2(u * 0.031 + 0.31, v * 0.21)).g;
+  float brk = texture2D(uWindTex, vWPos.xz * 0.045 + 0.55).g;
+  float streak = (s1 * 0.55 + s2 * 0.45) * smoothstep(0.25, 0.65, brk);
   float near = 1.0 - smoothstep(70.0, 170.0, vWDist);
-  float k = clamp((streak - 0.5) * 3.4, -1.0, 1.0);
-  vec3 lit = diffuseColor.rgb * vec3(1.18, 1.14, 0.8) + vec3(0.03, 0.04, 0.0);
-  vec3 dark = diffuseColor.rgb * vec3(0.72, 0.86, 0.9);
+  float k = clamp((streak - 0.3) * 3.0, -1.0, 1.0) * env;
+  vec3 lit = diffuseColor.rgb * vec3(1.2, 1.15, 0.78) + vec3(0.03, 0.04, 0.0);
+  vec3 dark = diffuseColor.rgb * vec3(0.74, 0.88, 0.92);
   vec3 painted = k > 0.0 ? mix(diffuseColor.rgb, lit, k * 0.9) : mix(diffuseColor.rgb, dark, -k * 0.9);
   diffuseColor.rgb = mix(diffuseColor.rgb, painted, grass * near * uWindAmt);
-  float gust = smoothstep(0.55, 1.0, sin(u * 0.045 + v * 0.012 + 1.3) * 0.5 + 0.5);
-  diffuseColor.rgb *= 1.0 + 0.12 * gust * grass * uWindAmt;
+  // the gust front itself brightens the grass a touch
+  diffuseColor.rgb *= 1.0 + 0.1 * env * grass * uWindAmt;
   float cn = texture2D(uWindTex, vWPos.xz * 0.0055 + vec2(uWindT * 0.0018, uWindT * 0.0007)).r * 0.65
            + texture2D(uWindTex, vWPos.xz * 0.013 + vec2(uWindT * 0.003, 0.4)).g * 0.35;
   float cs = smoothstep(0.52, 0.72, cn) * uDay * uWindAmt;
