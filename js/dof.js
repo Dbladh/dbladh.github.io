@@ -25,6 +25,9 @@ const FRAG = /* glsl */ `
   uniform float aperture;   // blur strength
   uniform float maxBlur;    // max blur radius in pixels
   uniform vec2 texel;
+  uniform vec3 hazeColor;   // linear horizon colour
+  uniform float hazeAmt;    // 0 = off
+  uniform float bloom;      // 0 = off
   varying vec2 vUv;
 
   float cocAt(vec2 uv) {
@@ -58,6 +61,25 @@ const FRAG = /* glsl */ `
     // The buffer is premultiplied linear; convert the colour to sRGB, then re-premultiply.
     float a = col.a;
     vec3 c = a > 0.0001 ? col.rgb / a : col.rgb;
+    if (a > 0.001) {
+      // Aerial perspective: distant ground fades toward the horizon colour (ridges layer in blue/violet).
+      float dz = -perspectiveDepthToViewZ(texture2D(tDepth, vUv).x, cameraNear, cameraFar);
+      c = mix(c, hazeColor, hazeAmt * 0.65 * smoothstep(55.0, 200.0, dz));
+      // Cheap bloom: bright neighbours (lit windows, lanterns, sun glints) spill softly.
+      if (bloom > 0.0) {
+        vec3 glow = vec3(0.0);
+        for (int i = 0; i < 8; i++) {
+          float ang = float(i) * 0.785398;
+          for (int k = 1; k <= 2; k++) {
+            vec2 o = vec2(cos(ang), sin(ang)) * float(k) * 7.0 * texel * (texel.x * 900.0 + 0.5);
+            vec4 s = texture2D(tColor, vUv + o);
+            vec3 sc = s.a > 0.001 ? s.rgb / s.a : s.rgb;
+            glow += max(sc - vec3(1.0), 0.0) * s.a / float(k);
+          }
+        }
+        c += glow * bloom * 0.09;
+      }
+    }
     // Grade: filmic tone curve, a little more saturation, warm highlights over cool shadows, soft vignette.
     c *= 1.18;
     c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
@@ -100,6 +122,9 @@ export function createDOF(renderer) {
       aperture: { value: 90 },
       maxBlur: { value: 12 },
       texel: { value: new THREE.Vector2(1, 1) },
+      hazeColor: { value: new THREE.Color('#bfe8ff') },
+      hazeAmt: { value: 1 },
+      bloom: { value: 1 },
     },
     depthTest: false,
     depthWrite: false,
@@ -138,6 +163,12 @@ export function createDOF(renderer) {
   return {
     get enabled() { return enabled; },
     set enabled(v) { enabled = v; },
+
+    /** Time-of-day inputs for the composite: horizon colour for haze, and bloom on/off (0..1). */
+    setLook(horizon, bloom) {
+      if (horizon) material.uniforms.hazeColor.value.copy(horizon);
+      if (bloom !== undefined) material.uniforms.bloom.value = bloom;
+    },
 
     /** Call after the renderer's size or pixel ratio changes. */
     resize() {

@@ -1,9 +1,9 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { buildWorld } from './world.js?v=20261015182137';
-import { createSky } from './sky.js?v=20261015182137';
-import { createDOF } from './dof.js?v=20261015182137';
+import { buildWorld } from './world.js?v=20261015182725';
+import { createSky } from './sky.js?v=20261015182725';
+import { createDOF } from './dof.js?v=20261015182725';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -452,6 +452,7 @@ function start() {
     const { night, horizon } = sky.set(hour);
     world.setNight(night);
     world.setClouds(night, horizon);
+    dof?.setLook(horizon, lowEnd || quality.scale < 1 ? 0 : 1);
     const minute = Math.floor(hour * 60);
     if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes
       shownMinute = minute;
