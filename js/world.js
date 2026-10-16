@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261015194635';
+} from './houses.js?v=20261015194841';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1306,30 +1306,32 @@ export function buildWorld(scene, sections, opts = {}) {
   }
 
   // ---- Clouds: layered, feathered sprites that drift, swell and shear against each other ----
+  // Few, smallish and translucent, so the sky shows between them: wisps, not an overcast.
   const cloudSprites = [];
   const cr = rng(90210);                                            // own random stream: the clouds must not depend on how much scenery was generated
-  for (let i = 0; i < (low ? 6 : 8); i++) {
+  for (let i = 0; i < (low ? 5 : 7); i++) {
     const g = new THREE.Group();
-    const span = 34 + cr() * 36;                                  // how wide this cloud bank is
-    const n = 4 + Math.floor(cr() * 3);
+    const span = 26 + cr() * 30;                                    // how wide this cloud bank is
+    const n = 3 + Math.floor(cr() * 2);
     for (let j = 0; j < n; j++) {
       const tex = cloudTexture(Math.floor(cr() * 4));
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.6 });
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.45 });
       const sp = new THREE.Sprite(mat);
-      const w = 48 + cr() * 56, h = w * (0.42 + cr() * 0.2);
+      const w = 34 + cr() * 38, h = w * (0.34 + cr() * 0.2);
       const u = (j / (n - 1)) - 0.5;
       sp.userData = {
-        w, h, bx: u * span + (cr() - 0.5) * 10, by: (cr() - 0.5) * 7 + (1 - Math.abs(u) * 1.4) * 2.5,
-        ph: cr() * 6.28, sp: 0.04 + cr() * 0.09, amp: 3 + cr() * 6, base: 0.62 + cr() * 0.3,
-        high: cr(),                                               // 0 = low/shaded layer, 1 = high/bright layer
+        w, h, bx: u * span + (cr() - 0.5) * 8, by: (cr() - 0.5) * 6 + (1 - Math.abs(u) * 1.4) * 2.0,
+        ph: cr() * 6.28, sp: 0.06 + cr() * 0.1, amp: 3 + cr() * 6, base: 0.34 + cr() * 0.3,
+        high: cr(),                                                 // 0 = low/shaded layer, 1 = high/bright layer
       };
       sp.position.set(sp.userData.bx, sp.userData.by, (cr() - 0.5) * 6);
       sp.scale.set(w, h, 1);
       g.add(sp);
       cloudSprites.push(sp);
     }
-    g.position.set((cr() - 0.5) * 360, 34 + cr() * 40, -80 - cr() * 70);
-    g.userData.speed = 0.35 + cr() * 0.7;
+    // spread the banks over the whole width and several heights so they never merge into one sheet
+    g.position.set(-170 + (i + cr() * 0.8) * (340 / (low ? 5 : 7)), 36 + cr() * 40, -90 - cr() * 60);
+    g.userData.speed = 1.0 + cr() * 1.6;
     skyScene.add(g);
     clouds.push(g);
   }
