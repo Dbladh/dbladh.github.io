@@ -2,16 +2,16 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017165333';
-import { createTrack } from './track.js?v=20261017165333';
-import { createRagdoll } from './ragdoll.js?v=20261017165333';
-import { createFx } from './fx.js?v=20261017165333';
-import { createAudio } from './audio.js?v=20261017165333';
-import { createPuffs } from './puffs.js?v=20261017165333';
-import { createDirt } from './dirt.js?v=20261017165333';
-import { createMudCoat } from './mudcoat.js?v=20261017165333';
-import { createCoins } from './coins.js?v=20261017165333';
-import { createFuel } from './fuel.js?v=20261017165333';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017165752';
+import { createTrack } from './track.js?v=20261017165752';
+import { createRagdoll } from './ragdoll.js?v=20261017165752';
+import { createFx } from './fx.js?v=20261017165752';
+import { createAudio } from './audio.js?v=20261017165752';
+import { createPuffs } from './puffs.js?v=20261017165752';
+import { createDirt } from './dirt.js?v=20261017165752';
+import { createMudCoat } from './mudcoat.js?v=20261017165752';
+import { createCoins } from './coins.js?v=20261017165752';
+import { createFuel } from './fuel.js?v=20261017165752';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -200,9 +200,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const sc = Math.floor(st.score);
     if (scoreEl && sc !== hudLast.score) { hudLast.score = sc; scoreEl.textContent = String(sc); }
     if (fuelEl) {
-      const f = Math.round(st.fuel * 100), low = st.fuel < 0.25;
+      const f = Math.round(st.fuel * 100), low = f < 30, lvl = f >= 70 ? 'ok' : low ? 'low' : 'mid';
       if (f !== hudLast.fuel) { hudLast.fuel = f; fuelFill.style.transform = 'scaleX(' + (f / 100) + ')'; fuelEl.setAttribute('aria-valuenow', String(f)); }
-      if (low !== hudLast.low) { hudLast.low = low; fuelEl.classList.toggle('low', low); }
+      if (lvl !== hudLast.low) { hudLast.low = lvl; fuelEl.dataset.level = lvl; fuelEl.classList.toggle('low', low); }
     }
     if (coinsEl && st.coins !== hudLast.coins) { hudLast.coins = st.coins; coinsEl.textContent = String(st.coins); }
     if (grooveEl) {
