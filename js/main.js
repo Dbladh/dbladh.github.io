@@ -1,10 +1,10 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016192803';
-import { buildWorld } from './world.js?v=20261016192803';
-import { createSky } from './sky.js?v=20261016192803';
-import { createDOF } from './dof.js?v=20261016192803';
+import { PAL } from './palette.js?v=20261016193656';
+import { buildWorld } from './world.js?v=20261016193656';
+import { createSky } from './sky.js?v=20261016193656';
+import { createDOF } from './dof.js?v=20261016193656';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -543,7 +543,7 @@ function start() {
     skyRenderer.render(skyScene, camera);
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
-      const want = active === 'home' ? 54 : camera.position.distanceTo(cur.look);
+      const want = active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
       focus += (want - focus) * Math.min(1, dt * 4);
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);

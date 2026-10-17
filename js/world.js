@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016192803';
+import { PAL } from './palette.js?v=20261016193656';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016192803';
+} from './houses.js?v=20261016193656';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1307,6 +1307,55 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   for (const f of farm) for (let k = 0; k < Math.round(7 * D); k++) {   // garden bushes and tall grass round the farm buildings
     const a = rand() * 6.28, r = 3 + rand() * 3, x = f.x + Math.cos(a) * r, z = f.z + Math.sin(a) * r;
     if (free(x, z, 0) && !branches.some((b) => distToPolyline(x, z, b) < 2)) addBush(x, z, 0.5 + rand() * 0.5);
+  }
+
+  // Foreground: the meadow in front of the camera was bare. Bushes line the path and a few small trees frame the
+  // edges, so the bottom of the screen has something soft to look past. Kept off the path itself and away from
+  // the very front (anything too near the camera would loom), and checked against the usual keep-out zones.
+  {
+    const fgBush = (x, z, s) => { if (free(x, z, 0.8) && Math.abs(x - pathX(z)) > 3.4) addBush(x, z, s); };
+    for (let i = 0, got = 0; got < Math.round(46 * D) && i < 600; i++) {
+      const z = 1 + rand() * 15, side = rand() < 0.5 ? -1 : 1;
+      const x = pathX(z) + side * (3.6 + Math.pow(rand(), 1.6) * 9);              // hugging the path, thinning outward
+      if (Math.abs(x) > 40) continue;
+      const before = items.bush.length;
+      fgBush(x, z, 0.5 + rand() * 0.55);
+      if (items.bush.length > before) got++;
+    }
+    // The strip straight under the camera, which phones show. It is always out of focus (soft depth of field), so it
+    // reads as big soft masses of green framing the view, with bigger bushes toward the edges.
+    for (let i = 0, got = 0; got < Math.round(34 * D) && i < 600; i++) {
+      const z = 6 + rand() * 7, x = (rand() - 0.5) * 18;
+      if (Math.abs(x - pathX(z)) < 3.6 || !free(x, z, 0.6)) continue;
+      addBush(x, z, (0.7 + rand() * 0.7) * (0.8 + Math.abs(x) * 0.05));
+      got++;
+    }
+    // ...and the band just beyond it (ground 15-22 units from the camera), which fills the lower third on phones.
+    for (let i = 0, got = 0; got < Math.round(26 * D) && i < 500; i++) {
+      const z = -1 + rand() * 9, x = (rand() - 0.5) * 15;
+      if (Math.abs(x - pathX(z)) < 3.6 || !free(x, z, 0.6)) continue;
+      addBush(x, z, 0.55 + rand() * 0.75);
+      got++;
+    }
+    for (let i = 0, got = 0; got < Math.round(4 * D) && i < 200; i++) {
+      const z = 0 + rand() * 7, side = rand() < 0.5 ? -1 : 1, x = side * (5 + rand() * 4);
+      if (Math.abs(x - pathX(z)) < 4.2 || !free(x, z, 1.2)) continue;
+      addTree(x, z, 0.55 + rand() * 0.4);
+      got++;
+    }
+    for (let i = 0, got = 0; got < Math.round(7 * D) && i < 300; i++) {         // small trees at the screen edges
+      const z = 6 + rand() * 6, side = rand() < 0.5 ? -1 : 1, x = side * (4.5 + rand() * 5);
+      if (Math.abs(x - pathX(z)) < 4.2 || !free(x, z, 1.2)) continue;
+      addTree(x, z, 0.5 + rand() * 0.3);
+      got++;
+    }
+    for (let i = 0, got = 0; got < Math.round(12 * D) && i < 300; i++) {
+      const z = 0 + rand() * 12, side = rand() < 0.5 ? -1 : 1;
+      const x = pathX(z) + side * (6.5 + rand() * 14);
+      if (Math.abs(x) > 40 || Math.abs(x) < 4 || !free(x, z, 1.5)) continue;
+      addTree(x, z, 0.6 + rand() * 0.4);
+      got++;
+    }
   }
 
   // ---- The village changes, the scenery does not: drop anything a house now stands on ----

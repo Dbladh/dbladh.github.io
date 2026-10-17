@@ -35,7 +35,8 @@ const FRAG = /* glsl */ `
   float cocAt(vec2 uv) {
     float d = texture2D(tDepth, uv).x;
     float dist = -perspectiveDepthToViewZ(d, cameraNear, cameraFar);
-    return clamp(aperture * abs(1.0 / focus - 1.0 / max(dist, 0.01)), 0.0, maxBlur);
+    float nearK = dist < focus ? 0.42 : 1.0;      // things in front of the focus plane blur less, so foreground trees and bushes still read as shapes
+    return clamp(aperture * abs(1.0 / focus - 1.0 / max(dist, 0.01)) * nearK, 0.0, maxBlur);
   }
 
   void main() {
