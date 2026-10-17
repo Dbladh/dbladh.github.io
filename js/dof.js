@@ -26,6 +26,7 @@ const FRAG = /* glsl */ `
   uniform float aperture;   // blur strength
   uniform float maxBlur;    // max blur radius in pixels
   uniform vec2 texel;
+  uniform float halfMode;   // 1 = use the half-resolution blurred colour (a runtime switch: no shader recompile)
   uniform vec3 hazeColor;   // linear horizon colour
   uniform float hazeAmt;    // 0 = off
   uniform float hazeNear;   // distance where the haze begins
@@ -44,9 +45,11 @@ const FRAG = /* glsl */ `
     float coc = cocAt(vUv);
     vec4 col = texture2D(tColor, vUv);
 
-#ifdef HALF_RES
-    col = mix(col, texture2D(tBlur, vUv), smoothstep(0.5, 2.5, coc));   // sharp pixels stay full resolution
-#else
+#ifndef BLUR_ONLY
+    if (halfMode > 0.5) {
+      col = mix(col, texture2D(tBlur, vUv), smoothstep(0.5, 2.5, coc));   // sharp pixels stay full resolution
+    } else
+#endif
     if (coc > 0.6) {
       vec4 sum = col;
       float wsum = 1.0;
@@ -64,7 +67,6 @@ const FRAG = /* glsl */ `
       }
       col = sum / wsum;
     }
-#endif
 #ifdef BLUR_ONLY
     gl_FragColor = col;
     return;
@@ -138,6 +140,7 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       aperture: { value: 90 },
       maxBlur: { value: 12 },
       texel: { value: new THREE.Vector2(1, 1) },
+      halfMode: { value: half ? 1 : 0 },
       hazeColor: { value: new THREE.Color('#bfe8ff') },
       hazeAmt: { value: 1 },
       hazeNear: { value: 55 },
@@ -148,7 +151,6 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
   if (classic) { uniforms.gradeAmt.value = 0; uniforms.hazeAmt.value = 0; uniforms.bloom.value = 0; }
   const material = new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, uniforms,
-    defines: halfRes ? { HALF_RES: 1 } : {},
     depthTest: false, depthWrite: false, blending: THREE.NoBlending,
   });
   // Half-resolution pass: only the blurred colour, drawn into a target a quarter of the pixel count.
@@ -200,8 +202,7 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       v = !!v && !!blurTarget;
       if (v === halfRes) return;
       halfRes = v;
-      material.defines = v ? { HALF_RES: 1 } : {};
-      material.needsUpdate = true;
+      uniforms.halfMode.value = v ? 1 : 0;
     },
 
     /** Time-of-day inputs for the composite: horizon colour for haze, and bloom on/off (0..1). */
@@ -213,6 +214,13 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
 
     /** Where the aerial haze starts (the dirt-bike game pushes it out so the ride itself stays clear). */
     setHazeNear(d) { material.uniforms.hazeNear.value = d; },
+
+    /** Multisampling of the scene target (0 = none). Changing it reallocates the target. */
+    get samples() { return target.samples; },
+    set samples(n) { if (n === target.samples) return; target.samples = n; target.dispose(); },
+
+    /** Compile the half-resolution blur pass ahead of time (so switching to it never stalls a frame). */
+    warm() { renderer.compile(blurScene, quadCam); },
 
     /** Call after the renderer's size or pixel ratio changes. */
     resize() {

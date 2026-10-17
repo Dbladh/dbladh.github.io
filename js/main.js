@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017094706';
-import { buildWorld } from './world.js?v=20261017094706';
-import { createSky } from './sky.js?v=20261017094706';
-import { createDOF } from './dof.js?v=20261017094706';
-import { createRide } from './ride.js?v=20261017094706';
-import { createGame } from './bikegame.js?v=20261017094706';
+import { PAL } from './palette.js?v=20261017095425';
+import { buildWorld } from './world.js?v=20261017095425';
+import { createSky } from './sky.js?v=20261017095425';
+import { createDOF } from './dof.js?v=20261017095425';
+import { createRide } from './ride.js?v=20261017095425';
+import { createGame } from './bikegame.js?v=20261017095425';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -378,8 +378,8 @@ function start() {
     setInterval(tick, 500); tick();
   }
   const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
-  const GAME_PIXEL_BUDGET = lowEnd ? 0.8e6 : 1.7e6;  // the dirt-bike game is soft-focus and busy: fewer pixels keep it smooth
-  let gameWasActive = false, skyN = 0;
+  const GAME_PIXEL_BUDGET = lowEnd ? 0.8e6 : 2.2e6;  // the dirt-bike game is soft-focus and busy: fewer pixels keep it smooth
+  let gameWasActive = false, skyN = 0, halfForced = false;   // (the game blurs at half resolution and drops bloom: much cheaper, looks the same)
   const quality = { scale: 1 };                     // the watchdog lowers this before it ever drops depth of field
   function pixelRatioFor(w, h) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -532,7 +532,7 @@ function start() {
     const { night, horizon } = sky.set(hour);
     world.setNight(night);
     world.setClouds(night, horizon);
-    dof?.setLook(horizon, lowEnd || quality.scale < 1 ? 0 : 1);
+    dof?.setLook(horizon, lowEnd || quality.scale < 1 || game?.active ? 0 : 1);
     const minute = Math.floor(hour * 60);
     if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes
       shownMinute = minute;
@@ -585,7 +585,7 @@ function start() {
   setSimple(startSimple); // when not simple, this also moves the camera to `active`
 
   // Compile the dirt-bike game's shaders in the background once the page has settled, so clicking the bike does not stall the scene.
-  if (game) setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => game.warmUp(), { timeout: 4000 }) : game.warmUp()), 3500);
+  if (game) setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => { dof?.warm(); game.warmUp(); }, { timeout: 4000 }) : (dof?.warm(), game.warmUp())), 3500);
 
   // ---- Render loop ----
   const clock = new THREE.Clock();
@@ -649,7 +649,7 @@ function start() {
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
     game?.update(dt, camera);
-    if (!!game?.active !== gameWasActive) { gameWasActive = !!game?.active; applyPixelRatio(); }          // the game draws fewer pixels
+    if (!!game?.active !== gameWasActive) { gameWasActive = !!game?.active; applyPixelRatio(); if (dof) { dof.samples = gameWasActive ? 0 : 2; dof.half = gameWasActive || halfForced; dof.setLook(null, gameWasActive || lowEnd || quality.scale < 1 ? 0 : 1); } }          // the game draws fewer pixels
 
     if (!reduceMotion) world.update(dt, camera);
     if (ride) {
@@ -687,7 +687,7 @@ function start() {
       if (slow.strikes >= 3) { // genuinely slow for ~9s in a row
         slow.strikes = 0;
         if (dof && !dof.half) {                       // 0) blur at half resolution before touching the scene's
-          dof.half = true;
+          dof.half = true; halfForced = true;
         } else if (quality.scale > 0.71) {            // 1) draw fewer pixels first (1 -> 0.85 -> 0.7)...
           quality.scale = Math.max(0.7, quality.scale - 0.15);
           onResize();
