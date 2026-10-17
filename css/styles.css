@@ -665,3 +665,11 @@ body.game-paused .gh-quit { display: none; }
 .gh-multfx.show { animation: ghmult 1.4s ease both; }
 @keyframes ghmult { 0% { opacity: 0; transform: scale(.6); } 14% { opacity: 1; transform: scale(1.18); } 28% { transform: scale(1); } 82% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
 @media (prefers-reduced-motion: reduce) { .gh-multfx.show { animation: none; opacity: 1; } }
+
+/* Game feedback layers */
+.gh-vignette { position: fixed; inset: 0; pointer-events: none; z-index: 20; opacity: 0; background: radial-gradient(ellipse 80% 70% at 50% 55%, transparent 52%, rgba(24, 52, 110, .6) 100%); }
+.gh-flash { position: fixed; inset: 0; pointer-events: none; z-index: 21; opacity: 0; }
+.gh-stats .gh-coins b.bump, .gh-stats .gh-score b.bump { display: inline-block; animation: ghbump .3s ease-out; }
+@keyframes ghbump { 0% { transform: scale(1); } 35% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.gh-groove.pulse { animation: ghpulse .55s ease-out; }
+@keyframes ghpulse { 0% { box-shadow: 0 0 0 0 rgba(209, 94, 77, .8); transform: scale(1.18); } 100% { box-shadow: 0 0 0 22px rgba(209, 94, 77, 0); transform: scale(1); } }

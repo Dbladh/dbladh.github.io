@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017090935';
+import { PAL } from './palette.js?v=20261017092446';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -116,13 +116,15 @@ export function createCoins(scene, track, laneZ) {
       mesh.count = n; mesh.instanceMatrix.needsUpdate = true;
     },
     /** Take every coin touching the bike (centre x, y; ~3.6 units long). Returns how many. */
+    /** The coins taken by the latest collect() call (for the pop effect). */
+    hits: [],
     collect(x, y, k = 1) {
-      let got = 0;
+      let got = 0; this.hits.length = 0;
       const b0 = Math.floor((x - 3) / BLOCK), b1 = Math.floor((x + 3) / BLOCK);
       for (let b = b0; b <= b1; b++) for (const c of blockOf(b)) {
         if (c.got) continue;
         const dx = (c.x - x) / (2.1 * k), dy = (c.y - (y + 0.4 * k)) / (2.3 * k);
-        if (dx * dx + dy * dy < 1) { c.got = true; got++; }
+        if (dx * dx + dy * dy < 1) { c.got = true; got++; this.hits.push({ x: c.x, y: c.y }); }
       }
       return got;
     },

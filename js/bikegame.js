@@ -2,11 +2,12 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017090935';
-import { createTrack } from './track.js?v=20261017090935';
-import { createRagdoll } from './ragdoll.js?v=20261017090935';
-import { createPuffs } from './puffs.js?v=20261017090935';
-import { createCoins } from './coins.js?v=20261017090935';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017092446';
+import { createTrack } from './track.js?v=20261017092446';
+import { createRagdoll } from './ragdoll.js?v=20261017092446';
+import { createFx } from './fx.js?v=20261017092446';
+import { createPuffs } from './puffs.js?v=20261017092446';
+import { createCoins } from './coins.js?v=20261017092446';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -53,6 +54,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
   const puffs = createPuffs(scene);
+  const juice = createFx(scene, camera, renderer, { low: matchMedia('(max-width: 700px)').matches });
+  const baseFov = () => (camera.aspect < 0.8 ? 70 : 55);                    // (the same rule as the page uses when it is resized)
   // Landing indicator: a pulsing circle where the bike will touch down. Its colour says how the landing would go if nothing changes:
   // green for a perfect one, gold for a clean one, orange for a rough one, coral for a crash.
   const landMark = new THREE.Group();
@@ -98,7 +101,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, bigAir: false, hz: null, viewW: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, hz: null, viewW: 0, squash: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -142,6 +145,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   /** The multiplier going up pops up right above the rider. */
   function flashMult() {
     if (!multFxEl) return;
+    juice.flash('#ffd36b', 0.14, 220); juice.halo('#ffcf5a', 5.5, 0.5, 0.55);
+    if (grooveEl) { grooveEl.classList.remove('pulse'); void grooveEl.offsetWidth; grooveEl.classList.add('pulse'); }
     multFxEl.textContent = '\u00d7' + st.mult + ' groove!'; multFxEl.hidden = false;
     multFxEl.classList.remove('show'); void multFxEl.offsetWidth; multFxEl.classList.add('show');
     clearTimeout(st.multT); st.multT = setTimeout(() => { multFxEl.hidden = true; }, 1400);
@@ -231,6 +236,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const c = st.charge;
     st.jumpVy = JUMP_MIN + (JUMP_MAX - JUMP_MIN) * (1 - (1 - c) * (1 - c));
     st.jumpReq = 0.12; st.charging = false;
+    if (c > 0.35) {                                                                     // a big jump: a ring at the wheels, a stretch, a flick of speed lines
+      const kk = SC / SCALE, gy = st.y - R;
+      juice.ring(st.x - HW * 0.5, gy + 0.1, laneZ, '#ffd9a0', 0.6, (2.5 + 3 * c) * kk, 0.45, true, 0.8); juice.burst('dust', st.x - HW * 0.5, gy + 0.3, laneZ, 8, '#d8c0a0');
+      st.squash = -0.5 * c; juice.flick(0.8 * c);
+    }
   }
 
   // ---- guided first run: short coaching tips until each move has been done, remembered across visits ----
@@ -270,6 +280,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   // ---- tricks: double-tap in the air ----
   function trickDone() { if (st.guideOn && st.guideStep >= 4) endGuide(true); }
+  const TRICK_COL = { back: '#ff8a72', front: '#ff8a72', hands: '#ffd36b', super: '#ffd36b', cancan: '#6fd8c8', nacnac: '#6fd8c8', heel: '#6fd8c8', cliff: '#6fd8c8' };
+  const trickColor = () => TRICK_COL[st.trick?.def?.id] || '#ffd36b';
+  /** A trick has been landed: burst, ring, a beat of hit-stop. */
+  function trickFx(id) {
+    const col = TRICK_COL[id] || '#ffd36b';
+    juice.burst('trick', st.x, st.y + 0.3, laneZ, 26, col); juice.ring(st.x, st.y + 0.3, laneZ + 0.4, col, 0.8, 4.8, 0.5, false, 0.9);
+    juice.halo(col, 7, 0.5, 0.7); juice.hitStop(40); juice.flash(col, 0.12, 160);
+  }
   function startTrick() {
     const tti = st.impact ? st.impact.t - (st.t - st.impactAt) : 0;
     let pick = null;
@@ -279,11 +297,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
     if (!pick) return;
     st.trick = pick.flip ? { kind: 'flip', dir: pick.flip, left: TAU, def: pick } : { kind: 'pose', pose: pick.pose, t: 0, dur: TRICK_TIME, def: pick };
+    juice.ring(st.x, st.y + 0.3, laneZ + 0.4, trickColor(), 0.6, 2.6, 0.35, false, 0.8); juice.halo(trickColor(), 5, TRICK_TIME, 0.4);
   }
   function finishPose(award_) {
     const t = st.trick; if (!t || t.kind !== 'pose') return;
     st.trick = null;
-    if (award_) { groove(0.25); award(t.def.pts, t.def.label); trickDone(); }
+    if (award_) { groove(0.25); award(t.def.pts, t.def.label); trickDone(); trickFx(t.def.id); }
   }
 
   /** Where and when the bike will touch down if nothing changes (a free-flight estimate). */
@@ -373,8 +392,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const above = st.y - R - groundY(st.x);
     if (assistOn && st.vy < 0 && above < 2.4 && st.airT > 0.2) { const k = Math.min(1, 2.0 * h * (1 - above / 2.4 + 0.3)); dth += wrap(gp.phi - st.th) * k; }
     st.th += dth; st.rot += dth;
-    if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); groove(0.4); award(400, 'Backflip!'); trickDone(); }
-    else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); groove(0.4); award(400, 'Front flip!'); trickDone(); }
+    if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); groove(0.4); award(400, 'Backflip!'); trickDone(); trickFx(st.trick?.def?.id || 'back'); }
+    else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); groove(0.4); award(400, 'Front flip!'); trickDone(); trickFx(st.trick?.def?.id || 'front'); }
     // wheels
     const c = Math.cos(st.th), s = Math.sin(st.th);
     const rx = st.x - HW * c, ry = st.y - HW * s, fx = st.x + HW * c, fy = st.y + HW * s;
@@ -384,6 +403,23 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.airT < 0.12) { st.y -= clear; if (st.vy < 0) st.vy = 0; }   // still scraping the lip: lift clear rather than land
       else if (st.vy <= 0) land();
     }
+  }
+
+  /** Feedback for touching down: bigger and greener the better the landing. */
+  function landFx(air, perfect, rough) {
+    const gy = groundY(st.x), kk = SC / SCALE;
+    const dust = (n, spread, color, a) => { for (let i = 0; i < n; i++) { const dir = i % 2 ? 1 : -1; puffs.emit(st.x + (Math.random() - 0.5) * 1.2, gy + 0.2, laneZ + 0.3, dir * (spread * (0.4 + Math.random())), 0.8 + Math.random() * 2, 0.5 * kk, 1.5 * kk, 0.7, color, a); } };
+    if (air > 0.45 && perfect) {
+      juice.ring(st.x, gy + 0.15, laneZ, '#8fd081', 0.7, 6.5 * kk, 0.65);
+      juice.ring(st.x, gy + 0.15, laneZ, '#e8f7c8', 0.4, 4 * kk, 0.45, true, 0.7);
+      juice.burst('perfect', st.x, gy + 0.6, laneZ, 22, '#d9f7a0'); juice.halo('#9ff09a', 6.5, 0.55, 0.7);
+      dust(10, 6, '#b79b78', 0.55); st.squash = 1; juice.bump(-0.5); juice.hitStop(55); juice.flash('#a8e89a', 0.22, 170); juice.flick(1);
+    } else if (air > 0.45 && !rough) {
+      juice.ring(st.x, gy + 0.15, laneZ, '#e8c24a', 0.6, 4 * kk, 0.5, true, 0.8); juice.burst('clean', st.x, gy + 0.5, laneZ, 9, '#ffe9a0');
+      dust(6, 4.5, '#b79b78', 0.5); st.squash = 0.6; juice.bump(-0.25);
+    } else if (rough && air > 0.3) {
+      dust(8, 5, '#8a6b4c', 0.6); st.squash = 0.8; juice.shake(0.35, 220); juice.bump(-0.5);
+    } else if (air > 0.2) { dust(3, 3, '#b79b78', 0.4); st.squash = 0.3; }
   }
 
   function land() {
@@ -419,6 +455,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         st.jumpVy = JUMP_MIN + (JUMP_MAX - JUMP_MIN) * (1 - (1 - c) * (1 - c)); st.jumpReq = 0.12;
       } else { st.charging = true; st.holdT = st.t - b.t0; }    // still down: the charge has already started
     } else if (st.down && !st.toggle) { st.charging = true; st.holdT = 0; }   // still holding at touchdown: start charging the next jump straight away
+    landFx(air, perfect, rough);
     events.onLand?.({ air, delta, perfect, rough, flips: st.flips });
     st.flips = 0;
   }
@@ -427,6 +464,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.mode = 'crash'; st.crashT = 0; st.mult = 1; st.meter = 0;
     events.onCrash?.();
     toast(msg);
+    const pit = /pit/i.test(msg);
+    juice.flash(pit ? '#10161c' : '#ffffff', pit ? 0.35 : 0.34, pit ? 220 : 120); juice.slowmo(0.35, 450); juice.shake(0.7, 380);
+    juice.burst(pit ? 'pit' : 'crash', st.x, st.y, laneZ, pit ? 24 : 30, pit ? '#8a6a48' : '#ffd9a0'); juice.ring(st.x, groundY(st.x) + 0.2, laneZ, '#ffffff', 0.6, 5, 0.5, true, 0.7);
+    for (let i = 0; i < 12; i++) puffs.emit(st.x + (Math.random() - 0.5) * 2, st.y - 0.4, laneZ + 0.3, (Math.random() - 0.5) * 10, 1 + Math.random() * 4, 0.7, 2.2, 0.9, pit ? '#6b5238' : '#b79b78', 0.6);
     // the rider is thrown clear: every body part goes its own way
     bike.root.updateMatrixWorld(true);
     ragdoll.detach(st.vx, Math.max(st.vy, 0));
@@ -456,7 +497,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.home = { pos: homeCam.pos.clone(), look: homeCam.look.clone() };
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
       setBikeScale();
-      track.visible = true; coins.visible = true; puffs.visible = true;
+      track.visible = true; coins.visible = true; puffs.visible = true; juice.reset(); juice.visible = true;
       newRun();
       bike.root.visible = true;
       clip.constant = 60; applyClip(true);
@@ -545,7 +586,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; world.setFollow(false); applyClip(false); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
+          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -555,11 +596,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         cam.position.copy(st.camPos); cam.lookAt(st.camLook);
         return true;
       }
+      juice.tick(dt); dt *= juice.timeScale;                                   // feedback runs on real time; hit-stop and slow motion scale the game's
       st.t += dt; if (st.mode === 'play') st.runT += dt;
       if (st.charging && st.grounded && st.mode === 'play') {
         st.holdT += dt; st.charge = Math.min(1, st.holdT / CHARGE_TIME);
         st.boost = Math.min(BOOST_CAP, st.boost + 2.5 * dt);                 // the bike slowly speeds up while crouched
-        if (st.charge >= 1 && !st.maxed) { st.maxed = true; try { navigator.vibrate?.(10); } catch (e) { /* not supported */ } }
+        if (st.charge >= 1 && !st.maxed) { st.maxed = true; juice.halo('#ff8a6a', 4.5, 0.4, 0.5); juice.ring(st.x - HW, st.y - R, laneZ + 0.3, '#ffb089', 0.5, 2.6, 0.4, false, 0.8); juice.shake(0.06, 160); try { navigator.vibrate?.(10); } catch (e) { /* not supported */ } }
       } else { st.charge = Math.max(0, st.charge - dt * 6); if (!st.charging) st.maxed = false; }
       if (st.mode !== 'play') st.charging = false;
       const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n;
@@ -568,10 +610,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         if (st.jumpReq > 0) st.jumpReq -= h;
       }
       st.impact = predictLanding(); st.impactAt = st.t;
+      juice.setIntensity(st.mode === 'play' ? THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1) : 0, st.boost / BOOST_CAP, st.charge); juice.setAnchor(st.x, st.y + 0.3, laneZ - 0.6);
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         const got = coins.collect(st.x, st.y, SC / SCALE);
-        if (got) { st.coins += got; st.bonus += 25 * got * st.mult; st.lastTrick = st.t; groove(0.05 * got); }
+        if (got) {
+          st.coins += got; st.bonus += 25 * got * st.mult; st.lastTrick = st.t; groove(0.05 * got);
+          for (const hit of coins.hits) juice.burst('coin', hit.x, hit.y, laneZ, 7, '#ffd54a');
+          if (coinsEl) { coinsEl.classList.remove('bump'); void coinsEl.offsetWidth; coinsEl.classList.add('bump'); }
+        }
         if (st.t - st.lastTrick > 5 && (st.mult > 1 || st.meter > 0)) {                // the groove fades if nothing happens for a while
           st.meter -= 0.14 * dt;
           if (st.meter < 0) { if (st.mult > 1) { st.mult--; st.meter = 0.6; } else st.meter = 0; }
@@ -581,6 +628,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         if (hz && hz.x0 !== st.warnedX) { st.warnedX = hz.x0; toast(hz.type === 'gap' ? 'Gap ahead - charge a jump!' : 'Mud ahead - jump it or slow down!'); }
         const mudNow = st.grounded ? track.mudAt(st.x) : 0;
         if (mudNow > 0.3) {                                                                   // mud spray from the rear wheel
+          juice.shake(0.05, 120);
           st.mudT = (st.mudT ?? 0) - dt;
           if (st.mudT <= 0) {
             st.mudT = 0.06;
@@ -605,18 +653,21 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         const shake = st.maxed ? (Math.sin(st.t * 70) * 0.012) : 0;           // at full charge the rider trembles, ready to go
         bike.rider.group.position.y = shake;
       }
-      bike.model.scale.y = 1 - 0.05 * st.crouch;                              // the bike squats on its suspension
+      st.squash *= Math.exp(-11 * dt);
+      bike.model.scale.y = (1 - 0.05 * st.crouch) * (1 - 0.14 * st.squash);   // the bike squats on its suspension (and squashes on a landing, stretches off a big jump)
+      if (st.trick && st.mode === 'play') { const c0 = Math.cos(st.th), s0 = Math.sin(st.th); juice.trail(st.x - 0.9 * c0, st.y - 0.9 * s0, laneZ - 0.2, trickColor()); juice.trail(st.x + 0.9 * c0, st.y + 0.9 * s0, laneZ - 0.2, trickColor()); }
       st.spinF += (st.vx * dt) / R;
       st.spinR += (st.vx * (1 + 1.6 * st.crouch) * dt) / R;                    // the rear wheel spins up while charging
       bike.wheels.rear.rotation.z = -st.spinR; bike.wheels.front.rotation.z = -st.spinF;
       // dirt kicked from the rear wheel and a little exhaust while charging
-      if (st.charging && st.grounded && st.mode === 'play' && st.charge > 0.05) {
+      const spK = THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), dustK = Math.max(st.charge, spK * 0.7);
+      if (st.grounded && st.mode === 'play' && dustK > 0.05 && (st.charging || st.vx > 14)) {
         st.puffT -= dt;
         if (st.puffT <= 0) {
-          st.puffT = 0.11 - 0.07 * st.charge;
+          st.puffT = 0.15 - 0.09 * dustK;
           const c = Math.cos(st.th), s2 = Math.sin(st.th);
           const wx = st.x - HW * c, wy = st.y - HW * s2 - R * 0.7;
-          puffs.emit(wx, wy, laneZ + 0.2, -3 - 4 * st.charge + (Math.random() - 0.5) * 2, 1.5 + 2.5 * st.charge, 0.5, 1.3 + st.charge, 0.7, '#a98a63', 0.55);
+          puffs.emit(wx, wy, laneZ + 0.2, -3 - 4 * dustK - spK * 3 + (Math.random() - 0.5) * 2, 1.5 + 2.5 * dustK, 0.5, 1.3 + dustK, 0.7, '#a98a63', 0.5);
           puffs.emit(st.x - HW * c * 1.5, st.y - HW * s2 * 0.4 + 0.5, laneZ - 0.3, -2.2 - 2 * st.charge, 0.9 + st.charge, 0.35, 0.9, 0.8, '#efeee5', 0.38);
         }
       }
@@ -630,7 +681,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.frameDt = dt; api.focusDistance = frame();
       const k = reduceMotion ? 1 : ease(Math.min(1, st.t / ENTER_SECONDS));
       cam.position.lerpVectors(st.from.pos, target.pos, k);
-      lookV.lerpVectors(st.from.look, target.look, k); cam.lookAt(lookV);
+      lookV.lerpVectors(st.from.look, target.look, k);
+      const fovT = baseFov() + juice.fovAdd; if (Math.abs(cam.fov - fovT) > 0.02) { cam.fov = fovT; cam.updateProjectionMatrix(); }       // the field of view pushes out with boost
+      const ox = juice.shakeX, oy = juice.shakeY + juice.bumpY;
+      cam.position.x += ox; cam.position.y += oy; lookV.x += ox; lookV.y += oy;
+      cam.lookAt(lookV);
       clip.constant = THREE.MathUtils.lerp(60, CUT, k);
       st.camPos.copy(cam.position); st.camLook.copy(lookV);
       track.update(cam.position.x, st.camY);
