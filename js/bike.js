@@ -3,7 +3,7 @@
 // (so pitching the bike turns it about its wheels). The rider is made of separate limb groups so the
 // game can let go of them for the crash ragdoll.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016204809';
+import { PAL } from './palette.js?v=20261016210713';
 
 export const BIKE = { wheelR: 0.36, rearX: -0.68, frontX: 0.68, wheelbase: 1.36, hip: [-0.22, 1.02], hands: [0.6, 1.2], feet: [0.0, 0.48] };
 
