@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017101334';
+import { PAL } from './palette.js?v=20261017101644';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -53,8 +53,9 @@ export function createCoins(scene, track, laneZ) {
         // metal: a bright specular band as the coin turns, and a diagonal glint that sweeps across the face now and then
         float spec = pow(max(dot(normalize(normal), normalize(vec3(0.45, 0.55, 0.7))), 0.0), 18.0);
         float sw = fract((vMapUv.x + vMapUv.y) * 0.6 - uTime * 0.45 + vPh);
-        float glint = smoothstep(0.035, 0.0, abs(sw - 0.5)) * step(0.1, vMapUv.x) * step(vMapUv.x, 0.98);
-        outgoingLight += vec3(1.0, 0.93, 0.68) * (spec * 0.75 + glint * 0.75);
+        float gd = (sw - 0.5) / 0.13;
+        float glint = exp(-gd * gd) * step(0.1, vMapUv.x) * step(vMapUv.x, 0.98);                  // a soft, blurry band (a gaussian), not a hard line
+        outgoingLight += vec3(1.0, 0.93, 0.68) * (spec * 0.75 + glint * 0.5);
         #include <opaque_fragment>`);
   };
   const mesh = new THREE.InstancedMesh(geo, mat, CAP);
