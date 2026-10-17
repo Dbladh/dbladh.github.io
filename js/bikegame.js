@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016204247';
-import { createTrack } from './track.js?v=20261016204247';
-import { createRagdoll } from './ragdoll.js?v=20261016204247';
-import { createPuffs } from './puffs.js?v=20261016204247';
-import { createCoins } from './coins.js?v=20261016204247';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016204526';
+import { createTrack } from './track.js?v=20261016204526';
+import { createRagdoll } from './ragdoll.js?v=20261016204526';
+import { createPuffs } from './puffs.js?v=20261016204526';
+import { createCoins } from './coins.js?v=20261016204526';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -15,6 +15,7 @@ const JUMP_MIN = 5.5, JUMP_MAX = 15;   // upward kick: a tap hops, a full charge
 const CHARGE_TIME = 1.1;               // seconds of holding to reach full charge (it then stays maxed)
 const BOOST_CAP = 4.5;                 // extra speed from charging and landings
 const BACK_W = 2.2, BACK_RATE = 1.2;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
+const BUFFER_WINDOW = 0.14;            // a press this close to touchdown is held over and applies on landing
 const TAP_KICK = 3.4;                  // nose-down kick of one tap (rad/s, it fades quickly)
 const DIVE_GRAV = 1.2;           // extra gravity while nose-diving
 const TAU = Math.PI * 2;
@@ -39,6 +40,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
   const puffs = createPuffs(scene);
+  // Landing indicator: two bars where the bike will touch down. The cream one lies along the slope (the angle to match); the
+  // other shows the bike's angle right now, green when it is close, amber, then coral.
+  const barGeo = new THREE.PlaneGeometry(1, 1);
+  const mkBar = (color, h) => {
+    const m = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+    m.scale.set(((BIKE.frontX - BIKE.rearX) * 1.8), h, 1); m.renderOrder = 6; m.visible = false; scene.add(m); return m;
+  };
+  const slopeBar = mkBar('#efeee5', 0.4), noseBar = mkBar('#8fd081', 0.16);
+  const GOOD = new THREE.Color('#8fd081'), OKAY = new THREE.Color('#e3b04b'), BAD = new THREE.Color('#d15e4d');
   const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
   bike.root.scale.setScalar(SCALE);
   bike.root.visible = false;
@@ -53,7 +63,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -104,7 +114,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
-    st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; puffs.clear();
+    st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; puffs.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
@@ -140,6 +150,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     if (grooveEl) grooveEl.hidden = true;
     const again = $('go-again'); again.disabled = true;
     setTimeout(() => { again.disabled = false; if (st.mode === 'over') again.focus({ preventScroll: true }); }, 650);   // so a panicked tap cannot restart at once
+  }
+
+  /** Where and when the bike will touch down if nothing changes (a free-flight estimate). */
+  function predictLanding() {
+    if (st.grounded || st.mode !== 'play') return null;
+    for (let t = 0.03; t <= 3; t += 0.03) {
+      const vyT = st.vy - GRAV * t;
+      const yy = st.y + st.vy * t - 0.5 * GRAV * t * t, xx = st.x + st.vx * t;
+      if ((vyT < 0 || t > 0.4) && yy - R <= groundY(xx)) return { t, x: xx, y: groundY(xx), phi: groundPose(xx).phi };
+    }
+    return null;
   }
 
   /** One fixed physics step of `h` seconds. */
@@ -182,6 +203,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     // ---- in the air ----
     st.airT += h;
     st.coyote -= h;
+    if (st.buf && st.t - st.buf.t0 > 0.22) {                    // the landing did not come: treat the held-over press as an ordinary air press
+      st.buf = null;
+      if (st.down) { st.diveOK = true; st.airHold = 0; }
+      st.kickW = Math.max(-6, st.kickW - TAP_KICK);
+    }
     if (st.down && st.diveOK) st.airHold += h; else st.airHold = 0;
     if (st.jumpReq > 0 && st.coyote > 0) { st.jumpReq = 0; st.vy = Math.max(st.vy, 0) + st.jumpVy; st.coyote = 0; }   // a jump pressed just after the lip
     st.vy -= GRAV * (diving ? DIVE_GRAV : 1) * h;
@@ -231,7 +257,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       }
     }
     st.rot = 0;
-    if (st.down) { st.charging = true; st.holdT = 0; }          // still holding at touchdown: start charging the next jump straight away
+    if (st.buf) {                                               // a press just before touchdown: apply it now
+      const b = st.buf; st.buf = null;
+      if (b.rel) {                                              // released already: the jump goes off the moment the wheels touch
+        const c = Math.min(1, b.held / CHARGE_TIME);
+        st.jumpVy = JUMP_MIN + (JUMP_MAX - JUMP_MIN) * (1 - (1 - c) * (1 - c)); st.jumpReq = 0.12;
+      } else { st.charging = true; st.holdT = st.t - b.t0; }    // still down: the charge has already started
+    } else if (st.down) { st.charging = true; st.holdT = 0; }   // still holding at touchdown: start charging the next jump straight away
     events.onLand?.({ air, delta, perfect, rough, flips: st.flips });
     st.flips = 0;
   }
@@ -250,7 +282,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const api = {
     get active() { return st.mode !== 'off'; },
     /** Debug / test access. */
-    get state() { return { charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
+    get state() { return { impact: st.impact, buf: !!st.buf, charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
     events,
     focusDistance: 26,
     onQuit: null,
@@ -287,6 +319,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.mode === 'off' || st.mode === 'out' || st.mode === 'over') return;
       st.down = true;
       if (st.grounded || st.coyote > 0) { st.charging = true; st.holdT = 0; st.diveOK = false; }
+      else if (st.impact && st.impact.t - (st.t - st.impactAt) < BUFFER_WINDOW && st.vy < 0) { st.buf = { t0: st.t, rel: false, held: 0 }; st.diveOK = false; }   // about to land: keep it for the landing
       else { st.diveOK = true; st.airHold = 0; st.kickW = Math.max(-6, st.kickW - TAP_KICK); }
     },
     release() {
@@ -295,6 +328,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         st.jumpVy = JUMP_MIN + (JUMP_MAX - JUMP_MIN) * (1 - (1 - c) * (1 - c));
         st.jumpReq = 0.12; st.charging = false;
       }
+      if (st.buf && !st.buf.rel) { st.buf.rel = true; st.buf.held = st.t - st.buf.t0; }
       st.down = false; st.diveOK = false;
     },
     update(dt, cam) {
@@ -306,7 +340,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; renderer.clippingPlanes = []; track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false;
+          st.mode = 'off'; renderer.clippingPlanes = []; track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; slopeBar.visible = noseBar.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -324,6 +358,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         physics(h);
         if (st.jumpReq > 0) st.jumpReq -= h;
       }
+      st.impact = predictLanding(); st.impactAt = st.t;
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         const got = coins.collect(st.x, st.y);
@@ -378,6 +413,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       clip.constant = THREE.MathUtils.lerp(60, CUT, k);
       track.update(cam.position.x, st.camY);
       coins.update(cam.position.x, st.t);
+      // landing indicator
+      const im = st.impact;
+      if (im && im.t < 1.8 && st.airT > 0.15) {
+        const delta = Math.abs(wrap(st.th - im.phi));
+        const a = Math.min(1, (1.8 - im.t) / 0.5), col = delta < 0.22 ? GOOD : delta < 0.55 ? OKAY : BAD;
+        slopeBar.visible = noseBar.visible = true;
+        slopeBar.position.set(im.x, im.y + 0.3, laneZ + 0.5); slopeBar.rotation.z = im.phi; slopeBar.material.opacity = 0.7 * a;
+        noseBar.position.set(im.x, im.y + 0.3, laneZ + 0.52); noseBar.rotation.z = st.th; noseBar.material.color.copy(col); noseBar.material.opacity = 0.9 * a;
+      } else slopeBar.visible = noseBar.visible = false;
       if (chargeEl) {                                                          // the charge ring floats above the bike
         const show = st.mode === 'play' && (st.charging || st.charge > 0.02) && st.grounded;
         chargeEl.hidden = !show;

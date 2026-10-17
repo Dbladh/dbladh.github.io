@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016204247';
-import { heightAt as terrainAt } from './world.js?v=20261016204247';
+import { PAL } from './palette.js?v=20261016204526';
+import { heightAt as terrainAt } from './world.js?v=20261016204526';
 
 export const XT = 186;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
