@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016224344';
+import { PAL } from './palette.js?v=20261016224802';
 
 const BLOCK = 48;
 const CAP = 220;
@@ -21,30 +21,68 @@ export function createCoins(scene, track, laneZ) {
   const blocks = new Map();
   const dummy = new THREE.Object3D();
 
-  function build(b) {
-    const list = [];
-    const rng = mulberry32((b * 7919 + seed * 104729) >>> 0);
-    const x0 = b * BLOCK, x1 = x0 + BLOCK;
-    const add = (x, y) => { if (x >= minX && x < x1 + 20 && !(track.inPit?.(x) && y < track.laneAt(x) + 6)) list.push({ x, y, got: false }); };   // none inside a pit, except arcs high above it
-    // arcs off lips
-    const lips = [];
+  const G = 24, STEP = 3.1, MIN_SEP = 2.7;                  // gravity, spacing along an arc, and the closest two coins may ever be
+  const POP = (s, vx) => Math.min(8, s * vx * 0.32);          // the lip of a big kicker throws you up a little extra (same rule as the game)
+  const JUMP_VY = (c) => 5.5 + 9.5 * (1 - (1 - c) * (1 - c));   // upward kick for a jump charged to c (0..1)
+
+  const lipsIn = (b) => {
+    const out = [], x0 = b * BLOCK, x1 = x0 + BLOCK;
     for (let x = x0; x < x1; x += 0.5) {
-      if (lips.length && x - lips[lips.length - 1] < 14) continue;
-      if (track.slopeAt(x - 1) > 0.3 && track.slopeAt(x + 1) < track.slopeAt(x - 1) - 0.25) lips.push(x);
+      if (out.length && x - out[out.length - 1] < 14) continue;
+      const s1 = track.slopeAt(x - 1);
+      if (s1 > 0.3 && track.slopeAt(x + 1) < s1 - 0.25) out.push(x);
     }
+    return out;
+  };
+  /** Coins along the path a bike leaving the lip at lx would fly (ballistic), evenly spaced by arc length. `land(x)` is the height it stops at. */
+  function arcCoins(lx, vx, vy, land, maxCoins, out) {
+    const lipY = track.laneAt(lx) + 1.0;                                                              // bike centre height above the ground
+    let t = 0, px = lx, py = lipY, run = 0, n = 0;
+    for (let k = 0; k < 140 && n < maxCoins; k++) {
+      t += 0.04;
+      const nx = lx + vx * t, ny = lipY + vy * t - 0.5 * G * t * t;
+      if (t > 0.3 && ny <= land(nx) + 1.1) break;                                                    // it has landed
+      run += Math.hypot(nx - px, ny - py); px = nx; py = ny;
+      if (run >= STEP) { run = 0; out.push({ x: nx, y: ny }); n++; }
+    }
+  }
+  /** Every coin one lip is responsible for: its arcs (fixed by the course, never by build order). */
+  function lipCoins(lx0) {
+    const rng = mulberry32((Math.floor(lx0 * 10) * 2654435 + seed * 104729) >>> 0), out = [];
+    let lx = lx0, top = track.laneAt(lx0);                                                              // the lip is the crest the ramp climbs to
+    for (let x = lx0; x <= lx0 + 10; x += 0.5) { const h = track.laneAt(x); if (h > top) { top = h; lx = x; } }
+    const s = track.slopeAt(lx - 1.2), vx = track.speedAt(lx) - 1.5;                                  // cruising speed here (a short ramp barely slows you)
+    const vy0 = vx * s + POP(s, vx);
+    const pit = track.pitAfter?.(lx);                                                                   // a gap right after this lip?
+    const land = pit ? (x) => (x < pit.x1 ? -1e9 : track.laneAt(x)) : (x) => track.laneAt(x);
+    if (pit) {
+      arcCoins(lx, vx, vy0 + JUMP_VY(0.8), land, 16, out);                                              // across a gap: the line of a well-charged jump (about 80%)
+      if (rng() < 0.5) arcCoins(lx, vx, vy0 + JUMP_VY(1.0), land, 16, out);                              // and a higher line for a full charge
+    } else {
+      arcCoins(lx, vx, vy0, land, 12, out);                                                              // off a kicker: the line you get with no jump at all
+      if (rng() < 0.55) arcCoins(lx, vx, vy0 + JUMP_VY(1.0), land, 14, out);                             // a higher line, for a fully charged jump
+    }
+    return out;
+  }
+
+  function build(b) {
+    const list = [], placed = [];
+    const x0 = b * BLOCK, x1 = x0 + BLOCK;
+    const ok = (c) => c.x >= minX && c.y >= track.laneAt(c.x) + 1.0 && !(track.inPit?.(c.x) && c.y < track.laneAt(c.x) + 6);
+    // lips of the neighbouring blocks too, so arcs that run across a block edge are resolved the same way whichever block is built first
+    const lips = [...lipsIn(b - 1), ...lipsIn(b), ...lipsIn(b + 1)].sort((a, c) => a - c);
     for (const lx of lips) {
-      const gy = track.laneAt(lx);
-      for (let k = 0; k < 7; k++) {
-        const x = lx + 3 + k * 2.6, arc = gy + 1.8 + 4.2 * Math.sin(Math.PI * (k + 0.6) / 7.4);
-        add(x, Math.max(arc, track.laneAt(x) + 1.5));
+      for (const c of lipCoins(lx)) {
+        if (!ok(c) || placed.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < MIN_SEP)) continue;       // never clumped or overlapping
+        placed.push(c);
+        if (lx >= x0 && lx < x1) list.push({ x: c.x, y: c.y, got: false });
       }
     }
-    // runs along the ground
-    const runs = 1 + Math.floor(rng() * 2);
-    for (let r = 0; r < runs; r++) {
-      const sx = x0 + 4 + rng() * (BLOCK - 22), n = 4 + Math.floor(rng() * 5), wave = rng() < 0.35;
-      if (lips.some((l) => sx + n * 2.4 > l - 3 && sx < l + 24)) continue;
-      for (let k = 0; k < n; k++) { const x = sx + k * 2.4; add(x, track.laneAt(x) + 1.5 + (wave ? Math.sin(k * 0.9) * 0.9 : 0)); }
+    // the odd short line on the flat, now and then (only where no arc is nearby)
+    const rng = mulberry32((b * 7919 + seed * 104729) >>> 0);
+    if (!lips.some((l) => l > x0 - 30 && l < x1 + 30) && rng() < 0.12) {
+      const sx = x0 + 8 + rng() * (BLOCK - 24);
+      for (let k = 0; k < 4; k++) { const c = { x: sx + k * STEP, y: track.laneAt(sx + k * STEP) + 1.7 }; if (ok(c)) list.push({ x: c.x, y: c.y, got: false }); }
     }
     return list;
   }
@@ -54,6 +92,8 @@ export function createCoins(scene, track, laneZ) {
     /** New course: coins start after `startX + 24`. */
     reset(newSeed, startX) { seed = newSeed; minX = startX + 24; blocks.clear(); },
     set visible(v) { mesh.visible = v; },
+    blockList(b) { return blockOf(b); },                       // (for tests)
+    get blockSize() { return BLOCK; },
     /** Redraw the coins near the camera. */
     update(camX, time) {
       let n = 0;

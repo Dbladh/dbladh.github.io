@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016224344';
-import { heightAt as terrainAt } from './world.js?v=20261016224344';
+import { PAL } from './palette.js?v=20261016224802';
+import { heightAt as terrainAt } from './world.js?v=20261016224802';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -113,6 +113,8 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   const inPit = (x) => { if (x < XT) return false; laneAt(x + 30); return gaps.some((g) => x > g.x0 + 0.3 && x < g.x1 - 0.1); };
   /** 0..1: how deep in mud x is (soft edges). */
   const mudAt = (x) => { if (x < XT) return 0; laneAt(x + 30); let m = 0; for (const u of muds) if (x > u.x0 - 0.5 && x < u.x1 + 0.5) m = Math.max(m, Math.min(smooth01((x - u.x0) / 1.5 + 0.2), smooth01((u.x1 - x) / 1.5 + 0.2))); return m; };
+  /** The gap whose lip is at x (within a metre), if any. */
+  const pitAfter = (x) => { laneAt(x + 80); return gaps.find((g) => Math.abs(g.x0 - x) < 1.2) || null; };
   /** The next hazard starting within `range` ahead of x: { type, x0, x1 } or null. */
   const hazardAhead = (x, range) => {
     laneAt(x + range + 20);
@@ -271,7 +273,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   group.visible = false;
 
   return {
-    group, laneAt, groundAt, slopeAt, inPit, mudAt, hazardAhead, XT, cutZ: CUTZ,
+    group, laneAt, groundAt, slopeAt, inPit, mudAt, hazardAhead, speedAt, pitAfter, XT, cutZ: CUTZ,
     get seed() { return seedNow; },
     set visible(v) { group.visible = v; },
     reset(newSeed = seedNow) {

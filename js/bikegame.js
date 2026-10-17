@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016224344';
-import { createTrack } from './track.js?v=20261016224344';
-import { createRagdoll } from './ragdoll.js?v=20261016224344';
-import { createPuffs } from './puffs.js?v=20261016224344';
-import { createCoins } from './coins.js?v=20261016224344';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016224802';
+import { createTrack } from './track.js?v=20261016224802';
+import { createRagdoll } from './ragdoll.js?v=20261016224802';
+import { createPuffs } from './puffs.js?v=20261016224802';
+import { createCoins } from './coins.js?v=20261016224802';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -463,6 +463,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       clearTimeout(st.hintT);
       document.body.classList.remove('game-mode');
     },
+    get coinsDebug() { return coins; },
     get track() { return track; },                                                                     // (for tests)
     get paused() { return st.paused; },
     /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */
