@@ -3,7 +3,7 @@
 // (so pitching the bike turns it about its wheels). The rider is made of separate limb groups so the
 // game can let go of them for the crash ragdoll.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016211135';
+import { PAL } from './palette.js?v=20261016215148';
 
 export const BIKE = { wheelR: 0.36, rearX: -0.68, frontX: 0.68, wheelbase: 1.36, hip: [-0.22, 1.02], hands: [0.6, 1.2], feet: [0.0, 0.48] };
 
@@ -97,11 +97,17 @@ function buildRider() {
   return { group, parts: P, zs: { N: 0.17, F: -0.17 } };
 }
 
-/** Pose the rider on the bike. `lean` is the torso's forward tilt in radians (0 upright), `crouch` lifts the knees/arms a touch. */
-export function poseRider(rider, lean = 0.7, crouch = 0) {
-  const P = rider.parts, [hx0, hy0] = BIKE.hip, [gx, gy] = BIKE.hands, [fx, fy] = BIKE.feet;
-  const hx = hx0 - 0.05 * crouch, hy = hy0 - 0.2 * crouch;     // crouching: hips sink and slide back, the torso folds forward
+/**
+ * Pose the rider on the bike. `lean` is the torso's forward tilt in radians (0 upright), `crouch` (0..1) sinks the hips for a jump charge,
+ * `trick` (0..1) with `kind` 'hands' (no-hander) or 'super' (superman) shows an in-air trick.
+ */
+export function poseRider(rider, lean = 0.7, crouch = 0, trick = 0, kind = '') {
+  const P = rider.parts, [hx0, hy0] = BIKE.hip;
+  let [gx, gy] = BIKE.hands, [fx, fy] = BIKE.feet;
+  let hx = hx0 - 0.05 * crouch, hy = hy0 - 0.2 * crouch;     // crouching: hips sink and slide back, the torso folds forward
   lean += 0.4 * crouch;
+  if (trick > 0 && kind === 'hands') { gx += 0.2 * trick; gy += 0.95 * trick; lean -= 0.35 * trick; }                       // both hands up off the bars
+  else if (trick > 0 && kind === 'super') { hx -= 0.45 * trick; hy += 0.05 * trick; lean += 0.75 * trick; fx -= 1.0 * trick; fy += 0.62 * trick; }   // body flat out over the back, legs stretched behind
   const L = P.torso.userData.len;
   P.torso.position.set(hx, hy, 0); P.torso.rotation.z = -lean;
   const sx = hx + Math.sin(lean) * L, sy = hy + Math.cos(lean) * L;
@@ -110,7 +116,7 @@ export function poseRider(rider, lean = 0.7, crouch = 0) {
     const z = rider.zs[k];
     const a = ik(sx, sy, gx, gy, 0.36, 0.36, false);
     aim(P['uArm' + k], sx, sy, a.mid[0], a.mid[1], z * 1.1); aim(P['fArm' + k], a.mid[0], a.mid[1], a.end[0], a.end[1], z * 1.1);
-    const l = ik(hx, hy, fx, fy, 0.42, 0.42, true);
+    const l = ik(hx, hy, fx, fy, 0.42, 0.42, kind !== 'super' || trick < 0.3);
     aim(P['uLeg' + k], hx, hy, l.mid[0], l.mid[1], z * 0.8); aim(P['fLeg' + k], l.mid[0], l.mid[1], l.end[0], l.end[1], z * 0.8);
   }
 }

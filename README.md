@@ -56,3 +56,5 @@ A small dirt bike rides across the sign hills now and then (first pass about 8 s
 - **Test switches:** `?bike=1` sends a bike straight away and keeps them coming, `?game=1` starts the game, `?course=NN` fixes the generated course.
 - The bike and game are off when the visitor prefers reduced motion and in Simple View.
 - Code: `js/bike.js` (models), `js/ride.js` (ambient pass), `js/bikegame.js` (shell, physics, scoring), `js/track.js` (ground), `js/coins.js`, `js/ragdoll.js`.
+
+The game's ground continues the real terrain: the same terrain material and colour function, and trees, bushes, rocks, wildflowers and grass built by the same plant builders as the main scene (`world.scatter` / `world.terrainColor` in `js/world.js`). The village in front of the bike's lane is sliced away with a clipping plane; the terrain itself is left whole, so green hills fall away toward the camera.

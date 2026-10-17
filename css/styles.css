@@ -664,3 +664,6 @@ body.game-paused .gh-quit { display: none; }
   .gh-hint.coach .gh-skip { min-height: 44px; font-size: .95rem; }
 }
 @media (max-height: 520px) { .gh-hint { top: calc(max(14px, env(safe-area-inset-top)) + 58px); bottom: auto; } }   /* landscape phones: tips go up in the sky, clear of the bike */
+@media (max-width: 600px) {
+  .gh-hint { white-space: normal; text-align: center; width: max-content; max-width: min(330px, calc(100vw - 32px)); border-radius: 20px; top: calc(max(14px, env(safe-area-inset-top)) + 72px); bottom: auto; }
+}

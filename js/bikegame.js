@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016211135';
-import { createTrack } from './track.js?v=20261016211135';
-import { createRagdoll } from './ragdoll.js?v=20261016211135';
-import { createPuffs } from './puffs.js?v=20261016211135';
-import { createCoins } from './coins.js?v=20261016211135';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016215148';
+import { createTrack } from './track.js?v=20261016215148';
+import { createRagdoll } from './ragdoll.js?v=20261016215148';
+import { createPuffs } from './puffs.js?v=20261016215148';
+import { createCoins } from './coins.js?v=20261016215148';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -17,7 +17,7 @@ const BOOST_CAP = 4.5;                 // extra speed from charging and landings
 const BACK_W = 2.2, BACK_RATE = 1.2;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
 const BUFFER_WINDOW = 0.14;            // a press this close to touchdown is held over and applies on landing
 const TAP_KICK = 3.4;                  // nose-down kick of one tap (rad/s, it fades quickly)
-const DIVE_GRAV = 1.2;           // extra gravity while nose-diving
+const DIVE_GRAV = 1.1;           // extra gravity while nose-diving
 const TAU = Math.PI * 2;
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
@@ -41,7 +41,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const $ = (id) => document.getElementById(id);
 
   const laneZ = world.bikeLaneZ;
-  const track = createTrack(scene, { laneZ, material: world.terrainMaterial, seed: 1 });
+  const track = createTrack(scene, { laneZ, material: world.terrainMaterial, world, seed: 1 });
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
   const puffs = createPuffs(scene);
@@ -58,9 +58,36 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   bike.root.scale.setScalar(SCALE);
   bike.root.visible = false;
   scene.add(bike.root);
-  const R = BIKE.wheelR * SCALE, HW = ((BIKE.frontX - BIKE.rearX) / 2) * SCALE;   // wheel radius, half wheelbase
+  let SC = SCALE;                                                                    // the bike is drawn larger on portrait phones
+  let R = BIKE.wheelR * SC, HW = ((BIKE.frontX - BIKE.rearX) / 2) * SC;                // wheel radius, half wheelbase
+  function setBikeScale() {
+    const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);
+    SC = SCALE * (1 + 0.5 * tall); R = BIKE.wheelR * SC; HW = ((BIKE.frontX - BIKE.rearX) / 2) * SC;
+    bike.root.scale.setScalar(SC);
+    slopeBar.scale.x = noseBar.scale.x = (BIKE.frontX - BIKE.rearX) * SC;
+  }
 
-  const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 60);   // clips everything nearer the camera than the cut
+  const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 60);   // clips the village (everything nearer the camera than the cut); the terrain itself is left whole
+  const clipped = [], hiddenObjs = [];
+  function applyClip(on) {
+    if (on) {
+      renderer.localClippingEnabled = true;
+      scene.traverse((o) => {
+        if (o.userData?.hideInGame && o.visible) { o.visible = false; hiddenObjs.push(o); return; }
+        const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        for (const m of ms) {
+          if (m === world.terrainMaterial || m.isShaderMaterial || m.isPointsMaterial || clipped.some((c) => c.m === m)) continue;
+          clipped.push({ m, planes: m.clippingPlanes, shadows: m.clipShadows }); m.clippingPlanes = [clip]; m.clipShadows = true;
+        }
+      });
+    } else {
+      for (const c of clipped) { c.m.clippingPlanes = c.planes; c.m.clipShadows = c.shadows; }
+      clipped.length = 0;
+      for (const o of hiddenObjs) o.visible = true;
+      hiddenObjs.length = 0;
+      renderer.localClippingEnabled = false;
+    }
+  }
   const CUT = track.cutZ + 0.4;
   const st = {
     mode: 'off', t: 0, from: { pos: new THREE.Vector3(), look: new THREE.Vector3() },
@@ -68,7 +95,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -79,9 +106,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function frame() {
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
-    const dist = THREE.MathUtils.clamp((30 - 8 * tall) / (2 * tanH * camera.aspect), 18, 60) * (1 + 0.03 * st.camZoom);   // a very slight pull-out while a jump charges
-    const ahead = 6 + st.vx * 0.2;
-    target.pos.set(st.x + ahead, st.camY + 2.5 + dist * 0.1, laneZ + dist);
+    const dist = THREE.MathUtils.clamp((40 - 10 * tall) / (2 * tanH * camera.aspect), 22, 80) * (1 + 0.03 * st.camZoom);   // a very slight pull-out while a jump charges
+    const ahead = 0.22 * (40 - 10 * tall) + st.vx * 0.12;                   // look well ahead (the bike sits about a quarter of the way in from the left)
+    target.pos.set(st.x + ahead, st.camY + 2.5 + dist * 0.11, laneZ + dist);
     target.look.set(st.x + ahead, st.camY + 3 + dist * (0.05 + tall * 0.16), laneZ);
     return dist;
   }
@@ -119,7 +146,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
-    st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; puffs.clear();
+    st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.lastAirTap = -9; puffs.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
@@ -198,12 +225,27 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       setCoach(st.charging ? (st.toggle ? 'Now tap again to jump!' : 'Now let go to jump!') : (st.toggle ? 'Tap anywhere once to crouch and charge a jump' : 'Press and hold anywhere to crouch and charge a jump'));
       if (!st.grounded) st.guideStep = 2;
       else if (!st.charging) st.guideStep = 0;
+    } else if (st.guideStep === 4) {
+      setCoach(st.grounded ? 'Last one: jump high, then double-tap quickly in the air for a trick' : 'Double-tap quickly now for a trick!');
     } else {
       if (!st.grounded) {
         const im = st.impact;
-        setCoach(im && im.t < 1.6 ? 'Tap to bring the nose down - line the bars up' : 'The nose tips back in the air: tap to level it');
-      } else setCoach(st.guideStep === 2 ? 'Jump again, then tap in the air to land smoothly' : (st.toggle ? 'Nice! Wait longer before the second tap for a bigger jump' : 'Nice! Hold longer for a bigger jump'));
+        setCoach(im && im.t < 1.6 ? 'Hold or tap to bring the nose down - line the bars up' : 'The nose tips back in the air: hold or tap to bring it forward');
+      } else setCoach(st.guideStep === 2 ? 'Jump again, then hold or tap in the air to land smoothly' : (st.toggle ? 'Nice! Wait longer before the second tap for a bigger jump' : 'Nice! Hold longer for a bigger jump'));
     }
+  }
+
+  // ---- tricks: double-tap in the air ----
+  function trickDone() { if (st.guideOn && st.guideStep >= 4) endGuide(true); }
+  function startTrick() {
+    const tti = st.impact ? st.impact.t - (st.t - st.impactAt) : 0;
+    if (tti > 0.78) st.trick = { kind: 'flip', left: TAU };                       // plenty of air: a backflip
+    else { st.trick = { kind: 'pose', pose: st.poseCycle++ % 2 ? 'super' : 'hands', t: 0, dur: 0.7 }; }   // less air: a pose trick
+  }
+  function finishPose(award_) {
+    const t = st.trick; if (!t || t.kind !== 'pose') return;
+    st.trick = null;
+    if (award_) { groove(0.25); award(150, t.pose === 'super' ? 'Superman!' : 'No-hander!'); trickDone(); }
   }
 
   /** Where and when the bike will touch down if nothing changes (a free-flight estimate). */
@@ -238,7 +280,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.x += st.vx * h;
       const q = groundPose(st.x);
       let leaves = false;                                     // would a free-flying bike clear the ground over the next ~0.12 s?
-      for (let t = 0.04; t <= 0.121 && !leaves; t += 0.04) leaves = prevY + st.vy * t - 0.5 * GRAV * t * t > groundPose(st.x + st.vx * t).y + 0.1;
+      for (let t = 0.04; t <= 0.121 && !leaves; t += 0.04) leaves = prevY + st.vy * t - 0.5 * (GRAV * 0.6) * t * t > groundPose(st.x + st.vx * t).y + 0.04;   // eager: bumps and small lifts give a little air even with no button down
       st.coyote = 0.08;
       if (st.jumpReq > 0) {                                   // jump: the carried ground velocity plus a kick
         st.jumpReq = 0; st.grounded = false; st.vy += st.jumpVy; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
@@ -267,25 +309,33 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.x += st.vx * h; st.y += st.vy * h;
     // The nose wants to tip backward (softer during the first 45 s of a run); a hold dives it, a tap gives a quick kick forward.
     const back = BACK_W * (0.5 + 0.5 * Math.min(1, st.runT / 45));
-    const want = diving ? -8.5 : back;
-    const rate = diving ? 18 : (st.om < 0 ? 6 : BACK_RATE);
+    const want = diving ? -2.8 : back;                                 // holding eases the nose forward, slowly
+    const rate = diving ? 4 : (st.om < 0 ? 6 : BACK_RATE);
     st.om += (want - st.om) * Math.min(1, rate * h);
     st.kickW *= Math.exp(-7 * h);
-    let dth = (st.om + st.kickW) * h;
+    let dth = (st.om + st.kickW) * h, assistOn = true;
+    if (st.trick && st.trick.kind === 'flip') {                          // a backflip trick: a controlled full turn
+      const step = Math.min(st.trick.left, 8.6 * h); st.trick.left -= step;
+      dth = step; assistOn = false; st.om = 0; st.kickW = 0;
+      if (st.trick.left <= 1e-6) st.trick = null;
+    } else if (st.trick && st.trick.kind === 'pose') {
+      st.trick.t += h;
+      if (st.trick.t >= st.trick.dur) finishPose(true);
+    }
     // Landing assist: close to the ground and falling, the suspension and the rider square the bike up with the slope.
     const gp = groundPose(st.x + st.vx * 0.12);
     const above = st.y - R - groundY(st.x);
-    if (st.vy < 0 && above < 2.4 && st.airT > 0.2) { const k = Math.min(1, 2.0 * h * (1 - above / 2.4 + 0.3)); dth += wrap(gp.phi - st.th) * k; }
+    if (assistOn && st.vy < 0 && above < 2.4 && st.airT > 0.2) { const k = Math.min(1, 2.0 * h * (1 - above / 2.4 + 0.3)); dth += wrap(gp.phi - st.th) * k; }
     st.th += dth; st.rot += dth;
-    if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); groove(0.4); award(400, 'Backflip!'); }
-    else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); groove(0.4); award(400, 'Front flip!'); }
+    if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); groove(0.4); award(400, 'Backflip!'); trickDone(); }
+    else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); groove(0.4); award(400, 'Front flip!'); trickDone(); }
     // wheels
     const c = Math.cos(st.th), s = Math.sin(st.th);
     const rx = st.x - HW * c, ry = st.y - HW * s, fx = st.x + HW * c, fy = st.y + HW * s;
     const clearR = ry - R - groundY(rx), clearF = fy - R - groundY(fx);
     const clear = Math.min(clearR, clearF);
     if (clear <= 0) {
-      if (st.airT < 0.25) { st.y -= clear; if (st.vy < 0) st.vy = 0; }   // still scraping the lip: lift clear rather than land
+      if (st.airT < 0.12) { st.y -= clear; if (st.vy < 0) st.vy = 0; }   // still scraping the lip: lift clear rather than land
       else if (st.vy <= 0) land();
     }
   }
@@ -295,23 +345,24 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const delta = wrap(st.th - p.phi);                         // + nose up, - nose down
     st.grounded = true; st.om = 0; st.kickW = 0; st.diveOK = false;
     const air = st.airT;
+    if (st.trick) { if (st.trick.kind === 'pose' && st.trick.t > 0.35) finishPose(true); st.trick = null; }
     if (delta > 1.15 || delta < -0.95) { crash(); return; }
     st.y = p.y;
     st.vy = st.vx * Math.tan(p.phi);
     st.th = p.phi + delta * 0.55;                              // the suspension absorbs part of the angle
     const perfect = Math.abs(delta) < 0.22, rough = Math.abs(delta) > 0.5;
     st.bestAir = Math.max(st.bestAir, air);
-    if (rough) { st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.meter = 0; toast('Rough landing'); }
+    if (rough && air > 0.3) { st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.meter = 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
     else {
-      st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 1.2 : 0.5));
       if (air > 0.45) {
+        st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 1.2 : 0.5));
         groove(perfect ? 0.34 : 0.2);
         award((perfect ? 150 : 60) + Math.max(0, air - 0.5) * 90, perfect ? 'Stuck it!' : 'Clean landing');
       }
     }
     st.rot = 0;
     if (st.guideOn && st.guideStep >= 2 && air > 0.4 && !rough) {   // a smooth landing counts toward finishing the tips
-      if (st.guideStep === 2) st.guideStep = 3; else endGuide(true);
+      if (st.guideStep < 4) st.guideStep++;
     }
     if (st.buf) {                                               // a press just before touchdown: apply it now
       const b = st.buf; st.buf = null;
@@ -357,10 +408,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.t = 0; st.down = false; st.startX = startX; st.best = loadBest();
       st.home = { pos: homeCam.pos.clone(), look: homeCam.look.clone() };
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
+      setBikeScale();
       track.visible = true; coins.visible = true; puffs.visible = true;
       newRun();
       bike.root.visible = true;
-      renderer.clippingPlanes = [clip]; clip.constant = 60;
+      clip.constant = 60; applyClip(true);
       document.body.classList.add('game-mode');
       document.activeElement?.blur?.();                        // keyboard focus must not stay on a button that is about to disappear: Space has to reach the game
       if (hud) hud.hidden = false;
@@ -369,7 +421,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (hint) {
         clearTimeout(st.hintT);
         if (st.guideOn) { hint.hidden = true; hint.classList.add('coach'); }
-        else { hint.classList.remove('coach'); if (hintText) hintText.textContent = 'Hold to crouch \u00b7 release to jump \u00b7 tap in the air to level out'; if (skipBtn) skipBtn.hidden = true; if (modeBtn) modeBtn.hidden = true; hint.hidden = false; st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
+        else { hint.classList.remove('coach'); if (hintText) hintText.textContent = 'Hold to crouch, release to jump \u00b7 in the air: hold to tilt forward, double-tap for tricks'; if (skipBtn) skipBtn.hidden = true; if (modeBtn) modeBtn.hidden = true; hint.hidden = false; st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
       }
       st.paused = false; if (pauseEl) pauseEl.hidden = true; document.body.classList.remove('game-paused');
       const tq = /[?&]toggle=(\d)/.exec(location.search);
@@ -418,7 +470,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         else { st.charging = true; st.holdT = 0; st.diveOK = false; }
       }
       else if (st.impact && st.impact.t - (st.t - st.impactAt) < BUFFER_WINDOW && st.vy < 0) { st.buf = { t0: st.t, rel: false, held: 0 }; st.diveOK = false; }   // about to land: keep it for the landing
-      else { st.diveOK = true; st.airHold = 0; st.kickW = Math.max(-6, st.kickW - TAP_KICK); }
+      else if (!st.trick && st.t - st.lastAirTap < 0.3 && st.airT > 0.12) { startTrick(); st.lastAirTap = -9; st.diveOK = false; st.kickW = 0; }   // a quick second tap: a trick
+      else { st.lastAirTap = st.t; st.diveOK = true; st.airHold = 0; st.kickW = Math.max(-6, st.kickW - TAP_KICK); }
     },
     release() {
       if (st.charging && !st.toggle) fireJump();                          // hold mode: let go to jump
@@ -434,7 +487,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; renderer.clippingPlanes = []; track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; slopeBar.visible = noseBar.visible = false;
+          st.mode = 'off'; applyClip(false); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; slopeBar.visible = noseBar.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -459,7 +512,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.impact = predictLanding(); st.impactAt = st.t;
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
-        const got = coins.collect(st.x, st.y);
+        const got = coins.collect(st.x, st.y, SC / SCALE);
         if (got) { st.coins += got; st.bonus += 25 * got * st.mult; st.lastTrick = st.t; groove(0.05 * got); }
         if (st.t - st.lastTrick > 5 && (st.mult > 1 || st.meter > 0)) {                // the groove fades if nothing happens for a while
           st.meter -= 0.14 * dt;
@@ -478,7 +531,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const crouchT = st.charging && st.grounded ? st.charge : 0;
       st.crouch += (crouchT - st.crouch) * Math.min(1, dt * (crouchT > st.crouch ? 6 : 14));
       if (!ragdoll.active) {
-        poseRider(bike.rider, st.lean, st.crouch);
+        const tr = st.trick && st.trick.kind === 'pose' ? st.trick : null;
+        poseRider(bike.rider, st.lean, st.crouch, tr ? Math.sin(Math.PI * Math.min(1, tr.t / tr.dur)) : 0, tr ? tr.pose : '');
         const shake = st.maxed ? (Math.sin(st.t * 70) * 0.012) : 0;           // at full charge the rider trembles, ready to go
         bike.rider.group.position.y = shake;
       }

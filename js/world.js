@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016211135';
+import { PAL } from './palette.js?v=20261016215148';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016211135';
+} from './houses.js?v=20261016215148';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -438,7 +438,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const skyScene = opts.skyScene ?? scene; // clouds live on the layer behind the title text
   const classic = !!opts.classic;          // ?look=classic: the original, dimmer palette
   const low = !!opts.low;                  // weaker machine: fewer plants, coarser terrain
-  const rand = rng(11);
+  let rand = rng(11);
   const pick = (a) => a[Math.floor(rand() * a.length)];
 
   const clouds = [];
@@ -633,11 +633,8 @@ export function buildWorld(scene, sections, opts = {}) {
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
   const c = new THREE.Color();
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    const h = heightAt(x, z);
-    p.setY(i, h);
-    const slope = (Math.abs(heightAt(x + 1.2, z) - h) + Math.abs(heightAt(x, z + 1.2) - h)) / 1.2;
+  /** The ground colour at (x, z) for height h and steepness `slope`, written into `c`: shared with the dirt-bike game so its ground matches. */
+  const terrainColor = (x, z, h, slope, c) => {
     const t = THREE.MathUtils.clamp((h + 3) / 16, 0, 1);
     c.copy(cLow).lerp(cHigh, t);
     c.lerp(cDeep, smooth(0.25, 0, t) * 0.5);
@@ -674,6 +671,14 @@ export function buildWorld(scene, sections, opts = {}) {
       branch = Math.max(branch, 1 - smooth(0.8, 1.9, distToPolyline(x, z, b)));
     });
     c.lerp(cPath, Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
+    return c;
+  };
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    const h = heightAt(x, z);
+    p.setY(i, h);
+    const slope = (Math.abs(heightAt(x + 1.2, z) - h) + Math.abs(heightAt(x, z + 1.2) - h)) / 1.2;
+    terrainColor(x, z, h, slope, c);
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -956,6 +961,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     smoke.castShadow = false;
     smoke.renderOrder = 3;
     smoke.layers.set(1);   // drawn in the sharp pass after the billboards, so it can pass in front of them
+    smoke.userData.hideInGame = true;   // the dirt-bike game hides it (its houses are sliced away)
     scene.add(smoke);
   }
   const _sd = new THREE.Object3D();
@@ -1029,8 +1035,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     });
   }
 
+  let hAt = heightAt;   // ground height used by the plant builders (the dirt-bike game swaps in its own ground)
   function addTreeRaw(x, z, s, force) {
-    const y = heightAt(x, z);
+    const y = hAt(x, z);
     anchors.push({ x, z, r: 0.55 * s, n: 7 });
     const kind = force ?? rand();
     if (kind < 0.4) { // round oak / apple / blossom tree: trunk, root flare, branches, lobes, leaf tufts
@@ -1073,7 +1080,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       items.trunk.push({ p: [x, y + 0.5 * s, z], s: [0.25 * s, 1.0 * s, 0.25 * s] });
       const hgt = (3 + rand() * 2.2) * s;
       items.cypress.push({ p: [x, y + hgt * 0.9, z], s: [(0.8 + rand() * 0.35) * s, hgt, (0.8 + rand() * 0.35) * s], c: pick(DARK) });
-      if (rand() < 0.4) items.cypress.push({ p: [x + 1.0 * s, heightAt(x + s, z) + hgt * 0.35, z + 0.4 * s], s: [0.55 * s, hgt * 0.5, 0.55 * s], c: pick(DARK) });
+      if (rand() < 0.4) items.cypress.push({ p: [x + 1.0 * s, hAt(x + s, z) + hgt * 0.35, z + 0.4 * s], s: [0.55 * s, hgt * 0.5, 0.55 * s], c: pick(DARK) });
     } else if (kind < 0.84) { // layered pine: one jagged, drooping, multi-tier shape
       items.trunk.push({ p: [x, y + 0.7 * s, z], s: [0.3 * s, 1.4 * s, 0.3 * s] });
       const H = (4.6 + rand() * 1.4) * s, R = (1.55 + rand() * 0.4) * s;
@@ -1094,14 +1101,14 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         const fx = x + Math.cos(a) * r, fz = z + Math.sin(a) * r;
         for (let f = 0; f < 5; f++) {
           const fa = (f / 5) * 6.28;
-          items.fern.push({ p: [fx, heightAt(fx, fz) + 0.22, fz], s: [0.8, 0.8, 0.8], ry: fa, rz: 0.95, c: pick(DARK).clone().offsetHSL(0, 0, 0.06) });
+          items.fern.push({ p: [fx, hAt(fx, fz) + 0.22, fz], s: [0.8, 0.8, 0.8], ry: fa, rz: 0.95, c: pick(DARK).clone().offsetHSL(0, 0, 0.06) });
         }
       }
     }
     if (rand() < 0.25) {
       for (let k = 0; k < 3; k++) {
         const a = rand() * 6.28, r = (0.7 + rand() * 0.6) * s;
-        const mx = x + Math.cos(a) * r, mz = z + Math.sin(a) * r, my = heightAt(mx, mz);
+        const mx = x + Math.cos(a) * r, mz = z + Math.sin(a) * r, my = hAt(mx, mz);
         const ms = 0.7 + rand() * 0.7;
         items.mushStem.push({ p: [mx, my + 0.09 * ms, mz], s: [ms, ms, ms], c: new THREE.Color('#f3ecd8') });
         const cap = pick([new THREE.Color('#d8342a'), new THREE.Color('#e8832a'), new THREE.Color('#b87a4b')]);
@@ -1109,15 +1116,15 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         if (cap.r > 0.6) for (let d = 0; d < 3; d++) items.dot.push({ p: [mx + (rand() - 0.5) * 0.1 * ms, my + 0.23 * ms, mz + (rand() - 0.5) * 0.1 * ms], s: [0.03 * ms, 0.02 * ms, 0.03 * ms], c: new THREE.Color('#ffffff') });
       }
     }
-    if (rand() < 0.12) items.log.push({ p: [x + 1.6 * s, heightAt(x + 1.6 * s, z) + 0.2, z + 0.5 * s], s: [0.24, 1.4 + rand() * 1.0, 0.24], rx: Math.PI / 2, ry: rand() * 6.28, c: BARK });
+    if (rand() < 0.12) items.log.push({ p: [x + 1.6 * s, hAt(x + 1.6 * s, z) + 0.2, z + 0.5 * s], s: [0.24, 1.4 + rand() * 1.0, 0.24], rx: Math.PI / 2, ry: rand() * 6.28, c: BARK });
   }
 
   function addBushRaw(x, z, s) {
-    const y = heightAt(x, z);
+    const y = hAt(x, z);
     anchors.push({ x, z, r: 0.75 * s, n: 5 });
     const col = pick(GREENS);
     items.bush.push({ p: [x, y + 0.4 * s, z], s: [s * 1.1, s * 0.8, s * 1.1], c: col });
-    if (rand() < 0.5) items.bush.push({ p: [x + 0.5 * s, heightAt(x + 0.5 * s, z) + 0.28 * s, z + 0.2 * s], s: [s * 0.7, s * 0.55, s * 0.7], c: col.clone().offsetHSL(0, 0, -0.04) });
+    if (rand() < 0.5) items.bush.push({ p: [x + 0.5 * s, hAt(x + 0.5 * s, z) + 0.28 * s, z + 0.2 * s], s: [s * 0.7, s * 0.55, s * 0.7], c: col.clone().offsetHSL(0, 0, -0.04) });
     if (rand() < 0.4) { // berries
       const bc = pick([new THREE.Color('#c93a4a'), new THREE.Color('#7a4bb0'), new THREE.Color('#3a63c9')]);
       for (let k = 0; k < 6; k++) {
@@ -1531,11 +1538,11 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // `farGeometry` (optional) replaces the geometry for instances beyond FAR_Z: that far away they are
   // heavily out of focus, so the coarser shape is never noticed.
   const FAR_Z = -42;
-  function instanced(geometry, material, list, { shadow = true, defaultColor, farGeometry } = {}) {
+  function instanced(geometry, material, list, { shadow = true, defaultColor, farGeometry, target = scene, farZ = FAR_Z, noShadow = false } = {}) {
     if (!list.length) return null;
     const cells = new Map();
     for (const it of list) {
-      const far = farGeometry && it.p[2] < FAR_Z ? 'f' : '';
+      const far = farGeometry && it.p[2] < farZ ? 'f' : '';
       const key = far + Math.floor(it.p[0] / CELL) + ',' + Math.floor(it.p[2] / CELL);
       if (!cells.has(key)) cells.set(key, []);
       cells.get(key).push(it);
@@ -1550,10 +1557,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         const col = it.c ?? defaultColor;
         if (col) mesh.setColorAt(i, col);
       });
-      mesh.castShadow = shadow;
+      mesh.castShadow = shadow && !noShadow;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
-      scene.add(mesh);
+      target.add(mesh);
       first = first || mesh;
     }
     return first;
@@ -1612,36 +1619,105 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     return geo;
   };
   const blobGeos = [0, 1, 2].map((i) => shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.38, i * 7.3), 0.7, 1.1));
-  const lobeLists = [[], [], []];
-  items.lobe.forEach((it, i) => lobeLists[i % 3].push(it));
-  const trunkGeo = shade(jitter(new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 2), 0.18, 5), 0.75, 1.05);
-  instanced(trunkGeo, barkMat, items.trunk, { defaultColor: BARK });
-  instanced(shade(new THREE.ConeGeometry(0.75, 1, 6), 0.7, 1.0), barkMat, items.flare, { defaultColor: BARK });
   const farBlobs = [0, 1, 2].map((i) => shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, i * 7.3), 0.7, 1.1));
-  lobeLists.forEach((list, i) => instanced(blobGeos[i], foliageMat, list, { farGeometry: farBlobs[i] }));
-  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.35, 3), 0.8, 1.12), foliageMat, items.leaf, { shadow: false });
-  instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.fruit, { shadow: false });
-  // cypress: a faceted flame, widest a little below the middle
-  instanced(shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1), foliageMat, items.cypress);
-  // pine: drooping jagged tiers, two-sided so it never turns see-through
-  instanced(addPlanarUV(pineGeometry(5, 9)), foliageMatDS, items.pine, { farGeometry: addPlanarUV(pineGeometry(3, 6)) });
-  instanced(shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), foliageMat, items.bush, { farGeometry: shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, 11), 0.65, 1.08) });
-  instanced(new THREE.IcosahedronGeometry(1, 0), white({ flatShading: true }), items.berry, { shadow: false });
-  instanced(new THREE.DodecahedronGeometry(1, 0), white({ flatShading: true }), items.rock);
-  instanced(tuftGeometry(), flat({ side: THREE.DoubleSide }), items.grass, { shadow: false });
-  instanced(new THREE.CylinderGeometry(0.014, 0.02, 1, 4), white(), items.stem, { shadow: false });
-  instanced(new THREE.SphereGeometry(1, 8, 6), white(), items.head, { shadow: false });
-  instanced(new THREE.SphereGeometry(1, 6, 5), white(), items.dot, { shadow: false });
-  instanced(new THREE.ConeGeometry(0.05, 0.5, 5).translate(0, 0.25, 0), white(), items.spike, { shadow: false });
-  instanced(new THREE.ConeGeometry(0.12, 0.85, 3).translate(0, 0.42, 0), white(), items.fern, { shadow: false });
-  instanced(new THREE.CylinderGeometry(0.028, 0.034, 0.18, 5), white(), items.mushStem, { shadow: false });
-  instanced(new THREE.SphereGeometry(1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), white(), items.mushCap, { shadow: false });
-  instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), logMat, items.log, { defaultColor: BARK });
-  instanced(new THREE.CylinderGeometry(0.04, 0.05, 1, 5), white(), items.reed, { shadow: false });
-  instanced(new THREE.CylinderGeometry(0.06, 0.06, 0.28, 6), white(), items.reedTop, { shadow: false });
-  instanced(new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12), white(), items.lily, { shadow: false });
-  instanced(new THREE.BoxGeometry(0.12, 0.9, 0.12), white(), items.post);
-  instanced(new THREE.BoxGeometry(1, 0.08, 0.06), white(), items.rail);
+  const trunkGeo = shade(jitter(new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 2), 0.18, 5), 0.75, 1.05);
+  // One set of shapes and materials serves the main scene and the dirt-bike game's new ground.
+  const GEO = {
+    flare: shade(new THREE.ConeGeometry(0.75, 1, 6), 0.7, 1.0),
+    leaf: shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.35, 3), 0.8, 1.12),
+    fruit: new THREE.IcosahedronGeometry(1, 0),
+    cypress: shade(jitter(lathe([[0, -1], [0.62, -0.88], [0.95, -0.45], [1, -0.05], [0.82, 0.42], [0.46, 0.8], [0, 1]], 7), 0.12, 9), 0.6, 1.1),
+    pine: addPlanarUV(pineGeometry(5, 9)), pineFar: addPlanarUV(pineGeometry(3, 6)),
+    bush: shade(jitter(new THREE.IcosahedronGeometry(1, 1), 0.3, 11), 0.65, 1.08), bushFar: shade(jitter(new THREE.IcosahedronGeometry(1, 0), 0.3, 11), 0.65, 1.08),
+    berry: new THREE.IcosahedronGeometry(1, 0), rock: new THREE.DodecahedronGeometry(1, 0), grass: tuftGeometry(),
+    stem: new THREE.CylinderGeometry(0.014, 0.02, 1, 4), head: new THREE.SphereGeometry(1, 8, 6), dot: new THREE.SphereGeometry(1, 6, 5),
+    spike: new THREE.ConeGeometry(0.05, 0.5, 5).translate(0, 0.25, 0), fern: new THREE.ConeGeometry(0.12, 0.85, 3).translate(0, 0.42, 0),
+    mushStem: new THREE.CylinderGeometry(0.028, 0.034, 0.18, 5), mushCap: new THREE.SphereGeometry(1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
+    log: new THREE.CylinderGeometry(0.5, 0.5, 1, 8), reed: new THREE.CylinderGeometry(0.04, 0.05, 1, 5), reedTop: new THREE.CylinderGeometry(0.06, 0.06, 0.28, 6),
+    lily: new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12), post: new THREE.BoxGeometry(0.12, 0.9, 0.12), rail: new THREE.BoxGeometry(1, 0.08, 0.06),
+  };
+  const MAT = { flatWhite: white({ flatShading: true }), grass: flat({ side: THREE.DoubleSide }), plain: white() };
+  /** Build the instanced meshes for a set of plant/prop lists (`src`, shaped like `items`) into `target`. */
+  function buildAll(src, target, opt = {}) {
+    const o = (extra = {}) => ({ ...extra, target, farZ: opt.farZ ?? FAR_Z, noShadow: !!opt.noShadow });
+    const lobeLists = [[], [], []];
+    src.lobe.forEach((it, i) => lobeLists[i % 3].push(it));
+    instanced(trunkGeo, barkMat, src.trunk, o({ defaultColor: BARK }));
+    instanced(GEO.flare, barkMat, src.flare, o({ defaultColor: BARK }));
+    lobeLists.forEach((list, i) => instanced(blobGeos[i], foliageMat, list, o({ farGeometry: farBlobs[i] })));
+    instanced(GEO.leaf, foliageMat, src.leaf, o({ shadow: false }));
+    instanced(GEO.fruit, MAT.flatWhite, src.fruit, o({ shadow: false }));
+    instanced(GEO.cypress, foliageMat, src.cypress, o());
+    instanced(GEO.pine, foliageMatDS, src.pine, o({ farGeometry: GEO.pineFar }));
+    instanced(GEO.bush, foliageMat, src.bush, o({ farGeometry: GEO.bushFar }));
+    instanced(GEO.berry, MAT.flatWhite, src.berry, o({ shadow: false }));
+    instanced(GEO.rock, MAT.flatWhite, src.rock, o());
+    instanced(GEO.grass, MAT.grass, src.grass, o({ shadow: false }));
+    instanced(GEO.stem, MAT.plain, src.stem, o({ shadow: false }));
+    instanced(GEO.head, MAT.plain, src.head, o({ shadow: false }));
+    instanced(GEO.dot, MAT.plain, src.dot, o({ shadow: false }));
+    instanced(GEO.spike, MAT.plain, src.spike, o({ shadow: false }));
+    instanced(GEO.fern, MAT.plain, src.fern, o({ shadow: false }));
+    instanced(GEO.mushStem, MAT.plain, src.mushStem, o({ shadow: false }));
+    instanced(GEO.mushCap, MAT.plain, src.mushCap, o({ shadow: false }));
+    instanced(GEO.log, logMat, src.log, o({ defaultColor: BARK }));
+    instanced(GEO.reed, MAT.plain, src.reed, o({ shadow: false }));
+    instanced(GEO.reedTop, MAT.plain, src.reedTop, o({ shadow: false }));
+    instanced(GEO.lily, MAT.plain, src.lily, o({ shadow: false }));
+    instanced(GEO.post, MAT.plain, src.post, o());
+    instanced(GEO.rail, MAT.plain, src.rail, o());
+  }
+  buildAll(items, scene);
+
+  /**
+   * For the dirt-bike game: grow the same trees, bushes, rocks, wildflowers and grass tufts as the main scene on other ground.
+   * Fills x0..x1 behind the lane (and a few low things on the slope in front), standing on `hFn(x, z)`, and returns a Group.
+   */
+  function scatter({ x0, x1, hFn, seed, laneZ, farZ, density = 1 }) {
+    const savedRand = rand, savedH = hAt, savedAnchors = anchors.splice(0), saved = {};
+    rand = rng(seed >>> 0); hAt = hFn;
+    for (const k of itemKeys) { saved[k] = items[k]; items[k] = []; }
+    const group = new THREE.Group();
+    try {
+      const W = x1 - x0, X = () => x0 + rand() * W, back = (a, b) => laneZ - (a + Math.pow(rand(), 0.8) * (b - a));
+      const nTrees = Math.round(6 * density * (0.7 + rand() * 0.6));
+      for (let i = 0; i < nTrees; i++) addTreeRaw(X(), back(4, 32), 0.75 + rand() * 0.75);
+      for (let i = 0; i < Math.round(8 * density); i++) addBushRaw(X(), back(2.6, 24), 0.45 + rand() * 0.6);
+      for (let i = 0; i < Math.round(4 * density); i++) addBushRaw(X(), laneZ + 8 + rand() * 30, 0.45 + rand() * 0.6);   // low planting on the slope toward the camera
+      for (let i = 0; i < Math.round(5 * density); i++) {                                                                  // rocks, some in clusters
+        const front = rand() < 0.4, x = X(), z = front ? laneZ + 6 + rand() * 34 : back(2.8, 30), n = rand() < 0.35 ? 3 : 1;
+        for (let k = 0; k < n; k++) {
+          const s = (0.35 + rand() * 0.85) * (k ? 0.65 : 1), rx = x + (rand() - 0.5) * 1.4 * (n - 1), rz = z + (rand() - 0.5) * 1.4 * (n - 1);
+          items.rock.push({ p: [rx, hAt(rx, rz) + s * 0.22, rz], s: [s * 1.2, s * 0.7, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.06, 0.5 + rand() * 0.2) });
+        }
+      }
+      for (let k = 0; k < (rand() < 0.6 ? 2 : 1); k++) {                                                                   // wildflower drifts
+        const base = pick(PALETTE), cx = X(), cz = rand() < 0.7 ? back(3, 24) : laneZ + 6 + rand() * 24, count = 14 + Math.floor(rand() * 14);
+        for (let i = 0; i < count; i++) {
+          const x = cx + (rand() - 0.5) * 7, z = cz + (rand() - 0.5) * 7;
+          if (Math.abs(z - laneZ) < 2.2) continue;
+          const f = rand() < 0.8 ? base : pick(PALETTE), y = hAt(x, z), col = new THREE.Color(f.c);
+          const ht = f.kind === 'sun' ? 1.0 + rand() * 0.35 : f.kind === 'spike' ? 0.55 : 0.32 + rand() * 0.28;
+          items.stem.push({ p: [x, y + ht / 2, z], s: [1, ht, 1], rz: (rand() - 0.5) * 0.15, c: STEM });
+          if (f.kind === 'daisy') { items.head.push({ p: [x, y + ht + 0.02, z], s: [0.12, 0.035, 0.12], c: col }); items.dot.push({ p: [x, y + ht + 0.05, z], s: [0.045, 0.03, 0.045], c: new THREE.Color('#f4b400') }); }
+          else if (f.kind === 'poppy') { items.head.push({ p: [x, y + ht + 0.03, z], s: [0.13, 0.05, 0.13], c: col }); items.dot.push({ p: [x, y + ht + 0.07, z], s: [0.04, 0.03, 0.04], c: new THREE.Color('#2b1a14') }); }
+          else if (f.kind === 'tulip') items.head.push({ p: [x, y + ht + 0.07, z], s: [0.07, 0.11, 0.07], c: col });
+          else if (f.kind === 'spike') items.spike.push({ p: [x, y + ht + 0.12, z], s: [1.2, 0.9, 1.2], c: col });
+          else { items.head.push({ p: [x, y + ht + 0.03, z], s: [0.24, 0.05, 0.24], rx: 0.5, c: col }); items.dot.push({ p: [x, y + ht + 0.07, z], s: [0.1, 0.05, 0.1], c: new THREE.Color('#4a2c14') }); }
+        }
+      }
+      const tuftAt = (x, z, s) => { if (Math.abs(z - laneZ) < 1.6) return; items.grass.push({ p: [x, hAt(x, z) - 0.02, z], s: [s, s * (0.75 + rand() * 0.5), s], ry: rand() * 6.28, c: pick(GREENS).clone().offsetHSL(0, 0, -0.06 + rand() * 0.1) }); };
+      for (let i = 0; i < Math.round(60 * density); i++) tuftAt(X(), rand() < 0.75 ? back(2, 34) : laneZ + 4 + rand() * 40, 0.7 + rand() * 0.4);
+      for (const an of anchors) for (let k = 0; k < Math.round(an.n * D) + 2; k++) { const a = rand() * 6.28, r = an.r * (0.8 + rand() * 1.1); tuftAt(an.x + Math.cos(a) * r, an.z + Math.sin(a) * r, 0.65 + rand() * 0.45); }
+      for (const rk of items.rock) for (let k = 0; k < 3; k++) { const a = rand() * 6.28, r = rk.s[0] * (0.9 + rand() * 0.5); tuftAt(rk.p[0] + Math.cos(a) * r, rk.p[2] + Math.sin(a) * r, 0.6 + rand() * 0.3); }
+      buildAll(items, group, { farZ, noShadow: true });
+    } finally {
+      for (const k of itemKeys) items[k] = saved[k];
+      anchors.splice(0, anchors.length, ...savedAnchors);
+      rand = savedRand; hAt = savedH;
+    }
+    return group;
+  }
 
   // ---- Butterflies: a few drifting about the meadow by day ----
   const butterflies = [];
@@ -1788,6 +1864,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       }`,
   }));
   fireflies.frustumCulled = false;
+  fireflies.userData.hideInGame = true;
   scene.add(fireflies);
 
   // Some fireflies carry real lights (spread near/middle/far) plus a glow pool on the ground.
@@ -2132,6 +2209,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     boards,
     get bikeLaneZ() { return LANE_Z; },
     get terrainMaterial() { return terrainMat; },
+    terrainColor, scatter,
     /**
      * Seat every sign for the current screen shape. Each slides inward along its hill until it fits the
      * visible width (never past the hill's crest), steps to its zig-zag depth as the screen gets narrow,
