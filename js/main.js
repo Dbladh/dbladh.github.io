@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017115803';
-import { buildWorld } from './world.js?v=20261017115803';
-import { createSky } from './sky.js?v=20261017115803';
-import { createDOF } from './dof.js?v=20261017115803';
-import { createRide } from './ride.js?v=20261017115803';
-import { createGame } from './bikegame.js?v=20261017115803';
+import { PAL } from './palette.js?v=20261017144654';
+import { buildWorld } from './world.js?v=20261017144654';
+import { createSky } from './sky.js?v=20261017144654';
+import { createDOF } from './dof.js?v=20261017144654';
+import { createRide } from './ride.js?v=20261017144654';
+import { createGame } from './bikegame.js?v=20261017144654';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -100,6 +100,9 @@ function start() {
   renderer.shadowMap.needsUpdate = true;
   renderer.info.autoReset = false;                 // several renders per frame: reset once, in draw()
   const perf = { cpu: 0, fps: 60 };
+  // ?perf=1 profiler: a ring of the last ~2.5 s of real frame times, where the CPU time goes, and how often the shadow map was redrawn
+  const prof = { ft: new Float32Array(150), n: 0, shadow: 0, sec: { time: 0, game: 0, world: 0 } };
+  const secT = (k, t0) => { prof.sec[k] += (performance.now() - t0 - prof.sec[k]) * 0.1; };
   let shadowTick = 0;
 
   // Weaker machines get fewer real lights (each one costs every pixel).
@@ -358,7 +361,11 @@ function start() {
     out.style.cssText = 'position:fixed;left:6px;top:150px;z-index:9999;margin:0;padding:8px;background:rgba(0,0,0,.78);color:#7CFC9A;font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;pointer-events:none;white-space:pre-wrap;max-width:92vw';
     document.body.appendChild(out);
     const css = [...document.styleSheets].map((x) => (x.href || '').split('/').pop()).filter(Boolean).join(',');
+    let lastSh = 0, lastShT = performance.now(), shadowPS = 0;
     const tick = () => {
+      const m = Math.min(prof.n, prof.ft.length), a = Array.from(prof.ft.slice(0, m)).sort((x, y) => x - y);
+      const fa = m ? a.reduce((x, y) => x + y, 0) / m : 16.7, p95 = m ? a[Math.floor(m * 0.95)] : 0, worst = m ? a[m - 1] : 0, longN = a.filter((v) => v > 20).length;
+      const nowT = performance.now(); shadowPS = ((prof.shadow - lastSh) * 1000) / Math.max(1, nowT - lastShT); lastSh = prof.shadow; lastShT = nowT;
       const cv = canvas.getBoundingClientRect(), sk = skyCanvas.getBoundingClientRect(), nv = nav.getBoundingClientRect();
       const vv = window.visualViewport;
       out.textContent = [
@@ -369,13 +376,15 @@ function start() {
         `scene css ${Math.round(cv.top)}..${Math.round(cv.bottom)}  sky ${Math.round(sk.top)}..${Math.round(sk.bottom)}`,
         `nav ${Math.round(nv.top)}..${Math.round(nv.bottom)}`,
         `html ${document.documentElement.clientHeight}  body ${document.body.clientHeight}  scrollY ${Math.round(scrollY)}`,
+        `frame ${fa.toFixed(1)}ms avg  p95 ${p95.toFixed(1)}  worst ${worst.toFixed(1)}  (${(1000 / fa).toFixed(0)} fps)   long(>20ms) ${longN}/${m}`,
+        `cpu: time ${prof.sec.time.toFixed(2)}  game ${prof.sec.game.toFixed(2)}  world ${prof.sec.world.toFixed(2)}  draw ${perf.cpu.toFixed(2)}ms   shadow redraws ${shadowPS.toFixed(1)}/s   scale ${quality.scale.toFixed(2)}  ratio ${renderer.getPixelRatio().toFixed(2)}`,
         `perf ${perf.fps.toFixed(0)}fps  cpu ${perf.cpu.toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k  geo ${renderer.info.memory.geometries}`,
         `village seed ${seed} (${world.themeName})`,
         `css ${css}`,
         `ua ${navigator.userAgent.replace(/^Mozilla\/5.0 /, '').slice(0, 70)}`,
       ].join('\n');
     };
-    setInterval(tick, 500); tick();
+    setInterval(tick, 500);                                       // (the first readout comes after start-up, once everything it reads exists)
   }
   const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
   const GAME_PIXEL_BUDGET = lowEnd ? 0.8e6 : 2.2e6;  // the dirt-bike game is soft-focus and busy: fewer pixels keep it smooth
@@ -533,10 +542,11 @@ function start() {
   // The clock: starts at the visitor's real time and then runs on its own, a whole day in DAY_SECONDS.
   // Dragging the slider sets the time; the clock carries on from there (and waits while you drag).
   const DAY_SECONDS = 300;
-  let hour = 12, shownMinute = -1, dragging = false;
+  let hour = 12, shownMinute = -1, dragging = false, lightsWarm = false, idleReady = false;
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
     const { night, horizon } = sky.set(hour);
+    if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
     world.setClouds(night, horizon);
     dof?.setLook(horizon, lowEnd || quality.scale < 1 || game?.active ? 0 : 1);
@@ -592,7 +602,15 @@ function start() {
   setSimple(startSimple); // when not simple, this also moves the camera to `active`
 
   // Compile the dirt-bike game's shaders in the background once the page has settled, so clicking the bike does not stall the scene.
-  if (game) setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => { dof?.warm(); game.warmUp(); }, { timeout: 4000 }) : (dof?.warm(), game.warmUp())), 3500);
+  // By day the nine point lights (intensity 0) are switched off, which saves a loop iteration per lit pixel per light; the shaders for both states are compiled
+  // at idle first (so the switch at dusk or dawn never freezes a frame). Only done by day, when switching them is invisible.
+  const prewarmLights = async () => {
+    if (lightsWarm || !idleReady || !dof || world.night > 0.02) return;
+    lightsWarm = true;
+    try { await dof.compileAsync(scene, camera); world.lightsSleep(true); await dof.compileAsync(scene, camera); } catch (e) { lightsWarm = false; }
+  };
+  window.__prewarmLights = prewarmLights;
+  if (game) setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => { dof?.warm(); game.warmUp(); idleReady = true; prewarmLights(); }, { timeout: 4000 }) : (dof?.warm(), game.warmUp(), idleReady = true, prewarmLights())), 3500);
 
   // ---- Render loop ----
   const clock = new THREE.Clock();
@@ -620,11 +638,12 @@ function start() {
   function frame() {
     requestAnimationFrame(frame);
     if (simple || document.hidden) { clock.getDelta(); return; }
-    const dt = Math.min(clock.getDelta(), 0.1);
+    const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.1);
+    prof.ft[prof.n++ % prof.ft.length] = rawDt * 1000;
 
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
-      setTime(hour + (dt * 24) / DAY_SECONDS);
+      const sT = performance.now(); setTime(hour + (dt * 24) / DAY_SECONDS); secT('time', sT);
       timeInput.value = hour;
     }
 
@@ -655,15 +674,15 @@ function start() {
     look.copy(cur.look);
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
-    game?.update(dt, camera);
+    const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
     if (!!game?.active !== gameWasActive) { gameWasActive = !!game?.active; applyPixelRatio(); if (dof) { dof.samples = gameWasActive ? 0 : 2; dof.half = gameWasActive || halfForced; dof.setLook(null, gameWasActive || lowEnd || quality.scale < 1 ? 0 : 1); } }          // the game draws fewer pixels
 
-    if (!reduceMotion) world.update(dt, camera);
+    const wT = performance.now(); if (!reduceMotion) world.update(dt, camera); secT('world', wT);
     if (ride) {
       ride.update(dt, active === 'home' && !openId && !tween && !game?.active);
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }
-    if (shadowTick++ % (game?.active ? 8 : 4) === 0) renderer.shadowMap.needsUpdate = true;
+    if (shadowTick++ % (game?.active ? 2 : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back
@@ -711,5 +730,5 @@ function start() {
     }
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }

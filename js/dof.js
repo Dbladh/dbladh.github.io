@@ -215,6 +215,12 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
     /** Where the aerial haze starts (the dirt-bike game pushes it out so the ride itself stays clear). */
     setHazeNear(d) { material.uniforms.hazeNear.value = d; },
 
+    /** Compile the scene's shaders for the offscreen target the scene is really drawn into (programs differ from the canvas ones), without drawing. */
+    compileAsync(scene, camera) {
+      const prev = renderer.getRenderTarget(); renderer.setRenderTarget(target);
+      try { return renderer.compileAsync(scene, camera); } finally { renderer.setRenderTarget(prev); }
+    },
+
     /** Multisampling of the scene target (0 = none). Changing it reallocates the target. */
     get samples() { return target.samples; },
     set samples(n) { if (n === target.samples) return; target.samples = n; target.dispose(); },

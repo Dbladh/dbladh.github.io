@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017115803';
+import { PAL } from './palette.js?v=20261017144654';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017115803';
+} from './houses.js?v=20261017144654';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1952,6 +1952,14 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     scene.add(light, pool);
     return { idx, light, pool };
   });
+  // Point lights at intensity 0 (all of them, by day) still cost every lit pixel a loop iteration each: while it is day they are switched off.
+  // (Switching changes the shaders, so main.js compiles both variants at idle before it enables this: lightsSleep(true).)
+  let lightsAsleepOK = false;
+  const syncLights = () => {
+    const on = !lightsAsleepOK || night > 0.02;
+    for (const l of houseLights) if (l.visible !== on) l.visible = on;
+    for (const f of ffLights) if (f.light.visible !== on) f.light.visible = on;
+  };
 
   // ---- Billboards ----
   // A real sign structure: a deep rim with a light inner lip, a backing box and rear beam, steel posts
@@ -2265,6 +2273,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     get bikeLaneZ() { return LANE_Z; },
     get terrainMaterial() { return terrainMat; },
     terrainColor, scatter, sceneryBuildings, warmHouse,
+    get night() { return night; },
+    /** Let the point lights switch off by day (call after both shader variants are compiled). */
+    lightsSleep(on) { lightsAsleepOK = !!on; syncLights(); },
     /** Carry the drifting life (fireflies, butterflies) into the game: they stay put in the world, one set of spots repeating along the ride. */
     setFollow(on, camX = 0, ground = null, z = 0) { follow.on = on; follow.camX = camX; if (ground) follow.ground = ground; follow.z = on ? z : 0; },
     /**
@@ -2523,7 +2534,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     },
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
-      night = n;
+      night = n; syncLights();
       terrainWind.uDay.value = 1 - n;
       pondU.uDay.value = 1 - n;
       for (const m of windowMats) m.emissiveIntensity = n * 1.3;
