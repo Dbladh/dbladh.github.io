@@ -33,7 +33,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   const decode = (data) => new Promise((res, rej) => { const p = ctx.decodeAudioData(data, res, rej); if (p?.catch) p.catch(rej); });
   const load = () => {
     if (loading) return loading;
-    const names = ['engine_idle', 'engine_high', 'rev_blip', 'crash', 'bounce'];
+    const names = ['engine_idle', 'engine_idle2', 'rev_blip', 'crash', 'bounce'];
     loading = Promise.all(names.map((n) => fetch(`${base}${n}.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf[n] = b; }).catch(() => { /* a missing file just stays silent */ }))).then(() => { ready = true; });
     return loading;
   };
@@ -52,15 +52,16 @@ export function createAudio({ base = 'audio/' } = {}) {
   // and overlapped by half, so the sound never settles into a short loop you can hear repeating.
   const GRAIN = 0.45;
   const win = (() => { const w = new Float32Array(48); for (let i = 0; i < w.length; i++) { const x = Math.sin(Math.PI * i / (w.length - 1)); w[i] = x * x; } return w; })();
-  function grainLayer(b) {
+  function grainLayer(bufs, pitch) {
     const bus = ctx.createGain(); bus.gain.value = 0; bus.connect(lp);
-    return { b, bus, next: 0, rate: 1, last: -9 };
+    return { bufs, pitch, bus, next: 0, rate: 1, last: [-9, -9] };
   }
   function grain(L, t) {
-    const rate = L.rate * (1 + (Math.random() - 0.5) * 0.03), span = Math.max(0.05, L.b.duration - GRAIN * rate - 0.05);
-    let off = Math.random() * span; if (Math.abs(off - L.last) < span * 0.25) off = (off + span * 0.5) % span;                  // never the same place twice in a row
-    L.last = off;
-    const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = L.b; s.playbackRate.value = rate;
+    const i = L.bufs.length > 1 && Math.random() < 0.42 ? 1 : 0, b = L.bufs[i];                        // grains alternate between the recordings
+    const rate = L.rate * L.pitch[i] * (1 + (Math.random() - 0.5) * 0.03), span = Math.max(0.05, b.duration - GRAIN * rate - 0.05);
+    let off = Math.random() * span; if (Math.abs(off - L.last[i]) < span * 0.25) off = (off + span * 0.5) % span;      // never the same place twice in a row
+    L.last[i] = off;
+    const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.playbackRate.value = rate;
     g.gain.setValueAtTime(0, t); g.gain.setValueCurveAtTime(win, t, GRAIN * (0.95 + Math.random() * 0.1));
     s.connect(g); g.connect(L.bus); s.start(t, off, GRAIN * rate + 0.02); s.onended = () => { try { s.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
   }
@@ -71,7 +72,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   }
   function buildEngine() {
     if (engine || !buf.engine_idle) return;
-    engine = { idle: grainLayer(buf.engine_idle), high: buf.engine_high ? grainLayer(buf.engine_high) : null };
+    engine = { idle: grainLayer(buf.engine_idle2 ? [buf.engine_idle, buf.engine_idle2] : [buf.engine_idle], [1, 1.2]) };       // (the second recording idles a little lower: pitched to match)
     const mkN = (type, f, q) => { const s = loopSrc(noise()), fl = ctx.createBiquadFilter(), g = ctx.createGain(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(bus); s.start(0, Math.random()); return { s, g, fl }; };
     ambience = { wind: mkN('bandpass', 900, 0.4), dirt: mkN('lowpass', 320, 0.7), mud: mkN('bandpass', 420, 1.2) };
   }
@@ -85,12 +86,13 @@ export function createAudio({ base = 'audio/' } = {}) {
   const ok = () => ctx && ready && on && ctx.state === 'running';
 
   // ---- one-shots ----
-  function play(name, { gain = 1, rate = 1, delay = 0, lpf = 0 } = {}) {
+  function play(name, { gain = 1, rate = 1, delay = 0, lpf = 0, offset = 0, dur = 0 } = {}) {
     if (!ok() || !buf[name]) return;
     const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = buf[name]; s.playbackRate.value = rate; g.gain.value = gain;
     let out = g; s.connect(g);
     if (lpf) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lpf; g.connect(f); out = f; }
-    out.connect(bus); s.start(ctx.currentTime + delay); s.onended = () => { try { s.disconnect(); out.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
+    out.connect(bus);
+    if (dur) { const t = ctx.currentTime + delay; g.gain.setValueAtTime(gain, t); g.gain.setValueAtTime(gain, t + dur * 0.6); g.gain.linearRampToValueAtTime(0, t + dur); s.start(t, offset, dur + 0.05); } else s.start(ctx.currentTime + delay); s.onended = () => { try { s.disconnect(); out.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
   }
   function tone(freq, dur, { type = 'sine', gain = 0.2, slide = 0, delay = 0, attack = 0.005 } = {}) {
     if (!ok()) return;
@@ -144,10 +146,8 @@ export function createAudio({ base = 'audio/' } = {}) {
       const now = ctx.currentTime;
       const wander = 0.012 * Math.sin(now * 0.9) + 0.008 * Math.sin(now * 2.3 + 1.7) + 0.005 * Math.sin(now * 5.1 + 0.4);   // a living engine never holds one pitch
       const r = clamp(st.rpm + (s.playing && s.grounded ? wander : wander * 0.5)), loud = (0.35 + 0.65 * r) * st.eng * ENGINE_GAIN;
-      const wgIdle = 1 - smooth(0.2, 0.7, r), wgHigh = smooth(0.25, 0.8, r);
-      engine.idle.rate = 0.86 + 1.0 * r + st.chargeW; at(engine.idle.bus.gain, wgIdle * loud, 0.05);
-      if (engine.high) { engine.high.rate = 0.84 + 0.36 * r + st.chargeW; at(engine.high.bus.gain, wgHigh * loud * 0.85, 0.05); }
-      pump(engine.idle); if (engine.high && wgHigh > 0.02) pump(engine.high); else if (engine.high) engine.high.next = 0;
+      engine.idle.rate = 0.9 + 1.75 * r + st.chargeW; at(engine.idle.bus.gain, loud * (1 - 0.25 * r), 0.05);   // one steady engine, pitched up with the revs
+      pump(engine.idle);
       at(lp.frequency, 14000 - 10500 * clamp(((s.camDist || 26) - 24) / 40), 0.2);                   // far camera: a more distant, duller engine
       // wind, tyres on dirt and mud
       const sp = s.playing ? s.speedK : 0;
@@ -157,7 +157,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     },
 
     // ---- events ----
-    jump(charge) { if (charge > 0.25) play('rev_blip', { gain: 0.3 + 0.5 * charge, rate: 0.95 + 0.15 * charge }); thud(0.2 + 0.15 * charge, 90); },
+    jump(charge) { if (charge > 0.45) play('rev_blip', { gain: 0.14 + 0.3 * charge, rate: 0.9 + Math.random() * 0.25, offset: Math.random() * 0.3, dur: 0.9 + Math.random() * 0.5 }); thud(0.2 + 0.15 * charge, 90); },
     land(kind, air = 0.5) {
       if (kind === 'perfect') { thud(0.5, 110); tone(1318, 0.5, { type: 'triangle', gain: 0.12, delay: 0.04 }); tone(1976, 0.6, { type: 'triangle', gain: 0.1, delay: 0.1 }); }
       else if (kind === 'clean') thud(0.4, 100);
