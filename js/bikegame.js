@@ -2,12 +2,12 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017100522';
-import { createTrack } from './track.js?v=20261017100522';
-import { createRagdoll } from './ragdoll.js?v=20261017100522';
-import { createFx } from './fx.js?v=20261017100522';
-import { createPuffs } from './puffs.js?v=20261017100522';
-import { createCoins } from './coins.js?v=20261017100522';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017100938';
+import { createTrack } from './track.js?v=20261017100938';
+import { createRagdoll } from './ragdoll.js?v=20261017100938';
+import { createFx } from './fx.js?v=20261017100938';
+import { createPuffs } from './puffs.js?v=20261017100938';
+import { createCoins } from './coins.js?v=20261017100938';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -20,6 +20,7 @@ const BUFFER_WINDOW = 0.14;            // a press this close to touchdown is hel
 const TAP_KICK = 4.6;                  // nose-down kick of one tap (rad/s, it fades quickly)
 const DIVE_GRAV = 4.6;           // gravity while the button is held in the air: the bike drops much faster (ramps in over a moment)
 const TAU = Math.PI * 2;
+const COMBO_TIME = 6;              // seconds a combo lasts without a trick, a perfect landing or a clean landing
 const TRICK_TIME = 0.75;           // every trick takes exactly this long
 // The tricks, in the order a double-tap cycles through them (a flip needs enough air left, so it is skipped for the next trick when there is not).
 const TRICKS = [
@@ -98,7 +99,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     x: 0, y: 0, vx: 8, vy: 0, th: 0, om: 0, grounded: true, coyote: 0, diveOK: false, jumpReq: 0,
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
-    bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
+    bonus: 0, dist: 0, mult: 1, comboT: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
     toggle: false, bigAir: false, hz: null, viewW: 0, squash: 0, spinA: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
@@ -137,7 +138,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function setHud() {
     if (scoreEl) scoreEl.textContent = String(Math.floor(st.score));
     if (coinsEl) coinsEl.textContent = String(st.coins);
-    if (grooveEl) { grooveEl.hidden = st.mode === 'over' || (st.mult < 2 && st.meter < 0.05); grooveEl.style.setProperty('--p', Math.min(1, st.meter).toFixed(3)); grooveEl.dataset.level = String(st.mult); }
+    if (grooveEl) { grooveEl.hidden = st.mode === 'over' || st.mult < 2; grooveEl.style.setProperty('--p', Math.min(1, Math.max(0, st.comboT / COMBO_TIME)).toFixed(3)); grooveEl.dataset.level = String(st.mult); }
     if (multEl) multEl.textContent = '×' + st.mult;
   }
   /** The multiplier going up pops up right above the rider. */
@@ -145,15 +146,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     if (!multFxEl) return;
     juice.flash('#ffd36b', 0.14, 220); juice.halo('#ffcf5a', 5.5, 0.5, 0.55);
     if (grooveEl) { grooveEl.classList.remove('pulse'); void grooveEl.offsetWidth; grooveEl.classList.add('pulse'); }
-    multFxEl.textContent = '\u00d7' + st.mult + ' groove!'; multFxEl.hidden = false;
+    multFxEl.textContent = '\u00d7' + st.mult + ' combo!'; multFxEl.hidden = false;
     multFxEl.classList.remove('show'); void multFxEl.offsetWidth; multFxEl.classList.add('show');
     clearTimeout(st.multT); st.multT = setTimeout(() => { multFxEl.hidden = true; }, 1400);
   }
   const scoreNow = () => st.dist * 0.5 + st.bonus;
-  function groove(add) {
-    st.meter += add;
-    while (st.meter >= 1 && st.mult < 5) { st.mult++; st.meter -= 0.7; flashMult(); }
-    if (st.meter > 1) st.meter = 1;
+  /** The combo multiplier (x1 to x5): each trick or perfect landing adds one, a clean landing keeps it alive, and it runs down on a timer. */
+  function combo(up) {
+    if (up) { if (st.mult < 5) { st.mult++; flashMult(); } st.comboT = COMBO_TIME; }
+    else if (st.mult > 1) st.comboT = COMBO_TIME;
     st.bestMult = Math.max(st.bestMult, st.mult);
   }
   function award(points, label) {
@@ -188,7 +189,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   }
 
   function newRun() {
-    st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.meter = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
+    st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.comboT = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
     track.reset(sd); coins.reset(sd, st.startX);
@@ -300,7 +301,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function finishPose(award_) {
     const t = st.trick; if (!t || t.kind !== 'spin') return;
     st.trick = null;
-    if (award_) { groove(0.25); award(t.def.pts, t.def.label); trickDone(); trickFx(t.def.id); }
+    if (award_) { combo(true); award(t.def.pts, t.def.label); trickDone(); trickFx(t.def.id); }
   }
 
   /** Where and when the bike will touch down if nothing changes (a free-flight estimate). */
@@ -390,8 +391,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const above = st.y - R - groundY(st.x);
     if (assistOn && st.vy < 0 && above < 2.4 && st.airT > 0.2) { const k = Math.min(1, 2.0 * h * (1 - above / 2.4 + 0.3)); dth += wrap(gp.phi - st.th) * k; }
     st.th += dth; st.rot += dth;
-    if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); groove(0.4); award(400, 'Backflip!'); trickDone(); trickFx(st.trick?.def?.id || 'back'); }
-    else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); groove(0.4); award(400, 'Front flip!'); trickDone(); trickFx(st.trick?.def?.id || 'front'); }
+    if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); combo(true); award(400, 'Backflip!'); trickDone(); trickFx(st.trick?.def?.id || 'back'); }
+    else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); combo(true); award(400, 'Front flip!'); trickDone(); trickFx(st.trick?.def?.id || 'front'); }
     // wheels
     const c = Math.cos(st.th), s = Math.sin(st.th);
     const rx = st.x - HW * c, ry = st.y - HW * s, fx = st.x + HW * c, fy = st.y + HW * s;
@@ -433,11 +434,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.th = p.phi + delta * 0.55;                              // the suspension absorbs part of the angle
     const perfect = Math.abs(delta) < 0.22, rough = Math.abs(delta) > 0.5;
     st.bestAir = Math.max(st.bestAir, air);
-    if (rough && air > 0.3) { st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.meter = 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
+    if (rough && air > 0.3) { st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
     else {
       if (air > 0.45) {
         st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 1.2 : 0.5));
-        groove(perfect ? 0.34 : 0.2);
+        combo(perfect);
         award((perfect ? 150 : 60) + Math.max(0, air - 0.5) * 90, perfect ? 'Stuck it!' : 'Clean landing');
       }
     }
@@ -459,7 +460,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   }
 
   function crash(msg = 'Crash!') {
-    st.mode = 'crash'; st.crashT = 0; st.mult = 1; st.meter = 0;
+    st.mode = 'crash'; st.crashT = 0; st.mult = 1; st.comboT = 0;
     events.onCrash?.();
     toast(msg);
     const pit = /pit/i.test(msg);
@@ -614,13 +615,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         const got = coins.collect(st.x, st.y, SC / SCALE);
         if (got) {
-          st.coins += got; st.bonus += 25 * got * st.mult; st.lastTrick = st.t; groove(0.05 * got);
+          st.coins += got; st.bonus += 25 * got * st.mult;
           for (const hit of coins.hits) juice.burst('coin', hit.x, hit.y, laneZ, 7, '#ffd54a');
           if (coinsEl) { coinsEl.classList.remove('bump'); void coinsEl.offsetWidth; coinsEl.classList.add('bump'); }
         }
-        if (st.t - st.lastTrick > 5 && (st.mult > 1 || st.meter > 0)) {                // the groove fades if nothing happens for a while
-          st.meter -= 0.14 * dt;
-          if (st.meter < 0) { if (st.mult > 1) { st.mult--; st.meter = 0.6; } else st.meter = 0; }
+        if (st.mult > 1) {                                                                  // the combo runs down; at zero it drops a step
+          st.comboT -= dt;
+          if (st.comboT <= 0) { st.mult--; st.comboT = st.mult > 1 ? 4 : 0; }
         }
         st.score = scoreNow();
         const hz = track.hazardAhead(st.x, 60); st.hz = hz;                                  // a heads-up before each hazard

@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261017100522">
+  <link rel="stylesheet" href="css/styles.css?v=20261017100938">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -168,7 +168,7 @@
   <div id="game-hud" class="game-hud" hidden>
     <div id="gh-vignette" class="gh-vignette"></div><div id="gh-flash" class="gh-flash"></div>
     <div class="gh-stats" aria-live="off"><span class="gh-score"><b id="gh-score">0</b> pts</span><span class="gh-coins"><i class="gh-coin" aria-hidden="true"></i><b id="gh-coins">0</b></span></div>
-    <div id="gh-groove" class="gh-groove" hidden aria-label="Groove multiplier"><span id="gh-mult">×1</span><small>groove</small></div>
+    <div id="gh-groove" class="gh-groove" hidden aria-label="Combo multiplier"><span id="gh-mult">×1</span><small>combo</small></div>
     <div id="gh-float" class="gh-float"><div id="gh-multfx" class="gh-multfx" hidden></div><p id="gh-toast" class="gh-toast" aria-live="polite"></p></div>
     <p id="gh-hint" class="gh-hint" role="status" hidden><span id="gh-hint-text">Hold to crouch, release to jump &middot; in the air: hold to drop faster, double-tap for tricks</span><button id="gh-mode" class="gh-skip" type="button" hidden>Use tap mode</button><button id="gh-skip" class="gh-skip" type="button" hidden>Skip tips</button></p>
     <button id="gh-pause" class="gh-pausebtn" type="button" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
@@ -193,7 +193,7 @@
       <div><dt>Coins</dt><dd id="go-coins">0</dd></div>
       <div><dt>Flips</dt><dd id="go-flips">0</dd></div>
       <div><dt>Best air</dt><dd id="go-air">0 s</dd></div>
-      <div><dt>Top groove</dt><dd id="go-groove">×1</dd></div>
+      <div><dt>Best combo</dt><dd id="go-groove">×1</dd></div>
     </dl>
     <button id="go-mode" class="go-switch" type="button" role="switch" aria-checked="false"><span class="sw" aria-hidden="true"></span><span class="swl">Tap mode: tap once to charge, tap again to jump</span></button>
     <div class="go-actions">
@@ -203,6 +203,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261017100522"></script>
+  <script type="module" src="js/main.js?v=20261017100938"></script>
 </body>
 </html>
