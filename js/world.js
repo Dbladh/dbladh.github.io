@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017115138';
+import { PAL } from './palette.js?v=20261017115441';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017115138';
+} from './houses.js?v=20261017115441';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1685,9 +1685,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       for (let i = 0; i < Math.round(8 * density); i++) addBushRaw(X(), back(2.6, 24), 0.45 + rand() * 0.6);
       // Planting on the slope toward the camera: only things that stay below the level of the lane, so nothing ever hides what is on it.
       const hmaxAt = (x, z) => (laneAt ? laneAt(x) - hAt(x, z) - 0.6 : -1);         // how tall something may stand at (x, z)
-      const fz = () => laneZ + 14 + Math.pow(rand(), 0.8) * 36;
-      for (let i = 0; i < Math.round(6 * density); i++) { const x = X(), z = fz(), s = Math.min(0.75 + rand() * 0.75, hmaxAt(x, z) / 7.2); if (s >= 0.4) addTreeRaw(x, z, s); }
-      for (let i = 0; i < Math.round(8 * density); i++) { const x = X(), z = fz(), s = Math.min(0.45 + rand() * 0.6, hmaxAt(x, z) / 1.4); if (s >= 0.3) addBushRaw(x, z, s); }
+      const fz = () => laneZ + 7 + Math.pow(rand(), 1.25) * 24;      // (the part of the slope the camera actually sees below the lane)
+      for (let i = 0; i < Math.round(13 * density); i++) { const x = X(), z = fz(), s = Math.min(0.75 + rand() * 0.75, hmaxAt(x, z) / 7.2); if (s >= 0.3) addTreeRaw(x, z, s); }
+      for (let i = 0; i < Math.round(18 * density); i++) { const x = X(), z = fz(), s = Math.min(0.45 + rand() * 0.6, hmaxAt(x, z) / 1.4); if (s >= 0.3) addBushRaw(x, z, s); }
       for (let i = 0; i < Math.round(5 * density); i++) {                                                                  // rocks, some in clusters
         const front = rand() < 0.4, x = X(), z = front ? fz() : back(2.8, 30), n = rand() < 0.35 ? 3 : 1;
         if (front && hmaxAt(x, z) < 1.3) continue;
@@ -1712,7 +1712,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         }
       }
       const tuftAt = (x, z, s) => { if (Math.abs(z - laneZ) < 1.6 || (z > laneZ + 3 && hmaxAt(x, z) < 0.8)) return; items.grass.push({ p: [x, hAt(x, z) - 0.02, z], s: [s, s * (0.75 + rand() * 0.5), s], ry: rand() * 6.28, c: pick(GREENS).clone().offsetHSL(0, 0, -0.06 + rand() * 0.1) }); };
-      for (let i = 0; i < Math.round(60 * density); i++) tuftAt(X(), rand() < 0.65 ? back(2, 34) : fz(), 0.7 + rand() * 0.4);
+      for (let i = 0; i < Math.round(60 * density); i++) tuftAt(X(), rand() < 0.55 ? back(2, 34) : fz(), 0.7 + rand() * 0.4);
       for (const an of anchors) for (let k = 0; k < Math.round(an.n * D) + 2; k++) { const a = rand() * 6.28, r = an.r * (0.8 + rand() * 1.1); tuftAt(an.x + Math.cos(a) * r, an.z + Math.sin(a) * r, 0.65 + rand() * 0.45); }
       for (const rk of items.rock) for (let k = 0; k < 3; k++) { const a = rand() * 6.28, r = rk.s[0] * (0.9 + rand() * 0.5); tuftAt(rk.p[0] + Math.cos(a) * r, rk.p[2] + Math.sin(a) * r, 0.6 + rand() * 0.3); }
       if (avoid) for (const k of itemKeys) items[k] = items[k].filter((it) => !avoid(it.p[0], it.p[2]));   // e.g. nothing grows in a pit

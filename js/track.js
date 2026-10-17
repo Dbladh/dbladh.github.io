@@ -6,10 +6,10 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { createTrail } from './trail.js?v=20261017115138';
-import { KINDS, buildObstacle } from './obstacles.js?v=20261017115138';
-import { PAL } from './palette.js?v=20261017115138';
-import { heightAt as terrainAt } from './world.js?v=20261017115138';
+import { createTrail } from './trail.js?v=20261017115441';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261017115441';
+import { PAL } from './palette.js?v=20261017115441';
+import { heightAt as terrainAt } from './world.js?v=20261017115441';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -138,7 +138,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   /** Ground height anywhere on the generated stretch. */
   const groundAt = (x, z) => {
     if (x < XT) return terrainAt(x, z);
-    const drop = z > laneZ + 3 ? 7 * smooth01((z - laneZ - 3) / 38) * smooth01((x - XT) / 40) : 0;   // hills fall away toward the camera (eased in so the seam with the real terrain is invisible)
+    const drop = z > laneZ + 3 ? 10.5 * smooth01((z - laneZ - 3) / 26) * smooth01((x - XT) / 40) : 0;   // hills fall away toward the camera (eased in so the seam with the real terrain is invisible)
     const far = z < laneZ - 36 ? smooth01((laneZ - 36 - z) / 90) * smooth01((x - XT) / 60) : 0;   // far ridges vary along the ride instead of repeating the edge's profile
     const ridge = far * (7 * Math.sin(x * 0.021 + z * 0.05) + 4 * Math.sin(x * 0.047 - z * 0.03 + 1.7));
     return prof(z) + weight(z) * delta(x) - drop + ridge;
@@ -261,6 +261,16 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     }
     return [];
   }
+  // The village-slicing plane (in the game) is wired into the shared tree/bush/rock materials, which would slice off every plant in the foreground
+  // as well: the generated ground's scenery gets its own copies of those materials without it.
+  let warmHolder = null;
+  const unclipCache = new WeakMap();
+  const unclip = (m) => {
+    let c = unclipCache.get(m);
+    if (!c) { c = m.clone(); c.clippingPlanes = null; c.clipShadows = false; c.onBeforeCompile = m.onBeforeCompile; c.customProgramCacheKey = () => 'noclip' + (m.customProgramCacheKey ? m.customProgramCacheKey() : ''); unclipCache.set(m, c); }
+    return c;
+  };
+  const unclipAll = (g) => g.traverse((o) => { if (o.material) o.material = Array.isArray(o.material) ? o.material.map(unclip) : unclip(o.material); });
   function plant(idx) {
     const x0 = Math.max(X0 + idx * CHUNK, XT + 2), x1 = X0 + (idx + 1) * CHUNK;
     if (x1 <= x0 + 1) { scenery.set(idx, null); return; }
@@ -268,7 +278,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     const list = planBuildings(idx);
     const holder = new THREE.Group();
     const avoid = (x, z) => inPit(x) || list.some((b) => Math.hypot(x - b.x, z - b.z) < b.r + 1.2);
-    holder.add(world.scatter({ x0, x1, hFn: groundAt, laneAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, avoid, density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) }));   // the planting thickens gradually past the seam
+    const scat = world.scatter({ x0, x1, hFn: groundAt, laneAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, avoid, density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) }); unclipAll(scat); holder.add(scat);   // the planting thickens gradually past the seam
     if (list.length) pendingB.push({ idx, holder, list });                              // houses and windmills are the costly part: built on a later frame
     group.add(holder); scenery.set(idx, holder);
   }
@@ -380,6 +390,12 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
       for (const k of [...mudMeshes.keys()]) dropMud(k);
       trail.relay();
       obs.length = 0; obsId = 0; for (const [, e] of obsMesh) { obsGroup.remove(e.g); e.g.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); } obsMesh.clear();
+    },
+    /** (warm-up) Plant a throwaway sample far below the ground so the foreground scenery's shaders are compiled before the first ride; call again with false to remove it. */
+    prewarm(on) {
+      if (warmHolder) { group.remove(warmHolder); warmHolder.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); warmHolder = null; }
+      if (!on) return;
+      warmHolder = new THREE.Group(); const sc = world.scatter({ x0: 0, x1: 24, hFn: () => -900, laneAt: () => -890, seed: 5, laneZ, farZ: laneZ - 70, density: 1 }); unclipAll(sc); warmHolder.add(sc); group.add(warmHolder);
     },
     /** The ride starts at x: the dirt trail begins there. */
     setTrailStart(x) { trail.reset(x); },
