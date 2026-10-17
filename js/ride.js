@@ -1,9 +1,9 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016210713';
-import { heightAt } from './world.js?v=20261016210713';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016210713';
+import { PAL } from './palette.js?v=20261016211135';
+import { heightAt } from './world.js?v=20261016211135';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016211135';
 
 const SCALE = 1.8;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
@@ -46,12 +46,15 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     x: 0, y: 0, vy: 0, grounded: true, pitch: 0, endX: 0,
     hop: 2, flip: 0, airT: 0, airDur: 1, launchPitch: 0, landPitch: 0, lean: 0.7, hover: 0, wheelSpin: 0,
   };
-  const rear = BIKE.rearX * SCALE, frontX = BIKE.frontX * SCALE, axle = BIKE.wheelR * SCALE;
+  let S = SCALE;                                              // drawn larger on narrow phone screens, where everything is small
+  let rear = BIKE.rearX * S, frontX = BIKE.frontX * S, axle = BIKE.wheelR * S;
   const groundAt = (x) => heightAt(x, laneZ);
   const slopeAt = (x) => (groundAt(x + 0.6) - groundAt(x - 0.6)) / 1.2;
   const rnd = (a, b) => a + Math.random() * (b - a);
 
   function start() {
+    const tall = Math.min(1, Math.max(0, (1 - camera.aspect) / 0.5));
+    S = SCALE * (1 + 0.9 * tall); rear = BIKE.rearX * S; frontX = BIKE.frontX * S; axle = BIKE.wheelR * S;
     const halfW = (camera.position.z - laneZ) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
     st.x = -halfW - 6; st.endX = halfW + 7;
     st.grounded = true; st.vy = 0; st.pitch = 0; st.hop = rnd(1.5, 3); st.flip = 0; st.lean = 0.7;
@@ -115,7 +118,7 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     bike.wheels.rear.rotation.z = bike.wheels.front.rotation.z = -st.wheelSpin;
     root.position.set(st.x, st.y, laneZ);
     root.rotation.z = st.pitch;
-    root.scale.setScalar(SCALE * (1 + st.hover * 0.06));
+    root.scale.setScalar(S * (1 + st.hover * 0.06));
     const dist = Math.hypot(camera.position.x - st.x, camera.position.y - st.y, camera.position.z - laneZ);
     const k = Math.max(1, (dist * 0.1) / 3.4);                                        // never smaller than ~10% of the distance: easy to tap far away
     hit.scale.set(4 * k, 3.4 * k, 3);

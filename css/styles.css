@@ -656,3 +656,11 @@ body.game-paused .gh-quit { display: none; }
 .go-switch[aria-checked="true"] .sw::after { transform: translateX(18px); }
 .go-switch:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .go-switch .sw, .go-switch .sw::after { transition: none; } }
+
+/* Phones: the coaching pill becomes a small card (text on top, links underneath) */
+@media (max-width: 600px) {
+  .gh-hint.coach { flex-wrap: wrap; justify-content: center; border-radius: 20px; padding: 10px 16px 6px; width: max-content; max-width: min(330px, calc(100vw - 32px)); top: calc(max(14px, env(safe-area-inset-top)) + 72px); bottom: auto; gap: 0 22px; }
+  .gh-hint.coach #gh-hint-text { flex: 1 1 100%; font-size: 1.05rem; line-height: 1.3; }
+  .gh-hint.coach .gh-skip { min-height: 44px; font-size: .95rem; }
+}
+@media (max-height: 520px) { .gh-hint { top: calc(max(14px, env(safe-area-inset-top)) + 58px); bottom: auto; } }   /* landscape phones: tips go up in the sky, clear of the bike */
