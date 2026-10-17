@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017161251';
-import { createTrack } from './track.js?v=20261017161251';
-import { createRagdoll } from './ragdoll.js?v=20261017161251';
-import { createFx } from './fx.js?v=20261017161251';
-import { createAudio } from './audio.js?v=20261017161251';
-import { createPuffs } from './puffs.js?v=20261017161251';
-import { createDirt } from './dirt.js?v=20261017161251';
-import { createMudCoat } from './mudcoat.js?v=20261017161251';
-import { createCoins } from './coins.js?v=20261017161251';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017161837';
+import { createTrack } from './track.js?v=20261017161837';
+import { createRagdoll } from './ragdoll.js?v=20261017161837';
+import { createFx } from './fx.js?v=20261017161837';
+import { createAudio } from './audio.js?v=20261017161837';
+import { createPuffs } from './puffs.js?v=20261017161837';
+import { createDirt } from './dirt.js?v=20261017161837';
+import { createMudCoat } from './mudcoat.js?v=20261017161837';
+import { createCoins } from './coins.js?v=20261017161837';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -44,7 +44,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const toastEl = document.getElementById('gh-toast');
   const floatEl = document.getElementById('gh-float');
   let rectCache = null; window.addEventListener('resize', () => { rectCache = null; });
-  const canvasRect = () => rectCache || (rectCache = renderer.domElement.getBoundingClientRect());     // (the canvas is fixed: its box only changes on a resize)
+  const canvasRect = () => rectCache || (rectCache = renderer.domElement.getBoundingClientRect());     // (measured once per frame)
   // "JUMP" markers floating over the next obstacles (up to two)
   const jumpEls = [0, 1].map(() => { const d = document.createElement('div'); d.className = 'gh-jump'; d.hidden = true; d.innerHTML = '<span class="t">JUMP</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l7 7 7-7M5 12l7 7 7-7"/></svg>'; (hud || document.body).appendChild(d); return d; });
   const multFxEl = document.getElementById('gh-multfx');
@@ -238,7 +238,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.warnedObs = -1; st.warnedX = -1; st.lift = 0; mudCoat.reset();
-    st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
+    st.cpx = undefined; st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
     st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear(); dirt.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
@@ -680,6 +680,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     },
     update(dt, cam) {
       if (st.mode === 'off') return false;
+      rectCache = null;                                                        // (measured again each frame: the canvas can change size without a window resize, and a stale box put the markers in the wrong place)
       if (st.mode === 'out') {
         st.t += dt;
         const k = reduceMotion ? 1 : ease(Math.min(1, st.t / (ENTER_SECONDS * 0.8)));
@@ -718,11 +719,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         checkObstacles();
-        const got = coins.collect(st.x, st.y, SC / SCALE, dt, st.vx);
+        // (swept: a slow frame must not let the bike step over a coin, so the path since the last frame is checked in short hops)
+        let got = 0; const taken = []; const hops = st.cpx === undefined || Math.abs(st.x - st.cpx) > 12 ? 1 : Math.min(10, Math.ceil(Math.hypot(st.x - st.cpx, st.y - st.cpy) / 1.0));
+        for (let h = 1; h <= hops; h++) { const f = h / hops; got += coins.collect(st.cpx === undefined || hops === 1 ? st.x : st.cpx + (st.x - st.cpx) * f, st.cpy === undefined || hops === 1 ? st.y : st.cpy + (st.y - st.cpy) * f, SC / SCALE, dt / hops, st.vx); for (const hh of coins.hits) taken.push({ x: hh.x, y: hh.y }); }
+        st.cpx = st.x; st.cpy = st.y;
         if (got) {
           for (let i = 0; i < Math.min(got, 3); i++) audio.coin();
           st.coins += got; st.bonus += 25 * got * st.mult;
-          for (const hit of coins.hits) juice.burst('coin', hit.x, hit.y, laneZ, 7, '#ffd54a');
+          for (const hit of taken) juice.burst('coin', hit.x, hit.y, laneZ, 7, '#ffd54a');
           if (coinsEl) { coinsEl.classList.remove('bump'); void coinsEl.offsetWidth; coinsEl.classList.add('bump'); }
         }
         if (st.mult > 1) {                                                                  // the combo runs down; at zero it drops a step
