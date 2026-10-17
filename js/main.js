@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016195828';
-import { buildWorld } from './world.js?v=20261016195828';
-import { createSky } from './sky.js?v=20261016195828';
-import { createDOF } from './dof.js?v=20261016195828';
-import { createRide } from './ride.js?v=20261016195828';
-import { createGame } from './bikegame.js?v=20261016195828';
+import { PAL } from './palette.js?v=20261016200529';
+import { buildWorld } from './world.js?v=20261016200529';
+import { createSky } from './sky.js?v=20261016200529';
+import { createDOF } from './dof.js?v=20261016200529';
+import { createRide } from './ride.js?v=20261016200529';
+import { createGame } from './bikegame.js?v=20261016200529';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -129,7 +129,7 @@ function start() {
   const bikeForce = /[?&]bike=1\b/.test(location.search);
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce });
   const bikeBtn = document.getElementById('bike-play');
-  const game = reduceMotion || !dof ? null : createGame(scene, camera);
+  const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world);
 
   // ---- Camera stops ----
   const HOME = { pos: new THREE.Vector3(0, 7, 22), look: new THREE.Vector3(0, 17, -40) };
@@ -444,13 +444,13 @@ function start() {
   }
   function playBike() {
     if (!game || game.active || active !== 'home' || openId) return;
+    const bx = ride?.riding ? ride.position.x : 0;
     ride?.reset();
-    game.start({ pos: camera.position.clone(), look: look.clone() });
-    ride?.reset();
+    game.start({ pos: camera.position.clone(), look: look.clone() }, bx);
   }
   bikeBtn?.addEventListener('click', playBike);
   if (game) {
-    game.onQuit = () => { ride?.reset(); cur.pos.copy(HOME.pos); cur.look.copy(HOME.look); riseName(); };
+    game.onQuit = () => { ride?.reset(); riseName(); };
     document.getElementById('gh-quit')?.addEventListener('click', () => game.stop());
     // The single button: mouse/touch anywhere in the game, or space/enter.
     const gameDown = (e) => { if (game.active && !e.target.closest('#gh-quit')) { game.press(); e.preventDefault(); } };

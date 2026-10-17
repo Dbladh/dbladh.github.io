@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016195828';
+import { PAL } from './palette.js?v=20261016200529';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016195828';
+} from './houses.js?v=20261016200529';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2131,6 +2131,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   return {
     boards,
     get bikeLaneZ() { return LANE_Z; },
+    get terrainMaterial() { return terrainMat; },
     /**
      * Seat every sign for the current screen shape. Each slides inward along its hill until it fits the
      * visible width (never past the hill's crest), steps to its zig-zag depth as the screen gets narrow,
