@@ -564,3 +564,10 @@ body.game-mode #stopnav, body.game-mode #controls, body.game-mode .hero, body.ga
 .gh-quit .ico { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 600px) { .gh-quit { min-height: 56px; font-size: 1.08rem; } }
 @media (prefers-reduced-motion: reduce) { .gh-hint { animation: none; } }
+
+.gh-toast { position: absolute; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 56px); transform: translateX(-50%); margin: 0; padding: 6px 16px; border-radius: 999px; opacity: 0;
+  background: var(--gold); color: var(--ink); font-weight: 800; font-size: 1.1rem; box-shadow: 0 3px 10px rgba(40, 52, 44, .2); white-space: nowrap; }
+.gh-toast:empty { display: none; }
+.gh-toast.show { animation: ghtoast 1.3s ease both; }
+@keyframes ghtoast { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1.05); } 25% { transform: translate(-50%, 0) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -6px); } }
+@media (prefers-reduced-motion: reduce) { .gh-toast.show { animation: none; opacity: 1; } }

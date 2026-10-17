@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016200529';
-import { heightAt as terrainAt } from './world.js?v=20261016200529';
+import { PAL } from './palette.js?v=20261016201222';
+import { heightAt as terrainAt } from './world.js?v=20261016201222';
 
 export const XT = 186;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -48,7 +48,7 @@ export function createTrack(scene, { laneZ, material, seed = 1 }) {
   function piece(d) {
     const lvl = last();                               // relative to the edge: keep it within about -2 .. +11
     const low = lvl < 0, high = lvl > 8, r = rng();
-    const k = () => ({ rise: 1.5 + d * 2.3 + rng() * 0.9, slope: 0.5 + rng() * 0.22, land: 14 + rng() * 8 + d * 6 });
+    const k = () => ({ rise: 2.2 + d * 2.8 + rng() * 1.0, slope: 0.62 + rng() * 0.2, land: 18 + rng() * 8 + d * 6 });
     if (low && r < 0.55) { ease(3 + rng() * 3, 28 + rng() * 14); flat(6 + rng() * 6); return; }
     if (high && r < 0.6) { ease(-(3 + rng() * 4), 26 + rng() * 14); flat(4 + rng() * 6); return; }
     if (r < 0.2) { whoops(3 + Math.floor(rng() * (2 + d * 3)), 0.45 + rng() * 0.5 + d * 0.3, 6 + rng() * 2.5); flat(4 + rng() * 5); }
