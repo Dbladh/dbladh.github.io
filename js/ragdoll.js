@@ -2,7 +2,7 @@
 // distance constraints fly and flop under gravity, bounce on the ground under them, and drive the same meshes the rider
 // was built from (so nothing needs to be built twice). `restore()` puts everything back on the bike.
 import * as THREE from 'three';
-import { aim } from './bike.js?v=20261017101739';
+import { aim } from './bike.js?v=20261017103601';
 
 const GRAV = 24;
 const L = { torso: 0.56, neck: 0.22, upper: 0.36, fore: 0.36, thigh: 0.42, shin: 0.42 };   // rider-local lengths (before scaling)
@@ -11,7 +11,7 @@ export function createRagdoll(scene, rider, groundAt) {
   const P = rider.parts;
   const tmp = new THREE.Vector3();
   const world = (obj, x, y) => { tmp.set(x, y, 0); obj.localToWorld(tmp); return [tmp.x, tmp.y, tmp.z]; };
-  let active = false, s = 1;
+  let active = false, s = 1, speedNow = 99;
   // joints: 0 hip, 1 shoulder, 2 head, 3/4 elbow+hand near, 5/6 elbow+hand far, 7/8 knee+foot near, 9/10 knee+foot far
   let pts = [], cons = [];
   const zs = {};
@@ -21,10 +21,14 @@ export function createRagdoll(scene, rider, groundAt) {
 
   return {
     get active() { return active; },
+    /** The hips (the centre of the body), or null before the rider is let go. */
+    get hip() { return active && pts.length ? pts[0] : null; },
+    /** How fast the fastest joint is moving (world units per second): near zero once the body has come to rest. */
+    get speed() { return speedNow; },
     /** Let the rider go: joints take the pose the rider is in right now and the bike's velocity. */
     detach(vx, vy) {
       if (active) return;
-      active = true;
+      active = true; speedNow = 99;
       const rg = rider.group;
       rg.updateMatrixWorld(true);
       s = new THREE.Vector3().setFromMatrixScale(rg.matrixWorld).x;
@@ -74,6 +78,8 @@ export function createRagdoll(scene, rider, groundAt) {
           }
         }
       }
+      let mv = 0; for (const p of pts) mv = Math.max(mv, Math.hypot(p.x - p.px, p.y - p.py) / h);
+      if (h > 1e-5) speedNow = mv;
       // drive the meshes
       const pt = (i) => pts[i];
       const zOf = (name) => zs[name];

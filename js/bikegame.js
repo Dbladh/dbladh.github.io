@@ -2,12 +2,12 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017101739';
-import { createTrack } from './track.js?v=20261017101739';
-import { createRagdoll } from './ragdoll.js?v=20261017101739';
-import { createFx } from './fx.js?v=20261017101739';
-import { createPuffs } from './puffs.js?v=20261017101739';
-import { createCoins } from './coins.js?v=20261017101739';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017103601';
+import { createTrack } from './track.js?v=20261017103601';
+import { createRagdoll } from './ragdoll.js?v=20261017103601';
+import { createFx } from './fx.js?v=20261017103601';
+import { createPuffs } from './puffs.js?v=20261017103601';
+import { createCoins } from './coins.js?v=20261017103601';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -100,7 +100,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, comboT: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, bigAir: false, hz: null, viewW: 0, squash: 0, spinA: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, hz: null, viewW: 0, squash: 0, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -113,15 +113,16 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
     // How much track to show: more at speed, and enough to see the next hazard coming with time to react (about 1.5 s).
     const spK = THREE.MathUtils.clamp((st.vx - 6) / 18, 0, 1), W0 = (27 - 7 * tall) * (1 + 0.1 * tall), bonus = (18 - 9 * tall) * spK * spK * (3 - 2 * spK);   // closer in when slow, well out at full speed
-    const needAhead = st.hz ? Math.min(st.hz.x0 - st.x, 34) / 0.74 : 0;
-    const Wt = Math.max(W0 + bonus, needAhead);
-    st.viewW = st.viewW ? st.viewW + (Wt - st.viewW) * (1 - Math.exp(-1.6 * st.frameDt)) : Wt;
+    const needAhead = st.hz ? Math.min(st.hz.x0 - st.cx, 34) / 0.74 : 0;
+    const wipeK = st.mode === 'crash' || st.mode === 'over' ? Math.min(1, st.crashT / 0.8) : 0;
+    const Wt = wipeK ? (W0 + bonus * (1 - wipeK)) * (1 - 0.15 * wipeK) : Math.max(W0 + bonus, needAhead);   // after a crash the camera eases in on the rider
+    st.viewW = st.viewW ? st.viewW + (Wt - st.viewW) * (1 - Math.exp(-(wipeK ? 3.5 : 1.6) * st.frameDt)) : Wt;
     const baseDist = THREE.MathUtils.clamp(st.viewW / (2 * tanH * camera.aspect), 22, 110) * (1 + 0.03 * st.camZoom);
     const c = 0.05 + tall * 0.05;
     // Keep both the bike and the ground in view: if a big jump (or a hill ahead) would push either off the screen, pull back.
     const ref = (x) => { const pt = track.pitSpan(x); return pt ? track.laneAt(pt.x0 - 0.5) - 1.5 : groundY(x); };       // over a gap, the ground to keep in view is the rim, not the bottom of the pit
-    const gHere = ref(st.x), gA = ref(st.x + 10), gB = ref(st.x + 22);
-    const yLow = Math.min(gHere, gA, gB) - 2.5, yHigh = Math.max(st.y + 4.5, gA + 3);
+    const gHere = ref(st.cx), gA = ref(st.cx + 10), gB = ref(st.cx + 22);
+    const yLow = Math.min(gHere, gA, gB) - 2.5, yHigh = Math.max(st.cy + 4.5, gA + 3);
     let d = baseDist;
     for (let k = 0; k < 2; k++) {
       const yc = st.camY + 3 + d * c;
@@ -130,9 +131,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const zoomT = THREE.MathUtils.clamp(d / baseDist, 1, 1.7 - 0.2 * tall);
     st.zoom += (zoomT - st.zoom) * (1 - Math.exp(-(zoomT > st.zoom ? 4 : 1.2) * st.frameDt));   // pulls back quickly, settles back slowly
     const dist = Math.min(baseDist * st.zoom, 150);
-    const ahead = 0.26 * st.viewW + st.vx * 0.08;                           // look well ahead (the bike sits about a quarter of the way in from the left)
-    target.pos.set(st.x + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 2.5 + dist * 0.11, laneZ + dist);
-    target.look.set(st.x + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
+    const wipe = st.mode === 'crash' || st.mode === 'over' ? Math.min(1, st.crashT / 0.8) : 0;
+    const ahead = (0.26 * st.viewW + st.vx * 0.08) * (1 - 0.45 * wipe);                // (after a crash the camera settles with the rider nearer the middle)                           // look well ahead (the bike sits about a quarter of the way in from the left)
+    target.pos.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 2.5 + dist * 0.11, laneZ + dist);
+    target.look.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
     return dist;
   }
   function setHud() {
@@ -460,7 +462,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   }
 
   function crash(msg = 'Crash!') {
-    st.mode = 'crash'; st.crashT = 0; st.mult = 1; st.comboT = 0;
+    st.mode = 'crash'; st.crashT = 0; st.calmT = 0; st.mult = 1; st.comboT = 0;
     events.onCrash?.();
     toast(msg);
     const pit = /pit/i.test(msg);
@@ -529,7 +531,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       document.body.classList.remove('game-mode');
     },
     get coinsDebug() { return coins; },
-    get track() { return track; },                                                                     // (for tests)
+    get track() { return track; },
+    get ragdollDebug() { return ragdoll; },                                                                     // (for tests)
     /** Compile the game's own shaders (bike, coins, puffs, mud, landing circle) in the background, so the first click does not stall the scene. */
     async warmUp() {
       if (st.warmed || st.mode !== 'off') return;
@@ -640,7 +643,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.mode === 'crash' || st.mode === 'over') {
         st.crashT += dt;
         ragdoll.update(dt);
-        if (st.mode === 'crash' && st.crashT > 1.5) showOver();
+        if (st.mode === 'crash') {                                                     // the card waits until the rider has all but come to a stop
+          st.calmT = ragdoll.speed < 1.4 ? st.calmT + dt : 0;
+          if ((st.crashT > 1.0 && st.calmT > 0.45) || st.crashT > 7) showOver();
+        }
       }
       // looks
       const leanT = st.mode === 'crash' ? 0.2 : st.grounded ? 0.7 : (st.down && st.diveOK ? 1.15 : 0.35);
@@ -679,7 +685,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       bike.root.rotation.z = st.th;
       setHud();
       // camera
-      st.camY += (st.y - st.camY) * Math.min(1, dt * 2.2);
+      const wiping = (st.mode === 'crash' || st.mode === 'over') && ragdoll.hip;           // after a crash the camera follows the tumbling rider, not the bike
+      if (wiping) { const hp = ragdoll.hip, kf = 1 - Math.exp(-6 * dt); st.cx += (hp.x - st.cx) * kf; st.cy += (hp.y - st.cy) * kf; } else { st.cx = st.x; st.cy = st.y; }
+      st.camY += (st.cy - st.camY) * Math.min(1, dt * (wiping ? 4 : 2.2));
       st.frameDt = dt; api.focusDistance = frame();
       const k = reduceMotion ? 1 : ease(Math.min(1, st.t / ENTER_SECONDS));
       cam.position.lerpVectors(st.from.pos, target.pos, k);
