@@ -8,8 +8,8 @@ const R = 130;                                                                //
 
 /** The trail's texture: u runs along the trail (it tiles), v across it. Packed pale dirt in the middle, two darker ruts, ragged feathered edges. */
 function makeTexture() {
-  const W = 256, H = 128, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d'), img = x.createImageData(W, H), d = img.data;
+  const W = 256, H = 128;
+  const d = new Uint8Array(W * H * 4);
   const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
   const vn = (px, py, per) => {                                                // tileable value noise along u
     const xi = Math.floor(px), yi = Math.floor(py), xf = px - xi, yf = py - yi, sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
@@ -35,14 +35,23 @@ function makeTexture() {
     const k = (j * W + i) * 4;
     d[k] = Math.max(0, Math.min(255, r)); d[k + 1] = Math.max(0, Math.min(255, g)); d[k + 2] = Math.max(0, Math.min(255, b)); d[k + 3] = Math.round(255 * edge * edge * (3 - 2 * edge));
   }
-  x.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+  // (a plain data texture, not a canvas one: no 2D-canvas premultiply/readback path, which is what some iOS versions mishandle)
+  const t = new THREE.DataTexture(d, W, H, THREE.RGBAFormat); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping;
+  t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4; t.needsUpdate = true; return t;
 }
 
 export function createTrail(parent, { laneZ, groundAt, inPit }) {
   const group = new THREE.Group(); group.visible = true; parent.add(group);
   const tex = makeTexture();
-  const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: new THREE.Color(0xffffff), emissiveMap: tex, emissiveIntensity: 0.5, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: new THREE.Color(0xffffff), emissiveMap: tex, emissiveIntensity: 0.5, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const fadeU = { uTrailX0: { value: 0 }, uTrailX1: { value: 1 } };            // the trail fades in from where the ride starts (done in the shader: no vertex colours)
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, fadeU);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vTrailX;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvTrailX = position.x;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTrailX0; uniform float uTrailX1; varying float vTrailX;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.a *= smoothstep(uTrailX0, uTrailX1, vTrailX);');
+  };
+  mat.customProgramCacheKey = () => 'trail';
   const idx = [];                                                              // (the index of a full segment; broken at gaps by shortening the draw range per quad run)
   const count = Math.ceil((2 * R) / SEG) + 2, segs = [];
   let startX = 0, fade = 1, lastFirst = null, lastLast = null, more = false;
@@ -50,20 +59,17 @@ export function createTrail(parent, { laneZ, groundAt, inPit }) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COLS * ROWS * 3), 3));
     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(COLS * ROWS * 2), 2));
-    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(COLS * ROWS * 4), 4));
     g.setIndex(new THREE.BufferAttribute(new Uint16Array((COLS - 1) * (ROWS - 1) * 6), 1));
     const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.visible = false; m.renderOrder = 2; group.add(m);
     segs.push({ m, g, idx: -999 });
   }
-  const smooth = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
   function lay(s, i) {
-    s.idx = i; const x0 = i * SEG, pos = s.g.attributes.position, uv = s.g.attributes.uv, col = s.g.attributes.color, ix = s.g.index.array;
+    s.idx = i; const x0 = i * SEG, pos = s.g.attributes.position, uv = s.g.attributes.uv, ix = s.g.index.array;
     for (let c = 0; c < COLS; c++) {
-      const x = x0 + c * STEP, a = smooth(startX + 6, startX + 26, x);        // the trail fades in from where the ride starts
+      const x = x0 + c * STEP;
       for (let r = 0; r < ROWS; r++) {
         const o = r / (ROWS - 1) * 2 - 1, z = laneZ + o * HALF, v = c * ROWS + r;
         pos.setXYZ(v, x, groundAt(x, z) + 0.05, z); uv.setXY(v, x / 9, (o + 1) / 2);
-        col.setXYZ(v, 1, 1, 1); col.setW(v, a);
       }
     }
     let n = 0;                                                                   // quads, skipping any that touch a gap
@@ -72,13 +78,13 @@ export function createTrail(parent, { laneZ, groundAt, inPit }) {
       if (inPit(xa - 0.2) || inPit(xb + 0.2)) continue;
       for (let r = 0; r < ROWS - 1; r++) { const p = c * ROWS + r, q = (c + 1) * ROWS + r; ix[n++] = p; ix[n++] = p + 1; ix[n++] = q; ix[n++] = q; ix[n++] = p + 1; ix[n++] = q + 1; }
     }
-    s.g.setDrawRange(0, n); s.g.index.needsUpdate = true; pos.needsUpdate = uv.needsUpdate = col.needsUpdate = true;
+    s.g.setDrawRange(0, n); s.g.index.needsUpdate = true; pos.needsUpdate = uv.needsUpdate = true;
     s.m.visible = n > 0;
   }
   return {
     set visible(v) { group.visible = v; },
     /** A new ride begins at x: the trail starts there (faded in). */
-    reset(x) { startX = x; lastFirst = lastLast = null; more = false; for (const s of segs) { s.idx = -999; s.m.visible = false; } },
+    reset(x) { startX = x; fadeU.uTrailX0.value = x + 6; fadeU.uTrailX1.value = x + 26; lastFirst = lastLast = null; more = false; for (const s of segs) { s.idx = -999; s.m.visible = false; } },
     /** 0..1: the whole trail fades in with the camera's trip into the game. */
     setFade(k) { fade = k; mat.opacity = k; },
     update(camX) {

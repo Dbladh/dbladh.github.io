@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017160449';
-import { createTrack } from './track.js?v=20261017160449';
-import { createRagdoll } from './ragdoll.js?v=20261017160449';
-import { createFx } from './fx.js?v=20261017160449';
-import { createAudio } from './audio.js?v=20261017160449';
-import { createPuffs } from './puffs.js?v=20261017160449';
-import { createDirt } from './dirt.js?v=20261017160449';
-import { createMudCoat } from './mudcoat.js?v=20261017160449';
-import { createCoins } from './coins.js?v=20261017160449';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017161251';
+import { createTrack } from './track.js?v=20261017161251';
+import { createRagdoll } from './ragdoll.js?v=20261017161251';
+import { createFx } from './fx.js?v=20261017161251';
+import { createAudio } from './audio.js?v=20261017161251';
+import { createPuffs } from './puffs.js?v=20261017161251';
+import { createDirt } from './dirt.js?v=20261017161251';
+import { createMudCoat } from './mudcoat.js?v=20261017161251';
+import { createCoins } from './coins.js?v=20261017161251';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -115,16 +115,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         box.setFromObject(c);
         if (box.isEmpty()) continue;
         if (box.min.z > track.cutZ + 1.4) { c.visible = false; hiddenObjs.push(c); }
-        else villageX.push({ o: c, x0: box.min.x, x1: box.max.x });                  // (the sign glows are never frustum-culled: they are hidden by distance instead)
+        else villageX.push({ o: c, x0: box.min.x, x1: box.max.x, z0: c.position.z, back: box.max.z > laneZ - 1.8 && box.min.z < laneZ + 1.8 && box.min.x < st.startX + 400 && box.max.x > st.startX - 40 ? box.max.z - (laneZ - 1.8) : 0 });                  // (the sign glows are never frustum-culled: they are hidden by distance instead)
       }
     } else {
       for (const o of hiddenObjs) o.visible = true; hiddenObjs.length = 0;
       for (const o of castOff) o.castShadow = true; castOff.length = 0;
-      for (const v of villageX) v.o.visible = true; villageX.length = 0;
+      for (const v of villageX) { v.o.visible = true; v.o.position.z = v.z0; } villageX.length = 0;
     }
   }
 
   const CUT = track.cutZ + 0.4;
+  const slideBoards = (k) => { for (const v of villageX) if (v.back) v.o.position.z = v.z0 - v.back * k; };     // a billboard standing in the lane slides back out of the rider's way
   const st = {
     mode: 'off', t: 0, from: { pos: new THREE.Vector3(), look: new THREE.Vector3() },
     x: 0, y: 0, vx: 8, vy: 0, th: 0, om: 0, grounded: true, coyote: 0, diveOK: false, jumpReq: 0,
@@ -256,7 +257,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.comboT = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
-    track.reset(sd); track.setTrailStart(st.startX); coins.reset(sd, st.startX);
+    track.reset(sd); track.setTrailStart(st.startX + 84); coins.reset(sd, st.startX);
     startRun(st.startX);
     if (overEl) overEl.hidden = true;
     document.body.classList.remove('game-over');
@@ -684,7 +685,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         const k = reduceMotion ? 1 : ease(Math.min(1, st.t / (ENTER_SECONDS * 0.8)));
         cam.position.lerpVectors(st.leaveFrom.pos, st.home.pos, k);
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
-        clip.constant = THREE.MathUtils.lerp(CUT, 60, k); track.setTrailFade(1 - k);
+        clip.constant = THREE.MathUtils.lerp(CUT, 60, k); track.setTrailFade(1 - k); slideBoards(1 - k);
         if (k >= 1) {
           st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
@@ -812,7 +813,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const ox = juice.shakeX, oy = juice.shakeY + juice.bumpY;
       cam.position.x += ox; cam.position.y += oy; lookV.x += ox; lookV.y += oy;
       cam.lookAt(lookV);
-      clip.constant = THREE.MathUtils.lerp(60, CUT, k); track.setTrailFade(k);
+      clip.constant = THREE.MathUtils.lerp(60, CUT, k); track.setTrailFade(k); slideBoards(k);
       st.camPos.copy(cam.position); st.camLook.copy(lookV);
       for (const v of villageX) { const far = cam.position.x - 90 > v.x1 || cam.position.x + 90 < v.x0; if (v.o.visible === far) v.o.visible = !far; }     // the village is only drawn while the camera is near it
       track.update(cam.position.x, st.camY);
