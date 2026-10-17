@@ -686,3 +686,6 @@ body.game-paused .gh-quit { display: none; }
 body.game-over .gh-jump, body.game-paused .gh-jump { display: none; }
 .gh-jump.edge .t::after { content: ' \25B6'; font-size: .75em; }
 .gh-jump.edge svg { transform: rotate(-90deg); }
+
+/* In the game the sky canvas is drawn at a lower resolution (which softens it just as well), so the CSS blur on top of it is dropped: a full-screen filter pass per redraw is costly. */
+body.game-mode #sky { filter: none; }

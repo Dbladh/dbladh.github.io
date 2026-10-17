@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017150131';
-import { buildWorld } from './world.js?v=20261017150131';
-import { createSky } from './sky.js?v=20261017150131';
-import { createDOF } from './dof.js?v=20261017150131';
-import { createRide } from './ride.js?v=20261017150131';
-import { createGame } from './bikegame.js?v=20261017150131';
+import { PAL } from './palette.js?v=20261017150224';
+import { buildWorld } from './world.js?v=20261017150224';
+import { createSky } from './sky.js?v=20261017150224';
+import { createDOF } from './dof.js?v=20261017150224';
+import { createRide } from './ride.js?v=20261017150224';
+import { createGame } from './bikegame.js?v=20261017150224';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -403,7 +403,7 @@ function start() {
   function applyPixelRatio() {
     const w = VW(), h = VH(), ratio = pixelRatioFor(w, h);
     renderer.setPixelRatio(ratio); renderer.setSize(w, h, false);
-    skyRenderer.setPixelRatio(Math.min(ratio, 1)); skyRenderer.setSize(w, h, false);
+    skyRenderer.setPixelRatio(Math.min(ratio, game?.active ? 0.6 : 1)); skyRenderer.setSize(w, h, false); skyRenderer.render(skyScene, camera);       // (resizing clears it: redraw at once)
     clearTimeout(dofTimer); dofTimer = setTimeout(() => dof?.resize(), 120);
     slow.t = 0; slow.n = 0; slow.strikes = 0; slow.hold = performance.now() + 2000;
   }
@@ -412,7 +412,7 @@ function start() {
     const ratio = pixelRatioFor(w, h);
     renderer.setPixelRatio(ratio);
     renderer.setSize(w, h, false);
-    skyRenderer.setPixelRatio(Math.min(ratio, 1));  // the sky is soft clouds and glows: full res buys nothing
+    skyRenderer.setPixelRatio(Math.min(ratio, game?.active ? 0.6 : 1));  // the sky is soft clouds and glows: full res buys nothing (in the game it is drawn smaller still, which also softens it)
     skyRenderer.setSize(w, h, false);
     camera.aspect = w / h;
     // Keep the view wide enough on portrait phones.
@@ -623,7 +623,7 @@ function start() {
   function draw(dt) {
     renderer.info.reset();
     const t0 = performance.now();
-    if (!game?.active || (skyN++ & 1) === 0) skyRenderer.render(skyScene, camera);          // in the game the soft sky only needs every other frame
+    if (!game?.active || (skyN++ % 3) === 0) skyRenderer.render(skyScene, camera);          // in the game the soft sky only needs every third frame
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
       const want = game?.active ? game.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
