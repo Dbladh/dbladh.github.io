@@ -6,10 +6,10 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { createTrail } from './trail.js?v=20261017111228';
-import { KINDS, buildObstacle } from './obstacles.js?v=20261017111228';
-import { PAL } from './palette.js?v=20261017114411';
-import { heightAt as terrainAt } from './world.js?v=20261017114411';
+import { createTrail } from './trail.js?v=20261017115138';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261017115138';
+import { PAL } from './palette.js?v=20261017115138';
+import { heightAt as terrainAt } from './world.js?v=20261017115138';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -96,7 +96,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
       for (let n = rng() < 0.5 ? 1 : 2; n > 0; n--) { const kind = dd > 0.5 && rng() < 0.3 ? big() : small(), prev = items[items.length - 1].kind; items.push({ kind, after: vmax * (airTime(need(prev)) + need(kind) * 1.1 + 0.55) }); }
     }
     else if ((r -= wTight) < 0) items = [{ kind: small(), after: 0 }, { kind: small(), after: 8 + rng() }];                 // one jump of about 0.55 clears both
-    else if ((r -= wTrio) < 0) items = [{ kind: small(), after: 0 }, { kind: small(), after: 6.5 + rng() * 0.5 }, { kind: small(), after: 6.5 + rng() * 0.5 }];   // one full jump clears all three
+    else if ((r -= wTrio) < 0) items = [{ kind: small(), after: 0 }, { kind: small(), after: 6.2 + rng() * 0.4 }, { kind: small(), after: 6.2 + rng() * 0.4 }];   // one full jump clears all three
     else if ((r -= wBig) < 0) items = [{ kind: big(), after: 0 }];
     else items = rng() < 0.5 ? [{ kind: small(), after: 0 }, { kind: big(), after: 9 }] : [{ kind: big(), after: 0 }, { kind: small(), after: 9 }];   // one jump of about 0.75 clears both
     // the charge the first jump needs: a tight group needs one bigger jump for all of it

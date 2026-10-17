@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017114411';
-import { createTrack } from './track.js?v=20261017114411';
-import { createRagdoll } from './ragdoll.js?v=20261017114411';
-import { createFx } from './fx.js?v=20261017114411';
-import { createAudio } from './audio.js?v=20261017103819';
-import { createPuffs } from './puffs.js?v=20261017114411';
-import { createDirt } from './dirt.js?v=20261017111228';
-import { createMudCoat } from './mudcoat.js?v=20261017111228';
-import { createCoins } from './coins.js?v=20261017114411';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017115138';
+import { createTrack } from './track.js?v=20261017115138';
+import { createRagdoll } from './ragdoll.js?v=20261017115138';
+import { createFx } from './fx.js?v=20261017115138';
+import { createAudio } from './audio.js?v=20261017115138';
+import { createPuffs } from './puffs.js?v=20261017115138';
+import { createDirt } from './dirt.js?v=20261017115138';
+import { createMudCoat } from './mudcoat.js?v=20261017115138';
+import { createCoins } from './coins.js?v=20261017115138';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -43,6 +43,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const pauseEl = document.getElementById('game-pause');
   const toastEl = document.getElementById('gh-toast');
   const floatEl = document.getElementById('gh-float');
+  // "JUMP" markers floating over the next obstacles (up to two)
+  const jumpEls = [0, 1].map(() => { const d = document.createElement('div'); d.className = 'gh-jump'; d.hidden = true; d.innerHTML = '<span class="t">JUMP</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l7 7 7-7M5 12l7 7 7-7"/></svg>'; (hud || document.body).appendChild(d); return d; });
   const multFxEl = document.getElementById('gh-multfx');
   const grooveEl = document.getElementById('gh-groove');
   const multEl = document.getElementById('gh-mult');
@@ -756,6 +758,21 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         const px = THREE.MathUtils.clamp(rc.left + (pv.x * 0.5 + 0.5) * rc.width, rc.left + half, rc.right - half);
         const py = THREE.MathUtils.clamp(rc.top + (-pv.y * 0.5 + 0.5) * rc.height, rc.top + 150, rc.bottom - 120);
         floatEl.style.left = px + 'px'; floatEl.style.top = py + 'px';
+      }
+      {                                                                                   // the JUMP markers over the next obstacles
+        const rc = renderer.domElement.getBoundingClientRect(), upcoming = st.mode === 'play' && !st.paused ? track.obstaclesIn(st.x - 1, st.x + 72).filter((o) => !o.hit && o.x > st.x - 1) : [];
+        let k = 0;
+        for (let i = 0; i < upcoming.length && k < 2; i++) {
+          const o = upcoming[i]; if (i && o.x - upcoming[i - 1].x < 12) continue;               // the rest of a tight group is one jump
+          let group = 1; for (let j = i + 1; j < upcoming.length && upcoming[j].x - upcoming[j - 1].x < 12; j++) group++;
+          const big = o.big || group > 1 || upcoming.slice(i, i + group).some((q) => q.big), el = jumpEls[k++];
+          pv.set(o.x, track.laneAt(o.x) + o.h + 2.2 * (SC / SCALE), laneZ).project(cam);
+          el.hidden = pv.z > 1 || pv.x < -1.1; el.classList.toggle('edge', pv.x > 0.88);          // (beyond the right edge it stays pinned there with an arrow)
+          el.firstChild.textContent = big ? 'BIG JUMP' : 'JUMP'; el.classList.toggle('big', big);
+          el.style.left = THREE.MathUtils.clamp(rc.left + (pv.x * 0.5 + 0.5) * rc.width, rc.left + 50, rc.right - 50) + 'px';
+          el.style.top = THREE.MathUtils.clamp(rc.top + (-pv.y * 0.5 + 0.5) * rc.height, rc.top + 120, rc.bottom - 140) + 'px';
+        }
+        for (; k < 2; k++) jumpEls[k].hidden = true;
       }
       // landing indicator
       const im = st.impact;

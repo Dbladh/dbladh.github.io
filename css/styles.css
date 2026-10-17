@@ -673,3 +673,16 @@ body.game-paused .gh-quit { display: none; }
 @keyframes ghbump { 0% { transform: scale(1); } 35% { transform: scale(1.35); } 100% { transform: scale(1); } }
 .gh-groove.pulse { animation: ghpulse .55s ease-out; }
 @keyframes ghpulse { 0% { box-shadow: 0 0 0 0 rgba(209, 94, 77, .8); transform: scale(1.18); } 100% { box-shadow: 0 0 0 22px rgba(209, 94, 77, 0); transform: scale(1); } }
+
+/* "JUMP" markers floating over the next obstacles */
+.gh-jump { position: fixed; z-index: 26; transform: translate(-50%, -100%); pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 0; animation: ghjump .7s ease-in-out infinite alternate; }
+.gh-jump[hidden] { display: none; }
+.gh-jump .t { font: 800 .95rem var(--name-font); letter-spacing: .08em; color: #fff; background: #e2552e; border: 2px solid #fff; border-radius: 999px; padding: 4px 14px; box-shadow: 0 3px 10px rgba(80, 30, 10, .35); }
+.gh-jump.big .t { background: #c2311f; font-size: 1.05rem; }
+.gh-jump svg { width: 26px; height: 26px; margin-top: -3px; fill: none; stroke: #e2552e; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 0 #fff) drop-shadow(0 1px 0 #fff); }
+.gh-jump.big svg { stroke: #c2311f; }
+@keyframes ghjump { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, calc(-100% + 8px)); } }
+@media (prefers-reduced-motion: reduce) { .gh-jump { animation: none; } }
+body.game-over .gh-jump, body.game-paused .gh-jump { display: none; }
+.gh-jump.edge .t::after { content: ' \25B6'; font-size: .75em; }
+.gh-jump.edge svg { transform: rotate(-90deg); }

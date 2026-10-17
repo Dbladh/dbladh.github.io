@@ -4,8 +4,6 @@
 V=$(date +%Y%m%d%H%M%S)
 cd "$(dirname "$0")" || exit 1
 sed -i '' -E "s#(css/styles\.css)(\?v=[0-9]+)?#\1?v=$V#; s#(js/main\.js)(\?v=[0-9]+)?#\1?v=$V#" index.html
-sed -i '' -E "s#(\./(world|sky|dof|ride|bikegame)\.js)(\?v=[0-9]+)?#\1?v=$V#g" js/main.js
-sed -i '' -E "s#(\./houses\.js)(\?v=[0-9]+)?#\1?v=$V#g" js/world.js
-sed -i '' -E "s#(\./palette\.js)(\?v=[0-9]+)?#\1?v=$V#g" js/houses.js js/world.js js/main.js js/bike.js js/ride.js js/bikegame.js js/track.js js/coins.js js/ragdoll.js js/puffs.js
-sed -i '' -E "s#(\./(world|bike|track|coins|ragdoll|puffs|fx)\.js)(\?v=[0-9]+)?#\1?v=$V#g" js/ride.js js/bikegame.js js/track.js js/coins.js js/ragdoll.js js/puffs.js
+# every module import (./name.js) in every script, so a changed module is never run against a stale cached one
+for f in js/*.js; do sed -i '' -E "s#(\./[A-Za-z0-9_-]+\.js)(\?v=[0-9]+)?#\1?v=$V#g" "$f"; done
 echo "asset version: $V"
