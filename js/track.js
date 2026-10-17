@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016215148';
-import { heightAt as terrainAt } from './world.js?v=20261016215148';
+import { PAL } from './palette.js?v=20261016215940';
+import { heightAt as terrainAt } from './world.js?v=20261016215940';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -15,7 +15,6 @@ const CHUNK = 24;
 const DXM = 0.6;                // ground mesh resolution along the ride (the lane itself is sampled every DX)
 const COLS = CHUNK / DXM + 1;
 const X0 = -192;                // chunk grid origin
-const POOL = 7;
 
 function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -81,36 +80,40 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   flat(30);
 
   // ---------------- ground chunks ----------------
-  // Rows run from far behind the lane to past the camera, so the ground in front of the bike is green hillside that
-  // falls away toward the viewer (no cut face, no dirt wall).
-  const ZS = []; for (let z = -200; z < laneZ - 34; z += 3.2) ZS.push(z); for (let z = laneZ - 34; z <= laneZ + 56.01; z += 1.25) ZS.push(z);   // all the way back to the real terrain's far edge   // as fine as the real terrain, so its colours and relief carry over
-  const NR = ZS.length;
+  // Green hillside that falls away toward the viewer (no cut face, no dirt wall). Two pools of 24-unit chunks share the same columns:
+  // NEAR rows (fine, from just behind the lane to past the camera) cover about 100 units either side of the camera, and FAR rows
+  // (coarser, back to the real terrain's far edge) about 240, since far ground is seen across a very wide span.
+  const ZN = []; for (let z = laneZ - 34; z <= laneZ + 56.01; z += 1.25) ZN.push(z);        // as fine as the real terrain, so its colours and relief carry over
+  const ZF = []; for (let z = -200; z <= laneZ - 34 + 1e-6; z += 3.2) ZF.push(z); if (ZF[ZF.length - 1] < laneZ - 34 - 1e-6) ZF.push(laneZ - 34);
   const tc = new THREE.Color();
   /** The real terrain's own colour function (fields, mud, rock, grain), with steepness measured on the generated ground. */
   function topColor(x, z, h) {
     const slope = (Math.abs(groundAt(x + 1.2, z) - h) + Math.abs(groundAt(x, z + 1.2) - h)) / 1.2;
     return world.terrainColor(x, z, h, slope, tc);
   }
-  const idxArr = [];
-  for (let i = 0; i < COLS - 1; i++) for (let r = 0; r < NR - 1; r++) { const p = i * NR + r, q = (i + 1) * NR + r; idxArr.push(p, p + 1, q, q, p + 1, q + 1); }
-  const chunks = [];
-  for (let i = 0; i < POOL; i++) {
-    const g = new THREE.BufferGeometry();
-    for (const [n, sz] of [['position', 3], ['color', 3], ['uv', 2]]) g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(COLS * NR * sz), sz));
-    g.setIndex(idxArr);
-    const m = new THREE.Mesh(g, material);
-    m.frustumCulled = false; m.visible = false; m.receiveShadow = true;
-    group.add(m);
-    chunks.push({ mesh: m, geo: g, idx: -999, slot: i });
+  function makePool(rows, count) {
+    const NR = rows.length, idx = [];
+    for (let i = 0; i < COLS - 1; i++) for (let r = 0; r < NR - 1; r++) { const p = i * NR + r, q = (i + 1) * NR + r; idx.push(p, p + 1, q, q, p + 1, q + 1); }
+    const pool = { rows, NR, chunks: [] };
+    for (let k = 0; k < count; k++) {
+      const g = new THREE.BufferGeometry();
+      for (const [n, sz] of [['position', 3], ['color', 3], ['uv', 2]]) g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(COLS * NR * sz), sz));
+      g.setIndex(idx);
+      const m = new THREE.Mesh(g, material);
+      m.frustumCulled = false; m.visible = false; m.receiveShadow = true;
+      group.add(m);
+      pool.chunks.push({ mesh: m, geo: g, idx: -999 });
+    }
+    return pool;
   }
-  function fillChunk(c, idx) {
+  function fillChunk(pool, c, idx) {
     c.idx = idx;
-    const pos = c.geo.attributes.position, col = c.geo.attributes.color, uv = c.geo.attributes.uv;
+    const { rows, NR } = pool, pos = c.geo.attributes.position, col = c.geo.attributes.color, uv = c.geo.attributes.uv;
     const x0 = X0 + idx * CHUNK;
     for (let i = 0; i < COLS; i++) {
       const x = x0 + i * DXM;
       for (let r = 0; r < NR; r++) {
-        const v = i * NR + r, z = ZS[r], y = groundAt(x, z), cc = topColor(x, z, y);
+        const v = i * NR + r, z = rows[r], y = groundAt(x, z), cc = topColor(x, z, y);
         pos.setXYZ(v, x, y, z); col.setXYZ(v, cc.r, cc.g, cc.b); uv.setXY(v, x / 64, z / 64);
       }
     }
@@ -121,16 +124,33 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     c.geo.setDrawRange(i0 * (NR - 1) * 6, (COLS - 1 - i0) * (NR - 1) * 6);
     c.mesh.visible = i0 < COLS - 1;
   }
+  const NEAR_R = 100, FAR_R = 240, PLANT_R = 125;
+  const near = makePool(ZN, Math.ceil((2 * NEAR_R) / CHUNK) + 2), far = makePool(ZF, Math.ceil((2 * FAR_R) / CHUNK) + 2);
+  function refresh(pool, camX, R, budget) {
+    const first = Math.floor((camX - R - X0) / CHUNK), lastC = Math.floor((camX + R - X0) / CHUNK);
+    const have = new Set(pool.chunks.map((c) => c.idx));
+    const free = pool.chunks.filter((c) => c.idx < first || c.idx > lastC);
+    const need = [];
+    for (let i = first; i <= lastC; i++) if (!have.has(i)) need.push(i);
+    need.sort((a, b) => Math.abs(X0 + (a + 0.5) * CHUNK - camX) - Math.abs(X0 + (b + 0.5) * CHUNK - camX));   // nearest first; a few per frame so no frame stalls
+    for (const i of need.slice(0, budget)) {
+      const c = free.pop();
+      if (!c) break;
+      fillChunk(pool, c, i);
+    }
+    for (const c of free) { c.idx = -999; c.mesh.visible = false; }
+  }
 
   // ---------------- scenery on the new ground: the same trees, bushes, rocks, flowers and grass as the main scene ----------------
-  const sceneryOf = chunks.map(() => null);
-  function plant(c, idx) {
-    if (sceneryOf[c.slot]) { sceneryOf[c.slot].traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(sceneryOf[c.slot]); sceneryOf[c.slot] = null; }
+  const scenery = new Map();                      // chunk index -> Group
+  function plant(idx) {
     const x0 = Math.max(X0 + idx * CHUNK, XT + 2), x1 = X0 + (idx + 1) * CHUNK;
-    if (x1 <= x0 + 1) return;
+    if (x1 <= x0 + 1) { scenery.set(idx, null); return; }
     const g = world.scatter({ x0, x1, hFn: groundAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) });   // the planting thickens gradually past the seam
-    group.add(g); sceneryOf[c.slot] = g;
+    group.add(g); scenery.set(idx, g);
   }
+  function dropScenery(idx) { const g = scenery.get(idx); if (g) { g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
+  function clearScenery() { for (const k of [...scenery.keys()]) dropScenery(k); }
 
   scene.add(group);
   group.visible = false;
@@ -142,21 +162,16 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     reset(newSeed = seedNow) {
       seedNow = newSeed; rng = mulberry32(newSeed >>> 0);
       H = [0]; flat(30);
-      for (const c of chunks) c.idx = -999;
+      for (const pool of [near, far]) for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; }
+      clearScenery();
     },
     /** Keep the ground chunks and their scenery around the camera (call every frame with the camera's x and y). */
-    update(camX, camY) {
-      const first = Math.floor((camX - 38 - X0) / CHUNK), lastC = Math.floor((camX + 62 - X0) / CHUNK);
-      ensure(X0 + (lastC + 1) * CHUNK + 40);
-      const have = new Map(chunks.map((c) => [c.idx, c]));
-      const free = chunks.filter((c) => c.idx < first || c.idx > lastC);
-      for (let i = first; i <= lastC; i++) {
-        if (have.has(i)) continue;
-        const c = free.pop();
-        if (!c) break;
-        fillChunk(c, i); plant(c, i);
-      }
-      for (const c of free) { c.mesh.visible = false; if (sceneryOf[c.slot]) sceneryOf[c.slot].visible = false; }
+    update(camX) {
+      ensure(camX + FAR_R + 60);
+      refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2);
+      const first = Math.floor((camX - PLANT_R - X0) / CHUNK), lastC = Math.floor((camX + PLANT_R - X0) / CHUNK);
+      for (const k of [...scenery.keys()]) if (k < first || k > lastC) dropScenery(k);
+      for (let i = first; i <= lastC; i++) if (!scenery.has(i)) { plant(i); break; }          // at most one new stretch of planting per frame
     },
     dispose() { scene.remove(group); },
   };

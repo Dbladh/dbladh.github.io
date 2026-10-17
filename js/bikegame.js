@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016215148';
-import { createTrack } from './track.js?v=20261016215148';
-import { createRagdoll } from './ragdoll.js?v=20261016215148';
-import { createPuffs } from './puffs.js?v=20261016215148';
-import { createCoins } from './coins.js?v=20261016215148';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016215940';
+import { createTrack } from './track.js?v=20261016215940';
+import { createRagdoll } from './ragdoll.js?v=20261016215940';
+import { createPuffs } from './puffs.js?v=20261016215940';
+import { createCoins } from './coins.js?v=20261016215940';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -32,8 +32,6 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const pauseEl = document.getElementById('game-pause');
   const modeBtn = document.getElementById('gh-mode');
   const switches = ['gp-mode', 'go-mode'].map((id) => document.getElementById(id)).filter(Boolean);
-  const chargeEl = document.getElementById('gh-charge');
-  const chargeBar = document.getElementById('gh-charge-bar');
   const toastEl = document.getElementById('gh-toast');
   const grooveEl = document.getElementById('gh-groove');
   const multEl = document.getElementById('gh-mult');
@@ -45,15 +43,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
   const puffs = createPuffs(scene);
-  // Landing indicator: two bars where the bike will touch down. The cream one lies along the slope (the angle to match); the
-  // other shows the bike's angle right now, green when it is close, amber, then coral.
-  const barGeo = new THREE.PlaneGeometry(1, 1);
-  const mkBar = (color, h) => {
-    const m = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
-    m.scale.set(((BIKE.frontX - BIKE.rearX) * 1.8), h, 1); m.renderOrder = 6; m.visible = false; scene.add(m); return m;
-  };
-  const slopeBar = mkBar('#efeee5', 0.4), noseBar = mkBar('#8fd081', 0.16);
-  const GOOD = new THREE.Color('#8fd081'), OKAY = new THREE.Color('#e3b04b'), BAD = new THREE.Color('#d15e4d');
+  // Landing indicator: a pulsing circle where the bike will touch down. Its colour says how the landing would go if nothing changes:
+  // green for a perfect one, gold for a clean one, orange for a rough one, coral for a crash.
+  const landMark = new THREE.Group();
+  const landMat = new THREE.MeshBasicMaterial({ color: '#8fd081', transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+  const landDiscMat = landMat.clone();
+  const landRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 44), landMat), landDisc = new THREE.Mesh(new THREE.CircleGeometry(0.72, 44), landDiscMat);
+  landRing.renderOrder = landDisc.renderOrder = 6; landMark.add(landDisc, landRing); landMark.visible = false; scene.add(landMark);
+  const LAND_COL = { perfect: new THREE.Color('#8fd081'), clean: new THREE.Color('#e8c24a'), rough: new THREE.Color('#ec8a3c'), crash: new THREE.Color('#d15e4d') };
   const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
   bike.root.scale.setScalar(SCALE);
   bike.root.visible = false;
@@ -64,7 +61,6 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);
     SC = SCALE * (1 + 0.5 * tall); R = BIKE.wheelR * SC; HW = ((BIKE.frontX - BIKE.rearX) / 2) * SC;
     bike.root.scale.setScalar(SC);
-    slopeBar.scale.x = noseBar.scale.x = (BIKE.frontX - BIKE.rearX) * SC;
   }
 
   const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 60);   // clips the village (everything nearer the camera than the cut); the terrain itself is left whole
@@ -230,7 +226,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     } else {
       if (!st.grounded) {
         const im = st.impact;
-        setCoach(im && im.t < 1.6 ? 'Hold or tap to bring the nose down - line the bars up' : 'The nose tips back in the air: hold or tap to bring it forward');
+        setCoach(im && im.t < 1.6 ? 'Hold or tap to bring the nose down - aim for a green landing circle' : 'The nose tips back in the air: hold or tap to bring it forward');
       } else setCoach(st.guideStep === 2 ? 'Jump again, then hold or tap in the air to land smoothly' : (st.toggle ? 'Nice! Wait longer before the second tap for a bigger jump' : 'Nice! Hold longer for a bigger jump'));
     }
   }
@@ -434,7 +430,6 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.down = false;
       if (hud) hud.hidden = true;
       if (overEl) overEl.hidden = true;
-      if (chargeEl) chargeEl.hidden = true;
       st.paused = false; if (pauseEl) pauseEl.hidden = true; document.body.classList.remove('game-paused');
       if (hint) hint.hidden = true;
       st.guideOn = false;
@@ -448,7 +443,6 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.mode !== 'play' || st.paused) return;
       st.paused = true; st.down = false; st.charging = false; st.buf = null; st.charge = 0;
       if (hint) hint.hidden = true;
-      if (chargeEl) chargeEl.hidden = true;
       document.body.classList.add('game-paused');
       if (pauseEl) { pauseEl.hidden = false; setTimeout(() => { if (st.paused) document.getElementById('gp-resume')?.focus({ preventScroll: true }); }, 50); }
     },
@@ -487,7 +481,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; applyClip(false); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; slopeBar.visible = noseBar.visible = false;
+          st.mode = 'off'; applyClip(false); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -569,27 +563,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       guideTick();
       // landing indicator
       const im = st.impact;
-      if (im && im.t < 1.8 && st.airT > 0.15) {
-        const delta = Math.abs(wrap(st.th - im.phi));
-        const a = Math.min(1, (1.8 - im.t) / 0.5), col = delta < 0.22 ? GOOD : delta < 0.55 ? OKAY : BAD;
-        slopeBar.visible = noseBar.visible = true;
-        slopeBar.position.set(im.x, im.y + 0.3, laneZ + 0.5); slopeBar.rotation.z = im.phi; slopeBar.material.opacity = 0.7 * a;
-        noseBar.position.set(im.x, im.y + 0.3, laneZ + 0.52); noseBar.rotation.z = st.th; noseBar.material.color.copy(col); noseBar.material.opacity = 0.9 * a;
-      } else slopeBar.visible = noseBar.visible = false;
-      if (chargeEl) {                                                          // the charge ring floats above the bike
-        const show = st.mode === 'play' && (st.charging || st.charge > 0.02) && st.grounded;
-        chargeEl.hidden = !show;
-        if (show) {
-          cam.updateMatrixWorld();
-          pv.set(st.x, st.y + 3.6, laneZ).project(cam);
-          const r = renderer.domElement.getBoundingClientRect();
-          chargeEl.style.left = (r.left + (pv.x * 0.5 + 0.5) * r.width) + 'px';
-          chargeEl.style.top = (r.top + (-pv.y * 0.5 + 0.5) * r.height) + 'px';
-          chargeEl.style.setProperty('--p', st.charge.toFixed(3));
-          chargeEl.classList.toggle('max', st.charge >= 1);
-          chargeEl.classList.toggle('hot', st.charge > 0.7);
-        }
-      }
+      if (im && im.t < 1.8 && st.airT > 0.15 && st.mode === 'play') {
+        const d = wrap(st.th - im.phi), ad = Math.abs(d);
+        const q = d > 1.15 || d < -0.95 ? 'crash' : ad > 0.5 ? 'rough' : ad < 0.22 ? 'perfect' : 'clean';
+        landMat.color.lerp(LAND_COL[q], Math.min(1, dt * 12)); landDiscMat.color.copy(landMat.color);
+        const a = Math.min(1, (1.8 - im.t) / 0.5);
+        const pulse = 1 + 0.14 * Math.sin(st.t * (7 + 8 * Math.max(0, 1 - im.t)));   // pulses faster as touchdown nears
+        landMark.visible = true;
+        landMark.position.set(im.x, im.y + 0.5, laneZ + 0.5);
+        landMark.scale.setScalar(1.5 * (SC / SCALE) * pulse);
+        landMat.opacity = 0.95 * a; landDiscMat.opacity = (0.22 + 0.12 * Math.sin(st.t * 9)) * a;
+      } else landMark.visible = false;
       return true;
     },
   };
