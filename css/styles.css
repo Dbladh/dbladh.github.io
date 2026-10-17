@@ -711,7 +711,7 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { #boot .boot-dots i { animation: none; opacity: .8; } html.boot #boot { transition: none; } }
 
 /* Shown for a moment if the bike is clicked before the game's shaders have been prepared in the background. */
-.gh-loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; display: inline-flex; align-items: center; gap: 12px; padding: 12px 20px; border-radius: 999px; background: color-mix(in srgb, var(--cream, #fbf8f0) 94%, transparent); border: 1.5px solid var(--sage, #b8c4a8); box-shadow: 0 8px 28px rgba(30, 40, 30, .28); font: 700 1rem var(--name-font, system-ui); color: var(--ink, #2a2f2a); }
+.gh-loading { white-space: nowrap; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; display: inline-flex; align-items: center; gap: 12px; padding: 12px 20px; border-radius: 999px; background: color-mix(in srgb, var(--cream, #fbf8f0) 94%, transparent); border: 1.5px solid var(--sage, #b8c4a8); box-shadow: 0 8px 28px rgba(30, 40, 30, .28); font: 700 1rem var(--name-font, system-ui); color: var(--ink, #2a2f2a); }
 .gh-loading[hidden] { display: none; }
 .gh-loading .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid currentColor; border-right-color: transparent; animation: ghspin .8s linear infinite; }
 @keyframes ghspin { to { transform: rotate(360deg); } }
