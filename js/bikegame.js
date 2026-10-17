@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017084904';
-import { createTrack } from './track.js?v=20261017084904';
-import { createRagdoll } from './ragdoll.js?v=20261017084904';
-import { createPuffs } from './puffs.js?v=20261017084904';
-import { createCoins } from './coins.js?v=20261017084904';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017085314';
+import { createTrack } from './track.js?v=20261017085314';
+import { createRagdoll } from './ragdoll.js?v=20261017085314';
+import { createPuffs } from './puffs.js?v=20261017085314';
+import { createCoins } from './coins.js?v=20261017085314';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -17,7 +17,7 @@ const BOOST_CAP = 4.5;                 // extra speed from charging and landings
 const BACK_W = 2.2, BACK_RATE = 1.2;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
 const BUFFER_WINDOW = 0.14;            // a press this close to touchdown is held over and applies on landing
 const TAP_KICK = 3.4;                  // nose-down kick of one tap (rad/s, it fades quickly)
-const DIVE_GRAV = 1.1;           // extra gravity while nose-diving
+const DIVE_GRAV = 2.3;           // gravity while the button is held in the air: the bike drops much faster (ramps in over a moment)
 const TAU = Math.PI * 2;
 const TRICK_TIME = 0.75;           // every trick takes exactly this long
 // The tricks, in the order a double-tap cycles through them (a flip needs enough air left, so it is skipped for the next trick when there is not).
@@ -349,7 +349,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
     if (st.down && st.diveOK) st.airHold += h; else st.airHold = 0;
     if (st.jumpReq > 0 && st.coyote > 0) { st.jumpReq = 0; st.vy = Math.max(st.vy, 0) + st.jumpVy; st.coyote = 0; }   // a jump pressed just after the lip
-    st.vy -= GRAV * (diving ? DIVE_GRAV : 1) * h;
+    const pull = st.down && st.diveOK ? Math.min(1, st.airHold / 0.12) : 0;            // holding pulls the bike down harder, so you choose where it lands
+    st.vy -= GRAV * (1 + (DIVE_GRAV - 1) * pull) * h;
+    if (st.vy < -52) st.vy = -52;
     st.x += st.vx * h; st.y += st.vy * h;
     // The nose wants to tip backward (softer during the first 45 s of a run); a hold dives it, a tap gives a quick kick forward.
     const back = BACK_W * (0.5 + 0.5 * Math.min(1, st.runT / 45));
@@ -466,7 +468,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (hint) {
         clearTimeout(st.hintT);
         if (st.guideOn) { hint.hidden = true; hint.classList.add('coach'); }
-        else { hint.classList.remove('coach'); if (hintText) hintText.textContent = 'Hold to crouch, release to jump \u00b7 in the air: hold to tilt forward, double-tap for tricks'; if (skipBtn) skipBtn.hidden = true; if (modeBtn) modeBtn.hidden = true; hint.hidden = false; st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
+        else { hint.classList.remove('coach'); if (hintText) hintText.textContent = 'Hold to crouch, release to jump \u00b7 in the air: hold to drop faster, double-tap for tricks'; if (skipBtn) skipBtn.hidden = true; if (modeBtn) modeBtn.hidden = true; hint.hidden = false; st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
       }
       st.paused = false; if (pauseEl) pauseEl.hidden = true; document.body.classList.remove('game-paused');
       const tq = /[?&]toggle=(\d)/.exec(location.search);

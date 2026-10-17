@@ -64,3 +64,5 @@ The game's ground continues the real terrain: the same terrain material and colo
 **Coins** now trace the paths of jumps: each kicker gets an arc along the line a no-jump launch flies, and often a higher one for a fully charged jump; each gap gets the line of a well-charged jump across it. Coins are evenly spaced (about 3 units along the arc, never closer than 2.7) and only the odd short line sits on the ground.
 
 **Tricks:** double-tap in the air. Each double-tap performs the next trick in a cycle: backflip, no-hander, front flip, superman, can-can, nac-nac, heel clicker, cliffhanger (a flip is skipped for the next trick when there is not enough air left). Every trick takes the same time (0.75 s); flips are worth 400, the rest 150-300, times your groove.
+
+**Steering the landing:** holding in the air pulls the bike down about 2.3 times as hard as gravity (ramping in over about 0.1 s) and eases the nose forward, so you choose where it lands. A hold started just after take-off cut a 1.12 s, 19-unit flight to 0.69 s and 12 units in testing.
