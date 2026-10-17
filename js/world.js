@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017093322';
+import { PAL } from './palette.js?v=20261017094706';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017093322';
+} from './houses.js?v=20261017094706';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1729,6 +1729,14 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
    * For the dirt-bike game: houses and windmills standing in the background of the new ground. `list` = [{ x, z, kind: 'house' | 'windmill', r }];
    * they are the main scene's own buildings (lit windows at night, turning sails). Returns a Group; call group.userData.dispose() to release it.
    */
+  // A few houses are built once (at idle) and cloned for the generated ground: building one from scratch costs 10-30 ms, a clone is free.
+  const houseCache = [], sharedGeo = new Set();
+  function warmHouse() {
+    if (houseCache.length >= 4) return false;
+    const hs = buildHouse(rngFrom(7001 + houseCache.length * 131), theme, { low, far: true, tall: houseCache.length === 3 });
+    hs.group.traverse((o) => { if (o.isMesh && o.geometry) sharedGeo.add(o.geometry); });
+    houseCache.push(hs); return true;
+  }
   function sceneryBuildings({ list, hFn, seed }) {
     const R = rngFrom(seed >>> 0), group = new THREE.Group(), glass = [], rotors = [];
     const plinthMat = mat(PAL.stoneWarm);
@@ -1736,7 +1744,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       let obj, r = b.r;
       if (b.kind === 'windmill') { const wm = buildWindmill(); obj = wm.group; rotors.push(wm.rotor); obj.scale.setScalar(1.25); r = 3.4 * 1.25; }
       else {
-        const hs = buildHouse(R, theme, { low, far: true, tall: R() < 0.25 });
+        const tall = R() < 0.25;
+        let hs;
+        if (houseCache.length >= 4) { const t = houseCache[tall ? 3 : Math.floor(R() * 3)]; hs = { group: t.group.clone(), glassMat: t.glassMat, radius: t.radius }; }
+        else hs = buildHouse(R, theme, { low, far: true, tall });
         obj = hs.group; glass.push(hs.glassMat); hs.glassMat.emissiveIntensity = night * 1.3; obj.scale.setScalar(0.95 + R() * 0.3); r = hs.radius * obj.scale.x;
       }
       let lo = 1e9, hi = -1e9;                                                         // stand it on the lowest ground under it, on a stone plinth that hides the slope
@@ -1751,7 +1762,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     group.userData.dispose = () => {
       for (const gm of glass) { const i = windowMats.indexOf(gm); if (i >= 0) windowMats.splice(i, 1); }
       for (const ro of rotors) { const i = windmills.indexOf(ro); if (i >= 0) windmills.splice(i, 1); }
-      group.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+      group.traverse((o) => { if (o.isMesh && o.geometry && !sharedGeo.has(o.geometry)) o.geometry.dispose(); });
     };
     return group;
   }
@@ -2253,7 +2264,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     boards,
     get bikeLaneZ() { return LANE_Z; },
     get terrainMaterial() { return terrainMat; },
-    terrainColor, scatter, sceneryBuildings,
+    terrainColor, scatter, sceneryBuildings, warmHouse,
     /** Carry the drifting life (fireflies, butterflies) into the game: they stay put in the world, one set of spots repeating along the ride. */
     setFollow(on, camX = 0, ground = null, z = 0) { follow.on = on; follow.camX = camX; if (ground) follow.ground = ground; follow.z = on ? z : 0; },
     /**

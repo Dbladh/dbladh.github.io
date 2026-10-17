@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017093322';
-import { buildWorld } from './world.js?v=20261017093322';
-import { createSky } from './sky.js?v=20261017093322';
-import { createDOF } from './dof.js?v=20261017093322';
-import { createRide } from './ride.js?v=20261017093322';
-import { createGame } from './bikegame.js?v=20261017093322';
+import { PAL } from './palette.js?v=20261017094706';
+import { buildWorld } from './world.js?v=20261017094706';
+import { createSky } from './sky.js?v=20261017094706';
+import { createDOF } from './dof.js?v=20261017094706';
+import { createRide } from './ride.js?v=20261017094706';
+import { createGame } from './bikegame.js?v=20261017094706';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -378,11 +378,21 @@ function start() {
     setInterval(tick, 500); tick();
   }
   const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
+  const GAME_PIXEL_BUDGET = lowEnd ? 0.8e6 : 1.7e6;  // the dirt-bike game is soft-focus and busy: fewer pixels keep it smooth
+  let gameWasActive = false, skyN = 0;
   const quality = { scale: 1 };                     // the watchdog lowers this before it ever drops depth of field
   function pixelRatioFor(w, h) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const budget = Math.sqrt(PIXEL_BUDGET / (w * h));
+    const budget = Math.sqrt((game?.active ? GAME_PIXEL_BUDGET : PIXEL_BUDGET) / (w * h));
     return Math.max(0.6, Math.min(dpr, budget) * quality.scale);
+  }
+  /** Only the drawing resolution (the game draws fewer pixels than the overview): no relayout. */
+  function applyPixelRatio() {
+    const w = VW(), h = VH(), ratio = pixelRatioFor(w, h);
+    renderer.setPixelRatio(ratio); renderer.setSize(w, h, false);
+    skyRenderer.setPixelRatio(Math.min(ratio, 1)); skyRenderer.setSize(w, h, false);
+    clearTimeout(dofTimer); dofTimer = setTimeout(() => dof?.resize(), 120);
+    slow.t = 0; slow.n = 0; slow.strikes = 0; slow.hold = performance.now() + 2000;
   }
   function onResize() {
     const w = VW(), h = VH();
@@ -584,7 +594,7 @@ function start() {
   function draw(dt) {
     renderer.info.reset();
     const t0 = performance.now();
-    skyRenderer.render(skyScene, camera);
+    if (!game?.active || (skyN++ & 1) === 0) skyRenderer.render(skyScene, camera);          // in the game the soft sky only needs every other frame
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
       const want = game?.active ? game.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
@@ -639,13 +649,14 @@ function start() {
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
     game?.update(dt, camera);
+    if (!!game?.active !== gameWasActive) { gameWasActive = !!game?.active; applyPixelRatio(); }          // the game draws fewer pixels
 
     if (!reduceMotion) world.update(dt, camera);
     if (ride) {
       ride.update(dt, active === 'home' && !openId && !tween && !game?.active);
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }
-    if (shadowTick++ % 4 === 0) renderer.shadowMap.needsUpdate = true;
+    if (shadowTick++ % (game?.active ? 8 : 4) === 0) renderer.shadowMap.needsUpdate = true;
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back

@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017093322';
-import { heightAt as terrainAt } from './world.js?v=20261017093322';
+import { PAL } from './palette.js?v=20261017094706';
+import { heightAt as terrainAt } from './world.js?v=20261017094706';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -160,9 +160,10 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     }
     return pool;
   }
-  function fillChunk(pool, c, idx) {
-    c.idx = idx;
-    if (X0 + (idx + 1) * CHUNK <= XT) { c.mesh.visible = false; return; }          // wholly inside the real terrain: nothing to draw, so nothing to build
+  /** Fill a ground chunk in small steps (a generator), so no single frame pays for the whole thing. */
+  function* fillChunk(pool, c, idx) {
+    c.idx = idx; c.mesh.visible = false;
+    if (X0 + (idx + 1) * CHUNK <= XT) return;                                       // wholly inside the real terrain: nothing to draw, so nothing to build
     const { rows, NR } = pool, pos = c.geo.attributes.position, col = c.geo.attributes.color, uv = c.geo.attributes.uv;
     const x0 = X0 + idx * CHUNK;
     for (let i = 0; i < COLS; i++) {
@@ -171,14 +172,26 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
         const v = i * NR + r, z = rows[r], y = groundAt(x, z), cc = topColor(x, z, y);
         pos.setXYZ(v, x, y, z); col.setXYZ(v, cc.r, cc.g, cc.b); uv.setXY(v, x / 64, z / 64);
       }
+      if (i % 10 === 9) yield;
     }
     pos.needsUpdate = true; col.needsUpdate = true; uv.needsUpdate = true;
+    yield;
     c.geo.computeVertexNormals();
     // only the part beyond the real terrain's edge is drawn (the real terrain draws the rest)
     const i0 = Math.min(COLS - 1, Math.max(0, Math.ceil((XT - x0) / DXM - 1e-6)));
     c.geo.setDrawRange(i0 * (NR - 1) * 6, (COLS - 1 - i0) * (NR - 1) * 6);
     c.mesh.visible = i0 < COLS - 1;
   }
+  const jobs = [];                                                                    // chunk fills in progress
+  /** Run the queued chunk fills until the frame's time is up (always at least one step). */
+  function runJobs(deadline) {
+    while (jobs.length && jobs[0].c.idx !== jobs[0].idx) jobs.shift();                // (a place the camera has left)
+    do {
+      const j = jobs[0]; if (!j) return;
+      if (j.c.idx !== j.idx || j.gen.next().done) jobs.shift();
+    } while (performance.now() < deadline);
+  }
+  let warm = 150;
   const NEAR_R = 100, FAR_R = 240, PLANT_R = 125;
   const near = makePool(ZN, Math.ceil((2 * NEAR_R) / CHUNK) + 2), far = makePool(ZF, Math.ceil((2 * FAR_R) / CHUNK) + 2);
   function refresh(pool, camX, R, budget) {
@@ -191,7 +204,8 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     for (const i of need.slice(0, budget)) {
       const c = free.pop();
       if (!c) break;
-      fillChunk(pool, c, i);
+      for (let k = jobs.length - 1; k >= 0; k--) if (jobs[k].c === c) jobs.splice(k, 1);   // it was still being filled for a place the camera has left
+      jobs.push({ c, idx: i, gen: fillChunk(pool, c, i) }); c.idx = i; c.mesh.visible = false;
     }
     for (const c of free) { c.idx = -999; c.mesh.visible = false; }
   }
@@ -220,10 +234,16 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     const holder = new THREE.Group();
     const avoid = (x, z) => inPit(x) || list.some((b) => Math.hypot(x - b.x, z - b.z) < b.r + 1.2);
     holder.add(world.scatter({ x0, x1, hFn: groundAt, laneAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, avoid, density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) }));   // the planting thickens gradually past the seam
-    if (list.length) { const bg = world.sceneryBuildings({ list, hFn: groundAt, seed: idx * 31 + seedNow }); holder.userData.buildings = bg; holder.add(bg); }
+    if (list.length) pendingB.push({ idx, holder, list });                              // houses and windmills are the costly part: built on a later frame
     group.add(holder); scenery.set(idx, holder);
   }
-  function dropScenery(idx) { const g = scenery.get(idx); if (g) { g.userData.buildings?.userData.dispose?.(); g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
+  const pendingB = [];
+  function buildPending() {
+    const b = pendingB.shift(); if (!b) return;
+    const bg = world.sceneryBuildings({ list: b.list, hFn: groundAt, seed: b.idx * 31 + seedNow });
+    b.holder.userData.buildings = bg; b.holder.add(bg);
+  }
+  function dropScenery(idx) { const pi = pendingB.findIndex((b) => b.idx === idx); if (pi >= 0) pendingB.splice(pi, 1); const g = scenery.get(idx); if (g) { g.userData.buildings?.userData.dispose?.(); g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
   function clearScenery() { for (const k of [...scenery.keys()]) dropScenery(k); }
 
   // ---------------- mud patches: a crisp, lumpy blob lying on the ground (own geometry, not painted on the terrain) ----------------
@@ -300,7 +320,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     set visible(v) { group.visible = v; },
     reset(newSeed = seedNow) {
       seedNow = newSeed; rng = mulberry32(newSeed >>> 0);
-      H = [0]; gaps.length = 0; muds.length = 0; lastHazard = -1e9; flat(30);
+      H = [0]; gaps.length = 0; muds.length = 0; lastHazard = -1e9; flat(30); warm = 150; pendingB.length = 0; jobs.length = 0;
       for (const pool of [near, far]) for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; }
       clearScenery();
       for (const k of [...mudMeshes.keys()]) dropMud(k);
@@ -308,11 +328,16 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     /** Keep the ground chunks and their scenery around the camera (call every frame with the camera's x and y). */
     update(camX) {
       ensure(camX + FAR_R + 60);
-      refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2);
+      const dl = warm > 0 ? Infinity : performance.now() + 2.5; warm--;                // after the first moments, do at most a few ms of building per frame
+      refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2); runJobs(dl);
       syncMud(camX);
       const first = Math.floor((camX - PLANT_R - X0) / CHUNK), lastC = Math.floor((camX + PLANT_R - X0) / CHUNK);
       for (const k of [...scenery.keys()]) if (k < first || k > lastC) dropScenery(k);
-      for (let i = first; i <= lastC; i++) if (!scenery.has(i)) { plant(i); break; }          // at most one new stretch of planting per frame
+      if (performance.now() < dl) {
+        let planted = false;
+        for (let i = first; i <= lastC; i++) if (!scenery.has(i)) { plant(i); planted = true; break; }          // at most one new stretch of planting per frame
+        if (!planted || warm > 0) buildPending();
+      }
     },
     dispose() { scene.remove(group); },
   };
