@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017162515';
+import { PAL } from './palette.js?v=20261017164206';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -63,6 +63,7 @@ export function createCoins(scene, track, laneZ) {
   scene.add(mesh);
 
   let seed = 1, minX = 0;
+  let blocked = null;                                           // (x, y) => true where something else (a fuel can) sits: no coin there
   const drawnIn = new Set();                                    // coins the magnet is drawing in
   const blocks = new Map();
   const dummy = new THREE.Object3D();
@@ -113,13 +114,14 @@ export function createCoins(scene, track, laneZ) {
     } else {
       arcCoins(lx, vx, vy0, land, 14, out);                                                              // off a kicker: the line you get with no jump at all
     }
+    out.meta = { lx, vx, pit: !!pit };
     return out.length >= 5 ? out : [];                                                                   // a little crest is not worth an arc
   }
 
   function build(b) {
     const list = [], placed = [];
     const x0 = b * BLOCK, x1 = x0 + BLOCK;
-    const ok = (c) => c.x >= minX && c.y >= track.laneAt(c.x) + 1.0 && !(track.inPit?.(c.x) && c.y < track.laneAt(c.x) + 6);
+    const ok = (c) => c.x >= minX && !(blocked && blocked(c.x, c.y)) && c.y >= track.laneAt(c.x) + 1.0 && !(track.inPit?.(c.x) && c.y < track.laneAt(c.x) + 6);
     // lips of the neighbouring blocks too, so arcs that run across a block edge are resolved the same way whichever block is built first
     const lips = [...lipsIn(b - 1), ...lipsIn(b), ...lipsIn(b + 1)].sort((a, c) => a - c);
     for (const lx of lips) {
@@ -150,7 +152,20 @@ export function createCoins(scene, track, laneZ) {
     /** New course: coins start after `startX + 24`. */
     reset(newSeed, startX) { seed = newSeed; minX = startX + 24; blocks.clear(); drawnIn.clear(); },
     set visible(v) { mesh.visible = v; },
-    blockList(b) { return blockOf(b); },                       // (for tests)
+    blockList(b) { return blockOf(b); },
+    /** Keep coins out of the way of something else: `fn(x, y)` says whether a coin there must be skipped (set before the course is drawn). */
+    setBlocker(fn) { blocked = fn; },
+    /** The coin arcs flown off the kicker lips in [x0, x1]: { lx, apex: {x, y}, pit } (the fuel cans use their highest points). */
+    arcs(x0, x1) {
+      const out = [];
+      for (let b = Math.floor(x0 / BLOCK); b <= Math.floor(x1 / BLOCK); b++) for (const lx0 of lipsIn(b)) {
+        if (lx0 < x0 || lx0 > x1) continue;
+        const pts = lipCoins(lx0); if (!pts.length) continue;
+        let top = pts[0]; for (const q of pts) if (q.y > top.y) top = q;
+        out.push({ lx: pts.meta.lx, apex: top, pit: pts.meta.pit });
+      }
+      return out;
+    },                       // (for tests)
     get blockSize() { return BLOCK; },
     /** Redraw the coins near the camera. */
     update(camX, time) {

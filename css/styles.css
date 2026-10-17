@@ -550,6 +550,17 @@ body.game-mode #stopnav, body.game-mode #controls, body.game-mode .hero, body.ga
 .game-hud { position: fixed; inset: 0; z-index: 25; pointer-events: none; font-family: var(--name-font, Outfit, system-ui, sans-serif); color: var(--ink); }
 .gh-stats { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; gap: 14px; align-items: center;
   padding: 8px 20px; border-radius: 999px; background: color-mix(in srgb, var(--cream) 92%, transparent); border: 1.5px solid var(--line); box-shadow: 0 3px 10px rgba(40, 52, 44, .16); font-weight: 600; font-size: 1.15rem; }
+/* the fuel gauge, under the score: green, turning amber and then red and pulsing when low */
+.gh-fuel { position: absolute; top: calc(max(14px, env(safe-area-inset-top)) + 58px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--cream) 90%, transparent); border: 1.5px solid var(--line); box-shadow: 0 2px 8px rgba(40, 52, 44, .14); }
+.gh-fuel svg { width: 18px; height: 18px; fill: none; stroke: #c2412a; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.gh-fuel-track { width: clamp(110px, 22vw, 170px); height: 10px; border-radius: 999px; background: rgba(40, 52, 44, .16); overflow: hidden; display: block; }
+.gh-fuel-track i { display: block; height: 100%; width: 100%; border-radius: 999px; transform-origin: left center; background: linear-gradient(90deg, #e2552e, #f2b52a 45%, #7fbf4d); background-size: 170px 100%; background-position: left; transition: transform .15s linear; }
+.gh-fuel.low .gh-fuel-track i { background: #d8402a; }
+.gh-fuel.low { animation: ghfuellow .6s ease-in-out infinite alternate; }
+.gh-fuel.low svg { stroke: #d8402a; }
+@keyframes ghfuellow { from { box-shadow: 0 2px 8px rgba(40, 52, 44, .14); } to { box-shadow: 0 0 0 3px rgba(216, 64, 42, .55), 0 2px 10px rgba(216, 64, 42, .35); } }
+@media (prefers-reduced-motion: reduce) { .gh-fuel.low { animation: none; border-color: #d8402a; } }
+body.game-over .gh-fuel, body.game-paused .gh-fuel { opacity: .5; }
 .gh-stats b { font-weight: 800; font-variant-numeric: tabular-nums; }
 .gh-coins { display: inline-flex; align-items: center; gap: .4em; }
 .gh-coin { width: .95em; height: .95em; border-radius: 50%; background: var(--gold); border: 2px solid var(--marigold, #E3B04B); box-sizing: border-box; }

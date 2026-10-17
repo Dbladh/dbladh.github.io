@@ -2,20 +2,22 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017162515';
-import { createTrack } from './track.js?v=20261017162515';
-import { createRagdoll } from './ragdoll.js?v=20261017162515';
-import { createFx } from './fx.js?v=20261017162515';
-import { createAudio } from './audio.js?v=20261017162515';
-import { createPuffs } from './puffs.js?v=20261017162515';
-import { createDirt } from './dirt.js?v=20261017162515';
-import { createMudCoat } from './mudcoat.js?v=20261017162515';
-import { createCoins } from './coins.js?v=20261017162515';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017164206';
+import { createTrack } from './track.js?v=20261017164206';
+import { createRagdoll } from './ragdoll.js?v=20261017164206';
+import { createFx } from './fx.js?v=20261017164206';
+import { createAudio } from './audio.js?v=20261017164206';
+import { createPuffs } from './puffs.js?v=20261017164206';
+import { createDirt } from './dirt.js?v=20261017164206';
+import { createMudCoat } from './mudcoat.js?v=20261017164206';
+import { createCoins } from './coins.js?v=20261017164206';
+import { createFuel } from './fuel.js?v=20261017164206';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
 const GRAV = 24;
 const JUMP_MIN = 5.5, JUMP_MAX = 15;   // upward kick: a tap hops, a full charge flies
+const FUEL_SECONDS = 40, CAN_FUEL = 25 / 40;   // a full tank lasts this long at a steady throttle; a can gives back this share of it
 const CHARGE_TIME = 1.1;               // seconds of holding to reach full charge (it then stays maxed)
 const BOOST_CAP = 4.5;                 // extra speed from charging and landings
 const BACK_W = 1.7, BACK_RATE = 0.9;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
@@ -56,6 +58,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const laneZ = world.bikeLaneZ;
   const track = createTrack(scene, { laneZ, material: world.terrainMaterial, world, seed: 1 });
   const coins = createCoins(scene, track, laneZ);
+  const fuel = createFuel(scene, track, coins, laneZ);
+  const fuelEl = document.getElementById('gh-fuel'), fuelFill = document.getElementById('gh-fuel-fill');
   const bike = buildBike();
   const mudCoat = createMudCoat(bike.root);                                    // mud that sticks to the bike and rider, then dries and falls away
   const puffs = createPuffs(scene);
@@ -137,7 +141,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     mode: 'off', t: 0, from: { pos: new THREE.Vector3(), look: new THREE.Vector3() },
     x: 0, y: 0, vx: 8, vy: 0, th: 0, om: 0, grounded: true, coyote: 0, diveOK: false, jumpReq: 0,
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
-    crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
+    crashT: 0, inv: 0, boost: 0, startX: 0, best: 0, fuel: 1, engineOut: false, outOfFuel: false, lowWarn: false, sputT: 0,
     bonus: 0, dist: 0, mult: 1, comboT: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
     bigAir: false, hz: null, viewW: 0, squash: 0, lift: 0, warnedObs: -1, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
@@ -191,10 +195,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     return dist;
   }
   let warmPromise = null, warmDone = false;
-  const hudLast = { score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 };       // (touch the page only when a value actually changed)
+  const hudLast = { fuel: -1, low: null, score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 };       // (touch the page only when a value actually changed)
   function setHud() {
     const sc = Math.floor(st.score);
     if (scoreEl && sc !== hudLast.score) { hudLast.score = sc; scoreEl.textContent = String(sc); }
+    if (fuelEl) {
+      const f = Math.round(st.fuel * 100), low = st.fuel < 0.25;
+      if (f !== hudLast.fuel) { hudLast.fuel = f; fuelFill.style.transform = 'scaleX(' + (f / 100) + ')'; fuelEl.setAttribute('aria-valuenow', String(f)); }
+      if (low !== hudLast.low) { hudLast.low = low; fuelEl.classList.toggle('low', low); }
+    }
     if (coinsEl && st.coins !== hudLast.coins) { hudLast.coins = st.coins; coinsEl.textContent = String(st.coins); }
     if (grooveEl) {
       const hid = st.mode === 'over' || st.mult < 2; if (hid !== hudLast.hidden) { hudLast.hidden = hid; grooveEl.hidden = hid; }
@@ -253,7 +262,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   /** Hide the per-round overlays (the JUMP markers, the toast, the combo pop-up): after a crash, on a restart, and on leaving. */
   function clearRoundUi(hintToo = false) {
-    Object.assign(hudLast, { score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 });         // (the HUD is redrawn from scratch)
+    Object.assign(hudLast, { fuel: -1, low: null, score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 });         // (the HUD is redrawn from scratch)
     for (const e of jumpEls) e.hidden = true;
     if (toastEl) { toastEl.textContent = ''; toastEl.classList.remove('show'); }
     if (multFxEl) { multFxEl.hidden = true; multFxEl.classList.remove('show'); clearTimeout(st.multT); }
@@ -264,7 +273,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.comboT = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
-    track.reset(sd); track.setTrailStart(st.startX + 84); coins.reset(sd, st.startX);
+    track.reset(sd); track.setTrailStart(st.startX + 84); coins.reset(sd, st.startX); fuel.reset(sd, st.startX);
+    st.fuel = 1; st.engineOut = false; st.outOfFuel = false; st.lowWarn = false; st.sputT = 0;
     startRun(st.startX);
     if (overEl) overEl.hidden = true;
     document.body.classList.remove('game-over');
@@ -279,6 +289,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     if (isBest) { st.best = final; saveBest(final); }
     audio.over(isBest && final > 0); for (const e of jumpEls) e.hidden = true;
     if (!overEl) return;
+    const goTitle = $('go-title'); if (goTitle) goTitle.textContent = st.outOfFuel ? 'Out of fuel!' : 'Wipeout!';
     $('go-score').textContent = final.toLocaleString();
     $('go-best').textContent = st.best.toLocaleString();
     $('go-dist').textContent = Math.round(st.dist * 0.6).toLocaleString() + ' m';
@@ -395,7 +406,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const p = groundPose(st.x + st.vx * h);
       const slope = Math.tan(p.phi);
       const mud = track.mudAt(st.x);
-      const aim = (base + st.boost - Math.max(-3, Math.min(5, slope * 6))) * (1 - 0.58 * mud);               // mud drags the bike down to a crawl
+      const aim = st.engineOut ? 0 : (base + st.boost - Math.max(-3, Math.min(5, slope * 6))) * (1 - 0.58 * mud);               // mud drags the bike down to a crawl
       st.vx += (aim - st.vx) * Math.min(1, (mud > 0.2 ? 4 : 2.5) * h);
       if (mud > 0.2) st.boost *= Math.exp(-2 * h);
       if (track.inPit(st.x) || track.inPit(st.x - HW * 0.9 + 0.7)) { crash('Into the pit!'); return; }       // driven over the edge of a gap
@@ -590,7 +601,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.home = { pos: homeCam.pos.clone(), look: homeCam.look.clone() };
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
       setBikeScale();
-      track.visible = true; coins.visible = true; puffs.visible = true; dirt.visible = true; juice.reset(); juice.visible = true;
+      track.visible = true; coins.visible = true; fuel.visible = true; puffs.visible = true; dirt.visible = true; juice.reset(); juice.visible = true;
       audio.unlock(); audio.start();
       newRun();
       bike.root.visible = true;
@@ -623,6 +634,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       document.body.classList.remove('game-mode');
     },
     get coinsDebug() { return coins; },
+    get fuelDebug() { return fuel; },
+    /** (for tests) set the tank (0..1). */
+    setFuel(v) { st.fuel = v; st.lowWarn = false; },
+    get fuelLevel() { return st.fuel; },
     get track() { return track; },
     get audioDebug() { return audio; },
     get mudCoatDebug() { return mudCoat; },
@@ -641,9 +656,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       warmPromise = (async () => {
         const prev = bike.root.position.y;
         bike.root.position.y = -800; landMark.position.y = -800;
-        bike.root.visible = true; landMark.visible = true; coins.visible = true; puffs.visible = true; dirt.visible = true; track.visible = true; track.prewarm(true);
+        bike.root.visible = true; landMark.visible = true; coins.visible = true; fuel.visible = true; puffs.visible = true; dirt.visible = true; track.visible = true; track.prewarm(true);
         try { if (api.compileHook) await api.compileHook(scene, camera); else if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { /* not fatal */ }
-        if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; track.visible = false; }
+        if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; fuel.visible = false; puffs.visible = false; dirt.visible = false; track.visible = false; }
         track.prewarm(false);
         bike.root.position.y = prev;
         for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 90)); if (!world.warmHouse?.()) break; }      // the background houses, built one at a time while idle
@@ -695,7 +710,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k); track.setTrailFade(1 - k); slideBoards(1 - k);
         if (k >= 1) {
-          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; bike.root.visible = false; landMark.visible = false;
+          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; fuel.visible = false; puffs.visible = false; dirt.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -720,21 +735,35 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       }
       st.impact = predictLanding(); st.impactAt = st.t;
       juice.setIntensity(st.mode === 'play' ? THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1) : 0, st.boost / BOOST_CAP, st.charge); juice.setAnchor(st.x, st.y + 0.3, laneZ - 0.6);
-      audio.update({ playing: st.mode === 'play', speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
+      audio.update({ playing: st.mode === 'play' && !st.engineOut, speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
       mudCoat.update(dt, st.mode === 'play' && st.grounded ? track.mudAt(st.x) : 0);
       if (mudCoat.coat > 0.15 && st.mode === 'play') { st.flakeT = (st.flakeT || 0) - dt; if (st.flakeT <= 0) { st.flakeT = 0.4 / mudCoat.coat; dirt.burst(st.x - 0.4 + Math.random() * 0.8, st.y - R * 0.9, laneZ + 0.3, 1, 0.3, 1); } }                       // lumps drop off as it dries
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         checkObstacles();
         // (swept: a slow frame must not let the bike step over a coin, so the path since the last frame is checked in short hops)
-        let got = 0; const taken = []; const hops = st.cpx === undefined || Math.abs(st.x - st.cpx) > 12 ? 1 : Math.min(10, Math.ceil(Math.hypot(st.x - st.cpx, st.y - st.cpy) / 1.0));
-        for (let h = 1; h <= hops; h++) { const f = h / hops; got += coins.collect(st.cpx === undefined || hops === 1 ? st.x : st.cpx + (st.x - st.cpx) * f, st.cpy === undefined || hops === 1 ? st.y : st.cpy + (st.y - st.cpy) * f, SC / SCALE, dt / hops, st.vx); for (const hh of coins.hits) taken.push({ x: hh.x, y: hh.y }); }
+        let got = 0, fuelGot = 0; const taken = [], fuelHits = []; const hops = st.cpx === undefined || Math.abs(st.x - st.cpx) > 12 ? 1 : Math.min(10, Math.ceil(Math.hypot(st.x - st.cpx, st.y - st.cpy) / 1.0));
+        for (let h = 1; h <= hops; h++) { const f = h / hops; got += coins.collect(st.cpx === undefined || hops === 1 ? st.x : st.cpx + (st.x - st.cpx) * f, st.cpy === undefined || hops === 1 ? st.y : st.cpy + (st.y - st.cpy) * f, SC / SCALE, dt / hops, st.vx); for (const hh of coins.hits) taken.push({ x: hh.x, y: hh.y });
+          if (!st.guideOn) { fuelGot += fuel.collect(st.cpx === undefined || hops === 1 ? st.x : st.cpx + (st.x - st.cpx) * f, st.cpx === undefined || hops === 1 ? st.y : st.cpy + (st.y - st.cpy) * f, SC / SCALE); for (const hh of fuel.hits) fuelHits.push({ x: hh.x, y: hh.y }); } }
         st.cpx = st.x; st.cpy = st.y;
         if (got) {
           for (let i = 0; i < Math.min(got, 3); i++) audio.coin();
           st.coins += got; st.bonus += 25 * got * st.mult;
           for (const hit of taken) juice.burst('coin', hit.x, hit.y, laneZ, 7, '#ffd54a');
           if (coinsEl) { coinsEl.classList.remove('bump'); void coinsEl.offsetWidth; coinsEl.classList.add('bump'); }
+        }
+        // ---- fuel: always draining, faster while the button is held (crouching/charging); cans refill it; an empty tank kills the engine ----
+        if (!st.guideOn) {
+          const creep = 1 + 0.6 * Math.min(1, st.dist / 3000);
+          if (!st.engineOut) st.fuel = Math.max(0, st.fuel - (dt / FUEL_SECONDS) * creep * (st.charging ? 1.9 : 1));
+          if (fuelGot) {
+            st.fuel = Math.min(1, st.fuel + fuelGot * CAN_FUEL); st.lowWarn = false; st.bonus += 50 * fuelGot * st.mult;
+            audio.fuelUp(); toast('+FUEL'); for (const hh of fuelHits) { juice.burst('coin', hh.x, hh.y, laneZ, 12, '#ff9a4a'); juice.ring(hh.x, hh.y, laneZ, '#ffb066', 0.5, 2.4, 0.35, false, 0.8); }
+          }
+          if (st.fuel < 0.25 && !st.lowWarn && !st.engineOut) { st.lowWarn = true; toast('Low fuel!'); audio.sputter(); }
+          if (st.fuel < 0.15 && !st.engineOut) { st.sputT -= dt; if (st.sputT <= 0) { st.sputT = 2.4; audio.sputter(); } }
+          if (st.fuel <= 0 && !st.engineOut) { st.engineOut = true; st.charging = false; st.charge = 0; toast('Out of fuel!'); audio.sputter(true); }
+          if (st.engineOut && st.grounded && st.vx < 1.2) { st.outOfFuel = true; st.mult = 1; st.comboT = 0; for (const e of jumpEls) e.hidden = true; st.crashT = 0; showOver(); }
         }
         if (st.mult > 1) {                                                                  // the combo runs down; at zero it drops a step
           st.comboT -= dt;
@@ -828,7 +857,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.camPos.copy(cam.position); st.camLook.copy(lookV);
       for (const v of villageX) { const far = cam.position.x - 90 > v.x1 || cam.position.x + 90 < v.x0; if (v.o.visible === far) v.o.visible = !far; }     // the village is only drawn while the camera is near it
       track.update(cam.position.x, st.camY);
-      coins.update(cam.position.x, st.t);
+      coins.update(cam.position.x, st.t); fuel.update(cam.position.x, st.t);
       guideTick();
       world.setFollow(true, cam.position.x, lifeGround, laneZ + 10);                      // fireflies and butterflies live in the game's world (the player rides past them)
       if (floatEl) {                                                                      // alerts, warnings and the multiplier float right above the rider

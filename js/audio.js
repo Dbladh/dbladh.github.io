@@ -203,6 +203,18 @@ export function createAudio({ base = 'audio/' } = {}) {
       const steps = [0, 2, 4, 7, 9, 12, 14, 16], f = 988 * Math.pow(2, steps[st.coinN] / 12);
       tone(f, 0.28, { type: 'triangle', gain: 0.16 }); tone(f * 2.005, 0.34, { type: 'sine', gain: 0.07, delay: 0.015 });
     },
+    /** A fuel can: a bright rising glug-and-ding. */
+    fuelUp() {
+      if (!ctx) return;
+      tone(196, 0.16, { type: 'triangle', gain: 0.17, slide: 330 }); tone(294, 0.16, { type: 'triangle', gain: 0.15, delay: 0.1, slide: 440 });
+      tone(784, 0.4, { type: 'triangle', gain: 0.15, delay: 0.2 }); tone(1175, 0.5, { type: 'sine', gain: 0.09, delay: 0.23 });
+    },
+    /** The engine coughing on empty (`dead`: the last gasp, a falling stutter). */
+    sputter(dead = false) {
+      if (!ctx) return;
+      const n = dead ? 5 : 2;
+      for (let i = 0; i < n; i++) tone(dead ? 120 - i * 14 : 130, 0.09, { type: 'sawtooth', gain: dead ? 0.2 : 0.13, delay: i * (dead ? 0.17 + i * 0.05 : 0.13), slide: -40 });
+    },
     combo(level) { const b = 523 * Math.pow(2, (level - 1) * 2 / 12); [0, 4, 7].forEach((st_, i) => tone(b * Math.pow(2, st_ / 12), 0.3, { type: 'triangle', gain: 0.13, delay: i * 0.065 })); },
     trick() { swoosh(0.34, 500, 3200, { gain: 0.2, q: 1.4 }); },
     trickDone() { tone(880, 0.22, { type: 'triangle', gain: 0.1 }); tone(1320, 0.3, { type: 'triangle', gain: 0.09, delay: 0.07 }); },
