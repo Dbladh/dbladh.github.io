@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016193656';
+import { PAL } from './palette.js?v=20261016195258';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016193656';
+} from './houses.js?v=20261016195258';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1001,11 +1001,21 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   };
   const SAGE_C = new THREE.Color(PAL.sage);
   const GREENS = (classic ? ['#5cb85c', '#6cc96a', '#4aa857', '#7fd070', '#8fcf5a'] : ['#4fcf5a', '#6ed84f', '#3ec46a', '#8ee05a', '#a4e04a']).map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.14));
+  // The dirt-bike trail: a lane across the scene, at the depth where the fewest house plots reach, kept clear of trees and bushes.
+  let LANE_Z = -24;
+  {
+    let best = 1e9;
+    for (let z = -28; z >= -46; z -= 0.5) {
+      let cost = Math.abs(z + 36) * 0.06;
+      for (const pd of PADS) cost += Math.max(0, pd.r + 2.5 - Math.abs(z - pd.z));
+      if (cost < best) { best = cost; LANE_Z = z; }
+    }
+  }
   const FALL = ['#ff9a4a', '#ffc94a', '#f2703c', '#ffd966'].map((h) => new THREE.Color(h));
   const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.1));
   const BLOSSOM = new THREE.Color('#ffb3c8');
   const BARK = new THREE.Color('#8a5a3c'), BIRCH = new THREE.Color('#e8e2d2');
-  const free = (x, z, pad = 0) => !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5);
+  const free = (x, z, pad = 0) => !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5) && Math.abs(z - LANE_Z) > 2.2 + pad * 0.5;
   const D = low ? 0.55 : 1; // detail multiplier: weaker machines get fewer plants
   const anchors = []; // things grass gathers around: { x, z, r (footprint radius), n (tuft count) }
   ignoreHouses = true;
@@ -2120,6 +2130,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
 
   return {
     boards,
+    get bikeLaneZ() { return LANE_Z; },
     /**
      * Seat every sign for the current screen shape. Each slides inward along its hill until it fits the
      * visible width (never past the hill's crest), steps to its zig-zag depth as the screen gets narrow,

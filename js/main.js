@@ -1,10 +1,11 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016193656';
-import { buildWorld } from './world.js?v=20261016193656';
-import { createSky } from './sky.js?v=20261016193656';
-import { createDOF } from './dof.js?v=20261016193656';
+import { PAL } from './palette.js?v=20261016195258';
+import { buildWorld } from './world.js?v=20261016195258';
+import { createSky } from './sky.js?v=20261016195258';
+import { createDOF } from './dof.js?v=20261016195258';
+import { createRide } from './ride.js?v=20261016195258';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -123,6 +124,10 @@ function start() {
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
   const dof = reduceMotion ? null : createDOF(renderer, { half: lowEnd, classic }); // soft focus is skipped for reduced motion
   let focus = 60;
+  // Easter egg: a dirt bike now and then rides across the hills (?bike=1 sends one straight away and keeps them coming).
+  const bikeForce = /[?&]bike=1\b/.test(location.search);
+  const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce });
+  const bikeBtn = document.getElementById('bike-play');
 
   // ---- Camera stops ----
   const HOME = { pos: new THREE.Vector3(0, 7, 22), look: new THREE.Vector3(0, 17, -40) };
@@ -429,6 +434,14 @@ function start() {
   ray.layers.enable(1);
   const ndc = new THREE.Vector2();
   const faces = world.boards.map((b) => b.face);
+  function pickBike(e) {
+    if (!ride || !ride.riding || active !== 'home' || openId) return false;
+    ndc.set((e.clientX / VW()) * 2 - 1, -(e.clientY / VH()) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    return ray.intersectObject(ride.hitTarget, false).length > 0;
+  }
+  function playBike() { ride?.poke(); window.dispatchEvent(new CustomEvent('bike:play')); }
+  bikeBtn?.addEventListener('click', playBike);
   function pick(e) {
     ndc.set((e.clientX / VW()) * 2 - 1, -(e.clientY / VH()) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -437,11 +450,14 @@ function start() {
   }
   canvas.addEventListener('click', (e) => {
     if (active !== 'home') return;
+    if (pickBike(e)) { playBike(); return; }
     const id = pick(e);
     if (id) goTo(id);
   });
   canvas.addEventListener('pointermove', (e) => {
-    canvas.style.cursor = active === 'home' && pick(e) ? 'pointer' : 'default';
+    const overBike = pickBike(e);
+    if (ride) ride.hover = overBike;
+    canvas.style.cursor = active === 'home' && (overBike || pick(e)) ? 'pointer' : 'default';
   });
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
   canvas.addEventListener('dblclick', () => goTo('home'));
@@ -594,6 +610,10 @@ function start() {
     camera.lookAt(look);
 
     if (!reduceMotion) world.update(dt, camera);
+    if (ride) {
+      ride.update(dt, active === 'home' && !openId && !tween);
+      if (bikeBtn) bikeBtn.hidden = !ride.riding;
+    }
     if (shadowTick++ % 4 === 0) renderer.shadowMap.needsUpdate = true;
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
@@ -642,5 +662,5 @@ function start() {
     }
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { ride, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }
