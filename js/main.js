@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017100016';
-import { buildWorld } from './world.js?v=20261017100016';
-import { createSky } from './sky.js?v=20261017100016';
-import { createDOF } from './dof.js?v=20261017100016';
-import { createRide } from './ride.js?v=20261017100016';
-import { createGame } from './bikegame.js?v=20261017100016';
+import { PAL } from './palette.js?v=20261017100522';
+import { buildWorld } from './world.js?v=20261017100522';
+import { createSky } from './sky.js?v=20261017100522';
+import { createDOF } from './dof.js?v=20261017100522';
+import { createRide } from './ride.js?v=20261017100522';
+import { createGame } from './bikegame.js?v=20261017100522';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -465,6 +465,13 @@ function start() {
     // The single button: mouse/touch anywhere in the game, or space/enter.
     const gameDown = (e) => { if (game.active && !e.target.closest('button, .gh-panel')) { game.press(); e.preventDefault(); } };
     window.addEventListener('pointerdown', gameDown);
+    // iOS shows its magnifier loupe / text-selection bubble when a finger rests on the screen: stop the touch's default action while playing (buttons keep working).
+    const notUi = (e) => !e.target.closest?.('button, a, input, .gh-panel');
+    window.addEventListener('touchstart', (e) => { if (game.active && notUi(e)) { e.preventDefault(); getSelection()?.removeAllRanges(); } }, { passive: false });
+    window.addEventListener('touchmove', (e) => { if (game.active && notUi(e)) e.preventDefault(); }, { passive: false });
+    document.addEventListener('contextmenu', (e) => { if (game.active) e.preventDefault(); });
+    document.addEventListener('selectstart', (e) => { if (game.active) e.preventDefault(); });
+    document.addEventListener('gesturestart', (e) => { if (game.active) e.preventDefault(); });
     window.addEventListener('pointerup', () => game.release());
     window.addEventListener('pointercancel', () => game.release());
     window.addEventListener('keydown', (e) => {

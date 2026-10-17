@@ -607,6 +607,9 @@ body.game-mode #stopnav, body.game-mode #controls, body.game-mode .hero, body.ga
 /* While playing, the page is a game surface: no double-tap zoom, no text selection, no pull-to-refresh */
 body.game-mode { touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
 body.game-mode canvas { touch-action: none; }
+/* Holding the screen to charge must never start iOS's text selection, magnifier loupe or link/image callout. */
+body.game-mode, body.game-mode * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.game-mode ::selection { background: transparent; }
 
 .go-new[hidden] { display: none; }
 body.game-over .gh-quit { display: none; }   /* the card has its own Back button */

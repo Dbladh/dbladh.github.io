@@ -2,12 +2,12 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017100016';
-import { createTrack } from './track.js?v=20261017100016';
-import { createRagdoll } from './ragdoll.js?v=20261017100016';
-import { createFx } from './fx.js?v=20261017100016';
-import { createPuffs } from './puffs.js?v=20261017100016';
-import { createCoins } from './coins.js?v=20261017100016';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017100522';
+import { createTrack } from './track.js?v=20261017100522';
+import { createRagdoll } from './ragdoll.js?v=20261017100522';
+import { createFx } from './fx.js?v=20261017100522';
+import { createPuffs } from './puffs.js?v=20261017100522';
+import { createCoins } from './coins.js?v=20261017100522';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -82,7 +82,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   scene.traverse((o) => {
     const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
     for (const m of ms) {
-      if (m === world.terrainMaterial || m.isShaderMaterial || m.isPointsMaterial || clipped.some((c) => c.m === m)) continue;
+      if (m === world.terrainMaterial || m.name === 'fx' || m.isShaderMaterial || m.isPointsMaterial || clipped.some((c) => c.m === m)) continue;
       clipped.push({ m }); m.clippingPlanes = [clip]; m.clipShadows = true;
     }
   });
