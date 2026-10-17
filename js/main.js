@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017083000';
-import { buildWorld } from './world.js?v=20261017083000';
-import { createSky } from './sky.js?v=20261017083000';
-import { createDOF } from './dof.js?v=20261017083000';
-import { createRide } from './ride.js?v=20261017083000';
-import { createGame } from './bikegame.js?v=20261017083000';
+import { PAL } from './palette.js?v=20261017084904';
+import { buildWorld } from './world.js?v=20261017084904';
+import { createSky } from './sky.js?v=20261017084904';
+import { createDOF } from './dof.js?v=20261017084904';
+import { createRide } from './ride.js?v=20261017084904';
+import { createGame } from './bikegame.js?v=20261017084904';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -586,6 +586,8 @@ function start() {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
       const want = game?.active ? game.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
       focus += (want - focus) * Math.min(1, dt * 4);
+      dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
+      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48; scene.fog.near = fn; scene.fog.far = fn + 167; }   // the game's camera sits further back: start the fog beyond the ride itself
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);
     } else {

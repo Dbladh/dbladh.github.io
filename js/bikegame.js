@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017083000';
-import { createTrack } from './track.js?v=20261017083000';
-import { createRagdoll } from './ragdoll.js?v=20261017083000';
-import { createPuffs } from './puffs.js?v=20261017083000';
-import { createCoins } from './coins.js?v=20261017083000';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017084904';
+import { createTrack } from './track.js?v=20261017084904';
+import { createRagdoll } from './ragdoll.js?v=20261017084904';
+import { createPuffs } from './puffs.js?v=20261017084904';
+import { createCoins } from './coins.js?v=20261017084904';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -114,20 +114,21 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
     // How much track to show: more at speed, and enough to see the next hazard coming with time to react (about 1.5 s).
     const W0 = 32 - 8 * tall, bonus = THREE.MathUtils.clamp((st.vx - 14) * 1.1, 0, 12);
-    const needAhead = st.hz ? Math.min(st.hz.x0 - st.x, 52) / 0.72 : 0;
+    const needAhead = st.hz ? Math.min(st.hz.x0 - st.x, 34) / 0.74 : 0;
     const Wt = Math.max(W0 + bonus, needAhead);
     st.viewW = st.viewW ? st.viewW + (Wt - st.viewW) * (1 - Math.exp(-2 * st.frameDt)) : Wt;
     const baseDist = THREE.MathUtils.clamp(st.viewW / (2 * tanH * camera.aspect), 22, 110) * (1 + 0.03 * st.camZoom);
     const c = 0.05 + tall * 0.16;
     // Keep both the bike and the ground in view: if a big jump (or a hill ahead) would push either off the screen, pull back.
-    const gHere = groundY(st.x), gA = groundY(st.x + 10), gB = groundY(st.x + 22);
+    const ref = (x) => { const pt = track.pitSpan(x); return pt ? track.laneAt(pt.x0 - 0.5) - 1.5 : groundY(x); };       // over a gap, the ground to keep in view is the rim, not the bottom of the pit
+    const gHere = ref(st.x), gA = ref(st.x + 10), gB = ref(st.x + 22);
     const yLow = Math.min(gHere, gA, gB) - 2.5, yHigh = Math.max(st.y + 4.5, gA + 3);
     let d = baseDist;
     for (let k = 0; k < 2; k++) {
       const yc = st.camY + 3 + d * c;
       d = Math.max(baseDist, Math.max(yc - yLow, yHigh - yc) / (tanH * 0.9));
     }
-    const zoomT = THREE.MathUtils.clamp(d / baseDist, 1, 2.6);
+    const zoomT = THREE.MathUtils.clamp(d / baseDist, 1, 1.7 - 0.2 * tall);
     st.zoom += (zoomT - st.zoom) * (1 - Math.exp(-(zoomT > st.zoom ? 4 : 1.2) * st.frameDt));   // pulls back quickly, settles back slowly
     const dist = Math.min(baseDist * st.zoom, 150);
     const ahead = 0.26 * st.viewW + st.vx * 0.08;                           // look well ahead (the bike sits about a quarter of the way in from the left)

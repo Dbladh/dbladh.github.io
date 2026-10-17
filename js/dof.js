@@ -28,6 +28,7 @@ const FRAG = /* glsl */ `
   uniform vec2 texel;
   uniform vec3 hazeColor;   // linear horizon colour
   uniform float hazeAmt;    // 0 = off
+  uniform float hazeNear;   // distance where the haze begins
   uniform float bloom;      // 0 = off
   uniform float gradeAmt;   // 0 = classic (ungraded)
   varying vec2 vUv;
@@ -75,7 +76,7 @@ const FRAG = /* glsl */ `
     if (a > 0.001) {
       // Aerial perspective: distant ground fades toward the horizon colour (ridges layer in blue/violet).
       float dz = -perspectiveDepthToViewZ(texture2D(tDepth, vUv).x, cameraNear, cameraFar);
-      c = mix(c, hazeColor, hazeAmt * 0.65 * smoothstep(55.0, 200.0, dz));
+      c = mix(c, hazeColor, hazeAmt * 0.65 * smoothstep(hazeNear, hazeNear + 145.0, dz));
       // Cheap bloom: bright neighbours (lit windows, lanterns, sun glints) spill softly.
       if (bloom > 0.0) {
         vec3 glow = vec3(0.0);
@@ -139,6 +140,7 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       texel: { value: new THREE.Vector2(1, 1) },
       hazeColor: { value: new THREE.Color('#bfe8ff') },
       hazeAmt: { value: 1 },
+      hazeNear: { value: 55 },
       bloom: { value: 1 },
       gradeAmt: { value: 1 },
       tBlur: { value: blurTarget ? blurTarget.texture : null },
@@ -208,6 +210,9 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       if (horizon) material.uniforms.hazeColor.value.copy(horizon);
       if (bloom !== undefined) material.uniforms.bloom.value = bloom;
     },
+
+    /** Where the aerial haze starts (the dirt-bike game pushes it out so the ride itself stays clear). */
+    setHazeNear(d) { material.uniforms.hazeNear.value = d; },
 
     /** Call after the renderer's size or pixel ratio changes. */
     resize() {
