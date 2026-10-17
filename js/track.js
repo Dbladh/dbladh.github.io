@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016223428';
-import { heightAt as terrainAt } from './world.js?v=20261016223428';
+import { PAL } from './palette.js?v=20261016224103';
+import { heightAt as terrainAt } from './world.js?v=20261016224103';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -131,15 +131,19 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   const ZF = []; for (let z = -200; z <= laneZ - 34 + 1e-6; z += 3.2) ZF.push(z); if (ZF[ZF.length - 1] < laneZ - 34 - 1e-6) ZF.push(laneZ - 34);
   const tc = new THREE.Color();
   /** The real terrain's own colour function (fields, mud, rock, grain), with steepness measured on the generated ground. */
-  const PIT_C = new THREE.Color('#3f3126'), MUD_C = new THREE.Color('#54402c');
+  const PIT_C = new THREE.Color('#3f3126'), MUD_C = new THREE.Color('#7a5434'), PUDDLE_C = new THREE.Color('#3b2a1c');
   function topColor(x, z, h) {
     const slope = (Math.abs(groundAt(x + 1.2, z) - h) + Math.abs(groundAt(x, z + 1.2) - h)) / 1.2;
     world.terrainColor(x, z, h, slope, tc);
     if (x > XT) {
       let pit = 0; for (const g of gaps) if (x > g.x0 - 0.7 && x < g.x1 + 0.7) pit = 1;                              // gaps: bare dark earth in the pit and up its walls
       if (pit) tc.lerp(PIT_C, 0.9).offsetHSL(0, 0, (hash(x * 3.1, z * 1.7) - 0.5) * 0.05);
-      const mud = mudAt(x) * (1 - smooth01(Math.abs(z - laneZ) / 9));                                                 // mud: a dark wet patch around the lane
-      if (mud > 0.01) tc.lerp(MUD_C, 0.92 * mud).offsetHSL(0, 0, -0.02 * mud);
+      const dz = z - laneZ, mud = mudAt(x) * (dz > 0 ? 1 - smooth01(dz / 24) : 1 - smooth01(-dz / 9));                // mud: a wide wet brown patch, reaching well toward the camera so it reads on small screens
+      if (mud > 0.01) {
+        tc.lerp(MUD_C, 0.97 * mud);
+        const wet = smooth01((Math.sin(x * 0.85 + z * 0.2) * Math.cos(z * 0.55 - x * 0.3) - 0.15) / 0.5) * mud;                    // darker puddles dotted through it
+        if (wet > 0.01) tc.lerp(PUDDLE_C, 0.8 * wet);
+      }
     }
     return tc;
   }
