@@ -2,14 +2,14 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017112025';
-import { createTrack } from './track.js?v=20261017112025';
-import { createRagdoll } from './ragdoll.js?v=20261017112025';
-import { createFx } from './fx.js?v=20261017112025';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017113352';
+import { createTrack } from './track.js?v=20261017113352';
+import { createRagdoll } from './ragdoll.js?v=20261017113352';
+import { createFx } from './fx.js?v=20261017113352';
 import { createAudio } from './audio.js?v=20261017103819';
-import { createPuffs } from './puffs.js?v=20261017112025';
+import { createPuffs } from './puffs.js?v=20261017113352';
 import { createDirt } from './dirt.js?v=20261017111228';
-import { createCoins } from './coins.js?v=20261017112025';
+import { createCoins } from './coins.js?v=20261017113352';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -233,7 +233,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.jumpReq = 0.12; st.charging = false; audio.jump(c);
     if (c > 0.35) {                                                                     // a big jump: a ring at the wheels, a stretch, a flick of speed lines
       const kk = SC / SCALE, gy = st.y - R;
-      juice.ring(st.x - HW * 0.5, gy + 0.1, laneZ, '#ffd9a0', 0.6, (2.5 + 3 * c) * kk, 0.45, true, 0.8); juice.burst('dust', st.x - HW * 0.5, gy + 0.3, laneZ, 8, '#d8c0a0');
+      juice.ring(st.x - HW * 0.5, gy + 0.1, laneZ, '#ffd9a0', 0.6, (2.5 + 3 * c) * kk, 0.45, true, 0.8); dirt.burst(st.x - HW * 0.5, gy + 0.2, laneZ, Math.round(6 + 10 * c), 0.55 + 0.5 * c);
       st.squash = -0.5 * c; juice.flick(0.8 * c);
     }
   }
@@ -405,17 +405,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const gy = groundY(st.x), kk = SC / SCALE;
     const dust = (n, spread, color, a) => { for (let i = 0; i < n; i++) { const dir = i % 2 ? 1 : -1; puffs.emit(st.x + (Math.random() - 0.5) * 1.2, gy + 0.2, laneZ + 0.3, dir * (spread * (0.4 + Math.random())), 0.8 + Math.random() * 2, 0.5 * kk, 1.5 * kk, 0.7, color, a); } };
     if (air > 0.45 && perfect) {
-      audio.land('perfect', air);
+      audio.land('perfect', air); dirt.burst(st.x, gy, laneZ, 10, 0.8);
       juice.ring(st.x, gy + 0.15, laneZ, '#8fd081', 0.7, 6.5 * kk, 0.65);
       juice.ring(st.x, gy + 0.15, laneZ, '#e8f7c8', 0.4, 4 * kk, 0.45, true, 0.7);
       juice.burst('perfect', st.x, gy + 0.6, laneZ, 22, '#d9f7a0'); juice.halo('#9ff09a', 6.5, 0.55, 0.7);
       dust(10, 6, '#b79b78', 0.55); st.squash = 1; juice.bump(-0.5); juice.hitStop(55); juice.flash('#a8e89a', 0.22, 170); juice.flick(1);
     } else if (air > 0.45 && !rough) {
-      audio.land('clean', air);
+      audio.land('clean', air); dirt.burst(st.x, gy, laneZ, 6, 0.6);
       juice.ring(st.x, gy + 0.15, laneZ, '#e8c24a', 0.6, 4 * kk, 0.5, true, 0.8); juice.burst('clean', st.x, gy + 0.5, laneZ, 9, '#ffe9a0');
       dust(6, 4.5, '#b79b78', 0.5); st.squash = 0.6; juice.bump(-0.25);
     } else if (rough && air > 0.3) {
-      audio.land('rough', air);
+      audio.land('rough', air); dirt.burst(st.x, gy, laneZ, 14, 1, 0.3);
       dust(8, 5, '#8a6b4c', 0.6); st.squash = 0.8; juice.shake(0.35, 220); juice.bump(-0.5);
     } else if (air > 0.2) { audio.land('small', air); dust(3, 3, '#b79b78', 0.4); st.squash = 0.3; }
   }
@@ -463,7 +463,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     toast(msg);
     const pit = /pit/i.test(msg); audio.crash(pit);
     juice.flash(pit ? '#10161c' : '#ffffff', pit ? 0.35 : 0.34, pit ? 220 : 120); juice.slowmo(0.35, 450); juice.shake(0.7, 380);
-    juice.burst(pit ? 'pit' : 'crash', st.x, st.y, laneZ, pit ? 24 : 30, pit ? '#8a6a48' : '#ffd9a0'); juice.ring(st.x, groundY(st.x) + 0.2, laneZ, '#ffffff', 0.6, 5, 0.5, true, 0.7);
+    if (pit) dirt.burst(st.x, st.y, laneZ, 28, 1.1, 0.8); else { juice.burst('crash', st.x, st.y, laneZ, 18, '#ffd9a0'); dirt.burst(st.x, groundY(st.x), laneZ, 18, 1, 0.2); } juice.ring(st.x, groundY(st.x) + 0.2, laneZ, '#ffffff', 0.6, 5, 0.5, true, 0.7);
     for (let i = 0; i < 12; i++) puffs.emit(st.x + (Math.random() - 0.5) * 2, st.y - 0.4, laneZ + 0.3, (Math.random() - 0.5) * 10, 1 + Math.random() * 4, 0.7, 2.2, 0.9, pit ? '#6b5238' : '#b79b78', 0.6);
     // the rider is thrown clear: every body part goes its own way
     bike.root.updateMatrixWorld(true);
@@ -678,8 +678,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           st.puffT = 0.15 - 0.09 * dustK;
           const c = Math.cos(st.th), s2 = Math.sin(st.th);
           const wx = st.x - HW * c, wy = st.y - HW * s2 - R * 0.7;
-          puffs.emit(wx, wy, laneZ + 0.2, -3 - 4 * dustK - spK * 3 + (Math.random() - 0.5) * 2, 1.5 + 2.5 * dustK, 0.5, 1.3 + dustK, 0.7, '#a98a63', 0.5);
-          puffs.emit(st.x - HW * c * 1.5, st.y - HW * s2 * 0.4 + 0.5, laneZ - 0.3, -2.2 - 2 * st.charge, 0.9 + st.charge, 0.35, 0.9, 0.8, '#efeee5', 0.38);
+          puffs.emit(wx, wy, laneZ + 0.2, -3 - 4 * dustK - spK * 3 + (Math.random() - 0.5) * 2, 1.5 + 2.5 * dustK, 0.55, 1.5 + dustK, 0.8, '#a98a63', 0.62);
+        }
+      }
+      if (st.mode === 'play') {                                                           // exhaust: thin grey-blue smoke from the pipe that drifts back and rises (more, darker and denser on the throttle)
+        st.exhT = (st.exhT || 0) - dt;
+        if (st.exhT <= 0) {
+          const th = Math.max(st.charge, spK * 0.6, st.grounded ? 0.12 : 0.5), ce = Math.cos(st.th), se = Math.sin(st.th);
+          st.exhT = 0.14 - 0.09 * th;
+          puffs.emit(st.x - HW * ce * 1.35 + se * 0.1, st.y - HW * se * 1.35 + 0.28 * ce, laneZ - 0.1, -1.6 - st.vx * 0.1 - 2.2 * th + (Math.random() - 0.5) * 0.6, 0.5 + Math.random() * 0.7 + th, 0.2, 0.8 + 0.7 * th, 0.9 + 0.5 * th, th > 0.5 ? '#6f7882' : '#a1a9b2', 0.3 + 0.25 * th, 1.5);
         }
       }
       st.camZoom += (st.crouch - st.camZoom) * Math.min(1, dt * 3);

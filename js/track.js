@@ -7,8 +7,8 @@
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
 import { createTrail } from './trail.js?v=20261017111228';
-import { PAL } from './palette.js?v=20261017112025';
-import { heightAt as terrainAt } from './world.js?v=20261017112025';
+import { PAL } from './palette.js?v=20261017113352';
+import { heightAt as terrainAt } from './world.js?v=20261017113352';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
