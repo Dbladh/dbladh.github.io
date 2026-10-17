@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016221809';
+import { PAL } from './palette.js?v=20261016223133';
 
 const BLOCK = 48;
 const CAP = 220;
@@ -25,7 +25,7 @@ export function createCoins(scene, track, laneZ) {
     const list = [];
     const rng = mulberry32((b * 7919 + seed * 104729) >>> 0);
     const x0 = b * BLOCK, x1 = x0 + BLOCK;
-    const add = (x, y) => { if (x >= minX && x < x1 + 20) list.push({ x, y, got: false }); };
+    const add = (x, y) => { if (x >= minX && x < x1 + 20 && !(track.inPit?.(x) && y < track.laneAt(x) + 6)) list.push({ x, y, got: false }); };   // none inside a pit, except arcs high above it
     // arcs off lips
     const lips = [];
     for (let x = x0; x < x1; x += 0.5) {

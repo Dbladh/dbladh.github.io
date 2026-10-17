@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016221809';
-import { createTrack } from './track.js?v=20261016221809';
-import { createRagdoll } from './ragdoll.js?v=20261016221809';
-import { createPuffs } from './puffs.js?v=20261016221809';
-import { createCoins } from './coins.js?v=20261016221809';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016223133';
+import { createTrack } from './track.js?v=20261016223133';
+import { createRagdoll } from './ragdoll.js?v=20261016223133';
+import { createPuffs } from './puffs.js?v=20261016223133';
+import { createCoins } from './coins.js?v=20261016223133';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -91,7 +91,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, bigAir: false, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -148,7 +148,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   /** Where the wheels would sit on the ground under the bike's centre x: height of the axle line and the ground's angle. */
   function groundPose(x) {
-    const gR = groundY(x - HW), gF = groundY(x + HW), phi = Math.atan2(gF - gR, 2 * HW);
+    let gR = groundY(x - HW), gF = groundY(x + HW);
+    gF = Math.max(gF, gR - 1.4); gR = Math.max(gR, gF - 1.4);                // at a cliff edge (a gap) the bike tips off it gently instead of nose-diving
+    const phi = Math.atan2(gF - gR, 2 * HW);
     return { y: (gR + gF) / 2 + R / Math.cos(phi), phi };
   }
 
@@ -283,10 +285,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const prevY = st.y;
       const p = groundPose(st.x + st.vx * h);
       const slope = Math.tan(p.phi);
-      const aim = base + st.boost - Math.max(-3, Math.min(5, slope * 6));
-      st.vx += (aim - st.vx) * Math.min(1, 2.5 * h);
+      const mud = track.mudAt(st.x);
+      const aim = (base + st.boost - Math.max(-3, Math.min(5, slope * 6))) * (1 - 0.58 * mud);               // mud drags the bike down to a crawl
+      st.vx += (aim - st.vx) * Math.min(1, (mud > 0.2 ? 4 : 2.5) * h);
+      if (mud > 0.2) st.boost *= Math.exp(-2 * h);
+      if (track.inPit(st.x) || track.inPit(st.x - HW * 0.9 + 0.7)) { crash('Into the pit!'); return; }       // driven over the edge of a gap
       st.x += st.vx * h;
       const q = groundPose(st.x);
+      if (st.charging && track.laneAt(st.x) - track.laneAt(st.x + 0.9) > 3) fireJump();                  // holding at the lip of a gap: the charge is released for you there
       let leaves = false;                                     // would a free-flying bike clear the ground over the next ~0.12 s?
       for (let t = 0.04; t <= 0.121 && !leaves; t += 0.04) leaves = prevY + st.vy * t - 0.5 * (GRAV * 0.6) * t * t > groundPose(st.x + st.vx * t).y + 0.04;   // eager: bumps and small lifts give a little air even with no button down
       st.coyote = 0.08;
@@ -294,7 +300,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         st.jumpReq = 0; st.grounded = false; st.vy += st.jumpVy; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
         return;
       }
-      if (leaves && st.vx > 4 && !st.charging) {   // the ground fell away faster than gravity: we take off (but never while the button is held: charging keeps the bike glued to the ground)
+      if (leaves && st.vx > 4 && !st.charging) {
+        const lipSlope = track.slopeAt(st.x - 1.2);
+        if (lipSlope > 0.35) st.vy += Math.min(8, lipSlope * st.vx * 0.32);                                       // the lip of a big kicker throws you up a little extra   // the ground fell away faster than gravity: we take off (but never while the button is held: charging keeps the bike glued to the ground)
         st.grounded = false; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
         return;
       }
@@ -353,6 +361,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const delta = wrap(st.th - p.phi);                         // + nose up, - nose down
     st.grounded = true; st.om = 0; st.kickW = 0; st.diveOK = false;
     const air = st.airT;
+    if (track.inPit(st.x) || track.inPit(st.x - HW * Math.cos(st.th) * 0.9 + 0.7)) { crash('Into the pit!'); return; }   // fell short of the far bank
     if (st.trick) { if (st.trick.kind === 'pose' && st.trick.t > 0.35) finishPose(true); st.trick = null; }
     if (delta > 1.15 || delta < -0.95) { crash(); return; }
     st.y = p.y;
@@ -384,10 +393,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.flips = 0;
   }
 
-  function crash() {
+  function crash(msg = 'Crash!') {
     st.mode = 'crash'; st.crashT = 0; st.mult = 1; st.meter = 0;
     events.onCrash?.();
-    toast('Crash!');
+    toast(msg);
     // the rider is thrown clear: every body part goes its own way
     bike.root.updateMatrixWorld(true);
     ragdoll.detach(st.vx, Math.max(st.vy, 0));
@@ -449,6 +458,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       clearTimeout(st.hintT);
       document.body.classList.remove('game-mode');
     },
+    get track() { return track; },                                                                     // (for tests)
     get paused() { return st.paused; },
     /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */
     pause() {
@@ -525,6 +535,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           if (st.meter < 0) { if (st.mult > 1) { st.mult--; st.meter = 0.6; } else st.meter = 0; }
         }
         st.score = scoreNow();
+        const hz = track.hazardAhead(st.x, 50);                                              // a heads-up before each hazard
+        if (hz && hz.x0 !== st.warnedX) { st.warnedX = hz.x0; toast(hz.type === 'gap' ? 'Gap ahead - charge a jump!' : 'Mud ahead - jump it or slow down!'); }
+        const mudNow = st.grounded ? track.mudAt(st.x) : 0;
+        if (mudNow > 0.3) {                                                                   // mud spray from the rear wheel
+          st.mudT = (st.mudT ?? 0) - dt;
+          if (st.mudT <= 0) {
+            st.mudT = 0.06;
+            const c = Math.cos(st.th), s2 = Math.sin(st.th);
+            puffs.emit(st.x - HW * c, st.y - HW * s2 - R * 0.6, laneZ + 0.2, -4 - Math.random() * 3, 3 + Math.random() * 3, 0.6, 1.5, 0.7, '#4a3a2a', 0.7);
+          }
+        }
       }
       if (st.mode === 'crash' || st.mode === 'over') {
         st.crashT += dt;

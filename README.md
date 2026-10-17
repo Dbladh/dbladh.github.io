@@ -58,3 +58,5 @@ A small dirt bike rides across the sign hills now and then (first pass about 8 s
 - Code: `js/bike.js` (models), `js/ride.js` (ambient pass), `js/bikegame.js` (shell, physics, scoring), `js/track.js` (ground), `js/coins.js`, `js/ragdoll.js`.
 
 The game's ground continues the real terrain: the same terrain material and colour function, and trees, bushes, rocks, wildflowers and grass built by the same plant builders as the main scene (`world.scatter` / `world.terrainColor` in `js/world.js`). The village in front of the bike's lane is sliced away with a clipping plane; the terrain itself is left whole, so green hills fall away toward the camera.
+
+**Hazards (the generated stretch):** gaps (pits between a lip and a far bank: fall in and the run is over) and mud patches (they drag the bike down to a crawl; jump them or slow down). A heads-up toast appears before each. Hold to charge on the approach: holding at the lip of a gap releases the charge for you. Bigger kickers throw you up a little extra even with no jump. A crash is always final (no extra lives).

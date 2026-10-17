@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016221809';
-import { heightAt as terrainAt } from './world.js?v=20261016221809';
+import { PAL } from './palette.js?v=20261016223133';
+import { heightAt as terrainAt } from './world.js?v=20261016223133';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -44,10 +44,42 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     for (let i = 1; i <= n; i++) push(y + rise * (i / n) * (i < 6 ? 0.55 + 0.45 * smooth01(i / 6) : 1));
     ease(-(rise + drop), landLen);
   };
+  // hazards: gaps (pits between a lip and a far bank) and mud patches (slow the bike)
+  const gaps = [], muds = [];
+  let lastHazard = -1e9;
+  const xNow = () => XT + (H.length - 1) * DX;
+  const speedAt = (x) => 15 + Math.min(9, Math.max(0, x - 60) / 260) + 1.5;       // roughly how fast the rider will be here
+  function gapPiece(d) {
+    flat(10 + rng() * 4);
+    const x = xNow() + 6, vx = speedAt(x);
+    const rise = 3 + d * 2.5 + rng() * 0.8, slope = 0.72 + rng() * 0.14;
+    const y0 = last(), n = Math.round(rise / slope / DX);
+    for (let i = 1; i <= n; i++) push(y0 + rise * (i / n) * (i < 6 ? 0.55 + 0.45 * smooth01(i / 6) : 1));
+    const lipY = last(), x0 = xNow();
+    // width: from a gap the bare ramp clears, up to one that needs most of a full charge (never wider than a charged jump can cross)
+    const vy = vx * slope * 1.25 + 2, passive = (vx * 2 * vy / 24) * 0.85, charged = (vx * 2 * (vy + 15) / 24) * 0.8;
+    const G = Math.min(charged * 0.85, Math.max(9, passive * (0.55 + 0.6 * rng() + 0.7 * d)));
+    const floor = lipY - 14;
+    for (let i = 0; i < Math.round(G / DX) - 1; i++) push(floor);
+    push(lipY - rng() * 1.2);                                                       // the far bank, a touch lower than the lip
+    gaps.push({ x0, x1: xNow() });
+    ease(-(3 + rng() * 3), 22 + rng() * 10); flat(8);
+  }
+  function mudPiece(d) {
+    flat(6);
+    const W = 16 + rng() * 10 + d * 8, x0 = xNow();
+    ease(-0.35, 2); flat(W - 4); ease(0.35, 2);
+    muds.push({ x0, x1: xNow() });
+    flat(6);
+  }
   function piece(d) {
+    if (xNow() > XT + 40 && xNow() - lastHazard > 40 && rng() < 0.17 + 0.18 * d) {
+      if (rng() < 0.55) gapPiece(d); else mudPiece(d);
+      lastHazard = xNow(); return;
+    }
     const lvl = last();                               // relative to the edge: keep it within about -2 .. +11
     const low = lvl < 0, high = lvl > 8, r = rng();
-    const k = () => ({ rise: 2.2 + d * 2.8 + rng() * 1.0, slope: 0.62 + rng() * 0.2, land: 18 + rng() * 8 + d * 6 });
+    const k = () => ({ rise: 3 + d * 3.2 + rng() * 1.0, slope: 0.7 + rng() * 0.2, land: 24 + rng() * 10 + d * 8 });   // bigger kickers: more air even without a jump
     if (low && r < 0.55) { ease(3 + rng() * 3, 28 + rng() * 14); flat(6 + rng() * 6); return; }
     if (high && r < 0.6) { ease(-(3 + rng() * 4), 26 + rng() * 14); flat(4 + rng() * 6); return; }
     if (r < 0.2) { whoops(3 + Math.floor(rng() * (2 + d * 3)), 0.45 + rng() * 0.5 + d * 0.3, 6 + rng() * 2.5); flat(4 + rng() * 5); }
@@ -77,6 +109,18 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     return prof(z) + weight(z) * delta(x) - drop + ridge;
   };
   const slopeAt = (x) => (laneAt(x + 0.5) - laneAt(x - 0.5));
+  /** Is x inside a gap (a pit)? */
+  const inPit = (x) => { if (x < XT) return false; laneAt(x + 30); return gaps.some((g) => x > g.x0 + 0.3 && x < g.x1 - 0.1); };
+  /** 0..1: how deep in mud x is (soft edges). */
+  const mudAt = (x) => { if (x < XT) return 0; laneAt(x + 30); let m = 0; for (const u of muds) if (x > u.x0 - 0.5 && x < u.x1 + 0.5) m = Math.max(m, Math.min(smooth01((x - u.x0) / 1.5 + 0.2), smooth01((u.x1 - x) / 1.5 + 0.2))); return m; };
+  /** The next hazard starting within `range` ahead of x: { type, x0, x1 } or null. */
+  const hazardAhead = (x, range) => {
+    laneAt(x + range + 20);
+    let best = null;
+    for (const g of gaps) if (g.x0 > x && g.x0 < x + range && (!best || g.x0 < best.x0)) best = { type: 'gap', ...g };
+    for (const u of muds) if (u.x0 > x && u.x0 < x + range && (!best || u.x0 < best.x0)) best = { type: 'mud', ...u };
+    return best;
+  };
   flat(30);
 
   // ---------------- ground chunks ----------------
@@ -87,9 +131,17 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   const ZF = []; for (let z = -200; z <= laneZ - 34 + 1e-6; z += 3.2) ZF.push(z); if (ZF[ZF.length - 1] < laneZ - 34 - 1e-6) ZF.push(laneZ - 34);
   const tc = new THREE.Color();
   /** The real terrain's own colour function (fields, mud, rock, grain), with steepness measured on the generated ground. */
+  const PIT_C = new THREE.Color('#3f3126'), MUD_C = new THREE.Color('#54402c');
   function topColor(x, z, h) {
     const slope = (Math.abs(groundAt(x + 1.2, z) - h) + Math.abs(groundAt(x, z + 1.2) - h)) / 1.2;
-    return world.terrainColor(x, z, h, slope, tc);
+    world.terrainColor(x, z, h, slope, tc);
+    if (x > XT) {
+      let pit = 0; for (const g of gaps) if (x > g.x0 - 0.7 && x < g.x1 + 0.7) pit = 1;                              // gaps: bare dark earth in the pit and up its walls
+      if (pit) tc.lerp(PIT_C, 0.9).offsetHSL(0, 0, (hash(x * 3.1, z * 1.7) - 0.5) * 0.05);
+      const mud = mudAt(x) * (1 - smooth01(Math.abs(z - laneZ) / 9));                                                 // mud: a dark wet patch around the lane
+      if (mud > 0.01) tc.lerp(MUD_C, 0.92 * mud).offsetHSL(0, 0, -0.02 * mud);
+    }
+    return tc;
   }
   function makePool(rows, count) {
     const NR = rows.length, idx = [];
@@ -146,7 +198,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   function plant(idx) {
     const x0 = Math.max(X0 + idx * CHUNK, XT + 2), x1 = X0 + (idx + 1) * CHUNK;
     if (x1 <= x0 + 1) { scenery.set(idx, null); return; }
-    const g = world.scatter({ x0, x1, hFn: groundAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) });   // the planting thickens gradually past the seam
+    const g = world.scatter({ x0, x1, hFn: groundAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, avoid: (x) => inPit(x), density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) });   // the planting thickens gradually past the seam
     group.add(g); scenery.set(idx, g);
   }
   function dropScenery(idx) { const g = scenery.get(idx); if (g) { g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
@@ -156,12 +208,12 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   group.visible = false;
 
   return {
-    group, laneAt, groundAt, slopeAt, XT, cutZ: CUTZ,
+    group, laneAt, groundAt, slopeAt, inPit, mudAt, hazardAhead, XT, cutZ: CUTZ,
     get seed() { return seedNow; },
     set visible(v) { group.visible = v; },
     reset(newSeed = seedNow) {
       seedNow = newSeed; rng = mulberry32(newSeed >>> 0);
-      H = [0]; flat(30);
+      H = [0]; gaps.length = 0; muds.length = 0; lastHazard = -1e9; flat(30);
       for (const pool of [near, far]) for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; }
       clearScenery();
     },

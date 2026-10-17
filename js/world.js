@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016221809';
+import { PAL } from './palette.js?v=20261016223133';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016221809';
+} from './houses.js?v=20261016223133';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1673,7 +1673,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
    * For the dirt-bike game: grow the same trees, bushes, rocks, wildflowers and grass tufts as the main scene on other ground.
    * Fills x0..x1 behind the lane (and a few low things on the slope in front), standing on `hFn(x, z)`, and returns a Group.
    */
-  function scatter({ x0, x1, hFn, seed, laneZ, farZ, density = 1 }) {
+  function scatter({ x0, x1, hFn, seed, laneZ, farZ, density = 1, avoid }) {
     const savedRand = rand, savedH = hAt, savedAnchors = anchors.splice(0), saved = {};
     rand = rng(seed >>> 0); hAt = hFn;
     for (const k of itemKeys) { saved[k] = items[k]; items[k] = []; }
@@ -1710,6 +1710,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       for (let i = 0; i < Math.round(60 * density); i++) tuftAt(X(), rand() < 0.75 ? back(2, 34) : laneZ + 4 + rand() * 40, 0.7 + rand() * 0.4);
       for (const an of anchors) for (let k = 0; k < Math.round(an.n * D) + 2; k++) { const a = rand() * 6.28, r = an.r * (0.8 + rand() * 1.1); tuftAt(an.x + Math.cos(a) * r, an.z + Math.sin(a) * r, 0.65 + rand() * 0.45); }
       for (const rk of items.rock) for (let k = 0; k < 3; k++) { const a = rand() * 6.28, r = rk.s[0] * (0.9 + rand() * 0.5); tuftAt(rk.p[0] + Math.cos(a) * r, rk.p[2] + Math.sin(a) * r, 0.6 + rand() * 0.3); }
+      if (avoid) for (const k of itemKeys) items[k] = items[k].filter((it) => !avoid(it.p[0], it.p[2]));   // e.g. nothing grows in a pit
       buildAll(items, group, { farZ, noShadow: true });
     } finally {
       for (const k of itemKeys) items[k] = saved[k];
