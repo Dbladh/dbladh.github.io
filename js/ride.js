@@ -1,11 +1,11 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016195258';
-import { heightAt } from './world.js?v=20261016195258';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016195258';
+import { PAL } from './palette.js?v=20261016195828';
+import { heightAt } from './world.js?v=20261016195828';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016195828';
 
-const SCALE = 3.2;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
+const SCALE = 1.8;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
 const GRAV = 18;
 
@@ -19,7 +19,7 @@ export function createRide(scene, world, camera, { force = false } = {}) {
 
   // An invisible, generous click target (bigger than the bike so it is easy to hit on a phone).
   const hit = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }));
-  hit.scale.set(7.2, 6.4, 3);
+  hit.scale.set(4, 3.4, 3);
   hit.userData.bike = true;
   scene.add(hit);
 
@@ -35,7 +35,7 @@ export function createRide(scene, world, camera, { force = false } = {}) {
   const sparkGeo = new THREE.BufferGeometry();
   sparkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sparkN * 3), 3));
   const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
-    map: sparkTex, size: 1.1, sizeAttenuation: true, transparent: true, depthWrite: false, color: new THREE.Color(PAL.gold),
+    map: sparkTex, size: 0.7, sizeAttenuation: true, transparent: true, depthWrite: false, color: new THREE.Color(PAL.gold),
     blending: THREE.AdditiveBlending,
   }));
   sparks.frustumCulled = false; sparks.visible = false;
@@ -116,13 +116,15 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     root.position.set(st.x, st.y, laneZ);
     root.rotation.z = st.pitch;
     root.scale.setScalar(SCALE * (1 + st.hover * 0.06));
-    hit.position.set(st.x, st.y + 1.2, laneZ);
-    hit.rotation.z = 0;
+    const dist = Math.hypot(camera.position.x - st.x, camera.position.y - st.y, camera.position.z - laneZ);
+    const k = Math.max(1, (dist * 0.1) / 3.4);                                        // never smaller than ~10% of the distance: easy to tap far away
+    hit.scale.set(4 * k, 3.4 * k, 3);
+    hit.position.set(st.x, st.y + 1.0 * k, laneZ);
     if (sparks.visible) {
       const p = sparkGeo.attributes.position, t = performance.now() / 1000;
       for (let i = 0; i < sparkN; i++) {
-        const a = t * 1.4 + (i / sparkN) * Math.PI * 2, r = 2.6 + Math.sin(t * 2.3 + i * 1.7) * 0.5;
-        p.setXYZ(i, st.x + Math.cos(a) * r * 1.5, st.y + 1.4 + Math.sin(a * 1.3) * r * 0.6, laneZ + 0.5);
+        const a = t * 1.4 + (i / sparkN) * Math.PI * 2, r = 1.5 + Math.sin(t * 2.3 + i * 1.7) * 0.3;
+        p.setXYZ(i, st.x + Math.cos(a) * r * 1.5, st.y + 1.0 + Math.sin(a * 1.3) * r * 0.6, laneZ + 0.5);
       }
       p.needsUpdate = true;
       sparks.material.opacity = 0.65 + 0.35 * Math.sin(t * 5);
@@ -142,6 +144,8 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     set hover(v) { hoverNow = !!v; },
     /** Forget the wait and send it now (the ?bike=1 test switch). */
     sendNow() { if (st.state === 'wait') st.timer = 0; },
+    /** Back to waiting (after the game, or when the view changes): hides the bike and queues the next pass. */
+    reset() { st.state = 'wait'; st.timer = force ? 4 : rnd(15, 30); root.visible = false; hit.visible = false; sparks.visible = false; },
     /** Clicked: the bike pops a wheelie hop and the game can start. */
     poke() { if (st.state === 'ride' && st.grounded) launch(9, 0); },
   };

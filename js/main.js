@@ -1,11 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016195258';
-import { buildWorld } from './world.js?v=20261016195258';
-import { createSky } from './sky.js?v=20261016195258';
-import { createDOF } from './dof.js?v=20261016195258';
-import { createRide } from './ride.js?v=20261016195258';
+import { PAL } from './palette.js?v=20261016195828';
+import { buildWorld } from './world.js?v=20261016195828';
+import { createSky } from './sky.js?v=20261016195828';
+import { createDOF } from './dof.js?v=20261016195828';
+import { createRide } from './ride.js?v=20261016195828';
+import { createGame } from './bikegame.js?v=20261016195828';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -128,6 +129,7 @@ function start() {
   const bikeForce = /[?&]bike=1\b/.test(location.search);
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce });
   const bikeBtn = document.getElementById('bike-play');
+  const game = reduceMotion || !dof ? null : createGame(scene, camera);
 
   // ---- Camera stops ----
   const HOME = { pos: new THREE.Vector3(0, 7, 22), look: new THREE.Vector3(0, 17, -40) };
@@ -440,8 +442,30 @@ function start() {
     ray.setFromCamera(ndc, camera);
     return ray.intersectObject(ride.hitTarget, false).length > 0;
   }
-  function playBike() { ride?.poke(); window.dispatchEvent(new CustomEvent('bike:play')); }
+  function playBike() {
+    if (!game || game.active || active !== 'home' || openId) return;
+    ride?.reset();
+    game.start({ pos: camera.position.clone(), look: look.clone() });
+    ride?.reset();
+  }
   bikeBtn?.addEventListener('click', playBike);
+  if (game) {
+    game.onQuit = () => { ride?.reset(); cur.pos.copy(HOME.pos); cur.look.copy(HOME.look); riseName(); };
+    document.getElementById('gh-quit')?.addEventListener('click', () => game.stop());
+    // The single button: mouse/touch anywhere in the game, or space/enter.
+    const gameDown = (e) => { if (game.active && !e.target.closest('#gh-quit')) { game.press(); e.preventDefault(); } };
+    window.addEventListener('pointerdown', gameDown);
+    window.addEventListener('pointerup', () => game.release());
+    window.addEventListener('pointercancel', () => game.release());
+    window.addEventListener('keydown', (e) => {
+      if (!game.active) return;
+      if (e.key === 'Escape') { game.stop(); e.preventDefault(); }
+      else if ((e.key === ' ' || e.key === 'Enter') && !e.target.closest('button')) { if (!e.repeat) game.press(); e.preventDefault(); }
+    });
+    window.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') game.release(); });
+    window.addEventListener('blur', () => game.release());
+    if (/[?&]game=1\b/.test(location.search)) setTimeout(playBike, 600);
+  }
   function pick(e) {
     ndc.set((e.clientX / VW()) * 2 - 1, -(e.clientY / VH()) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -449,7 +473,7 @@ function start() {
     return hit ? hit.object.userData.stopId : null;
   }
   canvas.addEventListener('click', (e) => {
-    if (active !== 'home') return;
+    if (active !== 'home' || game?.active) return;
     if (pickBike(e)) { playBike(); return; }
     const id = pick(e);
     if (id) goTo(id);
@@ -457,10 +481,10 @@ function start() {
   canvas.addEventListener('pointermove', (e) => {
     const overBike = pickBike(e);
     if (ride) ride.hover = overBike;
-    canvas.style.cursor = active === 'home' && (overBike || pick(e)) ? 'pointer' : 'default';
+    canvas.style.cursor = !game?.active && active === 'home' && (overBike || pick(e)) ? 'pointer' : 'default';
   });
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
-  canvas.addEventListener('dblclick', () => goTo('home'));
+  canvas.addEventListener('dblclick', () => { if (!game?.active) goTo('home'); });
 
   nav.addEventListener('click', (e) => {
     const a = e.target.closest('a');
@@ -474,7 +498,7 @@ function start() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (simple || e.target.closest('input, button')) return;
+    if (simple || game?.active || e.target.closest('input, button')) return;
     const i = ORDER.indexOf(active);
     if (e.key === 'ArrowRight') { goTo(ORDER[(i + 1) % ORDER.length]); e.preventDefault(); }
     else if (e.key === 'ArrowLeft') { goTo(ORDER[(i + ORDER.length - 1) % ORDER.length]); e.preventDefault(); }
@@ -559,7 +583,7 @@ function start() {
     skyRenderer.render(skyScene, camera);
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
-      const want = active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
+      const want = game?.active ? game.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
       focus += (want - focus) * Math.min(1, dt * 4);
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);
@@ -608,10 +632,11 @@ function start() {
     look.copy(cur.look);
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
+    game?.update(dt, camera);
 
     if (!reduceMotion) world.update(dt, camera);
     if (ride) {
-      ride.update(dt, active === 'home' && !openId && !tween);
+      ride.update(dt, active === 'home' && !openId && !tween && !game?.active);
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }
     if (shadowTick++ % 4 === 0) renderer.shadowMap.needsUpdate = true;
@@ -620,7 +645,7 @@ function start() {
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back
     // to the overview they fade in with its progress (the name first, the tagline a little after).
     let wantName, wantTag, direct = false;
-    if (active !== 'home' || openId) { wantName = wantTag = 0; }
+    if (active !== 'home' || openId || game?.active) { wantName = wantTag = 0; }
     else if (tween && tween.to === stops.home) {
       const u = Math.min(tween.t, 1);
       wantName = THREE.MathUtils.smoothstep(u, 0.05, 0.65);
@@ -662,5 +687,5 @@ function start() {
     }
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { ride, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }

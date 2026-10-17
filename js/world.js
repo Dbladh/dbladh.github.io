@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016195258';
+import { PAL } from './palette.js?v=20261016195828';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016195258';
+} from './houses.js?v=20261016195828';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1005,8 +1005,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   let LANE_Z = -24;
   {
     let best = 1e9;
-    for (let z = -28; z >= -46; z -= 0.5) {
-      let cost = Math.abs(z + 36) * 0.06;
+    for (let z = -44; z >= -56; z -= 0.5) {
+      let cost = Math.abs(z + 50) * 0.06;
       for (const pd of PADS) cost += Math.max(0, pd.r + 2.5 - Math.abs(z - pd.z));
       if (cost < best) { best = cost; LANE_Z = z; }
     }
