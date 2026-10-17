@@ -6,10 +6,10 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { createTrail } from './trail.js?v=20261017145711';
-import { KINDS, buildObstacle } from './obstacles.js?v=20261017145711';
-import { PAL } from './palette.js?v=20261017145711';
-import { heightAt as terrainAt } from './world.js?v=20261017145711';
+import { createTrail } from './trail.js?v=20261017150131';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261017150131';
+import { PAL } from './palette.js?v=20261017150131';
+import { heightAt as terrainAt } from './world.js?v=20261017150131';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -81,6 +81,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   // (cruise + a full boost). Obstacles close together are either spread out enough for a separate jump each (air time + charge time + margin),
   // or so tight that one bigger jump clears them all. They ramp up with distance in how often they come, how many, and how big, never in how little time you get.
   const obs = []; let obsId = 0;
+  const obsFrom = (x) => { let lo = 0, hi = obs.length; while (lo < hi) { const m = (lo + hi) >> 1; if (obs[m].x < x) lo = m + 1; else hi = m; } return lo; };   // (obstacles are in order of x)
   const addObs = (kind) => { const K = KINDS[kind]; obs.push({ id: obsId++, kind, x: xNow(), h: K.h, hw: K.hw, big: K.big, label: K.label, hit: false }); flat(1.5); };
   const airTime = (c) => (2 * (5.5 + 9.5 * (1 - (1 - c) * (1 - c)))) / 24;           // how long a jump charged to c is in the air (the game's jump numbers)
   function obstaclePiece(dd) {
@@ -207,7 +208,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
         const v = i * NR + r, z = rows[r], y = groundAt(x, z), cc = topColor(x, z, y);
         pos.setXYZ(v, x, y, z); col.setXYZ(v, cc.r, cc.g, cc.b); uv.setXY(v, x / 64, z / 64);
       }
-      if (i % 10 === 9) yield;
+      if (i % 2 === 1) yield;                                                      // (small steps: a step costs about a millisecond, so a frame never pays much)
     }
     pos.needsUpdate = true; col.needsUpdate = true; uv.needsUpdate = true;
     yield;
@@ -227,21 +228,27 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     } while (performance.now() < deadline);
   }
   let warm = 150;
+  const tprof = { ensure: 0, refresh: 0, chunkFill: 0, mud: 0, trail: 0, obstacles: 0, drop: 0, plant: 0, buildings: 0, total: 0 };
+  Object.defineProperty(tprof, 'lap', { value: {}, enumerable: false });
   const NEAR_R = 100, FAR_R = 240, PLANT_R = 125;
   const near = makePool(ZN, Math.ceil((2 * NEAR_R) / CHUNK) + 2), far = makePool(ZF, Math.ceil((2 * FAR_R) / CHUNK) + 2);
   function refresh(pool, camX, R, budget) {
     const first = Math.floor((camX - R - X0) / CHUNK), lastC = Math.floor((camX + R - X0) / CHUNK);
+    if (pool.first === first && pool.last === lastC && !pool.more) return;                 // nothing changed since last frame (and nothing waiting): no work, no garbage
+    pool.first = first; pool.last = lastC;
     const have = new Set(pool.chunks.map((c) => c.idx));
     const free = pool.chunks.filter((c) => c.idx < first || c.idx > lastC);
     const need = [];
     for (let i = first; i <= lastC; i++) if (!have.has(i)) need.push(i);
     need.sort((a, b) => Math.abs(X0 + (a + 0.5) * CHUNK - camX) - Math.abs(X0 + (b + 0.5) * CHUNK - camX));   // nearest first; a few per frame so no frame stalls
+    let started = 0;
     for (const i of need.slice(0, budget)) {
       const c = free.pop();
       if (!c) break;
       for (let k = jobs.length - 1; k >= 0; k--) if (jobs[k].c === c) jobs.splice(k, 1);   // it was still being filled for a place the camera has left
-      jobs.push({ c, idx: i, gen: fillChunk(pool, c, i) }); c.idx = i; c.mesh.visible = false;
+      jobs.push({ c, idx: i, gen: fillChunk(pool, c, i) }); c.idx = i; c.mesh.visible = false; started++;
     }
+    pool.more = started < need.length;                                                     // some are still waiting for a later frame
     for (const c of free) { c.idx = -999; c.mesh.visible = false; }
   }
 
@@ -373,19 +380,19 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
         e.g.scale.setScalar(Math.max(0.001, 1 - k)); e.g.position.y = e.g.userData.base + 1.8 * k; e.g.rotation.z = -0.9 * k; if (k >= 1) e.g.visible = false;
       }
     }
-    for (const o of obs) if (o.x >= a && o.x <= b && !obsMesh.has(o.id)) { const g = buildObstacle(o, laneAt(o.x), laneZ); obsGroup.add(g); obsMesh.set(o.id, { o, g, hitAt: 0 }); }
+    for (let oi = obsFrom(a); oi < obs.length && obs[oi].x <= b; oi++) { const o = obs[oi]; if (obsMesh.has(o.id)) continue; { const g = buildObstacle(o, laneAt(o.x), laneZ); obsGroup.add(g); obsMesh.set(o.id, { o, g, hitAt: 0 }); } }
   }
   return {
-    obstaclesIn: (x0, x1) => { laneAt(x1 + 30); return obs.filter((o) => o.x >= x0 && o.x <= x1); },
+    obstaclesIn: (x0, x1) => { laneAt(x1 + 30); const out = []; for (let i = obsFrom(x0); i < obs.length && obs[i].x <= x1; i++) out.push(obs[i]); return out; },
     /** The next obstacle not yet hit, starting within `range` ahead of x. */
-    obstacleAhead: (x, range) => { laneAt(x + range + 20); return obs.find((o) => !o.hit && o.x > x && o.x < x + range) || null; },
+    obstacleAhead: (x, range) => { laneAt(x + range + 20); for (let i = obsFrom(x + 1e-6); i < obs.length && obs[i].x < x + range; i++) if (!obs[i].hit) return obs[i]; return null; },
     group, laneAt, groundAt, slopeAt, inPit, pitSpan, mudAt, hazardAhead, speedAt, pitAfter, XT, cutZ: CUTZ,
     get seed() { return seedNow; },
     set visible(v) { group.visible = v; },
     reset(newSeed = seedNow) {
       seedNow = newSeed; rng = mulberry32(newSeed >>> 0);
       H = [0]; gaps.length = 0; muds.length = 0; lastHazard = -1e9; flat(30); warm = 150; pendingB.length = 0; jobs.length = 0;
-      for (const pool of [near, far]) for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; }
+      for (const pool of [near, far]) { pool.first = pool.last = null; pool.more = false; for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; } }
       clearScenery();
       for (const k of [...mudMeshes.keys()]) dropMud(k);
       trail.relay();
@@ -402,18 +409,23 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     setTrailFade(k) { trail.setFade(k); },
     /** Keep the ground chunks and their scenery around the camera (call every frame with the camera's x and y). */
     update(camX) {
-      ensure(camX + FAR_R + 60);
+      const T0 = performance.now(); let tm = T0; const lap = (k) => { const n = performance.now(); tprof[k] = Math.max(tprof[k] * 0.97, n - tm); tprof.lap[k] = n - tm; tm = n; };      // (decaying maximum per section, for ?perf=1)
+      ensure(camX + FAR_R + 60); lap('ensure');
       const dl = warm > 0 ? Infinity : performance.now() + 2.5; warm--;                // after the first moments, do at most a few ms of building per frame
-      refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2); runJobs(dl);
-      syncMud(camX); trail.update(camX); syncObstacles(camX);
+      refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2); lap('refresh'); runJobs(dl); lap('chunkFill');
+      syncMud(camX); lap('mud'); trail.update(camX); lap('trail'); syncObstacles(camX); lap('obstacles');
       const first = Math.floor((camX - PLANT_R - X0) / CHUNK), lastC = Math.floor((camX + PLANT_R - X0) / CHUNK);
       for (const k of [...scenery.keys()]) if (k < first || k > lastC) dropScenery(k);
+      lap('drop');
       if (performance.now() < dl) {
         let planted = false;
         for (let i = first; i <= lastC; i++) if (!scenery.has(i)) { plant(i); planted = true; break; }          // at most one new stretch of planting per frame
-        if (!planted || warm > 0) buildPending();
+        lap('plant');
+        if (!planted || warm > 0) buildPending(); lap('buildings');
       }
+      tprof.total = Math.max(tprof.total * 0.97, performance.now() - T0);
     },
+    get profile() { return tprof; },
     dispose() { scene.remove(group); },
   };
 }

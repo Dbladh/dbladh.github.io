@@ -45,7 +45,7 @@ export function createTrail(parent, { laneZ, groundAt, inPit }) {
   const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: new THREE.Color(0xffffff), emissiveMap: tex, emissiveIntensity: 0.5, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
   const idx = [];                                                              // (the index of a full segment; broken at gaps by shortening the draw range per quad run)
   const count = Math.ceil((2 * R) / SEG) + 2, segs = [];
-  let startX = 0, fade = 1;
+  let startX = 0, fade = 1, lastFirst = null, lastLast = null, more = false;
   for (let k = 0; k < count; k++) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COLS * ROWS * 3), 3));
@@ -78,20 +78,24 @@ export function createTrail(parent, { laneZ, groundAt, inPit }) {
   return {
     set visible(v) { group.visible = v; },
     /** A new ride begins at x: the trail starts there (faded in). */
-    reset(x) { startX = x; for (const s of segs) { s.idx = -999; s.m.visible = false; } },
+    reset(x) { startX = x; lastFirst = lastLast = null; more = false; for (const s of segs) { s.idx = -999; s.m.visible = false; } },
     /** 0..1: the whole trail fades in with the camera's trip into the game. */
     setFade(k) { fade = k; mat.opacity = k; },
     update(camX) {
       const first = Math.floor((camX - R) / SEG), last = Math.floor((camX + R) / SEG);
+      if (first === lastFirst && last === lastLast && !more) return;                      // nothing changed since last frame: no work, no garbage
+      lastFirst = first; lastLast = last;
       const have = new Set(segs.map((s) => s.idx)), free = segs.filter((s) => s.idx < first || s.idx > last);
-      let built = 0;
-      for (let i = first; i <= last && built < 4; i++) {
+      let built = 0, waiting = false;
+      for (let i = first; i <= last; i++) {
         if (have.has(i) || (i + 1) * SEG < startX - 2) continue;
+        if (built >= 4) { waiting = true; break; }
         const s = free.pop(); if (!s) break; lay(s, i); built++;
       }
+      more = waiting;
       for (const s of free) { s.idx = -999; s.m.visible = false; }
     },
     /** The gaps (and so the broken stretches) of the course changed: lay everything again. */
-    relay() { for (const s of segs) s.idx = -999; },
+    relay() { lastFirst = lastLast = null; for (const s of segs) s.idx = -999; },
   };
 }

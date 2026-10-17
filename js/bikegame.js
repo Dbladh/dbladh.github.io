@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017145711';
-import { createTrack } from './track.js?v=20261017145711';
-import { createRagdoll } from './ragdoll.js?v=20261017145711';
-import { createFx } from './fx.js?v=20261017145711';
-import { createAudio } from './audio.js?v=20261017145711';
-import { createPuffs } from './puffs.js?v=20261017145711';
-import { createDirt } from './dirt.js?v=20261017145711';
-import { createMudCoat } from './mudcoat.js?v=20261017145711';
-import { createCoins } from './coins.js?v=20261017145711';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017150131';
+import { createTrack } from './track.js?v=20261017150131';
+import { createRagdoll } from './ragdoll.js?v=20261017150131';
+import { createFx } from './fx.js?v=20261017150131';
+import { createAudio } from './audio.js?v=20261017150131';
+import { createPuffs } from './puffs.js?v=20261017150131';
+import { createDirt } from './dirt.js?v=20261017150131';
+import { createMudCoat } from './mudcoat.js?v=20261017150131';
+import { createCoins } from './coins.js?v=20261017150131';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -43,6 +43,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const pauseEl = document.getElementById('game-pause');
   const toastEl = document.getElementById('gh-toast');
   const floatEl = document.getElementById('gh-float');
+  let rectCache = null; window.addEventListener('resize', () => { rectCache = null; });
+  const canvasRect = () => rectCache || (rectCache = renderer.domElement.getBoundingClientRect());     // (the canvas is fixed: its box only changes on a resize)
   // "JUMP" markers floating over the next obstacles (up to two)
   const jumpEls = [0, 1].map(() => { const d = document.createElement('div'); d.className = 'gh-jump'; d.hidden = true; d.innerHTML = '<span class="t">JUMP</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l7 7 7-7M5 12l7 7 7-7"/></svg>'; (hud || document.body).appendChild(d); return d; });
   const multFxEl = document.getElementById('gh-multfx');
@@ -166,11 +168,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     target.look.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
     return dist;
   }
+  const hudLast = { score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 };       // (touch the page only when a value actually changed)
   function setHud() {
-    if (scoreEl) scoreEl.textContent = String(Math.floor(st.score));
-    if (coinsEl) coinsEl.textContent = String(st.coins);
-    if (grooveEl) { grooveEl.hidden = st.mode === 'over' || st.mult < 2; grooveEl.style.setProperty('--p', Math.min(1, Math.max(0, st.comboT / COMBO_TIME)).toFixed(3)); grooveEl.dataset.level = String(st.mult); }
-    if (multEl) multEl.textContent = '×' + st.mult;
+    const sc = Math.floor(st.score);
+    if (scoreEl && sc !== hudLast.score) { hudLast.score = sc; scoreEl.textContent = String(sc); }
+    if (coinsEl && st.coins !== hudLast.coins) { hudLast.coins = st.coins; coinsEl.textContent = String(st.coins); }
+    if (grooveEl) {
+      const hid = st.mode === 'over' || st.mult < 2; if (hid !== hudLast.hidden) { hudLast.hidden = hid; grooveEl.hidden = hid; }
+      const p = Math.min(1, Math.max(0, st.comboT / COMBO_TIME)).toFixed(3); if (p !== hudLast.p) { hudLast.p = p; grooveEl.style.setProperty('--p', p); }
+      if (st.mult !== hudLast.level) { hudLast.level = st.mult; grooveEl.dataset.level = String(st.mult); }
+    }
+    if (multEl && st.mult !== hudLast.mult) { hudLast.mult = st.mult; multEl.textContent = '×' + st.mult; }
   }
   /** The multiplier going up pops up right above the rider. */
   function flashMult() {
@@ -222,6 +230,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   /** Hide the per-round overlays (the JUMP markers, the toast, the combo pop-up): after a crash, on a restart, and on leaving. */
   function clearRoundUi(hintToo = false) {
+    Object.assign(hudLast, { score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 });         // (the HUD is redrawn from scratch)
     for (const e of jumpEls) e.hidden = true;
     if (toastEl) { toastEl.textContent = ''; toastEl.classList.remove('show'); }
     if (multFxEl) { multFxEl.hidden = true; multFxEl.classList.remove('show'); clearTimeout(st.multT); }
@@ -787,14 +796,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (floatEl) {                                                                      // alerts, warnings and the multiplier float right above the rider
         cam.updateMatrixWorld();
         pv.set(st.x, st.y + 3.4 * (SC / SCALE), laneZ).project(cam);
-        const rc = renderer.domElement.getBoundingClientRect();
+        const rc = canvasRect();
         const half = Math.max(60, floatEl.offsetWidth / 2) + 8;                              // keep the whole message on screen
         const px = THREE.MathUtils.clamp(rc.left + (pv.x * 0.5 + 0.5) * rc.width, rc.left + half, rc.right - half);
         const py = THREE.MathUtils.clamp(rc.top + (-pv.y * 0.5 + 0.5) * rc.height, rc.top + 150, rc.bottom - 120);
         floatEl.style.left = px + 'px'; floatEl.style.top = py + 'px';
       }
       {                                                                                   // the JUMP markers over the next obstacles
-        const rc = renderer.domElement.getBoundingClientRect(), upcoming = st.mode === 'play' && !st.paused ? track.obstaclesIn(st.x - 1, st.x + 72).filter((o) => !o.hit && o.x > st.x - 1) : [];
+        const rc = canvasRect(), upcoming = st.mode === 'play' && !st.paused ? track.obstaclesIn(st.x - 1, st.x + 72).filter((o) => !o.hit && o.x > st.x - 1) : [];
         let k = 0;
         for (let i = 0; i < upcoming.length && k < 2; i++) {
           const o = upcoming[i]; if (i && o.x - upcoming[i - 1].x < 12) continue;               // the rest of a tight group is one jump

@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017145711';
-import { buildWorld } from './world.js?v=20261017145711';
-import { createSky } from './sky.js?v=20261017145711';
-import { createDOF } from './dof.js?v=20261017145711';
-import { createRide } from './ride.js?v=20261017145711';
-import { createGame } from './bikegame.js?v=20261017145711';
+import { PAL } from './palette.js?v=20261017150131';
+import { buildWorld } from './world.js?v=20261017150131';
+import { createSky } from './sky.js?v=20261017150131';
+import { createDOF } from './dof.js?v=20261017150131';
+import { createRide } from './ride.js?v=20261017150131';
+import { createGame } from './bikegame.js?v=20261017150131';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -377,6 +377,7 @@ function start() {
         `nav ${Math.round(nv.top)}..${Math.round(nv.bottom)}`,
         `html ${document.documentElement.clientHeight}  body ${document.body.clientHeight}  scrollY ${Math.round(scrollY)}`,
         `frame ${fa.toFixed(1)}ms avg  p95 ${p95.toFixed(1)}  worst ${worst.toFixed(1)}  (${(1000 / fa).toFixed(0)} fps)   long(>20ms) ${longN}/${m}`,
+        `track(max): ${game?.active ? Object.entries(game.track.profile).map(([k, v]) => k + ' ' + v.toFixed(1)).join('  ') : 'game off'}`,
         `cpu: time ${prof.sec.time.toFixed(2)}  game ${prof.sec.game.toFixed(2)}  world ${prof.sec.world.toFixed(2)}  draw ${perf.cpu.toFixed(2)}ms   shadow redraws ${shadowPS.toFixed(1)}/s   scale ${quality.scale.toFixed(2)}x${dyn.scale.toFixed(2)}  ratio ${renderer.getPixelRatio().toFixed(2)}`,
         `perf ${perf.fps.toFixed(0)}fps  cpu ${perf.cpu.toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k  geo ${renderer.info.memory.geometries}`,
         `village seed ${seed} (${world.themeName})`,
