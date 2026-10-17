@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016223133';
-import { createTrack } from './track.js?v=20261016223133';
-import { createRagdoll } from './ragdoll.js?v=20261016223133';
-import { createPuffs } from './puffs.js?v=20261016223133';
-import { createCoins } from './coins.js?v=20261016223133';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016223428';
+import { createTrack } from './track.js?v=20261016223428';
+import { createRagdoll } from './ragdoll.js?v=20261016223428';
+import { createPuffs } from './puffs.js?v=20261016223428';
+import { createCoins } from './coins.js?v=20261016223428';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -91,7 +91,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, bigAir: false, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, hz: null, viewW: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -102,7 +102,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function frame() {
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
-    const baseDist = THREE.MathUtils.clamp((40 - 10 * tall) / (2 * tanH * camera.aspect), 22, 80) * (1 + 0.03 * st.camZoom);
+    // How much track to show: more at speed, and enough to see the next hazard coming with time to react (about 1.5 s).
+    const W0 = 40 - 10 * tall, bonus = THREE.MathUtils.clamp((st.vx - 14) * 1.1, 0, 12);
+    const needAhead = st.hz ? Math.min(st.hz.x0 - st.x, 52) / 0.72 : 0;
+    const Wt = Math.max(W0 + bonus, needAhead);
+    st.viewW = st.viewW ? st.viewW + (Wt - st.viewW) * (1 - Math.exp(-2 * st.frameDt)) : Wt;
+    const baseDist = THREE.MathUtils.clamp(st.viewW / (2 * tanH * camera.aspect), 22, 110) * (1 + 0.03 * st.camZoom);
     const c = 0.05 + tall * 0.16;
     // Keep both the bike and the ground in view: if a big jump (or a hill ahead) would push either off the screen, pull back.
     const gHere = groundY(st.x), gA = groundY(st.x + 10), gB = groundY(st.x + 22);
@@ -114,8 +119,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
     const zoomT = THREE.MathUtils.clamp(d / baseDist, 1, 2.6);
     st.zoom += (zoomT - st.zoom) * (1 - Math.exp(-(zoomT > st.zoom ? 4 : 1.2) * st.frameDt));   // pulls back quickly, settles back slowly
-    const dist = Math.min(baseDist * st.zoom, 110);
-    const ahead = 0.22 * (40 - 10 * tall) + st.vx * 0.12;                   // look well ahead (the bike sits about a quarter of the way in from the left)
+    const dist = Math.min(baseDist * st.zoom, 150);
+    const ahead = 0.26 * st.viewW + st.vx * 0.08;                           // look well ahead (the bike sits about a quarter of the way in from the left)
     target.pos.set(st.x + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 2.5 + dist * 0.11, laneZ + dist);
     target.look.set(st.x + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
     return dist;
@@ -156,7 +161,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
-    st.zoom = 1; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.lastAirTap = -9; puffs.clear();
+    st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.lastAirTap = -9; puffs.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
@@ -535,7 +540,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           if (st.meter < 0) { if (st.mult > 1) { st.mult--; st.meter = 0.6; } else st.meter = 0; }
         }
         st.score = scoreNow();
-        const hz = track.hazardAhead(st.x, 50);                                              // a heads-up before each hazard
+        const hz = track.hazardAhead(st.x, 60); st.hz = hz;                                  // a heads-up before each hazard
         if (hz && hz.x0 !== st.warnedX) { st.warnedX = hz.x0; toast(hz.type === 'gap' ? 'Gap ahead - charge a jump!' : 'Mud ahead - jump it or slow down!'); }
         const mudNow = st.grounded ? track.mudAt(st.x) : 0;
         if (mudNow > 0.3) {                                                                   // mud spray from the rear wheel
