@@ -37,14 +37,12 @@ def write(name, s, sr, q=3):
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', wav, '-codec:a', 'libmp3lame', '-qscale:a', str(q), f'{OUT}/{name}.mp3'], check=True)
     print(f'{name}: {len(s) / sr:.2f}s, {os.path.getsize(f"{OUT}/{name}.mp3") // 1024} KB')
 
-# idle: the steady stretch of the clip (it starts up before and winds down after)
+# The engine layers are played as overlapping random "grains" of these regions (so there is no short loop to hear repeat): the steady
+# stretch of the idle clip (it starts up before and winds down after), and the loud rev bursts of the high-rev clip.
 sr = 24000; x = load('bike_idle', sr)
-write('engine_idle', norm(loopify(seg(x, sr, 2.0, 8.4), int(0.35 * sr))), sr)
-
-# high revs: the two sustained bursts of the clip, joined and looped
+write('engine_idle', norm(fade(seg(x, sr, 1.8, 8.8), sr, 0.005, 0.005)), sr)
 sr = 24000; x = load('bike_highrev', sr)
-a, b = seg(x, sr, 3.72, 4.62), seg(x, sr, 5.08, 5.88)
-write('engine_high', norm(loopify(xfade_join(a, b, int(0.12 * sr)), int(0.12 * sr))), sr)
+write('engine_high', norm(fade(seg(x, sr, 3.72, 6.15), sr, 0.005, 0.005)), sr)
 
 # the throttle blip (used when the rider lets go to jump)
 sr = 44100; x = load('bike_midrev', sr)

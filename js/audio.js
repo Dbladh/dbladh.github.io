@@ -8,6 +8,7 @@
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
 const KEY = 'dirtbike-sound';
+const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 const loadOn = () => { try { return localStorage.getItem(KEY) !== '0'; } catch (e) { return true; } };
@@ -47,15 +48,36 @@ export function createAudio({ base = 'audio/' } = {}) {
   };
   const loopSrc = (b, rate = 1) => { const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.playbackRate.value = rate; return s; };
 
+  // The engine layers are played as grains: short slices (about 0.45 s) taken from random places in a longer recording, each faded in and out
+  // and overlapped by half, so the sound never settles into a short loop you can hear repeating.
+  const GRAIN = 0.45;
+  const win = (() => { const w = new Float32Array(48); for (let i = 0; i < w.length; i++) { const x = Math.sin(Math.PI * i / (w.length - 1)); w[i] = x * x; } return w; })();
+  function grainLayer(b) {
+    const bus = ctx.createGain(); bus.gain.value = 0; bus.connect(lp);
+    return { b, bus, next: 0, rate: 1, last: -9 };
+  }
+  function grain(L, t) {
+    const rate = L.rate * (1 + (Math.random() - 0.5) * 0.03), span = Math.max(0.05, L.b.duration - GRAIN * rate - 0.05);
+    let off = Math.random() * span; if (Math.abs(off - L.last) < span * 0.25) off = (off + span * 0.5) % span;                  // never the same place twice in a row
+    L.last = off;
+    const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = L.b; s.playbackRate.value = rate;
+    g.gain.setValueAtTime(0, t); g.gain.setValueCurveAtTime(win, t, GRAIN * (0.95 + Math.random() * 0.1));
+    s.connect(g); g.connect(L.bus); s.start(t, off, GRAIN * rate + 0.02); s.onended = () => { try { s.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
+  }
+  function pump(L) {                                                                        // keep the next ~0.15 s of grains scheduled
+    const now = ctx.currentTime;
+    if (L.next < now) L.next = now + 0.01;
+    while (L.next < now + 0.15) { grain(L, L.next); L.next += GRAIN * 0.5 * (0.9 + Math.random() * 0.2); }
+  }
   function buildEngine() {
     if (engine || !buf.engine_idle) return;
-    const mk = (b, rate) => { const s = loopSrc(b, rate), g = ctx.createGain(); g.gain.value = 0; s.connect(g); g.connect(lp); s.start(0, Math.random() * Math.min(1, b.duration * 0.5)); return { s, g }; };
-    engine = { idle: mk(buf.engine_idle, 1), high: buf.engine_high ? mk(buf.engine_high, 1) : null };
+    engine = { idle: grainLayer(buf.engine_idle), high: buf.engine_high ? grainLayer(buf.engine_high) : null };
     const mkN = (type, f, q) => { const s = loopSrc(noise()), fl = ctx.createBiquadFilter(), g = ctx.createGain(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(bus); s.start(0, Math.random()); return { s, g, fl }; };
     ambience = { wind: mkN('bandpass', 900, 0.4), dirt: mkN('lowpass', 320, 0.7), mud: mkN('bandpass', 420, 1.2) };
   }
   function killEngine() {
-    for (const n of [engine?.idle, engine?.high, ambience?.wind, ambience?.dirt, ambience?.mud]) { try { n?.s.stop(); n?.s.disconnect(); n?.g.disconnect(); } catch (e) { /* already stopped */ } }
+    for (const L of [engine?.idle, engine?.high]) { try { L?.bus.disconnect(); } catch (e) { /* gone */ } }
+    for (const n of [ambience?.wind, ambience?.dirt, ambience?.mud]) { try { n?.s.stop(); n?.s.disconnect(); n?.g.disconnect(); } catch (e) { /* already stopped */ } }
     engine = ambience = null;
   }
 
@@ -119,10 +141,13 @@ export function createAudio({ base = 'audio/' } = {}) {
       st.rpm += (target - st.rpm) * (1 - Math.exp(-(target > st.rpm ? 7 : 2.4) * dt));
       st.eng += ((s.playing ? 1 : 0) - st.eng) * (1 - Math.exp(-(s.playing ? 4 : 14) * dt));       // cut quickly in a crash
       st.chargeW = s.charge >= 0.98 && s.grounded ? Math.sin(ctx.currentTime * 60) * 0.015 : 0;      // at full charge the engine trembles
-      const r = clamp(st.rpm), loud = (0.5 + 0.5 * r) * st.eng;
+      const now = ctx.currentTime;
+      const wander = 0.012 * Math.sin(now * 0.9) + 0.008 * Math.sin(now * 2.3 + 1.7) + 0.005 * Math.sin(now * 5.1 + 0.4);   // a living engine never holds one pitch
+      const r = clamp(st.rpm + (s.playing && s.grounded ? wander : wander * 0.5)), loud = (0.35 + 0.65 * r) * st.eng * ENGINE_GAIN;
       const wgIdle = 1 - smooth(0.2, 0.7, r), wgHigh = smooth(0.25, 0.8, r);
-      at(engine.idle.g.gain, wgIdle * loud * 0.9, 0.04); at(engine.idle.s.playbackRate, 0.86 + 1.0 * r + st.chargeW, 0.05);
-      if (engine.high) { at(engine.high.g.gain, wgHigh * loud * 0.8, 0.04); at(engine.high.s.playbackRate, 0.84 + 0.36 * r + st.chargeW, 0.05); }
+      engine.idle.rate = 0.86 + 1.0 * r + st.chargeW; at(engine.idle.bus.gain, wgIdle * loud, 0.05);
+      if (engine.high) { engine.high.rate = 0.84 + 0.36 * r + st.chargeW; at(engine.high.bus.gain, wgHigh * loud * 0.85, 0.05); }
+      pump(engine.idle); if (engine.high && wgHigh > 0.02) pump(engine.high); else if (engine.high) engine.high.next = 0;
       at(lp.frequency, 14000 - 10500 * clamp(((s.camDist || 26) - 24) / 40), 0.2);                   // far camera: a more distant, duller engine
       // wind, tyres on dirt and mud
       const sp = s.playing ? s.speedK : 0;
