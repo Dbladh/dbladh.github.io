@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017152006';
-import { createTrack } from './track.js?v=20261017152006';
-import { createRagdoll } from './ragdoll.js?v=20261017152006';
-import { createFx } from './fx.js?v=20261017152006';
-import { createAudio } from './audio.js?v=20261017152006';
-import { createPuffs } from './puffs.js?v=20261017152006';
-import { createDirt } from './dirt.js?v=20261017152006';
-import { createMudCoat } from './mudcoat.js?v=20261017152006';
-import { createCoins } from './coins.js?v=20261017152006';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017152757';
+import { createTrack } from './track.js?v=20261017152757';
+import { createRagdoll } from './ragdoll.js?v=20261017152757';
+import { createFx } from './fx.js?v=20261017152757';
+import { createAudio } from './audio.js?v=20261017152757';
+import { createPuffs } from './puffs.js?v=20261017152757';
+import { createDirt } from './dirt.js?v=20261017152757';
+import { createMudCoat } from './mudcoat.js?v=20261017152757';
+import { createCoins } from './coins.js?v=20261017152757';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -161,9 +161,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
     const zoomT = THREE.MathUtils.clamp(d / baseDist, 1, 1.7 - 0.2 * tall);
     st.zoom += (zoomT - st.zoom) * (1 - Math.exp(-(zoomT > st.zoom ? 4 : 1.2) * st.frameDt));   // pulls back quickly, settles back slowly
-    const dist = Math.min(baseDist * st.zoom, 150);
+    const nearK = 1 - 0.32 * THREE.MathUtils.clamp(st.lift / 5, 0, 1);                                          // pulled in closer while the camera is lifted over the start hill
+    const dist = Math.min(baseDist * st.zoom, 150) * nearK;
     const wipe = st.mode === 'crash' || st.mode === 'over' ? Math.min(1, st.crashT / 0.8) : 0;
-    const ahead = (0.26 * st.viewW + st.vx * 0.08) * (1 - 0.45 * wipe);                // (after a crash the camera settles with the rider nearer the middle)                           // look well ahead (the bike sits about a quarter of the way in from the left)
+    const ahead = (0.26 * st.viewW + st.vx * 0.08) * (1 - 0.45 * wipe) * nearK;                // (after a crash the camera settles with the rider nearer the middle)                           // look well ahead (the bike sits about a quarter of the way in from the left)
     target.pos.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 2.5 + dist * 0.11, laneZ + dist);
     target.look.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
     // A clear view of the rider: if ground nearer the camera (a hill on the slope toward the viewer) would hide the bike, the camera lifts over it.
@@ -174,6 +175,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         const t = k / 14, gx = tx + (bx - tx) * t, gz = tz + (laneZ - tz) * t, yNeed = (track.groundAt(gx, gz) + 0.8 - by * t) / (1 - t);   // the camera height at which the line of sight clears this ground
         if (yNeed - ty > need) need = yNeed - ty;
       }
+      need = Math.max(need, track.groundAt(tx, tz) + 1.6 - ty);                                               // (and the camera itself stays above the ground)
       need = Math.min(need, 14);
       st.lift += (need - st.lift) * (1 - Math.exp(-(need > st.lift ? 7 : 2) * st.frameDt));                  // up quickly, down slowly
       target.pos.y += st.lift;
