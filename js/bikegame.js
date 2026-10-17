@@ -2,14 +2,14 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017113352';
-import { createTrack } from './track.js?v=20261017113352';
-import { createRagdoll } from './ragdoll.js?v=20261017113352';
-import { createFx } from './fx.js?v=20261017113352';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017114135';
+import { createTrack } from './track.js?v=20261017114135';
+import { createRagdoll } from './ragdoll.js?v=20261017114135';
+import { createFx } from './fx.js?v=20261017114135';
 import { createAudio } from './audio.js?v=20261017103819';
-import { createPuffs } from './puffs.js?v=20261017113352';
+import { createPuffs } from './puffs.js?v=20261017114135';
 import { createDirt } from './dirt.js?v=20261017111228';
-import { createCoins } from './coins.js?v=20261017113352';
+import { createCoins } from './coins.js?v=20261017114135';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -103,7 +103,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, comboT: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    bigAir: false, hz: null, viewW: 0, squash: 0, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    bigAir: false, hz: null, viewW: 0, squash: 0, warnedObs: -1, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -187,6 +187,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const lifeGround = (x, z) => { const pt = track.pitSpan(x); return pt ? track.groundAt(pt.x0 - 0.5, z) : track.groundAt(x, z); };
 
   function startRun(x) {
+    st.warnedObs = -1; st.warnedX = -1;
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
     st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear(); dirt.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
@@ -457,6 +458,33 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.flips = 0;
   }
 
+  // ---- obstacles on the trail: clear them with a jump; hit one slowly and you stumble, hit one fast and you crash ----
+  const cruiseSpeed = () => (st.guideOn ? 12 : 15) + Math.min(9, Math.max(0, st.x - st.startX) / 260);
+  function checkObstacles() {
+    const list = track.obstaclesIn(st.x - 6, st.x + 6); if (!list.length) return;
+    const c = Math.cos(st.th), sn = Math.sin(st.th);
+    for (const o of list) {
+      if (o.hit) continue;
+      const top = track.laneAt(o.x) + o.h;
+      for (const sg of [-1, 1]) {                                                        // each wheel against the obstacle's top (a little forgiving at the edges)
+        const wx = st.x + sg * HW * c, wy = st.y + sg * HW * sn;
+        if (Math.abs(wx - o.x) < o.hw + R * 0.5 && wy - R < top - 0.14) { hitObstacle(o); return; }
+      }
+    }
+  }
+  function hitObstacle(o) {
+    o.hit = true;
+    const fast = st.vx > cruiseSpeed() + (o.big ? 0.8 : 2.4);                           // boosted and fast: a crash; at cruising pace: a stumble
+    const gy = track.laneAt(o.x), kk = SC / SCALE;
+    dirt.burst(o.x, gy + 0.2, laneZ, fast ? 16 : 10, fast ? 1.1 : 0.8, 0.2);
+    if (fast) { crash(`Hit a ${o.label.toLowerCase()}!`); return; }
+    st.vx = Math.max(7, st.vx * 0.55); st.boost = 0; st.charging = false; st.charge = 0;
+    st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0;
+    st.squash = 1; st.kickW = Math.max(-6, st.kickW - 3.5);
+    juice.shake(0.4, 220); juice.bump(-0.45); juice.flash('#ffffff', 0.12, 120); audio.land('rough', 0.6);
+    toast('Stumble! Jump the next one');
+  }
+
   function crash(msg = 'Crash!') {
     st.mode = 'crash'; st.crashT = 0; st.calmT = 0; st.mult = 1; st.comboT = 0;
     events.onCrash?.();
@@ -613,6 +641,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       audio.update({ playing: st.mode === 'play', speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
+        checkObstacles();
         const got = coins.collect(st.x, st.y, SC / SCALE, dt);
         if (got) {
           for (let i = 0; i < Math.min(got, 3); i++) audio.coin();
@@ -626,6 +655,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         }
         st.score = scoreNow();
         const hz = track.hazardAhead(st.x, 60); st.hz = hz;                                  // a heads-up before each hazard
+        const ob = hz ? null : track.obstacleAhead(st.x, 80);
+        if (ob && ob.id !== st.warnedObs && !ob.hit) { st.warnedObs = ob.id; toast(ob.big ? `${ob.label} ahead - charge a big jump!` : `${ob.label} ahead - hop it!`); }
         if (hz && hz.x0 !== st.warnedX) { st.warnedX = hz.x0; toast(hz.type === 'gap' ? 'Gap ahead - charge a jump!' : 'Mud ahead - jump it or slow down!'); }
         const mudNow = st.grounded ? track.mudAt(st.x) : 0;
         if (mudNow > 0.3) {                                                                   // mud spray from the rear wheel

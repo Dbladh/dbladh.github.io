@@ -7,8 +7,9 @@
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
 import { createTrail } from './trail.js?v=20261017111228';
-import { PAL } from './palette.js?v=20261017113352';
-import { heightAt as terrainAt } from './world.js?v=20261017113352';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261017111228';
+import { PAL } from './palette.js?v=20261017114135';
+import { heightAt as terrainAt } from './world.js?v=20261017114135';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -74,11 +75,43 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     muds.push({ x0, x1: xNow() });
     flat(6);
   }
+  // ---------------- obstacles: logs, stumps, rocks, log piles and boulders on the lane ----------------
+  // THE RULE: there is always enough time and room to see an obstacle, charge the jump it needs, and release. Before every obstacle the ground
+  // is flat for (1.0 s to see and react + the charge time its jump needs + a 0.7 s margin) at the fastest speed the rider can have there
+  // (cruise + a full boost). Obstacles close together are either spread out enough for a separate jump each (air time + charge time + margin),
+  // or so tight that one bigger jump clears them all. They ramp up with distance in how often they come, how many, and how big, never in how little time you get.
+  const obs = []; let obsId = 0;
+  const addObs = (kind) => { const K = KINDS[kind]; obs.push({ id: obsId++, kind, x: xNow(), h: K.h, hw: K.hw, big: K.big, label: K.label, hit: false }); flat(1.5); };
+  const airTime = (c) => (2 * (5.5 + 9.5 * (1 - (1 - c) * (1 - c)))) / 24;           // how long a jump charged to c is in the air (the game's jump numbers)
+  function obstaclePiece(dd) {
+    const vmax = speedAt(xNow()) + 4.5;
+    const SM = ['log', 'stump', 'rock'], BG = ['logs2', 'boulder'], small = () => SM[Math.floor(rng() * SM.length)], big = () => BG[Math.floor(rng() * BG.length)];
+    const need = (k) => (KINDS[k].big ? 0.6 : 0.3);                                   // the charge (0..1) a jump over it should have
+    const wSingle = 1, wLoose = dd > 0.2 ? 0.25 + 0.5 * dd : 0, wTight = dd > 0.12 ? 0.2 + 0.4 * dd : 0, wTrio = dd > 0.45 ? 0.5 * (dd - 0.3) : 0, wBig = dd > 0.4 ? 0.6 * (dd - 0.25) : 0, wMix = dd > 0.6 ? 0.35 * dd : 0;
+    let r = rng() * (wSingle + wLoose + wTight + wTrio + wBig + wMix);
+    let items;                                                                        // [{ kind, after: units from the previous one }]
+    if ((r -= wSingle) < 0) items = [{ kind: small(), after: 0 }];
+    else if ((r -= wLoose) < 0) {                                                     // two or three, each cleared with its own jump
+      items = [{ kind: small(), after: 0 }];
+      for (let n = rng() < 0.5 ? 1 : 2; n > 0; n--) { const kind = dd > 0.5 && rng() < 0.3 ? big() : small(), prev = items[items.length - 1].kind; items.push({ kind, after: vmax * (airTime(need(prev)) + need(kind) * 1.1 + 0.55) }); }
+    }
+    else if ((r -= wTight) < 0) items = [{ kind: small(), after: 0 }, { kind: small(), after: 8 + rng() }];                 // one jump of about 0.55 clears both
+    else if ((r -= wTrio) < 0) items = [{ kind: small(), after: 0 }, { kind: small(), after: 6.5 + rng() * 0.5 }, { kind: small(), after: 6.5 + rng() * 0.5 }];   // one full jump clears all three
+    else if ((r -= wBig) < 0) items = [{ kind: big(), after: 0 }];
+    else items = rng() < 0.5 ? [{ kind: small(), after: 0 }, { kind: big(), after: 9 }] : [{ kind: big(), after: 0 }, { kind: small(), after: 9 }];   // one jump of about 0.75 clears both
+    // the charge the first jump needs: a tight group needs one bigger jump for all of it
+    const tight = items.length > 1 && items[1].after < 12, needFirst = tight ? (items.length > 2 ? 1.0 : (items.some((i) => KINDS[i.kind].big) ? 0.75 : 0.55)) : need(items[0].kind);
+    flat(vmax * (1.0 + needFirst * 1.1 + 0.7));                                       // the run-up: time to see, react and charge
+    for (const it of items) { if (it.after) flat(it.after); addObs(it.kind); }
+    flat(14 + rng() * 4);
+    lastHazard = xNow() + 20;                                                         // the next gap or mud keeps well clear as well (they need a charge too)
+  }
   function piece(d) {
     if (xNow() > XT + 40 && xNow() - lastHazard > 40 && rng() < 0.17 + 0.18 * d) {
       if (rng() < 0.55) gapPiece(d); else mudPiece(d);
       lastHazard = xNow(); return;
     }
+    if (xNow() > XT + 40 && xNow() - lastHazard > 10 && rng() < 0.28 + 0.5 * Math.min(1, (xNow() - XT) / 1500)) { obstaclePiece(Math.min(1, (xNow() - XT) / 1500)); return; }
     const lvl = last();                               // relative to the edge: keep it within about -2 .. +11
     const low = lvl < 0, high = lvl > 8, r = rng();
     const k = () => ({ rise: 3 + d * 3.2 + rng() * 1.0, slope: 0.7 + rng() * 0.2, land: 24 + rng() * 10 + d * 8 });   // bigger kickers: more air even without a jump
@@ -318,7 +351,24 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
 
   const trail = createTrail(group, { laneZ, groundAt, inPit });                                 // the worn dirt trail along the lane
 
+  // meshes for the obstacles near the camera
+  const obsGroup = new THREE.Group(); group.add(obsGroup);
+  const obsMesh = new Map();
+  function syncObstacles(camX) {
+    const a = camX - 90, b = camX + 230, now = performance.now();
+    for (const [id, e] of obsMesh) {
+      if (e.o.x < a || e.o.x > b) { obsGroup.remove(e.g); e.g.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); obsMesh.delete(id); continue; }
+      if (e.o.hit) {                                                                    // knocked: it tumbles up and shrinks away
+        e.hitAt = e.hitAt || now; const k = Math.min(1, (now - e.hitAt) / 260);
+        e.g.scale.setScalar(Math.max(0.001, 1 - k)); e.g.position.y = e.g.userData.base + 1.8 * k; e.g.rotation.z = -0.9 * k; if (k >= 1) e.g.visible = false;
+      }
+    }
+    for (const o of obs) if (o.x >= a && o.x <= b && !obsMesh.has(o.id)) { const g = buildObstacle(o, laneAt(o.x), laneZ); obsGroup.add(g); obsMesh.set(o.id, { o, g, hitAt: 0 }); }
+  }
   return {
+    obstaclesIn: (x0, x1) => { laneAt(x1 + 30); return obs.filter((o) => o.x >= x0 && o.x <= x1); },
+    /** The next obstacle not yet hit, starting within `range` ahead of x. */
+    obstacleAhead: (x, range) => { laneAt(x + range + 20); return obs.find((o) => !o.hit && o.x > x && o.x < x + range) || null; },
     group, laneAt, groundAt, slopeAt, inPit, pitSpan, mudAt, hazardAhead, speedAt, pitAfter, XT, cutZ: CUTZ,
     get seed() { return seedNow; },
     set visible(v) { group.visible = v; },
@@ -329,6 +379,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
       clearScenery();
       for (const k of [...mudMeshes.keys()]) dropMud(k);
       trail.relay();
+      obs.length = 0; obsId = 0; for (const [, e] of obsMesh) { obsGroup.remove(e.g); e.g.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); } obsMesh.clear();
     },
     /** The ride starts at x: the dirt trail begins there. */
     setTrailStart(x) { trail.reset(x); },
@@ -338,7 +389,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
       ensure(camX + FAR_R + 60);
       const dl = warm > 0 ? Infinity : performance.now() + 2.5; warm--;                // after the first moments, do at most a few ms of building per frame
       refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2); runJobs(dl);
-      syncMud(camX); trail.update(camX);
+      syncMud(camX); trail.update(camX); syncObstacles(camX);
       const first = Math.floor((camX - PLANT_R - X0) / CHUNK), lastC = Math.floor((camX + PLANT_R - X0) / CHUNK);
       for (const k of [...scenery.keys()]) if (k < first || k > lastC) dropScenery(k);
       if (performance.now() < dl) {

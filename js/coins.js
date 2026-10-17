@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017113352';
+import { PAL } from './palette.js?v=20261017114135';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -126,6 +126,13 @@ export function createCoins(scene, track, laneZ) {
         if (!ok(c) || placed.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < MIN_SEP)) continue;       // never clumped or overlapping
         placed.push(c);
         if (lx >= x0 && lx < x1) list.push({ x: c.x, y: c.y, got: false });
+      }
+    }
+    // a little arc of coins over each obstacle: the line a good hop takes (so the coins show where to jump)
+    for (const o of track.obstaclesIn(x0 - 8, x1 + 8)) {
+      for (let k = -2; k <= 2; k++) {
+        const cx = o.x + k * 3.0, u = (k * 3.0) / 6.6, c = { x: cx, y: track.laneAt(cx) + 1.15 + (o.h + 0.9) * (1 - u * u) };
+        if (cx >= x0 && cx < x1 && ok(c) && !placed.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < MIN_SEP)) { placed.push(c); list.push({ x: c.x, y: c.y, got: false }); }
       }
     }
     // the odd short line on the flat, now and then (only where no arc is nearby)

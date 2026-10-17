@@ -79,7 +79,7 @@ export function createDirt(scene, groundAt) {
       const m = Math.min(1, mud * 1.4);
       while (acc >= 1) {
         acc -= 1;
-        const c = (Math.random() < m ? MUD : DIRT)[Math.floor(Math.random() * (Math.random() < m ? MUD.length : DIRT.length))];
+        const pal = Math.random() < m ? MUD : DIRT, c = pal[Math.floor(Math.random() * pal.length)];
         const size = rnd(0.45, 0.8) * (1 + 1.0 * mud) * (0.85 + 0.3 * power);
         const thrown = (1.5 + 0.28 * speed + rnd(0, 4)) * (1 + 0.5 * mud);
         const up = (2.5 + rnd(0, 6) + 3.5 * power) * (1 + 0.55 * mud);
@@ -89,7 +89,7 @@ export function createDirt(scene, groundAt) {
     /** A burst of clods (a jump-off, a landing, a crash): thrown up and out both ways. `dark` 0..1 blends toward mud. */
     burst(x, y, z, n, power = 1, dark = 0) {
       for (let i = 0; i < n; i++) {
-        const c = (Math.random() < dark ? MUD : DIRT)[Math.floor(Math.random() * 4)], dir = Math.random() < 0.5 ? -1 : 1;
+        const pal = Math.random() < dark ? MUD : DIRT, c = pal[Math.floor(Math.random() * pal.length)], dir = Math.random() < 0.5 ? -1 : 1;
         emit(x + rnd(-0.4, 0.4), y + 0.1, z + rnd(-0.6, 0.6), dir * rnd(1.5, 7) * power, rnd(3, 10) * power, rnd(0.4, 0.8) * (1 + 0.6 * dark), c);
       }
     },
