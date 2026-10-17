@@ -19,7 +19,7 @@ function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-/** A low-poly jerry can (about 1.4 units tall, drawn 1.8 times larger), built from boxes with vertex colours, merged into one geometry. */
+/** A low-poly jerry can (about 1.4 units tall, drawn at that size, close to a coin), built from boxes with vertex colours, merged into one geometry. */
 function canGeometry() {
   const parts = [];
   const add = (geo, x, y, z, color, ry = 0) => {
@@ -196,7 +196,7 @@ export function createFuel(scene, track, coins, laneZ) {
         const f = Math.min(1, Math.max(0, (camX + WIN_R - s.x) / 30)) * Math.min(1, Math.max(0, (s.x - (camX - WIN_L)) / 20));
         dummy.position.set(s.x, s.y + Math.sin(time * 2 + s.x) * 0.12, laneZ);
         dummy.rotation.set(0, time * 2.4 + s.x, 0.08 * Math.sin(time * 1.7 + s.x));
-        dummy.scale.setScalar(1.8 * f); dummy.updateMatrix();
+        dummy.scale.setScalar(1.0 * f); dummy.updateMatrix();
         mesh.setMatrixAt(n++, dummy.matrix);
       }
       mesh.count = n; mesh.instanceMatrix.needsUpdate = true;
