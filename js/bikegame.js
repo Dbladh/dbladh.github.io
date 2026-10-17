@@ -2,9 +2,10 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016201836';
-import { createTrack } from './track.js?v=20261016201836';
-import { createCoins } from './coins.js?v=20261016201836';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016202331';
+import { createTrack } from './track.js?v=20261016202331';
+import { createRagdoll } from './ragdoll.js?v=20261016202331';
+import { createCoins } from './coins.js?v=20261016202331';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -12,7 +13,6 @@ const GRAV = 24;
 const JUMP = 9.5;                // upward kick from the ground
 const DIVE_GRAV = 1.2;           // extra gravity while nose-diving
 const TAU = Math.PI * 2;
-const RIDER_SCALE = 1.12;     // the rider group's size on the bike (restored after a crash)
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
 
@@ -31,6 +31,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const track = createTrack(scene, { laneZ, material: world.terrainMaterial, seed: 1 });
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
+  const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
   bike.root.scale.setScalar(SCALE);
   bike.root.visible = false;
   scene.add(bike.root);
@@ -93,7 +94,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
-    if (st.rider) { st.rider.removeFromParent(); bike.model.add(st.rider); st.rider.position.set(0, 0, 0); st.rider.rotation.set(0, 0, 0); st.rider.scale.setScalar(RIDER_SCALE); st.rider = null; }
+    ragdoll.restore();
   }
 
   function newRun() {
@@ -218,11 +219,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.mode = 'crash'; st.crashT = 0; st.mult = 1; st.meter = 0;
     events.onCrash?.();
     toast('Crash!');
-    // the rider is thrown clear (a single tumbling body for now)
-    const rg = bike.rider.group;
+    // the rider is thrown clear: every body part goes its own way
     bike.root.updateMatrixWorld(true);
-    scene.attach(rg);
-    st.rider = rg; st.rv = { x: st.vx * 0.9 + 2, y: Math.max(4, st.vy + 5), w: -5 };
+    ragdoll.detach(st.vx, Math.max(st.vy, 0));
   }
 
   $('go-again')?.addEventListener('click', () => { if (st.mode === 'over') newRun(); });
@@ -300,18 +299,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       }
       if (st.mode === 'crash' || st.mode === 'over') {
         st.crashT += dt;
-        if (st.rider) {                                          // placeholder tumble for the thrown rider
-          const rg = st.rider, rv = st.rv;
-          rv.y -= GRAV * dt; rg.position.x += rv.x * dt; rg.position.y += rv.y * dt; rg.rotation.z += rv.w * dt;
-          const gy = groundY(rg.position.x) + 0.5;
-          if (rg.position.y < gy) { rg.position.y = gy; rv.y *= -0.3; rv.x *= 0.6; rv.w *= 0.6; }
-        }
+        ragdoll.update(dt);
         if (st.mode === 'crash' && st.crashT > 1.5) showOver();
       }
       // looks
       const leanT = st.mode === 'crash' ? 0.2 : st.grounded ? 0.7 : (st.down && st.diveOK ? 1.15 : 0.35);
       st.lean += (leanT - st.lean) * Math.min(1, dt * 8);
-      if (!st.rider) poseRider(bike.rider, st.lean);
+      if (!ragdoll.active) poseRider(bike.rider, st.lean);
       st.spin += (st.vx * dt) / R;
       bike.wheels.rear.rotation.z = bike.wheels.front.rotation.z = -st.spin;
       bike.root.position.set(st.x, st.y, laneZ);

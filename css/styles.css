@@ -602,3 +602,4 @@ body.game-mode #stopnav, body.game-mode #controls, body.game-mode .hero, body.ga
 .go-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 @media (max-width: 600px) { .gh-groove { width: 62px; height: 62px; } .gh-groove span { font-size: 1.25rem; } .go-btn { min-height: 56px; } }
 @media (prefers-reduced-motion: reduce) { .gh-panel { animation: none; } }
+.gh-groove[hidden] { display: none; }
