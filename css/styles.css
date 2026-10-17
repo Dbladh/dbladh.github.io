@@ -638,16 +638,6 @@ body.game-paused .gh-quit { display: none; }
 .gp-note { margin: 0 0 16px; opacity: .8; }
 @media (max-width: 600px) { .gh-pausebtn { width: 52px; height: 52px; } }
 
-/* Tap mode switch (accessibility: no holding needed) */
-.go-switch { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; min-height: 52px; margin: 0 0 14px; padding: 8px 14px; text-align: left; cursor: pointer;
-  border-radius: 16px; border: 1.5px solid var(--line); background: color-mix(in srgb, var(--cream) 70%, white); color: var(--ink); font: 700 .95rem/1.25 var(--name-font); }
-.go-switch .sw { flex: none; position: relative; width: 44px; height: 26px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, white); transition: background-color .2s ease; }
-.go-switch .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--paper); box-shadow: 0 1px 3px rgba(30, 36, 40, .35); transition: transform .2s cubic-bezier(.3, 1.5, .5, 1); }
-.go-switch[aria-checked="true"] .sw { background: var(--coral-text); }
-.go-switch[aria-checked="true"] .sw::after { transform: translateX(18px); }
-.go-switch:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-@media (prefers-reduced-motion: reduce) { .go-switch .sw, .go-switch .sw::after { transition: none; } }
-
 /* Phones: the coaching pill becomes a small card (text on top, links underneath) */
 @media (max-width: 600px) {
   .gh-hint.coach { flex-wrap: wrap; justify-content: center; border-radius: 20px; padding: 10px 16px 6px; width: max-content; max-width: min(330px, calc(100vw - 32px)); top: calc(max(14px, env(safe-area-inset-top)) + 72px); bottom: auto; gap: 0 22px; }
