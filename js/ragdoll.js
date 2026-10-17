@@ -2,7 +2,7 @@
 // distance constraints fly and flop under gravity, bounce on the ground under them, and drive the same meshes the rider
 // was built from (so nothing needs to be built twice). `restore()` puts everything back on the bike.
 import * as THREE from 'three';
-import { aim } from './bike.js?v=20261017103819';
+import { aim } from './bike.js?v=20261017105830';
 
 const GRAV = 24;
 const L = { torso: 0.56, neck: 0.22, upper: 0.36, fore: 0.36, thigh: 0.42, shin: 0.42 };   // rider-local lengths (before scaling)
@@ -19,7 +19,9 @@ export function createRagdoll(scene, rider, groundAt) {
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-  return {
+  const self = {
+    /** Set by the game: called with the impact speed when the body hits the ground hard (for the thud). */
+    onBounce: null,
     get active() { return active; },
     /** The hips (the centre of the body), or null before the rider is let go. */
     get hip() { return active && pts.length ? pts[0] : null; },
@@ -57,7 +59,7 @@ export function createRagdoll(scene, rider, groundAt) {
     },
     update(dt) {
       if (!active) return;
-      const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n, r = 0.14 * s;
+      const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n, r = 0.14 * s; let hit = 0;
       for (let step = 0; step < n; step++) {
         for (const p of pts) {
           const vx = (p.x - p.px) * 0.995, vy = (p.y - p.py) * 0.995;
@@ -74,10 +76,11 @@ export function createRagdoll(scene, rider, groundAt) {
           }
           for (const p of pts) {                           // the ground: slide, lose some energy
             const g = groundAt(p.x) + r;
-            if (p.y < g) { const vy = p.y - p.py; p.y = g; p.py = g + 0.25 * vy; p.px += (p.x - p.px) * 0.35; }   // bounce a little, drag along
+            if (p.y < g) { const vy = p.y - p.py; if (vy < 0 && h > 1e-5) hit = Math.max(hit, -vy / h); p.y = g; p.py = g + 0.25 * vy; p.px += (p.x - p.px) * 0.35; }   // bounce a little, drag along
           }
         }
       }
+      if (hit > 2.5 && self.onBounce) self.onBounce(hit);
       let mv = 0; for (const p of pts) mv = Math.max(mv, Math.hypot(p.x - p.px, p.y - p.py) / h);
       if (h > 1e-5) speedNow = mv;
       // drive the meshes
@@ -99,4 +102,5 @@ export function createRagdoll(scene, rider, groundAt) {
       for (const [, o] of parts) { rider.group.add(o); o.scale.setScalar(1); }
     },
   };
+  return self;
 }

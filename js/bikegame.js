@@ -2,12 +2,13 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017103819';
-import { createTrack } from './track.js?v=20261017103819';
-import { createRagdoll } from './ragdoll.js?v=20261017103819';
-import { createFx } from './fx.js?v=20261017103819';
-import { createPuffs } from './puffs.js?v=20261017103819';
-import { createCoins } from './coins.js?v=20261017103819';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017105830';
+import { createTrack } from './track.js?v=20261017105830';
+import { createRagdoll } from './ragdoll.js?v=20261017105830';
+import { createFx } from './fx.js?v=20261017105830';
+import { createAudio } from './audio.js?v=20261017103819';
+import { createPuffs } from './puffs.js?v=20261017105830';
+import { createCoins } from './coins.js?v=20261017105830';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -51,6 +52,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
   const puffs = createPuffs(scene);
+  const audio = createAudio();
   const juice = createFx(scene, camera, renderer, { low: matchMedia('(max-width: 700px)').matches });
   const baseFov = () => (camera.aspect < 0.8 ? 70 : 55);                    // (the same rule as the page uses when it is resized)
   // Landing indicator: a pulsing circle where the bike will touch down. Its colour says how the landing would go if nothing changes:
@@ -62,6 +64,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   landRing.renderOrder = landDisc.renderOrder = 6; landMark.add(landDisc, landRing); landMark.visible = false; scene.add(landMark);
   const LAND_COL = { perfect: new THREE.Color('#8fd081'), clean: new THREE.Color('#e8c24a'), rough: new THREE.Color('#ec8a3c'), crash: new THREE.Color('#d15e4d') };
   const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
+  ragdoll.onBounce = (v) => audio.bounce(v);
   bike.root.scale.setScalar(SCALE);
   bike.root.visible = false;
   scene.add(bike.root);
@@ -144,7 +147,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   /** The multiplier going up pops up right above the rider. */
   function flashMult() {
     if (!multFxEl) return;
-    juice.flash('#ffd36b', 0.14, 220); juice.halo('#ffcf5a', 5.5, 0.5, 0.55);
+    audio.combo(st.mult); juice.flash('#ffd36b', 0.14, 220); juice.halo('#ffcf5a', 5.5, 0.5, 0.55);
     if (grooveEl) { grooveEl.classList.remove('pulse'); void grooveEl.offsetWidth; grooveEl.classList.add('pulse'); }
     multFxEl.textContent = '\u00d7' + st.mult + ' combo!'; multFxEl.hidden = false;
     multFxEl.classList.remove('show'); void multFxEl.offsetWidth; multFxEl.classList.add('show');
@@ -205,6 +208,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.score = scoreNow();
     const final = Math.floor(st.score), isBest = final > st.best;
     if (isBest) { st.best = final; saveBest(final); }
+    audio.over(isBest && final > 0);
     if (!overEl) return;
     $('go-score').textContent = final.toLocaleString();
     $('go-best').textContent = st.best.toLocaleString();
@@ -224,7 +228,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function fireJump() {                                     // jump with the current charge: higher the longer it built
     const c = st.charge;
     st.jumpVy = JUMP_MIN + (JUMP_MAX - JUMP_MIN) * (1 - (1 - c) * (1 - c));
-    st.jumpReq = 0.12; st.charging = false;
+    st.jumpReq = 0.12; st.charging = false; audio.jump(c);
     if (c > 0.35) {                                                                     // a big jump: a ring at the wheels, a stretch, a flick of speed lines
       const kk = SC / SCALE, gy = st.y - R;
       juice.ring(st.x - HW * 0.5, gy + 0.1, laneZ, '#ffd9a0', 0.6, (2.5 + 3 * c) * kk, 0.45, true, 0.8); juice.burst('dust', st.x - HW * 0.5, gy + 0.3, laneZ, 8, '#d8c0a0');
@@ -273,7 +277,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const trickColor = () => TRICK_COL[st.trick?.def?.id] || '#ffd36b';
   /** A trick has been landed: burst, ring, a beat of hit-stop. */
   function trickFx(id) {
-    const col = TRICK_COL[id] || '#ffd36b';
+    const col = TRICK_COL[id] || '#ffd36b'; audio.trickDone();
     juice.burst('trick', st.x, st.y + 0.3, laneZ, 26, col); juice.ring(st.x, st.y + 0.3, laneZ + 0.4, col, 0.8, 4.8, 0.5, false, 0.9);
     juice.halo(col, 7, 0.5, 0.7); juice.hitStop(40); juice.flash(col, 0.12, 160);
   }
@@ -286,7 +290,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
     if (!pick) return;
     st.trick = pick.flip ? { kind: 'flip', dir: pick.flip, left: TAU, def: pick } : { kind: 'spin', dir: pick.spin, t: 0, dur: TRICK_TIME, def: pick };
-    juice.ring(st.x, st.y + 0.3, laneZ + 0.4, trickColor(), 0.6, 2.6, 0.35, false, 0.8); juice.halo(trickColor(), 5, TRICK_TIME, 0.4);
+    audio.trick(); juice.ring(st.x, st.y + 0.3, laneZ + 0.4, trickColor(), 0.6, 2.6, 0.35, false, 0.8); juice.halo(trickColor(), 5, TRICK_TIME, 0.4);
   }
   function finishPose(award_) {
     const t = st.trick; if (!t || t.kind !== 'spin') return;
@@ -399,16 +403,19 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const gy = groundY(st.x), kk = SC / SCALE;
     const dust = (n, spread, color, a) => { for (let i = 0; i < n; i++) { const dir = i % 2 ? 1 : -1; puffs.emit(st.x + (Math.random() - 0.5) * 1.2, gy + 0.2, laneZ + 0.3, dir * (spread * (0.4 + Math.random())), 0.8 + Math.random() * 2, 0.5 * kk, 1.5 * kk, 0.7, color, a); } };
     if (air > 0.45 && perfect) {
+      audio.land('perfect', air);
       juice.ring(st.x, gy + 0.15, laneZ, '#8fd081', 0.7, 6.5 * kk, 0.65);
       juice.ring(st.x, gy + 0.15, laneZ, '#e8f7c8', 0.4, 4 * kk, 0.45, true, 0.7);
       juice.burst('perfect', st.x, gy + 0.6, laneZ, 22, '#d9f7a0'); juice.halo('#9ff09a', 6.5, 0.55, 0.7);
       dust(10, 6, '#b79b78', 0.55); st.squash = 1; juice.bump(-0.5); juice.hitStop(55); juice.flash('#a8e89a', 0.22, 170); juice.flick(1);
     } else if (air > 0.45 && !rough) {
+      audio.land('clean', air);
       juice.ring(st.x, gy + 0.15, laneZ, '#e8c24a', 0.6, 4 * kk, 0.5, true, 0.8); juice.burst('clean', st.x, gy + 0.5, laneZ, 9, '#ffe9a0');
       dust(6, 4.5, '#b79b78', 0.5); st.squash = 0.6; juice.bump(-0.25);
     } else if (rough && air > 0.3) {
+      audio.land('rough', air);
       dust(8, 5, '#8a6b4c', 0.6); st.squash = 0.8; juice.shake(0.35, 220); juice.bump(-0.5);
-    } else if (air > 0.2) { dust(3, 3, '#b79b78', 0.4); st.squash = 0.3; }
+    } else if (air > 0.2) { audio.land('small', air); dust(3, 3, '#b79b78', 0.4); st.squash = 0.3; }
   }
 
   function land() {
@@ -452,7 +459,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.mode = 'crash'; st.crashT = 0; st.calmT = 0; st.mult = 1; st.comboT = 0;
     events.onCrash?.();
     toast(msg);
-    const pit = /pit/i.test(msg);
+    const pit = /pit/i.test(msg); audio.crash(pit);
     juice.flash(pit ? '#10161c' : '#ffffff', pit ? 0.35 : 0.34, pit ? 220 : 120); juice.slowmo(0.35, 450); juice.shake(0.7, 380);
     juice.burst(pit ? 'pit' : 'crash', st.x, st.y, laneZ, pit ? 24 : 30, pit ? '#8a6a48' : '#ffd9a0'); juice.ring(st.x, groundY(st.x) + 0.2, laneZ, '#ffffff', 0.6, 5, 0.5, true, 0.7);
     for (let i = 0; i < 12; i++) puffs.emit(st.x + (Math.random() - 0.5) * 2, st.y - 0.4, laneZ + 0.3, (Math.random() - 0.5) * 10, 1 + Math.random() * 4, 0.7, 2.2, 0.9, pit ? '#6b5238' : '#b79b78', 0.6);
@@ -464,6 +471,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   $('gp-resume')?.addEventListener('click', () => api.resume());
   $('gp-quit')?.addEventListener('click', () => api.stop());
   $('gh-pause')?.addEventListener('click', () => api.pause());
+  const soundBtn = $('gh-sound');
+  const showSound = () => { if (!soundBtn) return; soundBtn.setAttribute('aria-pressed', String(audio.enabled)); soundBtn.setAttribute('aria-label', audio.enabled ? 'Sound on' : 'Sound off'); };
+  soundBtn?.addEventListener('click', () => { audio.unlock(); audio.enabled = !audio.enabled; showSound(); });
+  audio.onChange(showSound); showSound();
   skipBtn?.addEventListener('click', () => endGuide(false));
   window.addEventListener('blur', () => api.pause());                          // auto-pause: losing the window, or the tab going to the background
   document.addEventListener('visibilitychange', () => { if (document.hidden) api.pause(); });
@@ -483,6 +494,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
       setBikeScale();
       track.visible = true; coins.visible = true; puffs.visible = true; juice.reset(); juice.visible = true;
+      audio.unlock(); audio.start();
       newRun();
       bike.root.visible = true;
       clip.constant = 60; applyClip(true);
@@ -514,6 +526,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     },
     get coinsDebug() { return coins; },
     get track() { return track; },
+    get audioDebug() { return audio; },
     get ragdollDebug() { return ragdoll; },                                                                     // (for tests)
     /** Compile the game's own shaders (bike, coins, puffs, mud, landing circle) in the background, so the first click does not stall the scene. */
     async warmUp() {
@@ -531,14 +544,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */
     pause() {
       if (st.mode !== 'play' || st.paused) return;
-      st.paused = true; st.down = false; st.charging = false; st.buf = null; st.charge = 0;
+      st.paused = true; st.down = false; st.charging = false; st.buf = null; st.charge = 0; audio.pause();
       if (hint) hint.hidden = true;
       document.body.classList.add('game-paused');
       if (pauseEl) { pauseEl.hidden = false; setTimeout(() => { if (st.paused) document.getElementById('gp-resume')?.focus({ preventScroll: true }); }, 50); }
     },
     resume() {
       if (!st.paused) return;
-      st.paused = false; st.down = false;
+      st.paused = false; st.down = false; audio.resume();
       if (pauseEl) pauseEl.hidden = true;
       document.body.classList.remove('game-paused');
     },
@@ -548,7 +561,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     /** The one button. On the ground: hold to crouch and charge, release to jump. In the air: tap to kick the nose down, hold to dive. */
     press() {
       if (st.mode === 'off' || st.mode === 'out' || st.mode === 'over' || st.paused) return;
-      st.down = true;
+      st.down = true; audio.unlock();
       if (st.grounded || st.coyote > 0) {
         st.charging = true; st.holdT = 0; st.diveOK = false;
       }
@@ -570,7 +583,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
+          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -595,10 +608,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       }
       st.impact = predictLanding(); st.impactAt = st.t;
       juice.setIntensity(st.mode === 'play' ? THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1) : 0, st.boost / BOOST_CAP, st.charge); juice.setAnchor(st.x, st.y + 0.3, laneZ - 0.6);
+      audio.update({ playing: st.mode === 'play', speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         const got = coins.collect(st.x, st.y, SC / SCALE, dt);
         if (got) {
+          for (let i = 0; i < Math.min(got, 3); i++) audio.coin();
           st.coins += got; st.bonus += 25 * got * st.mult;
           for (const hit of coins.hits) juice.burst('coin', hit.x, hit.y, laneZ, 7, '#ffd54a');
           if (coinsEl) { coinsEl.classList.remove('bump'); void coinsEl.offsetWidth; coinsEl.classList.add('bump'); }
