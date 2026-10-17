@@ -571,3 +571,34 @@ body.game-mode #stopnav, body.game-mode #controls, body.game-mode .hero, body.ga
 .gh-toast.show { animation: ghtoast 1.3s ease both; }
 @keyframes ghtoast { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1.05); } 25% { transform: translate(-50%, 0) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -6px); } }
 @media (prefers-reduced-motion: reduce) { .gh-toast.show { animation: none; opacity: 1; } }
+
+/* Groove badge and the game-over card */
+.gh-groove { position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); width: 74px; height: 74px; border-radius: 50%; display: grid; place-content: center; text-align: center;
+  background: conic-gradient(var(--coral) calc(var(--p, 0) * 360deg), color-mix(in srgb, var(--cream) 80%, transparent) 0); box-shadow: 0 3px 10px rgba(40, 52, 44, .2); }
+.gh-groove::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--paper); }
+.gh-groove > * { position: relative; }
+.gh-groove span { font-weight: 800; font-size: 1.5rem; line-height: 1; }
+.gh-groove small { font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--coral-text); }
+.gh-groove[data-level="5"] span { color: var(--coral-text); }
+.gh-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 40; width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box;
+  padding: 24px 24px 22px; border-radius: 22px; background: var(--paper); color: var(--ink); text-align: center; box-shadow: 0 10px 40px rgba(30, 36, 40, .35);
+  border: 2px dashed var(--line); outline: 6px solid var(--paper); animation: gopop .35s cubic-bezier(.3, 1.5, .5, 1) both; font-family: var(--name-font); }
+.gh-panel[hidden] { display: none; }
+@keyframes gopop { from { opacity: 0; transform: translate(-50%, -46%) scale(.92); } }
+.gh-panel h2 { margin: 0 0 4px; font-size: 2rem; font-weight: 800; }
+.go-new { margin: 0 0 6px; display: inline-block; padding: 3px 14px; border-radius: 999px; background: var(--gold); font-weight: 800; }
+.go-stats { margin: 12px 0 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.go-stats div { padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--cream) 70%, white); }
+.go-stats .go-big { background: color-mix(in srgb, var(--gold) 38%, var(--paper)); }
+.go-stats dt { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--ink) 70%, white); }
+.go-stats dd { margin: 2px 0 0; font-weight: 800; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.go-stats .go-big dd { font-size: 1.7rem; }
+.go-actions { display: grid; gap: 10px; }
+.go-btn { min-height: 52px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--cream); color: var(--ink); font: 700 1.05rem var(--name-font); cursor: pointer; transition: transform .2s ease, background-color .2s ease; }
+.go-btn:hover:not(:disabled) { background: var(--gold); transform: translateY(-1px); }
+.go-primary { background: var(--coral-text); border-color: var(--coral-text); color: #fff; }
+.go-primary:hover:not(:disabled) { background: var(--coral); color: var(--ink); }
+.go-btn:disabled { opacity: .55; cursor: default; }
+.go-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+@media (max-width: 600px) { .gh-groove { width: 62px; height: 62px; } .gh-groove span { font-size: 1.25rem; } .go-btn { min-height: 56px; } }
+@media (prefers-reduced-motion: reduce) { .gh-panel { animation: none; } }

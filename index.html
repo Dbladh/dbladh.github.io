@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261016201222">
+  <link rel="stylesheet" href="css/styles.css?v=20261016201836">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -167,12 +167,30 @@
   <p id="live" class="sr-only" aria-live="polite"></p>
   <div id="game-hud" class="game-hud" hidden>
     <div class="gh-stats" aria-live="off"><span class="gh-score"><b id="gh-score">0</b> pts</span><span class="gh-coins"><i class="gh-coin" aria-hidden="true"></i><b id="gh-coins">0</b></span></div>
+    <div id="gh-groove" class="gh-groove" hidden aria-label="Groove multiplier"><span id="gh-mult">×1</span><small>groove</small></div>
     <p id="gh-toast" class="gh-toast" aria-live="polite"></p>
     <p id="gh-hint" class="gh-hint" hidden>Tap to jump &middot; hold in the air to dive</p>
     <button id="gh-quit" class="gh-quit" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back to the landscape</span></button>
   </div>
+  <div id="game-over" class="gh-panel" role="dialog" aria-labelledby="go-title" hidden>
+    <h2 id="go-title">Wipeout!</h2>
+    <p id="go-new" class="go-new" hidden>New best!</p>
+    <dl class="go-stats">
+      <div class="go-big"><dt>Score</dt><dd id="go-score">0</dd></div>
+      <div class="go-big"><dt>Best</dt><dd id="go-best">0</dd></div>
+      <div><dt>Distance</dt><dd id="go-dist">0 m</dd></div>
+      <div><dt>Coins</dt><dd id="go-coins">0</dd></div>
+      <div><dt>Flips</dt><dd id="go-flips">0</dd></div>
+      <div><dt>Best air</dt><dd id="go-air">0 s</dd></div>
+      <div><dt>Top groove</dt><dd id="go-groove">×1</dd></div>
+    </dl>
+    <div class="go-actions">
+      <button id="go-again" class="go-btn go-primary" type="button">Ride again</button>
+      <button id="go-quit" class="go-btn" type="button">Back to the landscape</button>
+    </div>
+  </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261016201222"></script>
+  <script type="module" src="js/main.js?v=20261016201836"></script>
 </body>
 </html>

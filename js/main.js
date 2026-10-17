@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016201222';
-import { buildWorld } from './world.js?v=20261016201222';
-import { createSky } from './sky.js?v=20261016201222';
-import { createDOF } from './dof.js?v=20261016201222';
-import { createRide } from './ride.js?v=20261016201222';
-import { createGame } from './bikegame.js?v=20261016201222';
+import { PAL } from './palette.js?v=20261016201836';
+import { buildWorld } from './world.js?v=20261016201836';
+import { createSky } from './sky.js?v=20261016201836';
+import { createDOF } from './dof.js?v=20261016201836';
+import { createRide } from './ride.js?v=20261016201836';
+import { createGame } from './bikegame.js?v=20261016201836';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -453,7 +453,7 @@ function start() {
     game.onQuit = () => { ride?.reset(); riseName(); };
     document.getElementById('gh-quit')?.addEventListener('click', () => game.stop());
     // The single button: mouse/touch anywhere in the game, or space/enter.
-    const gameDown = (e) => { if (game.active && !e.target.closest('#gh-quit')) { game.press(); e.preventDefault(); } };
+    const gameDown = (e) => { if (game.active && !e.target.closest('button, .gh-panel')) { game.press(); e.preventDefault(); } };
     window.addEventListener('pointerdown', gameDown);
     window.addEventListener('pointerup', () => game.release());
     window.addEventListener('pointercancel', () => game.release());
