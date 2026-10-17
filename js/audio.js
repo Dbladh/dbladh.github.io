@@ -18,7 +18,7 @@ const loadOn = () => { try { return localStorage.getItem(KEY) !== '0'; } catch (
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, ready = false, loading = null, on = loadOn(), running = false;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = loadOn(), running = false;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -30,6 +30,8 @@ export function createAudio({ base = 'audio/' } = {}) {
     master = ctx.createGain(); master.gain.value = on ? 0.8 : 0; master.connect(ctx.destination);
     lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 14000; lp.connect(master);       // the camera's distance softens the engine
     bus = ctx.createGain(); bus.connect(master);
+    soft = ctx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 4200; soft.Q.value = 0.5; soft.connect(bus);   // rewards: rounded, never harsh
+    dull = ctx.createBiquadFilter(); dull.type = 'lowpass'; dull.frequency.value = 1500; dull.Q.value = 0.7; dull.connect(bus);   // setbacks: muffled and low
     return ctx;
   };
   const decode = (data) => new Promise((res, rej) => { const p = ctx.decodeAudioData(data, res, rej); if (p?.catch) p.catch(rej); });
@@ -102,11 +104,14 @@ export function createAudio({ base = 'audio/' } = {}) {
     } else engine = { idle: grainLayer(buf.engine_idle) };
     const mkN = (type, f, q) => { const s = loopSrc(noise()), fl = ctx.createBiquadFilter(), g = ctx.createGain(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(bus); s.start(0, Math.random()); return { s, g, fl }; };
     ambience = { wind: mkN('bandpass', 900, 0.4), dirt: mkN('lowpass', 320, 0.7), mud: mkN('bandpass', 420, 1.2) };
+    const osc = (type) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = 300; g.gain.value = 0; o.connect(g); g.connect(soft); o.start(); return { o, g }; };
+    fx = { air: osc('sine'), charge: osc('triangle') };                              // a tone that climbs the longer you stay up, and a whine that builds as you charge
   }
   function killEngine() {
     for (const L of [engine?.idle, engine?.synth]) { try { L?.bus.disconnect(); L?.node?.disconnect(); } catch (e) { /* gone */ } }
     for (const n of [ambience?.wind, ambience?.dirt, ambience?.mud]) { try { n?.s.stop(); n?.s.disconnect(); n?.g.disconnect(); } catch (e) { /* already stopped */ } }
-    engine = ambience = null;
+    for (const n of [fx?.air, fx?.charge]) { try { n?.o.stop(); n?.o.disconnect(); n?.g.disconnect(); } catch (e) { /* already stopped */ } }
+    engine = ambience = fx = null;
   }
 
   const at = (p, v, tc = 0.05) => p.setTargetAtTime(v, ctx.currentTime, tc);
@@ -121,12 +126,12 @@ export function createAudio({ base = 'audio/' } = {}) {
     out.connect(bus);
     if (dur) { const t = ctx.currentTime + delay; g.gain.setValueAtTime(gain, t); g.gain.setValueAtTime(gain, t + dur * 0.6); g.gain.linearRampToValueAtTime(0, t + dur); s.start(t, offset, dur + 0.05); } else s.start(ctx.currentTime + delay); s.onended = () => { try { s.disconnect(); out.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
   }
-  function tone(freq, dur, { type = 'sine', gain = 0.2, slide = 0, delay = 0, attack = 0.005 } = {}) {
+  function tone(freq, dur, { type = 'sine', gain = 0.2, slide = 0, delay = 0, attack = 0.005, dest = null } = {}) {
     if (!ok()) return;
     const t = ctx.currentTime + delay, o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), t + dur);
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.05); o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
+    o.connect(g); g.connect(dest || bus); o.start(t); o.stop(t + dur + 0.05); o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
   }
   function swoosh(dur, f0, f1, { gain = 0.18, q = 1.2, type = 'bandpass', delay = 0 } = {}) {
     if (!ok()) return;
@@ -135,6 +140,8 @@ export function createAudio({ base = 'audio/' } = {}) {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + dur * 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(bus); s.start(t, Math.random()); s.stop(t + dur + 0.05); s.onended = () => { try { s.disconnect(); f.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
   }
+  const lastAt = {};
+  const gate = (name, min) => { const t = ctx.currentTime; if (t - (lastAt[name] ?? -9) < min) return false; lastAt[name] = t; return true; };       // (no sound may stack on itself)
   const thud = (gain = 0.5, f = 120) => { tone(f, 0.22, { gain, slide: f * 0.4, type: 'sine' }); swoosh(0.16, 900, 120, { gain: gain * 0.7, type: 'lowpass', q: 0.7 }); };
 
   const api = {
@@ -187,6 +194,11 @@ export function createAudio({ base = 'audio/' } = {}) {
       at(ambience.wind.g.gain, 0.22 * sp * sp * (s.grounded ? 0.8 : 1), 0.12); at(ambience.wind.fl.frequency, 500 + 1400 * sp, 0.2);
       at(ambience.dirt.g.gain, s.grounded && s.playing ? 0.1 + 0.2 * sp : 0, 0.08);
       at(ambience.mud.g.gain, s.playing && s.grounded ? 0.5 * (s.mud || 0) : 0, 0.08);
+      if (fx) {
+        const air = s.playing && !s.grounded ? s.air || 0 : 0, ch = s.playing ? s.charge || 0 : 0;
+        at(fx.air.g.gain, 0.03 * smooth(0.5, 1.1, air), 0.12); at(fx.air.o.frequency, 330 + 520 * clamp(air / 2.6), 0.1);
+        at(fx.charge.g.gain, 0.035 * smooth(0.04, 0.3, ch), 0.06); at(fx.charge.o.frequency, 200 + 330 * ch, 0.05);
+      }
     },
 
     // ---- events ----
@@ -194,30 +206,72 @@ export function createAudio({ base = 'audio/' } = {}) {
     land(kind, air = 0.5) {
       if (kind === 'perfect') { thud(0.5, 110); tone(1318, 0.5, { type: 'triangle', gain: 0.12, delay: 0.04 }); tone(1976, 0.6, { type: 'triangle', gain: 0.1, delay: 0.1 }); }
       else if (kind === 'clean') thud(0.4, 100);
-      else if (kind === 'rough') { thud(0.8, 80); play('bounce', { gain: 0.55, rate: 0.75, lpf: 1800 }); }
+      else if (kind === 'rough') { thud(0.8, 80); play('bounce', { gain: 0.55, rate: 0.75, lpf: 1800 }); tone(300, 0.2, { type: 'triangle', gain: 0.07, slide: 170, delay: 0.05, dest: dull }); }
       else if (air > 0.2) thud(0.22, 100);
     },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime; st.coinN = now - st.coinAt < 0.8 ? Math.min(7, st.coinN + 1) : 0; st.coinAt = now;
-      const steps = [0, 2, 4, 7, 9, 12, 14, 16], f = 988 * Math.pow(2, steps[st.coinN] / 12);
-      tone(f, 0.28, { type: 'triangle', gain: 0.16 }); tone(f * 2.005, 0.34, { type: 'sine', gain: 0.07, delay: 0.015 });
+      const steps = [0, 2, 4, 7, 9, 12, 14, 16], f = 880 * Math.pow(2, steps[st.coinN] / 12);
+      tone(f, 0.3, { type: 'sine', gain: 0.1, attack: 0.004, dest: soft });                                // warm fundamental
+      tone(f * 2, 0.2, { type: 'sine', gain: 0.03, delay: 0.01, dest: soft }); tone(f * 2.76, 0.14, { type: 'sine', gain: 0.018, dest: soft });   // a soft bell on top
+      if (st.coinN >= 4 && st.coinN % 2 === 0) tone(f * 3, 0.26, { type: 'sine', gain: 0.02, delay: 0.04, dest: soft });
     },
     /** A fuel can: a bright rising glug-and-ding. */
     fuelUp() {
       if (!ctx) return;
-      tone(196, 0.16, { type: 'triangle', gain: 0.17, slide: 330 }); tone(294, 0.16, { type: 'triangle', gain: 0.15, delay: 0.1, slide: 440 });
-      tone(784, 0.4, { type: 'triangle', gain: 0.15, delay: 0.2 }); tone(1175, 0.5, { type: 'sine', gain: 0.09, delay: 0.23 });
+      tone(196, 0.16, { type: 'triangle', gain: 0.15, slide: 330, dest: soft }); tone(294, 0.16, { type: 'triangle', gain: 0.13, delay: 0.1, slide: 440, dest: soft });
+      tone(784, 0.4, { type: 'sine', gain: 0.12, delay: 0.2, dest: soft }); tone(1175, 0.5, { type: 'sine', gain: 0.08, delay: 0.23, dest: soft });
     },
-    /** The engine coughing on empty (`dead`: the last gasp, a falling stutter). */
+    /** The engine coughing on empty (a falling stutter). */
     sputter(dead = false) {
       if (!ctx) return;
       const n = dead ? 5 : 2;
-      for (let i = 0; i < n; i++) tone(dead ? 120 - i * 14 : 130, 0.09, { type: 'sawtooth', gain: dead ? 0.2 : 0.13, delay: i * (dead ? 0.17 + i * 0.05 : 0.13), slide: -40 });
+      for (let i = 0; i < n; i++) tone(dead ? 120 - i * 14 : 130, 0.09, { type: 'sawtooth', gain: dead ? 0.2 : 0.13, delay: i * (dead ? 0.17 + i * 0.05 : 0.13), slide: -40, dest: dull });
     },
     combo(level) { const b = 523 * Math.pow(2, (level - 1) * 2 / 12); [0, 4, 7].forEach((st_, i) => tone(b * Math.pow(2, st_ / 12), 0.3, { type: 'triangle', gain: 0.13, delay: i * 0.065 })); },
-    trick() { swoosh(0.34, 500, 3200, { gain: 0.2, q: 1.4 }); },
-    trickDone() { tone(880, 0.22, { type: 'triangle', gain: 0.1 }); tone(1320, 0.3, { type: 'triangle', gain: 0.09, delay: 0.07 }); },
+    trick() { swoosh(0.34, 500, 3200, { gain: 0.11, q: 1.4 }); },
+    /** A trick landed. `streak`: how many in a row (each within a few seconds of the last): the chime climbs a major scale and fills out. */
+    trickDone(streak = 1) {
+      if (!ctx) return;
+      const n = Math.max(1, Math.min(8, streak)), steps = [0, 2, 4, 7, 9, 12, 14, 16], f0 = 523.25 * Math.pow(2, steps[n - 1] / 12), g0 = 0.1 + 0.01 * Math.min(n, 6);
+      const note = (semi, delay, g = g0, dur = 0.34) => { const f = f0 * Math.pow(2, semi / 12); tone(f, dur, { type: 'sine', gain: g, delay, dest: soft }); tone(f * 2.01, dur * 0.6, { type: 'triangle', gain: g * 0.3, delay, dest: soft }); };
+      if (n === 1) note(0, 0);
+      else if (n === 2) { note(0, 0); note(7, 0.06); }
+      else if (n === 3) { note(0, 0); note(4, 0.055); note(7, 0.11); }
+      else if (n === 4) { note(0, 0); note(4, 0.05); note(7, 0.1); note(12, 0.16, g0 * 0.8, 0.5); }
+      else { [0, 4, 7, 12, 16].forEach((sm, i) => note(sm, i * 0.05, g0 * (i > 2 ? 0.8 : 1), 0.5)); tone(f0 * 4, 0.5, { type: 'sine', gain: 0.03, delay: 0.28, dest: soft }); }
+    },
+    /** The combo ran out (a timeout drops it a step; `comboLost` is a hard knock down). */
+    comboDrop() { if (!ctx || !gate('drop', 0.3)) return; tone(330, 0.16, { type: 'triangle', gain: 0.07, slide: 262, dest: dull }); },
+    comboLost() { if (!ctx || !gate('lost', 0.3)) return; tone(392, 0.22, { type: 'triangle', gain: 0.1, slide: 360, dest: dull }); tone(311, 0.36, { type: 'triangle', gain: 0.1, delay: 0.2, slide: 262, dest: dull }); },
+    /** Hit an obstacle slowly: a dull clunk and a short rattle. */
+    stumble() { if (!ctx) return; thud(0.35, 90); tone(170, 0.2, { type: 'square', gain: 0.04, slide: 80, dest: dull }); tone(120, 0.12, { type: 'square', gain: 0.03, delay: 0.12, slide: 70, dest: dull }); },
+    /** Fuel under a quarter (and the repeating warning under 15%): two quiet falling beeps. */
+    lowFuel() { if (!ctx || !gate('lowfuel', 1)) return; tone(660, 0.09, { type: 'square', gain: 0.035, dest: dull }); tone(520, 0.1, { type: 'square', gain: 0.035, delay: 0.16, dest: dull }); },
+    /** The tank is empty: the engine whine falls away, then coughs and dies. */
+    outOfFuel() {
+      if (!ctx) return;
+      tone(280, 1.0, { type: 'sawtooth', gain: 0.07, slide: 55, dest: dull }); tone(140, 1.0, { type: 'sawtooth', gain: 0.05, slide: 40, dest: dull });
+      for (let i = 0; i < 4; i++) tone(110 - i * 14, 0.09, { type: 'sawtooth', gain: 0.1, delay: 0.55 + i * (0.17 + i * 0.05), slide: -40, dest: dull });
+      tone(220, 0.7, { type: 'sine', gain: 0.05, delay: 1.1, slide: 110, dest: dull });
+    },
+    /** A close call with an obstacle: a quick whoosh and a high ping. */
+    nearMiss() { if (!ctx || !gate('near', 0.4)) return; swoosh(0.22, 900, 3400, { gain: 0.11, q: 1.6 }); tone(1568, 0.2, { type: 'sine', gain: 0.045, delay: 0.05, dest: soft }); },
+    /** The charge reached full. */
+    chargeReady() { if (!ctx || !gate('ready', 0.3)) return; tone(1320, 0.08, { type: 'triangle', gain: 0.06, dest: soft }); tone(1760, 0.14, { type: 'triangle', gain: 0.05, delay: 0.05, dest: soft }); },
+    /** Every 500 m. */
+    milestone() { if (!ctx) return; [784, 1047, 1319].forEach((f, i) => tone(f, 0.55 + i * 0.1, { type: 'sine', gain: 0.085 - i * 0.012, delay: i * 0.08, dest: soft })); },
+    /** The score passed the best. */
+    newBest() { if (!ctx) return; [523, 659, 784, 1047, 1319].forEach((f, i) => { tone(f, 0.4, { type: 'sine', gain: 0.1, delay: i * 0.08, dest: soft }); tone(f * 2.01, 0.25, { type: 'triangle', gain: 0.03, delay: i * 0.08, dest: soft }); }); },
+    /** Buttons and cards: soft ticks. */
+    ui(kind = 'tap') {
+      if (!ctx) return;
+      if (kind === 'confirm') { tone(523, 0.09, { type: 'sine', gain: 0.07, dest: soft }); tone(784, 0.12, { type: 'sine', gain: 0.06, delay: 0.06, dest: soft }); }
+      else if (kind === 'back') { tone(440, 0.08, { type: 'sine', gain: 0.06, dest: soft }); tone(330, 0.1, { type: 'sine', gain: 0.05, delay: 0.05, dest: soft }); }
+      else if (kind === 'cardIn') tone(494, 0.14, { type: 'sine', gain: 0.05, dest: soft });
+      else tone(660, 0.06, { type: 'sine', gain: 0.055, dest: soft });
+    },
     crash(pit) {
       play('crash', { gain: pit ? 0.5 : 0.95 });
       if (pit) { tone(900, 1.1, { type: 'sine', gain: 0.12, slide: 140 }); swoosh(1.0, 1400, 150, { gain: 0.2, type: 'lowpass' }); }
@@ -234,5 +288,7 @@ export function createAudio({ base = 'audio/' } = {}) {
 /** No Web Audio: every call does nothing. */
 function stub() {
   const f = () => {};
-  return { enabled: false, onChange: f, unlock: f, start: f, stop: f, pause: f, resume: f, update: f, jump: f, land: f, coin: f, combo: f, trick: f, trickDone: f, crash: f, bounce: f, over: f };
+  const out = { enabled: false };
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui']) out[n] = f;
+  return out;
 }

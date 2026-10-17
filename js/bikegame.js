@@ -2,16 +2,16 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017165752';
-import { createTrack } from './track.js?v=20261017165752';
-import { createRagdoll } from './ragdoll.js?v=20261017165752';
-import { createFx } from './fx.js?v=20261017165752';
-import { createAudio } from './audio.js?v=20261017165752';
-import { createPuffs } from './puffs.js?v=20261017165752';
-import { createDirt } from './dirt.js?v=20261017165752';
-import { createMudCoat } from './mudcoat.js?v=20261017165752';
-import { createCoins } from './coins.js?v=20261017165752';
-import { createFuel } from './fuel.js?v=20261017165752';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017171053';
+import { createTrack } from './track.js?v=20261017171053';
+import { createRagdoll } from './ragdoll.js?v=20261017171053';
+import { createFx } from './fx.js?v=20261017171053';
+import { createAudio } from './audio.js?v=20261017171053';
+import { createPuffs } from './puffs.js?v=20261017171053';
+import { createDirt } from './dirt.js?v=20261017171053';
+import { createMudCoat } from './mudcoat.js?v=20261017171053';
+import { createCoins } from './coins.js?v=20261017171053';
+import { createFuel } from './fuel.js?v=20261017171053';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -141,7 +141,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     mode: 'off', t: 0, from: { pos: new THREE.Vector3(), look: new THREE.Vector3() },
     x: 0, y: 0, vx: 8, vy: 0, th: 0, om: 0, grounded: true, coyote: 0, diveOK: false, jumpReq: 0,
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
-    crashT: 0, inv: 0, boost: 0, startX: 0, best: 0, fuel: 1, engineOut: false, outOfFuel: false, lowWarn: false, sputT: 0,
+    crashT: 0, inv: 0, boost: 0, startX: 0, best: 0, trickStreak: 0, trickStreakT: -99, nextMile: 500, bestSaid: false, fuel: 1, engineOut: false, outOfFuel: false, lowWarn: false, sputT: 0,
     bonus: 0, dist: 0, mult: 1, comboT: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
     bigAir: false, hz: null, viewW: 0, squash: 0, lift: 0, warnedObs: -1, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
@@ -274,6 +274,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
     track.reset(sd); track.setTrailStart(st.startX + 84); coins.reset(sd, st.startX); fuel.reset(sd, st.startX);
+    st.trickStreak = 0; st.trickStreakT = -99; st.nextMile = 500; st.bestSaid = false;
     st.fuel = 1; st.engineOut = false; st.outOfFuel = false; st.lowWarn = false; st.sputT = 0;
     startRun(st.startX);
     if (overEl) overEl.hidden = true;
@@ -287,7 +288,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.score = scoreNow();
     const final = Math.floor(st.score), isBest = final > st.best;
     if (isBest) { st.best = final; saveBest(final); }
-    audio.over(isBest && final > 0); for (const e of jumpEls) e.hidden = true;
+    audio.ui('cardIn'); audio.over(isBest && final > 0); for (const e of jumpEls) e.hidden = true;
     if (!overEl) return;
     const goTitle = $('go-title'); if (goTitle) goTitle.textContent = st.outOfFuel ? 'Out of fuel!' : 'Wipeout!';
     $('go-score').textContent = final.toLocaleString();
@@ -357,7 +358,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const trickColor = () => TRICK_COL[st.trick?.def?.id] || '#ffd36b';
   /** A trick has been landed: burst, ring, a beat of hit-stop. */
   function trickFx(id) {
-    const col = TRICK_COL[id] || '#ffd36b'; audio.trickDone();
+    const col = TRICK_COL[id] || '#ffd36b';
+    st.trickStreak = st.t - st.trickStreakT < 4 ? st.trickStreak + 1 : 1; st.trickStreakT = st.t; audio.trickDone(st.trickStreak);      // (tricks in a row build the chime)
     juice.burst('trick', st.x, st.y + 0.3, laneZ, 26, col); juice.ring(st.x, st.y + 0.3, laneZ + 0.4, col, 0.8, 4.8, 0.5, false, 0.9);
     juice.halo(col, 7, 0.5, 0.7); juice.hitStop(40); juice.flash(col, 0.12, 160);
   }
@@ -511,7 +513,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.th = p.phi + delta * 0.55;                              // the suspension absorbs part of the angle
     const perfect = Math.abs(delta) < 0.22, rough = Math.abs(delta) > 0.5;
     st.bestAir = Math.max(st.bestAir, air);
-    if (rough && air > 0.3) { st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
+    if (rough && air > 0.3) { if (st.mult > 1) audio.comboLost(); st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
     else {
       if (air > 0.45) {
         st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 1.2 : 0.5));
@@ -540,6 +542,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function checkObstacles() {
     const list = track.obstaclesIn(st.x - 6, st.x + 6); if (!list.length) return;
     const c = Math.cos(st.th), sn = Math.sin(st.th);
+    for (const o of list) {                                                              // a close call: cleared with the wheels less than a metre above it
+      if (o.hit || o.near) continue;
+      if (Math.abs(st.x - o.x) < o.hw + 1.2) o.minClear = Math.min(o.minClear ?? 9, st.y - R - (track.laneAt(o.x) + o.h));
+      else if (st.x > o.x && o.minClear !== undefined) { o.near = true; if (o.minClear < 0.9 && o.minClear > -0.2) { audio.nearMiss(); st.bonus += 40 * st.mult; toast('Close call!'); } }
+    }
     for (const o of list) {
       if (o.hit) continue;
       const top = track.laneAt(o.x) + o.h;
@@ -558,12 +565,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.vx = Math.max(7, st.vx * 0.55); st.boost = 0; st.charging = false; st.charge = 0;
     st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0;
     st.squash = 1; st.kickW = Math.max(-6, st.kickW - 3.5);
-    juice.shake(0.4, 220); juice.bump(-0.45); juice.flash('#ffffff', 0.12, 120); audio.land('rough', 0.6);
+    juice.shake(0.4, 220); juice.bump(-0.45); juice.flash('#ffffff', 0.12, 120); audio.stumble(); if (st.mult > 1) audio.comboDrop();
     toast('Stumble! Jump the next one');
   }
 
   function crash(msg = 'Crash!') {
-    st.mode = 'crash'; st.crashT = 0; st.calmT = 0; st.mult = 1; st.comboT = 0;
+    st.mode = 'crash'; st.crashT = 0; st.calmT = 0; st.mult = 1; st.comboT = 0; st.trickStreak = 0;
     events.onCrash?.();
     toast(msg);
     const pit = /pit/i.test(msg); audio.crash(pit);
@@ -576,18 +583,18 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     ragdoll.detach(st.vx, Math.max(st.vy, 0));
   }
 
-  $('gp-resume')?.addEventListener('click', () => api.resume());
-  $('gp-quit')?.addEventListener('click', () => api.stop());
-  $('gh-pause')?.addEventListener('click', () => api.pause());
+  $('gp-resume')?.addEventListener('click', () => { audio.ui('tap'); api.resume(); });
+  $('gp-quit')?.addEventListener('click', () => { audio.ui('back'); api.stop(); });
+  $('gh-pause')?.addEventListener('click', () => { audio.ui('tap'); api.pause(); });
   const soundBtn = $('gh-sound');
   const showSound = () => { if (!soundBtn) return; soundBtn.setAttribute('aria-pressed', String(audio.enabled)); soundBtn.setAttribute('aria-label', audio.enabled ? 'Sound on' : 'Sound off'); };
-  soundBtn?.addEventListener('click', () => { audio.unlock(); audio.enabled = !audio.enabled; showSound(); });
+  soundBtn?.addEventListener('click', () => { audio.unlock(); audio.enabled = !audio.enabled; showSound(); if (audio.enabled) audio.ui('tap'); });
   audio.onChange(showSound); showSound();
   skipBtn?.addEventListener('click', () => endGuide(false));
   window.addEventListener('blur', () => api.pause());                          // auto-pause: losing the window, or the tab going to the background
   document.addEventListener('visibilitychange', () => { if (document.hidden) api.pause(); });
-  $('go-again')?.addEventListener('click', () => { if (st.mode === 'over') newRun(); });
-  $('go-quit')?.addEventListener('click', () => api.stop());
+  $('go-again')?.addEventListener('click', () => { if (st.mode === 'over') { audio.ui('confirm'); newRun(); } });
+  $('go-quit')?.addEventListener('click', () => { audio.ui('back'); api.stop(); });
   const api = {
     get active() { return st.mode !== 'off'; },
     /** Debug / test access. */
@@ -725,7 +732,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.charging && st.grounded && st.mode === 'play') {
         st.holdT += dt; st.charge = Math.min(1, st.holdT / CHARGE_TIME);
         st.boost = Math.min(BOOST_CAP, st.boost + 2.5 * dt);                 // the bike slowly speeds up while crouched
-        if (st.charge >= 1 && !st.maxed) { st.maxed = true; juice.halo('#ff8a6a', 4.5, 0.4, 0.5); juice.ring(st.x - HW, st.y - R, laneZ + 0.3, '#ffb089', 0.5, 2.6, 0.4, false, 0.8); juice.shake(0.06, 160); try { navigator.vibrate?.(10); } catch (e) { /* not supported */ } }
+        if (st.charge >= 1 && !st.maxed) { st.maxed = true; audio.chargeReady(); juice.halo('#ff8a6a', 4.5, 0.4, 0.5); juice.ring(st.x - HW, st.y - R, laneZ + 0.3, '#ffb089', 0.5, 2.6, 0.4, false, 0.8); juice.shake(0.06, 160); try { navigator.vibrate?.(10); } catch (e) { /* not supported */ } }
       } else { st.charge = Math.max(0, st.charge - dt * 6); if (!st.charging) st.maxed = false; }
       if (st.mode !== 'play') st.charging = false;
       const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n;
@@ -735,11 +742,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       }
       st.impact = predictLanding(); st.impactAt = st.t;
       juice.setIntensity(st.mode === 'play' ? THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1) : 0, st.boost / BOOST_CAP, st.charge); juice.setAnchor(st.x, st.y + 0.3, laneZ - 0.6);
-      audio.update({ playing: st.mode === 'play' && !st.engineOut, speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
+      audio.update({ air: st.grounded ? 0 : st.airT, playing: st.mode === 'play' && !st.engineOut, speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
       mudCoat.update(dt, st.mode === 'play' && st.grounded ? track.mudAt(st.x) : 0);
       if (mudCoat.coat > 0.15 && st.mode === 'play') { st.flakeT = (st.flakeT || 0) - dt; if (st.flakeT <= 0) { st.flakeT = 0.4 / mudCoat.coat; dirt.burst(st.x - 0.4 + Math.random() * 0.8, st.y - R * 0.9, laneZ + 0.3, 1, 0.3, 1); } }                       // lumps drop off as it dries
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
+        if (st.dist * 0.6 >= st.nextMile) { audio.milestone(); toast(st.nextMile + ' m!'); st.nextMile += 500; }
+        if (!st.bestSaid && st.best > 0 && scoreNow() > st.best) { st.bestSaid = true; audio.newBest(); toast('New best!'); }
         checkObstacles();
         // (swept: a slow frame must not let the bike step over a coin, so the path since the last frame is checked in short hops)
         let got = 0, fuelGot = 0; const taken = [], fuelHits = []; const hops = st.cpx === undefined || Math.abs(st.x - st.cpx) > 12 ? 1 : Math.min(10, Math.ceil(Math.hypot(st.x - st.cpx, st.y - st.cpy) / 1.0));
@@ -760,14 +769,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
             st.fuel = Math.min(1, st.fuel + fuelGot * CAN_FUEL); st.lowWarn = false; st.bonus += 50 * fuelGot * st.mult;
             audio.fuelUp(); toast('+FUEL'); for (const hh of fuelHits) { juice.burst('coin', hh.x, hh.y, laneZ, 12, '#ff9a4a'); juice.ring(hh.x, hh.y, laneZ, '#ffb066', 0.5, 2.4, 0.35, false, 0.8); }
           }
-          if (st.fuel < 0.25 && !st.lowWarn && !st.engineOut) { st.lowWarn = true; toast('Low fuel!'); audio.sputter(); }
-          if (st.fuel < 0.15 && !st.engineOut) { st.sputT -= dt; if (st.sputT <= 0) { st.sputT = 2.4; audio.sputter(); } }
-          if (st.fuel <= 0 && !st.engineOut) { st.engineOut = true; st.charging = false; st.charge = 0; toast('Out of fuel!'); audio.sputter(true); }
+          if (st.fuel < 0.25 && !st.lowWarn && !st.engineOut) { st.lowWarn = true; toast('Low fuel!'); audio.lowFuel(); }
+          if (st.fuel < 0.15 && !st.engineOut) { st.sputT -= dt; if (st.sputT <= 0) { st.sputT = 2.4; audio.lowFuel(); } }
+          if (st.fuel <= 0 && !st.engineOut) { st.engineOut = true; st.charging = false; st.charge = 0; toast('Out of fuel!'); audio.outOfFuel(); }
           if (st.engineOut && st.grounded && st.vx < 1.2) { st.outOfFuel = true; st.mult = 1; st.comboT = 0; for (const e of jumpEls) e.hidden = true; st.crashT = 0; showOver(); }
         }
         if (st.mult > 1) {                                                                  // the combo runs down; at zero it drops a step
           st.comboT -= dt;
-          if (st.comboT <= 0) { st.mult--; st.comboT = st.mult > 1 ? 4 : 0; }
+          if (st.comboT <= 0) { st.mult--; st.comboT = st.mult > 1 ? 4 : 0; audio.comboDrop(); }
         }
         st.score = scoreNow();
         const hz = track.hazardAhead(st.x, 60); st.hz = hz;                                  // a heads-up before each hazard
