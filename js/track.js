@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016225440';
-import { heightAt as terrainAt } from './world.js?v=20261016225440';
+import { PAL } from './palette.js?v=20261016230717';
+import { heightAt as terrainAt } from './world.js?v=20261016230717';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -67,7 +67,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   }
   function mudPiece(d) {
     flat(6);
-    const W = 16 + rng() * 10 + d * 8, x0 = xNow();
+    const W = 9 + rng() * 5 + d * 3, x0 = xNow();                                      // a patch you can hop (or grit through)
     ease(-0.35, 2); flat(W - 4); ease(0.35, 2);
     muds.push({ x0, x1: xNow() });
     flat(6);
@@ -195,13 +195,32 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
 
   // ---------------- scenery on the new ground: the same trees, bushes, rocks, flowers and grass as the main scene ----------------
   const scenery = new Map();                      // chunk index -> Group
+  /** Where a house or windmill stands in the background of this stretch (if any): flat ground, clear of pits, well behind the lane. */
+  function planBuildings(idx) {
+    const cx0 = X0 + idx * CHUNK, cx1 = cx0 + CHUNK, r = mulberry32((idx * 4421 + seedNow * 977) >>> 0);
+    const dens = smooth01((cx0 + CHUNK / 2 - XT - 25) / 90);                         // none near the seam, then a house or mill every couple of stretches
+    if (r() > 0.6 * dens) return [];
+    for (let tries = 0; tries < 14; tries++) {
+      const x = cx0 + 9 + r() * (CHUNK - 18), z = laneZ - (26 + r() * 42), kind = r() < 0.22 ? 'windmill' : 'house', rad = kind === 'windmill' ? 4.4 : 6.6;
+      if (gaps.some((g) => g.x1 > x - rad - 4 && g.x0 < x + rad + 4)) continue;
+      let lo = 1e9, hi = -1e9;
+      for (let k = 0; k < 9; k++) { const a = (k / 8) * 6.28, h = groundAt(x + Math.cos(a) * rad * 0.7, z + Math.sin(a) * rad * 0.7); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+      if (hi - lo < 1.8) return [{ x, z, kind, r: rad }];
+    }
+    return [];
+  }
   function plant(idx) {
     const x0 = Math.max(X0 + idx * CHUNK, XT + 2), x1 = X0 + (idx + 1) * CHUNK;
     if (x1 <= x0 + 1) { scenery.set(idx, null); return; }
-    const g = world.scatter({ x0, x1, hFn: groundAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, avoid: (x) => inPit(x), density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) });   // the planting thickens gradually past the seam
-    group.add(g); scenery.set(idx, g);
+    laneAt(x1 + 60);                                                                  // make sure the course (and so every gap) exists this far ahead
+    const list = planBuildings(idx);
+    const holder = new THREE.Group();
+    const avoid = (x, z) => inPit(x) || list.some((b) => Math.hypot(x - b.x, z - b.z) < b.r + 1.2);
+    holder.add(world.scatter({ x0, x1, hFn: groundAt, laneAt, seed: idx * 7919 + seedNow * 104729, laneZ, farZ: laneZ - 70, avoid, density: ((x1 - x0) / CHUNK) * (0.15 + 0.85 * smooth01((x0 + (x1 - x0) / 2 - XT) / 80)) }));   // the planting thickens gradually past the seam
+    if (list.length) { const bg = world.sceneryBuildings({ list, hFn: groundAt, seed: idx * 31 + seedNow }); holder.userData.buildings = bg; holder.add(bg); }
+    group.add(holder); scenery.set(idx, holder);
   }
-  function dropScenery(idx) { const g = scenery.get(idx); if (g) { g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
+  function dropScenery(idx) { const g = scenery.get(idx); if (g) { g.userData.buildings?.userData.dispose?.(); g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
   function clearScenery() { for (const k of [...scenery.keys()]) dropScenery(k); }
 
   // ---------------- mud patches: a crisp, lumpy blob lying on the ground (own geometry, not painted on the terrain) ----------------
@@ -211,7 +230,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   const MUD_COLS = ['#6f4d2e', '#5a3f27', '#7c5936', '#493322'].map((h) => new THREE.Color(h));
   const mudMeshes = new Map();          // mud index -> Group
   function buildMud(u, seedN) {
-    const r = mulberry32((Math.floor(u.x0 * 10) + seedN * 131) >>> 0), cx = (u.x0 + u.x1) / 2, cz = laneZ + 2.5, rx = (u.x1 - u.x0) / 2 + 1.5, rz = 10.5;
+    const r = mulberry32((Math.floor(u.x0 * 10) + seedN * 131) >>> 0), cx = (u.x0 + u.x1) / 2, cz = laneZ + 1.8, rx = (u.x1 - u.x0) / 2 + 1.2, rz = 7.2;
     const SEG = 48, RINGS = 6, ph = [r() * 6, r() * 6, r() * 6];
     const outline = (a) => 1 + 0.13 * Math.sin(a * 3 + ph[0]) + 0.08 * Math.sin(a * 5 + ph[1]) + 0.05 * Math.sin(a * 9 + ph[2]);   // a lumpy, irregular outline
     const pos = [], col = [], idx = [];
@@ -245,13 +264,13 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     const grp = new THREE.Group();
     const blob = new THREE.Mesh(g, mudMat); blob.receiveShadow = true; grp.add(blob);
     // wet puddles and lumps of churned earth
-    for (let k = 0; k < 7; k++) {
+    for (let k = 0; k < 5; k++) {
       const a = r() * 6.28, rf = 0.15 + r() * 0.65, n = outline(a), px = cx + Math.cos(a) * rx * n * rf, pz = cz + Math.sin(a) * rz * n * rf;
       const rad = 0.8 + r() * 1.5, p = new THREE.Mesh(new THREE.CircleGeometry(rad, 9).rotateX(-Math.PI / 2), puddleMat);
       p.scale.set(1.5, 1, 1); p.position.set(px, heightOn(px, pz, rf) + 0.07, pz); p.rotation.y = r() * 3; grp.add(p);
     }
-    const clumps = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), clumpMat, 46), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v3 = new THREE.Vector3(), sc = new THREE.Vector3();
-    for (let k = 0; k < 46; k++) {
+    const clumps = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), clumpMat, 30), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v3 = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (let k = 0; k < 30; k++) {
       const a = r() * 6.28, rf = Math.sqrt(r()) * 0.97, n = outline(a), px = cx + Math.cos(a) * rx * n * rf, pz = cz + Math.sin(a) * rz * n * rf, s0 = 0.14 + r() * 0.32;
       if (Math.abs(pz - laneZ) < 1.6) { m4.makeScale(0, 0, 0); clumps.setMatrixAt(k, m4); continue; }                // keep the lane clear
       e.set(r() * 3, r() * 6, r() * 3); q.setFromEuler(e);

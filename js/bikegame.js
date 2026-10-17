@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016225440';
-import { createTrack } from './track.js?v=20261016225440';
-import { createRagdoll } from './ragdoll.js?v=20261016225440';
-import { createPuffs } from './puffs.js?v=20261016225440';
-import { createCoins } from './coins.js?v=20261016225440';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016230717';
+import { createTrack } from './track.js?v=20261016230717';
+import { createRagdoll } from './ragdoll.js?v=20261016230717';
+import { createPuffs } from './puffs.js?v=20261016230717';
+import { createCoins } from './coins.js?v=20261016230717';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -33,6 +33,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const modeBtn = document.getElementById('gh-mode');
   const switches = ['gp-mode', 'go-mode'].map((id) => document.getElementById(id)).filter(Boolean);
   const toastEl = document.getElementById('gh-toast');
+  const floatEl = document.getElementById('gh-float');
+  const multFxEl = document.getElementById('gh-multfx');
   const grooveEl = document.getElementById('gh-groove');
   const multEl = document.getElementById('gh-mult');
   const overEl = document.getElementById('game-over');
@@ -91,7 +93,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, bigAir: false, hz: null, viewW: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, hz: null, viewW: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -131,10 +133,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     if (grooveEl) { grooveEl.hidden = st.mode === 'over' || (st.mult < 2 && st.meter < 0.05); grooveEl.style.setProperty('--p', Math.min(1, st.meter).toFixed(3)); grooveEl.dataset.level = String(st.mult); }
     if (multEl) multEl.textContent = '×' + st.mult;
   }
+  /** The multiplier going up pops up right above the rider. */
+  function flashMult() {
+    if (!multFxEl) return;
+    multFxEl.textContent = '\u00d7' + st.mult + ' groove!'; multFxEl.hidden = false;
+    multFxEl.classList.remove('show'); void multFxEl.offsetWidth; multFxEl.classList.add('show');
+    clearTimeout(st.multT); st.multT = setTimeout(() => { multFxEl.hidden = true; }, 1400);
+  }
   const scoreNow = () => st.dist * 0.5 + st.bonus;
   function groove(add) {
     st.meter += add;
-    while (st.meter >= 1 && st.mult < 5) { st.mult++; st.meter -= 0.7; }
+    while (st.meter >= 1 && st.mult < 5) { st.mult++; st.meter -= 0.7; flashMult(); }
     if (st.meter > 1) st.meter = 1;
     st.bestMult = Math.max(st.bestMult, st.mult);
   }
@@ -509,7 +518,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; applyClip(false); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
+          st.mode = 'off'; world.setFollow(false); applyClip(false); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -600,6 +609,16 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       track.update(cam.position.x, st.camY);
       coins.update(cam.position.x, st.t);
       guideTick();
+      world.setFollow(true, cam.position.x, st.camY - 1.5, laneZ + 10);                  // fireflies and butterflies keep drifting along with the ride
+      if (floatEl) {                                                                      // alerts, warnings and the multiplier float right above the rider
+        cam.updateMatrixWorld();
+        pv.set(st.x, st.y + 3.4 * (SC / SCALE), laneZ).project(cam);
+        const rc = renderer.domElement.getBoundingClientRect();
+        const half = Math.max(60, floatEl.offsetWidth / 2) + 8;                              // keep the whole message on screen
+        const px = THREE.MathUtils.clamp(rc.left + (pv.x * 0.5 + 0.5) * rc.width, rc.left + half, rc.right - half);
+        const py = THREE.MathUtils.clamp(rc.top + (-pv.y * 0.5 + 0.5) * rc.height, rc.top + 150, rc.bottom - 120);
+        floatEl.style.left = px + 'px'; floatEl.style.top = py + 'px';
+      }
       // landing indicator
       const im = st.impact;
       if (st.grounded) st.bigAir = false;

@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016225440';
+import { PAL } from './palette.js?v=20261016230717';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016225440';
+} from './houses.js?v=20261016230717';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1673,7 +1673,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
    * For the dirt-bike game: grow the same trees, bushes, rocks, wildflowers and grass tufts as the main scene on other ground.
    * Fills x0..x1 behind the lane (and a few low things on the slope in front), standing on `hFn(x, z)`, and returns a Group.
    */
-  function scatter({ x0, x1, hFn, seed, laneZ, farZ, density = 1, avoid }) {
+  function scatter({ x0, x1, hFn, seed, laneZ, farZ, density = 1, avoid, laneAt }) {
     const savedRand = rand, savedH = hAt, savedAnchors = anchors.splice(0), saved = {};
     rand = rng(seed >>> 0); hAt = hFn;
     for (const k of itemKeys) { saved[k] = items[k]; items[k] = []; }
@@ -1683,19 +1683,24 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       const nTrees = Math.round(6 * density * (0.7 + rand() * 0.6));
       for (let i = 0; i < nTrees; i++) addTreeRaw(X(), back(4, 32), 0.75 + rand() * 0.75);
       for (let i = 0; i < Math.round(8 * density); i++) addBushRaw(X(), back(2.6, 24), 0.45 + rand() * 0.6);
-      for (let i = 0; i < Math.round(4 * density); i++) addBushRaw(X(), laneZ + 8 + rand() * 30, 0.45 + rand() * 0.6);   // low planting on the slope toward the camera
+      // Planting on the slope toward the camera: only things that stay below the level of the lane, so nothing ever hides what is on it.
+      const hmaxAt = (x, z) => (laneAt ? laneAt(x) - hAt(x, z) - 0.6 : -1);         // how tall something may stand at (x, z)
+      const fz = () => laneZ + 14 + Math.pow(rand(), 0.8) * 36;
+      for (let i = 0; i < Math.round(6 * density); i++) { const x = X(), z = fz(), s = Math.min(0.75 + rand() * 0.75, hmaxAt(x, z) / 7.2); if (s >= 0.4) addTreeRaw(x, z, s); }
+      for (let i = 0; i < Math.round(8 * density); i++) { const x = X(), z = fz(), s = Math.min(0.45 + rand() * 0.6, hmaxAt(x, z) / 1.4); if (s >= 0.3) addBushRaw(x, z, s); }
       for (let i = 0; i < Math.round(5 * density); i++) {                                                                  // rocks, some in clusters
-        const front = rand() < 0.4, x = X(), z = front ? laneZ + 6 + rand() * 34 : back(2.8, 30), n = rand() < 0.35 ? 3 : 1;
+        const front = rand() < 0.4, x = X(), z = front ? fz() : back(2.8, 30), n = rand() < 0.35 ? 3 : 1;
+        if (front && hmaxAt(x, z) < 1.3) continue;
         for (let k = 0; k < n; k++) {
           const s = (0.35 + rand() * 0.85) * (k ? 0.65 : 1), rx = x + (rand() - 0.5) * 1.4 * (n - 1), rz = z + (rand() - 0.5) * 1.4 * (n - 1);
           items.rock.push({ p: [rx, hAt(rx, rz) + s * 0.22, rz], s: [s * 1.2, s * 0.7, s], ry: rand() * 6.28, c: new THREE.Color().setHSL(0.1, 0.06, 0.5 + rand() * 0.2) });
         }
       }
       for (let k = 0; k < (rand() < 0.6 ? 2 : 1); k++) {                                                                   // wildflower drifts
-        const base = pick(PALETTE), cx = X(), cz = rand() < 0.7 ? back(3, 24) : laneZ + 6 + rand() * 24, count = 14 + Math.floor(rand() * 14);
+        const base = pick(PALETTE), cx = X(), cz = rand() < 0.65 ? back(3, 24) : fz(), count = 14 + Math.floor(rand() * 14);
         for (let i = 0; i < count; i++) {
           const x = cx + (rand() - 0.5) * 7, z = cz + (rand() - 0.5) * 7;
-          if (Math.abs(z - laneZ) < 2.2) continue;
+          if (Math.abs(z - laneZ) < 2.2 || (z > laneZ + 3 && hmaxAt(x, z) < 1.7)) continue;
           const f = rand() < 0.8 ? base : pick(PALETTE), y = hAt(x, z), col = new THREE.Color(f.c);
           const ht = f.kind === 'sun' ? 1.0 + rand() * 0.35 : f.kind === 'spike' ? 0.55 : 0.32 + rand() * 0.28;
           items.stem.push({ p: [x, y + ht / 2, z], s: [1, ht, 1], rz: (rand() - 0.5) * 0.15, c: STEM });
@@ -1706,8 +1711,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           else { items.head.push({ p: [x, y + ht + 0.03, z], s: [0.24, 0.05, 0.24], rx: 0.5, c: col }); items.dot.push({ p: [x, y + ht + 0.07, z], s: [0.1, 0.05, 0.1], c: new THREE.Color('#4a2c14') }); }
         }
       }
-      const tuftAt = (x, z, s) => { if (Math.abs(z - laneZ) < 1.6) return; items.grass.push({ p: [x, hAt(x, z) - 0.02, z], s: [s, s * (0.75 + rand() * 0.5), s], ry: rand() * 6.28, c: pick(GREENS).clone().offsetHSL(0, 0, -0.06 + rand() * 0.1) }); };
-      for (let i = 0; i < Math.round(60 * density); i++) tuftAt(X(), rand() < 0.75 ? back(2, 34) : laneZ + 4 + rand() * 40, 0.7 + rand() * 0.4);
+      const tuftAt = (x, z, s) => { if (Math.abs(z - laneZ) < 1.6 || (z > laneZ + 3 && hmaxAt(x, z) < 0.8)) return; items.grass.push({ p: [x, hAt(x, z) - 0.02, z], s: [s, s * (0.75 + rand() * 0.5), s], ry: rand() * 6.28, c: pick(GREENS).clone().offsetHSL(0, 0, -0.06 + rand() * 0.1) }); };
+      for (let i = 0; i < Math.round(60 * density); i++) tuftAt(X(), rand() < 0.65 ? back(2, 34) : fz(), 0.7 + rand() * 0.4);
       for (const an of anchors) for (let k = 0; k < Math.round(an.n * D) + 2; k++) { const a = rand() * 6.28, r = an.r * (0.8 + rand() * 1.1); tuftAt(an.x + Math.cos(a) * r, an.z + Math.sin(a) * r, 0.65 + rand() * 0.45); }
       for (const rk of items.rock) for (let k = 0; k < 3; k++) { const a = rand() * 6.28, r = rk.s[0] * (0.9 + rand() * 0.5); tuftAt(rk.p[0] + Math.cos(a) * r, rk.p[2] + Math.sin(a) * r, 0.6 + rand() * 0.3); }
       if (avoid) for (const k of itemKeys) items[k] = items[k].filter((it) => !avoid(it.p[0], it.p[2]));   // e.g. nothing grows in a pit
@@ -1719,6 +1724,40 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     }
     return group;
   }
+
+  /**
+   * For the dirt-bike game: houses and windmills standing in the background of the new ground. `list` = [{ x, z, kind: 'house' | 'windmill', r }];
+   * they are the main scene's own buildings (lit windows at night, turning sails). Returns a Group; call group.userData.dispose() to release it.
+   */
+  function sceneryBuildings({ list, hFn, seed }) {
+    const R = rngFrom(seed >>> 0), group = new THREE.Group(), glass = [], rotors = [];
+    const plinthMat = mat(PAL.stoneWarm);
+    for (const b of list) {
+      let obj, r = b.r;
+      if (b.kind === 'windmill') { const wm = buildWindmill(); obj = wm.group; rotors.push(wm.rotor); obj.scale.setScalar(1.25); r = 3.4 * 1.25; }
+      else {
+        const hs = buildHouse(R, theme, { low, far: true, tall: R() < 0.25 });
+        obj = hs.group; glass.push(hs.glassMat); hs.glassMat.emissiveIntensity = night * 1.3; obj.scale.setScalar(0.95 + R() * 0.3); r = hs.radius * obj.scale.x;
+      }
+      let lo = 1e9, hi = -1e9;                                                         // stand it on the lowest ground under it, on a stone plinth that hides the slope
+      for (let k = 0; k < 9; k++) { const a = (k / 8) * 6.28, h = hFn(b.x + Math.cos(a) * r * 0.7, b.z + Math.sin(a) * r * 0.7); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+      obj.position.set(b.x, hi - 0.1, b.z); obj.rotation.y = (R() - 0.5) * 0.9;        // the front faces the viewer, a little turned
+      const plinth = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.9, hi - lo + 2.6, 9), plinthMat);
+      plinth.position.set(b.x, hi - 0.1 - (hi - lo + 2.6) / 2 + 0.05, b.z);
+      group.add(obj, plinth);
+    }
+    for (const gm of glass) windowMats.push(gm);
+    for (const ro of rotors) windmills.push(ro);
+    group.userData.dispose = () => {
+      for (const gm of glass) { const i = windowMats.indexOf(gm); if (i >= 0) windowMats.splice(i, 1); }
+      for (const ro of rotors) { const i = windmills.indexOf(ro); if (i >= 0) windmills.splice(i, 1); }
+      group.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+    };
+    return group;
+  }
+
+  // The dirt-bike game carries the drifting life of the scene (fireflies, butterflies) along with the camera.
+  const follow = { on: false, x: 0, y: 0, z: 0 };
 
   // ---- Butterflies: a few drifting about the meadow by day ----
   const butterflies = [];
@@ -1865,7 +1904,6 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       }`,
   }));
   fireflies.frustumCulled = false;
-  fireflies.userData.hideInGame = true;
   scene.add(fireflies);
 
   // Some fireflies carry real lights (spread near/middle/far) plus a glow pool on the ground.
@@ -2210,7 +2248,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     boards,
     get bikeLaneZ() { return LANE_Z; },
     get terrainMaterial() { return terrainMat; },
-    terrainColor, scatter,
+    terrainColor, scatter, sceneryBuildings,
+    /** Move the drifting life (fireflies, butterflies) to follow the game's camera: offsets from where they were made. */
+    setFollow(on, x = 0, y = 0, z = 0) { follow.on = on; follow.x = on ? x : 0; follow.y = on ? y : 0; follow.z = on ? z : 0; },
     /**
      * Seat every sign for the current screen shape. Each slides inward along its hill until it fits the
      * visible width (never past the hill's crest), steps to its zig-zag depth as the screen gets narrow,
@@ -2402,7 +2442,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         u.vis = (u.vis ?? 1) + ((blk ? 0 : 1) - (u.vis ?? 1)) * Math.min(1, dt * 6);
         bf.scale.setScalar(Math.max(0.001, u.vis));
         bf.visible = night < 0.5 && u.vis > 0.03;
-        bf.position.set(u.bx + Math.sin(t) * 3.2 + Math.sin(t * 2.3) * 0.8, u.by + Math.sin(t * 1.7) * 0.5, u.bz + Math.cos(t * 0.8) * 3.0);
+        bf.position.set(u.bx + Math.sin(t) * 3.2 + Math.sin(t * 2.3) * 0.8 + follow.x, u.by + Math.sin(t * 1.7) * 0.5 + follow.y, u.bz + Math.cos(t * 0.8) * 3.0 + follow.z);
         bf.rotation.y = t + Math.PI / 2;
         const flap = Math.sin(time * 22 + u.ph) * 0.9;
         u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
@@ -2413,9 +2453,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         const f = ffData[i];
         const amp = f.gi === 0 ? 1.8 : 1.3;
         a.setXYZ(i,
-          f.x + Math.sin(time * 0.35 + f.ph) * amp,
-          f.y + Math.sin(time * 0.8 + f.ph * 2) * 0.7,
-          f.z + Math.cos(time * 0.3 + f.ph * 1.3) * amp);
+          f.x + Math.sin(time * 0.35 + f.ph) * amp + follow.x,
+          f.y + Math.sin(time * 0.8 + f.ph * 2) * 0.7 + follow.y,
+          f.z + Math.cos(time * 0.3 + f.ph * 1.3) * amp + follow.z);
         pos.fromBufferAttribute(a, i);
         const tv = blockedBy(pos) ? 0 : 1;
         ffVis[i] += (tv - ffVis[i]) * Math.min(1, dt * 6);
@@ -2428,7 +2468,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         fl.light.position.copy(pos);
         const fv = ffVis[fl.idx];
         fl.light.intensity = night * FF_I * flick * fv;
-        fl.pool.position.set(pos.x, heightAt(pos.x, pos.z) + 0.08, pos.z);
+        fl.pool.position.set(pos.x, follow.on ? pos.y - 1.0 : heightAt(pos.x, pos.z) + 0.08, pos.z);
         fl.pool.material.opacity = night * 0.5 * flick * fv;
       });
     },
