@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017161837';
+import { PAL } from './palette.js?v=20261017162515';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017161837';
+} from './houses.js?v=20261017162515';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1971,7 +1971,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // A real sign structure: a deep rim with a light inner lip, a backing box and rear beam, steel posts
   // with ground shadows, a front catwalk with railing and a ladder, and lamps on arms above.
   // Frame parts are *lit* (darker underneath, lit from the sun) while the face stays unlit so text is crisp.
-  const boardGroup = new THREE.Group();
+  const boardGroup = new THREE.Group(); boardGroup.name = 'billboards';
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
