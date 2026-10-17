@@ -23,7 +23,7 @@ export function createFx(scene, camera, renderer, { low = false } = {}) {
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xf6f3e6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, fog: false });
   const lines = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), lineMat, LINES);
   lines.frustumCulled = false; lines.renderOrder = 8; lineGroup.add(lines);
-  const L = Array.from({ length: LINES }, (_, i) => ({ x: (Math.random() * 2 - 1) * 1.2, y: (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.38), d: 8 + Math.random() * 24, len: 0.7 + Math.random() * 1.6, sp: 0.7 + Math.random() * 0.6 }));
+  const L = Array.from({ length: LINES }, (_, i) => ({ x: (Math.random() * 2 - 1) * 1.2, y: (Math.random() < 0.5 ? -1 : 1) * (0.24 + Math.random() * 0.3), d: 8 + Math.random() * 24, len: 0.7 + Math.random() * 1.6, sp: 0.7 + Math.random() * 0.6 }));
   const dummy = new THREE.Object3D();
   let speedK = 0, boostK = 0, chargeK = 0, flick = 0;
 
@@ -59,7 +59,7 @@ export function createFx(scene, camera, renderer, { low = false } = {}) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
   const haloMat = new THREE.SpriteMaterial({ map: haloTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false });
   const haloSprite = new THREE.Sprite(haloMat); haloSprite.renderOrder = 6; haloSprite.visible = false; root.add(haloSprite);
-  const H = { life: 0, max: 1, scale: 4, o: 0.5 }; const anchor = new THREE.Vector3();
+  const H = { life: 0, max: 1, scale: 4, o: 0.5 }; const anchor = new THREE.Vector3(), tmpP = new THREE.Vector3(); let bikeY = -0.2;
 
   // ---------- time, shake, bump, fov ----------
   const T = { hit: 0, slow: 0, slowScale: 1, shakeT: 0, shakeAmp: 0 };
@@ -122,17 +122,18 @@ export function createFx(scene, camera, renderer, { low = false } = {}) {
       const target = 4 * boostK + 3 * speedK * (0.5 + 0.5 * boostK);
       fx.fovAdd += (target - fx.fovAdd) * Math.min(1, dt * 3.5);
       // speed lines
+      camera.updateMatrixWorld(); tmpP.copy(anchor).project(camera); if (Number.isFinite(tmpP.y)) bikeY += (Math.max(-0.7, Math.min(0.7, tmpP.y)) - bikeY) * Math.min(1, dt * 6); else bikeY = -0.2;
       const s = clamp01(speedK * 0.75 + boostK * 0.35 + chargeK * 0.15), on = smooth(0.12, 0.35, s);
       flick = Math.max(0, flick - dt * 3);
-      lineMat.opacity = (0.08 + 0.3 * s + 0.25 * flick) * on; lineGroup.visible = on > 0.01;
+      lineMat.opacity = (0.05 + 0.17 * s + 0.15 * flick) * on; lineGroup.visible = on > 0.01;
       if (on > 0.01) {
         const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), asp = camera.aspect;
         for (let i = 0; i < LINES; i++) {
           const l = L[i], halfH = tan * l.d, halfW = halfH * asp;
           l.x -= dt * (0.9 + 2.6 * s + flick) * l.sp * (30 / l.d) * 0.9;
-          if (l.x < -1.25) { l.x = 1.25 + Math.random() * 0.2; l.y = (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.38); l.d = 8 + Math.random() * 24; l.len = 0.7 + Math.random() * 1.6; }
+          if (l.x < -1.25) { l.x = 1.25 + Math.random() * 0.2; l.y = (Math.random() < 0.5 ? -1 : 1) * (0.24 + Math.random() * 0.3); l.d = 8 + Math.random() * 24; l.len = 0.7 + Math.random() * 1.6; }
           const len = l.len * (0.25 + 1.2 * s + flick * 0.5) * halfW * 0.18;
-          dummy.position.set(l.x * halfW, l.y * halfH, -l.d); dummy.scale.set(len, 0.0055 * l.d + 0.004, 1); dummy.updateMatrix(); lines.setMatrixAt(i, dummy.matrix);
+          dummy.position.set(l.x * halfW, Math.max(-0.97, Math.min(0.97, bikeY + l.y)) * halfH, -l.d); dummy.scale.set(len, 0.0055 * l.d + 0.004, 1); dummy.updateMatrix(); lines.setMatrixAt(i, dummy.matrix);
         }
         lines.instanceMatrix.needsUpdate = true;
       }
