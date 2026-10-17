@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016204526';
-import { createTrack } from './track.js?v=20261016204526';
-import { createRagdoll } from './ragdoll.js?v=20261016204526';
-import { createPuffs } from './puffs.js?v=20261016204526';
-import { createCoins } from './coins.js?v=20261016204526';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016204809';
+import { createTrack } from './track.js?v=20261016204809';
+import { createRagdoll } from './ragdoll.js?v=20261016204809';
+import { createPuffs } from './puffs.js?v=20261016204809';
+import { createCoins } from './coins.js?v=20261016204809';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -27,6 +27,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const scoreEl = document.getElementById('gh-score');
   const coinsEl = document.getElementById('gh-coins');
   const hint = document.getElementById('gh-hint');
+  const hintText = document.getElementById('gh-hint-text');
+  const skipBtn = document.getElementById('gh-skip');
+  const pauseEl = document.getElementById('game-pause');
   const chargeEl = document.getElementById('gh-charge');
   const chargeBar = document.getElementById('gh-charge-bar');
   const toastEl = document.getElementById('gh-toast');
@@ -63,7 +66,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -152,6 +155,39 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     setTimeout(() => { again.disabled = false; if (st.mode === 'over') again.focus({ preventScroll: true }); }, 650);   // so a panicked tap cannot restart at once
   }
 
+  // ---- guided first run: short coaching tips until each move has been done, remembered across visits ----
+  const GUIDE_KEY = 'dirtbike-guide';
+  const guideDone = () => { try { return localStorage.getItem(GUIDE_KEY) === '1'; } catch (e) { return false; } };
+  const saveGuideDone = () => { try { localStorage.setItem(GUIDE_KEY, '1'); } catch (e) { /* private mode */ } };
+  function setCoach(text) {
+    if (!hint) return;
+    if (!text) { hint.hidden = true; return; }
+    if (hintText && hintText.textContent !== text) hintText.textContent = text;
+    hint.classList.add('coach'); hint.hidden = false; if (skipBtn) skipBtn.hidden = false;
+  }
+  function endGuide(done) {
+    st.guideOn = false; if (done) { saveGuideDone(); toast("You've got it - ride on!"); } else saveGuideDone();
+    if (hint) { hint.hidden = true; hint.classList.remove('coach'); }
+  }
+  /** Which tip fits what the rider is doing right now? Steps: 0 charge, 1 release, 2 first jumps (air tips), 3 one more smooth landing. */
+  function guideTick() {
+    if (!st.guideOn || st.mode !== 'play' || st.paused) { if (hint && st.guideOn) hint.hidden = true; return; }
+    if (st.runT < 1.2) { setCoach(''); return; }
+    if (st.guideStep === 0) {
+      setCoach('Press and hold anywhere to crouch and charge a jump');
+      if (st.charging && st.charge >= 0.3) st.guideStep = 1;
+    } else if (st.guideStep === 1) {
+      setCoach(st.charging ? 'Now let go to jump!' : 'Press and hold anywhere to crouch and charge a jump');
+      if (!st.grounded) st.guideStep = 2;
+      else if (!st.charging) st.guideStep = 0;
+    } else {
+      if (!st.grounded) {
+        const im = st.impact;
+        setCoach(im && im.t < 1.6 ? 'Tap to bring the nose down - line the bars up' : 'The nose tips back in the air: tap to level it');
+      } else setCoach(st.guideStep === 2 ? 'Jump again, then tap in the air to land smoothly' : 'Nice! Hold longer for a bigger jump');
+    }
+  }
+
   /** Where and when the bike will touch down if nothing changes (a free-flight estimate). */
   function predictLanding() {
     if (st.grounded || st.mode !== 'play') return null;
@@ -174,7 +210,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       return;
     }
     const dist = Math.max(0, st.x - st.startX);
-    const base = 12 + Math.min(6, dist / 350);
+    const base = (st.guideOn ? 10 : 12) + Math.min(6, dist / 350);
     if (st.grounded) {
       const prevY = st.y;
       const p = groundPose(st.x + st.vx * h);
@@ -190,9 +226,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         st.jumpReq = 0; st.grounded = false; st.vy += st.jumpVy; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
         return;
       }
-      if (leaves && st.vx > 4) {              // the ground fell away faster than gravity: we take off
+      if (leaves && st.vx > 4 && !st.charging) {   // the ground fell away faster than gravity: we take off (but never while the button is held: charging keeps the bike glued to the ground)
         st.grounded = false; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
-        if (st.charging) { st.vy += st.charge * 6; st.charging = false; }   // still holding at the lip: the charge becomes a smaller pop
         return;
       }
       st.vy = (q.y - prevY) / h;
@@ -257,6 +292,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       }
     }
     st.rot = 0;
+    if (st.guideOn && st.guideStep >= 2 && air > 0.4 && !rough) {   // a smooth landing counts toward finishing the tips
+      if (st.guideStep === 2) st.guideStep = 3; else endGuide(true);
+    }
     if (st.buf) {                                               // a press just before touchdown: apply it now
       const b = st.buf; st.buf = null;
       if (b.rel) {                                              // released already: the jump goes off the moment the wheels touch
@@ -277,6 +315,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     ragdoll.detach(st.vx, Math.max(st.vy, 0));
   }
 
+  $('gp-resume')?.addEventListener('click', () => api.resume());
+  $('gp-quit')?.addEventListener('click', () => api.stop());
+  $('gh-pause')?.addEventListener('click', () => api.pause());
+  skipBtn?.addEventListener('click', () => endGuide(false));
+  window.addEventListener('blur', () => api.pause());                          // auto-pause: losing the window, or the tab going to the background
+  document.addEventListener('visibilitychange', () => { if (document.hidden) api.pause(); });
   $('go-again')?.addEventListener('click', () => { if (st.mode === 'over') newRun(); });
   $('go-quit')?.addEventListener('click', () => api.stop());
   const api = {
@@ -298,7 +342,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       document.body.classList.add('game-mode');
       document.activeElement?.blur?.();                        // keyboard focus must not stay on a button that is about to disappear: Space has to reach the game
       if (hud) hud.hidden = false;
-      if (hint) { hint.hidden = false; clearTimeout(st.hintT); st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
+      const gq = /[?&]guide=(\d)/.exec(location.search);
+      st.guideOn = gq ? gq[1] === '1' : !guideDone(); st.guideStep = 0;
+      if (hint) {
+        clearTimeout(st.hintT);
+        if (st.guideOn) { hint.hidden = true; hint.classList.add('coach'); }
+        else { hint.classList.remove('coach'); if (hintText) hintText.textContent = 'Hold to crouch \u00b7 release to jump \u00b7 tap in the air to level out'; if (skipBtn) skipBtn.hidden = true; hint.hidden = false; st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
+      }
+      st.paused = false; if (pauseEl) pauseEl.hidden = true; document.body.classList.remove('game-paused');
       setHud();
     },
     stop() {
@@ -308,15 +359,35 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (hud) hud.hidden = true;
       if (overEl) overEl.hidden = true;
       if (chargeEl) chargeEl.hidden = true;
+      st.paused = false; if (pauseEl) pauseEl.hidden = true; document.body.classList.remove('game-paused');
+      if (hint) hint.hidden = true;
+      st.guideOn = false;
       document.body.classList.remove('game-over');
       clearTimeout(st.hintT);
       document.body.classList.remove('game-mode');
     },
+    get paused() { return st.paused; },
+    /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */
+    pause() {
+      if (st.mode !== 'play' || st.paused) return;
+      st.paused = true; st.down = false; st.charging = false; st.buf = null; st.charge = 0;
+      if (hint) hint.hidden = true;
+      if (chargeEl) chargeEl.hidden = true;
+      document.body.classList.add('game-paused');
+      if (pauseEl) { pauseEl.hidden = false; setTimeout(() => { if (st.paused) document.getElementById('gp-resume')?.focus({ preventScroll: true }); }, 50); }
+    },
+    resume() {
+      if (!st.paused) return;
+      st.paused = false; st.down = false;
+      if (pauseEl) pauseEl.hidden = true;
+      document.body.classList.remove('game-paused');
+    },
+    togglePause() { if (st.paused) api.resume(); else api.pause(); },
     /** Ride again (the buttons on the game-over panel). */
     again() { if (st.mode === 'over') newRun(); },
     /** The one button. On the ground: hold to crouch and charge, release to jump. In the air: tap to kick the nose down, hold to dive. */
     press() {
-      if (st.mode === 'off' || st.mode === 'out' || st.mode === 'over') return;
+      if (st.mode === 'off' || st.mode === 'out' || st.mode === 'over' || st.paused) return;
       st.down = true;
       if (st.grounded || st.coyote > 0) { st.charging = true; st.holdT = 0; st.diveOK = false; }
       else if (st.impact && st.impact.t - (st.t - st.impactAt) < BUFFER_WINDOW && st.vy < 0) { st.buf = { t0: st.t, rel: false, held: 0 }; st.diveOK = false; }   // about to land: keep it for the landing
@@ -344,6 +415,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
+        return true;
+      }
+      if (st.paused) {                                                         // frozen: keep the camera exactly where it was
+        cam.position.copy(st.camPos); cam.lookAt(st.camLook);
         return true;
       }
       st.t += dt; if (st.mode === 'play') st.runT += dt;
@@ -411,8 +486,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       cam.position.lerpVectors(st.from.pos, target.pos, k);
       lookV.lerpVectors(st.from.look, target.look, k); cam.lookAt(lookV);
       clip.constant = THREE.MathUtils.lerp(60, CUT, k);
+      st.camPos.copy(cam.position); st.camLook.copy(lookV);
       track.update(cam.position.x, st.camY);
       coins.update(cam.position.x, st.t);
+      guideTick();
       // landing indicator
       const im = st.impact;
       if (im && im.t < 1.8 && st.airT > 0.15) {

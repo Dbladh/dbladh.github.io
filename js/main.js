@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016204526';
-import { buildWorld } from './world.js?v=20261016204526';
-import { createSky } from './sky.js?v=20261016204526';
-import { createDOF } from './dof.js?v=20261016204526';
-import { createRide } from './ride.js?v=20261016204526';
-import { createGame } from './bikegame.js?v=20261016204526';
+import { PAL } from './palette.js?v=20261016204809';
+import { buildWorld } from './world.js?v=20261016204809';
+import { createSky } from './sky.js?v=20261016204809';
+import { createDOF } from './dof.js?v=20261016204809';
+import { createRide } from './ride.js?v=20261016204809';
+import { createGame } from './bikegame.js?v=20261016204809';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -460,6 +460,7 @@ function start() {
     window.addEventListener('keydown', (e) => {
       if (!game.active) return;
       if (e.key === 'Escape') { game.stop(); e.preventDefault(); }
+      else if ((e.key === 'p' || e.key === 'P') && !e.repeat) { game.togglePause(); e.preventDefault(); }
       else if ((e.key === ' ' || e.key === 'Enter') && !e.target.closest('button')) { if (!e.repeat) game.press(); e.preventDefault(); }
     });
     window.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') game.release(); });

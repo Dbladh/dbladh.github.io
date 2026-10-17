@@ -631,3 +631,18 @@ body.game-over .gh-quit { display: none; }   /* the card has its own Back button
 .gh-charge.max { animation: ghmax .35s ease-in-out infinite alternate; }
 @keyframes ghmax { from { transform: translate(-50%, -50%) scale(1); } to { transform: translate(-50%, -50%) scale(1.18); } }
 @media (prefers-reduced-motion: reduce) { .gh-charge.max { animation: none; } }
+
+/* Coaching tips, pause button and pause card */
+.gh-hint.coach { animation: none; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); white-space: normal; text-align: center; border-style: solid; background: color-mix(in srgb, var(--gold) 55%, var(--paper)); }
+.gh-hint[hidden] { display: none; }
+.gh-skip { pointer-events: auto; border: 0; background: transparent; color: var(--coral-text); font: 700 .85rem var(--name-font); text-decoration: underline; cursor: pointer; padding: 6px 4px; min-height: 36px; }
+.gh-skip[hidden] { display: none; }
+.gh-pausebtn { position: absolute; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); width: 48px; height: 48px; border-radius: 50%; pointer-events: auto; cursor: pointer;
+  border: 1.5px solid var(--line); background: color-mix(in srgb, var(--cream) 92%, transparent); color: var(--ink); box-shadow: 0 3px 10px rgba(40, 52, 44, .16); display: grid; place-items: center; transition: transform .2s ease, background-color .2s ease; }
+.gh-pausebtn:hover { background: var(--gold); transform: translateY(-1px); }
+.gh-pausebtn:focus-visible { outline: 2px solid var(--coral-text); outline-offset: 3px; }
+.gh-pausebtn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+body.game-over .gh-pausebtn, body.game-paused .gh-pausebtn { display: none; }
+body.game-paused .gh-quit { display: none; }
+.gp-note { margin: 0 0 16px; opacity: .8; }
+@media (max-width: 600px) { .gh-pausebtn { width: 52px; height: 52px; } }
