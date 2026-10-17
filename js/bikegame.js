@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017155919';
-import { createTrack } from './track.js?v=20261017155919';
-import { createRagdoll } from './ragdoll.js?v=20261017155919';
-import { createFx } from './fx.js?v=20261017155919';
-import { createAudio } from './audio.js?v=20261017155919';
-import { createPuffs } from './puffs.js?v=20261017155919';
-import { createDirt } from './dirt.js?v=20261017155919';
-import { createMudCoat } from './mudcoat.js?v=20261017155919';
-import { createCoins } from './coins.js?v=20261017155919';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017160449';
+import { createTrack } from './track.js?v=20261017160449';
+import { createRagdoll } from './ragdoll.js?v=20261017160449';
+import { createFx } from './fx.js?v=20261017160449';
+import { createAudio } from './audio.js?v=20261017160449';
+import { createPuffs } from './puffs.js?v=20261017160449';
+import { createDirt } from './dirt.js?v=20261017160449';
+import { createMudCoat } from './mudcoat.js?v=20261017160449';
+import { createCoins } from './coins.js?v=20261017160449';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -717,7 +717,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         checkObstacles();
-        const got = coins.collect(st.x, st.y, SC / SCALE, dt);
+        const got = coins.collect(st.x, st.y, SC / SCALE, dt, st.vx);
         if (got) {
           for (let i = 0; i < Math.min(got, 3); i++) audio.coin();
           st.coins += got; st.bonus += 25 * got * st.mult;
@@ -829,7 +829,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         floatEl.style.left = px + 'px'; floatEl.style.top = py + 'px';
       }
       {                                                                                   // the JUMP markers over the next obstacles
-        const rc = canvasRect(), upcoming = st.mode === 'play' && !st.paused ? track.obstaclesIn(st.x - 1, st.x + 72).filter((o) => !o.hit && o.x > st.x - 1) : [];
+        const rc = canvasRect();
+        // The next obstacles ahead (within 50 units). Once the rider has passed an obstacle, the rest of its tight group is part of the same jump and gets no marker of its own.
+        let upcoming = [];
+        if (st.mode === 'play' && !st.paused) {
+          const passed = track.obstaclesIn(st.x - 14, st.x - 1).pop();
+          if (!(passed && st.x - passed.x < 8)) upcoming = track.obstaclesIn(st.x - 1, st.x + 50).filter((o) => !o.hit && o.x > st.x - 1 && !(passed && o.x - passed.x < 12));   // (and none for a moment after passing one, so each marker visibly goes away)
+        }
         let k = 0;
         for (let i = 0; i < upcoming.length && k < 2; i++) {
           const o = upcoming[i]; if (i && o.x - upcoming[i - 1].x < 12) continue;               // the rest of a tight group is one jump

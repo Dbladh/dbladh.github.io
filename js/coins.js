@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017155919';
+import { PAL } from './palette.js?v=20261017160449';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -63,6 +63,7 @@ export function createCoins(scene, track, laneZ) {
   scene.add(mesh);
 
   let seed = 1, minX = 0;
+  const drawnIn = new Set();                                    // coins the magnet is drawing in
   const blocks = new Map();
   const dummy = new THREE.Object3D();
 
@@ -147,7 +148,7 @@ export function createCoins(scene, track, laneZ) {
 
   return {
     /** New course: coins start after `startX + 24`. */
-    reset(newSeed, startX) { seed = newSeed; minX = startX + 24; blocks.clear(); },
+    reset(newSeed, startX) { seed = newSeed; minX = startX + 24; blocks.clear(); drawnIn.clear(); },
     set visible(v) { mesh.visible = v; },
     blockList(b) { return blockOf(b); },                       // (for tests)
     get blockSize() { return BLOCK; },
@@ -169,16 +170,25 @@ export function createCoins(scene, track, laneZ) {
     /** Take every coin touching the bike (centre x, y; ~3.6 units long). Returns how many. */
     /** The coins taken by the latest collect() call (for the pop effect). */
     hits: [],
-    collect(x, y, k = 1, dt = 1 / 60) {
+    collect(x, y, k = 1, dt = 1 / 60, vx = 0) {
       let got = 0; this.hits.length = 0;
-      const px = x, py = y + 0.4 * k, pull = 1 - Math.exp(-dt * 11);
+      const py = y + 0.4 * k, aimX = x + vx * 0.05, pull = 1 - Math.exp(-dt * 16);
+      const inner = (dx, dy) => (dx * dx) / (2.1 * k * 2.1 * k) + (dy * dy) / (2.3 * k * 2.3 * k) < 1;
+      const take = (c) => { c.got = true; got++; this.hits.push({ x: c.x, y: c.y }); drawnIn.delete(c); };
+      // coins newly within reach of the magnet (or right on the bike): taken at once, or started drawing in
       const b0 = Math.floor((x - 10) / BLOCK), b1 = Math.floor((x + 10) / BLOCK);
       for (let b = b0; b <= b1; b++) for (const c of blockOf(b)) {
-        if (c.got) continue;
-        const dx = c.x - px, dy = c.y - py;
-        if ((dx * dx) / (5.2 * k * 5.2 * k) + (dy * dy) / (6.2 * k * 6.2 * k) > 1 && !c.mag) continue;                          // out of reach
-        if ((dx * dx) / (2.1 * k * 2.1 * k) + (dy * dy) / (2.3 * k * 2.3 * k) < 1) { c.got = true; got++; this.hits.push({ x: c.x, y: c.y }); continue; }
-        c.mag = true; c.x += (px - c.x) * pull; c.y += (py - c.y) * pull;                                                       // a coin near the bike is drawn in (so a slightly different line still picks it up)
+        if (c.got || c.mag) continue;
+        const dx = c.x - x, dy = c.y - py;
+        if ((dx * dx) / (5.2 * k * 5.2 * k) + (dy * dy) / (6.2 * k * 6.2 * k) > 1) continue;                                   // out of reach
+        if (inner(dx, dy)) take(c); else { c.mag = true; c.magT = 0; drawnIn.add(c); }
+      }
+      // coins being drawn in (wherever they are now: one that falls behind the bike must still be finished off): they aim a little ahead of the bike so a fast bike
+      // does not outrun them, and one that has been drawing in for 0.22 s is simply taken
+      for (const c of drawnIn) {
+        c.magT += dt;
+        if (inner(c.x - x, c.y - py) || c.magT > 0.22) { take(c); continue; }
+        c.x += (aimX - c.x) * pull; c.y += (py - c.y) * pull;
       }
       return got;
     },
