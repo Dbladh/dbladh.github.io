@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017150733';
-import { createTrack } from './track.js?v=20261017150733';
-import { createRagdoll } from './ragdoll.js?v=20261017150733';
-import { createFx } from './fx.js?v=20261017150733';
-import { createAudio } from './audio.js?v=20261017150733';
-import { createPuffs } from './puffs.js?v=20261017150733';
-import { createDirt } from './dirt.js?v=20261017150733';
-import { createMudCoat } from './mudcoat.js?v=20261017150733';
-import { createCoins } from './coins.js?v=20261017150733';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017152006';
+import { createTrack } from './track.js?v=20261017152006';
+import { createRagdoll } from './ragdoll.js?v=20261017152006';
+import { createFx } from './fx.js?v=20261017152006';
+import { createAudio } from './audio.js?v=20261017152006';
+import { createPuffs } from './puffs.js?v=20261017152006';
+import { createDirt } from './dirt.js?v=20261017152006';
+import { createMudCoat } from './mudcoat.js?v=20261017152006';
+import { createCoins } from './coins.js?v=20261017152006';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -171,11 +171,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const bx = st.cx, by = st.cy + 1.2, tx = target.pos.x, ty = target.pos.y, tz = target.pos.z;
       let need = 0;
       for (let k = 1; k <= 12; k++) {
-        const t = k / 14, gx = tx + (bx - tx) * t, gz = tz + (laneZ - tz) * t, yNeed = (track.groundAt(gx, gz) + 1.4 - by * t) / (1 - t);   // the camera height at which the line of sight clears this ground
+        const t = k / 14, gx = tx + (bx - tx) * t, gz = tz + (laneZ - tz) * t, yNeed = (track.groundAt(gx, gz) + 0.8 - by * t) / (1 - t);   // the camera height at which the line of sight clears this ground
         if (yNeed - ty > need) need = yNeed - ty;
       }
-      need = Math.min(need, 18);
-      st.lift += (need - st.lift) * (1 - Math.exp(-(need > st.lift ? 7 : 1.3) * st.frameDt));                  // up quickly, down slowly
+      need = Math.min(need, 14);
+      st.lift += (need - st.lift) * (1 - Math.exp(-(need > st.lift ? 7 : 2) * st.frameDt));                  // up quickly, down slowly
       target.pos.y += st.lift;
     }
     return dist;
