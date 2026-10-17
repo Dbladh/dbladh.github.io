@@ -2,14 +2,14 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016230717';
-import { createTrack } from './track.js?v=20261016230717';
-import { createRagdoll } from './ragdoll.js?v=20261016230717';
-import { createPuffs } from './puffs.js?v=20261016230717';
-import { createCoins } from './coins.js?v=20261016230717';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017082226';
+import { createTrack } from './track.js?v=20261017082226';
+import { createRagdoll } from './ragdoll.js?v=20261017082226';
+import { createPuffs } from './puffs.js?v=20261017082226';
+import { createCoins } from './coins.js?v=20261017082226';
 
 const ENTER_SECONDS = 1.3;
-const SCALE = 1.8;
+const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
 const GRAV = 24;
 const JUMP_MIN = 5.5, JUMP_MAX = 15;   // upward kick: a tap hops, a full charge flies
 const CHARGE_TIME = 1.1;               // seconds of holding to reach full charge (it then stays maxed)
@@ -105,7 +105,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
     // How much track to show: more at speed, and enough to see the next hazard coming with time to react (about 1.5 s).
-    const W0 = 40 - 10 * tall, bonus = THREE.MathUtils.clamp((st.vx - 14) * 1.1, 0, 12);
+    const W0 = 32 - 8 * tall, bonus = THREE.MathUtils.clamp((st.vx - 14) * 1.1, 0, 12);
     const needAhead = st.hz ? Math.min(st.hz.x0 - st.x, 52) / 0.72 : 0;
     const Wt = Math.max(W0 + bonus, needAhead);
     st.viewW = st.viewW ? st.viewW + (Wt - st.viewW) * (1 - Math.exp(-2 * st.frameDt)) : Wt;
@@ -163,7 +163,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   /** Where the wheels would sit on the ground under the bike's centre x: height of the axle line and the ground's angle. */
   function groundPose(x) {
     let gR = groundY(x - HW), gF = groundY(x + HW);
-    gF = Math.max(gF, gR - 1.4); gR = Math.max(gR, gF - 1.4);                // at a cliff edge (a gap) the bike tips off it gently instead of nose-diving
+    const drop = HW * 1.16; gF = Math.max(gF, gR - drop); gR = Math.max(gR, gF - drop);                // at a cliff edge (a gap) the bike tips off it gently instead of nose-diving
     const phi = Math.atan2(gF - gR, 2 * HW);
     return { y: (gR + gF) / 2 + R / Math.cos(phi), phi };
   }
@@ -306,7 +306,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (track.inPit(st.x) || track.inPit(st.x - HW * 0.9 + 0.7)) { crash('Into the pit!'); return; }       // driven over the edge of a gap
       st.x += st.vx * h;
       const q = groundPose(st.x);
-      if (st.charging && track.laneAt(st.x) - track.laneAt(st.x + 0.9) > 3) fireJump();                  // holding at the lip of a gap: the charge is released for you there
+      if (st.charging && track.laneAt(st.x) - track.laneAt(st.x + HW + 0.5) > 3) fireJump();                  // holding at the lip of a gap: the charge is released for you there
       let leaves = false;                                     // would a free-flying bike clear the ground over the next ~0.12 s?
       for (let t = 0.04; t <= 0.121 && !leaves; t += 0.04) leaves = prevY + st.vy * t - 0.5 * (GRAV * 0.6) * t * t > groundPose(st.x + st.vx * t).y + 0.04;   // eager: bumps and small lifts give a little air even with no button down
       st.coyote = 0.08;
@@ -430,7 +430,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     get active() { return st.mode !== 'off'; },
     /** Debug / test access. */
     get tapMode() { return st.toggle; },
-    get state() { return { impact: st.impact, buf: !!st.buf, charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
+    get state() { return { jumpVy: st.jumpVy, impact: st.impact, buf: !!st.buf, charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
     events,
     focusDistance: 26,
     onQuit: null,
