@@ -123,7 +123,7 @@ export function createFx(scene, camera, renderer, { low = false } = {}) {
       fx.fovAdd += (target - fx.fovAdd) * Math.min(1, dt * 3.5);
       // speed lines
       camera.updateMatrixWorld(); tmpP.copy(anchor).project(camera); if (Number.isFinite(tmpP.y)) bikeY += (Math.max(-0.7, Math.min(0.7, tmpP.y)) - bikeY) * Math.min(1, dt * 6); else bikeY = -0.2;
-      const s = clamp01(speedK * 0.75 + boostK * 0.35 + chargeK * 0.15), on = smooth(0.12, 0.35, s);
+      const s = clamp01(speedK * 0.75 + boostK * 0.35 + chargeK * 0.15), on = smooth(0.55, 0.85, speedK) * smooth(0.6, 0.95, boostK);          // the lines are for full speed only: fast AND fully boosted
       flick = Math.max(0, flick - dt * 3);
       const tallK = clamp01((1 - camera.aspect) / 0.5);                                 // phones: longer, brighter, slightly thicker streaks (the screen is narrow)
       lineMat.opacity = Math.min(0.85, (0.05 + 0.17 * s + 0.15 * flick) * on * (1 + 0.45 * tallK)); lineGroup.visible = on > 0.01;
