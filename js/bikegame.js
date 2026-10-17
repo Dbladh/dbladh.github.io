@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016215940';
-import { createTrack } from './track.js?v=20261016215940';
-import { createRagdoll } from './ragdoll.js?v=20261016215940';
-import { createPuffs } from './puffs.js?v=20261016215940';
-import { createCoins } from './coins.js?v=20261016215940';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016220540';
+import { createTrack } from './track.js?v=20261016220540';
+import { createRagdoll } from './ragdoll.js?v=20261016220540';
+import { createPuffs } from './puffs.js?v=20261016220540';
+import { createCoins } from './coins.js?v=20261016220540';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -48,7 +48,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const landMark = new THREE.Group();
   const landMat = new THREE.MeshBasicMaterial({ color: '#8fd081', transparent: true, opacity: 0, depthTest: false, depthWrite: false });
   const landDiscMat = landMat.clone();
-  const landRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 44), landMat), landDisc = new THREE.Mesh(new THREE.CircleGeometry(0.72, 44), landDiscMat);
+  const landRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 48).rotateX(-Math.PI / 2), landMat), landDisc = new THREE.Mesh(new THREE.CircleGeometry(0.72, 48).rotateX(-Math.PI / 2), landDiscMat);   // lying flat on the ground
   landRing.renderOrder = landDisc.renderOrder = 6; landMark.add(landDisc, landRing); landMark.visible = false; scene.add(landMark);
   const LAND_COL = { perfect: new THREE.Color('#8fd081'), clean: new THREE.Color('#e8c24a'), rough: new THREE.Color('#ec8a3c'), crash: new THREE.Color('#d15e4d') };
   const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
@@ -91,7 +91,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -102,10 +102,22 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function frame() {
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
-    const dist = THREE.MathUtils.clamp((40 - 10 * tall) / (2 * tanH * camera.aspect), 22, 80) * (1 + 0.03 * st.camZoom);   // a very slight pull-out while a jump charges
+    const baseDist = THREE.MathUtils.clamp((40 - 10 * tall) / (2 * tanH * camera.aspect), 22, 80) * (1 + 0.03 * st.camZoom);
+    const c = 0.05 + tall * 0.16;
+    // Keep both the bike and the ground in view: if a big jump (or a hill ahead) would push either off the screen, pull back.
+    const gHere = groundY(st.x), gA = groundY(st.x + 10), gB = groundY(st.x + 22);
+    const yLow = Math.min(gHere, gA, gB) - 2.5, yHigh = Math.max(st.y + 4.5, gA + 3);
+    let d = baseDist;
+    for (let k = 0; k < 2; k++) {
+      const yc = st.camY + 3 + d * c;
+      d = Math.max(baseDist, Math.max(yc - yLow, yHigh - yc) / (tanH * 0.9));
+    }
+    const zoomT = THREE.MathUtils.clamp(d / baseDist, 1, 2.6);
+    st.zoom += (zoomT - st.zoom) * (1 - Math.exp(-(zoomT > st.zoom ? 4 : 1.2) * st.frameDt));   // pulls back quickly, settles back slowly
+    const dist = Math.min(baseDist * st.zoom, 110);
     const ahead = 0.22 * (40 - 10 * tall) + st.vx * 0.12;                   // look well ahead (the bike sits about a quarter of the way in from the left)
-    target.pos.set(st.x + ahead, st.camY + 2.5 + dist * 0.11, laneZ + dist);
-    target.look.set(st.x + ahead, st.camY + 3 + dist * (0.05 + tall * 0.16), laneZ);
+    target.pos.set(st.x + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 2.5 + dist * 0.11, laneZ + dist);
+    target.look.set(st.x + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
     return dist;
   }
   function setHud() {
@@ -142,7 +154,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
-    st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.lastAirTap = -9; puffs.clear();
+    st.zoom = 1; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.lastAirTap = -9; puffs.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
@@ -266,7 +278,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       return;
     }
     const dist = Math.max(0, st.x - st.startX);
-    const base = (st.guideOn ? 10 : 12) + Math.min(6, dist / 350);
+    const base = (st.guideOn ? 12 : 15) + Math.min(9, dist / 260);          // cruising speed: faster, and it keeps building
     if (st.grounded) {
       const prevY = st.y;
       const p = groundPose(st.x + st.vx * h);
@@ -552,7 +564,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       setHud();
       // camera
       st.camY += (st.y - st.camY) * Math.min(1, dt * 2.2);
-      api.focusDistance = frame();
+      st.frameDt = dt; api.focusDistance = frame();
       const k = reduceMotion ? 1 : ease(Math.min(1, st.t / ENTER_SECONDS));
       cam.position.lerpVectors(st.from.pos, target.pos, k);
       lookV.lerpVectors(st.from.look, target.look, k); cam.lookAt(lookV);
@@ -570,8 +582,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         const a = Math.min(1, (1.8 - im.t) / 0.5);
         const pulse = 1 + 0.14 * Math.sin(st.t * (7 + 8 * Math.max(0, 1 - im.t)));   // pulses faster as touchdown nears
         landMark.visible = true;
-        landMark.position.set(im.x, im.y + 0.5, laneZ + 0.5);
-        landMark.scale.setScalar(1.5 * (SC / SCALE) * pulse);
+        landMark.position.set(im.x, im.y + 0.12, laneZ);
+        landMark.rotation.set(0, 0, im.phi);                                     // tilted to the slope it will land on
+        landMark.scale.setScalar(2.3 * (SC / SCALE) * pulse);
         landMat.opacity = 0.95 * a; landDiscMat.opacity = (0.22 + 0.12 * Math.sin(st.t * 9)) * a;
       } else landMark.visible = false;
       return true;
