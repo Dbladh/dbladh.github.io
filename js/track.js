@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017085705';
-import { heightAt as terrainAt } from './world.js?v=20261017085705';
+import { PAL } from './palette.js?v=20261017090404';
+import { heightAt as terrainAt } from './world.js?v=20261017090404';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -162,6 +162,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   }
   function fillChunk(pool, c, idx) {
     c.idx = idx;
+    if (X0 + (idx + 1) * CHUNK <= XT) { c.mesh.visible = false; return; }          // wholly inside the real terrain: nothing to draw, so nothing to build
     const { rows, NR } = pool, pos = c.geo.attributes.position, col = c.geo.attributes.color, uv = c.geo.attributes.uv;
     const x0 = X0 + idx * CHUNK;
     for (let i = 0; i < COLS; i++) {

@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017085705';
-import { buildWorld } from './world.js?v=20261017085705';
-import { createSky } from './sky.js?v=20261017085705';
-import { createDOF } from './dof.js?v=20261017085705';
-import { createRide } from './ride.js?v=20261017085705';
-import { createGame } from './bikegame.js?v=20261017085705';
+import { PAL } from './palette.js?v=20261017090404';
+import { buildWorld } from './world.js?v=20261017090404';
+import { createSky } from './sky.js?v=20261017090404';
+import { createDOF } from './dof.js?v=20261017090404';
+import { createRide } from './ride.js?v=20261017090404';
+import { createGame } from './bikegame.js?v=20261017090404';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -573,6 +573,9 @@ function start() {
   active = stops[initial] ? initial : 'home';
   const startSimple = store.get('simple') === '1' || (store.get('simple') === null && reduceMotion);
   setSimple(startSimple); // when not simple, this also moves the camera to `active`
+
+  // Compile the dirt-bike game's shaders in the background once the page has settled, so clicking the bike does not stall the scene.
+  if (game) setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => game.warmUp(), { timeout: 4000 }) : game.warmUp()), 3500);
 
   // ---- Render loop ----
   const clock = new THREE.Clock();

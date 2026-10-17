@@ -1,9 +1,9 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017085705';
-import { heightAt } from './world.js?v=20261017085705';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017085705';
+import { PAL } from './palette.js?v=20261017090404';
+import { heightAt } from './world.js?v=20261017090404';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017090404';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
@@ -81,8 +81,8 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     if (!active) { if (st.state === 'ride') { st.state = 'wait'; root.visible = false; hit.visible = false; sparks.visible = false; } return; }
     if (st.state === 'wait') {
       st.timer -= dt;
-      if (st.timer <= 0) start();
-      return;
+      if (st.timer > 0) return;
+      start();                                              // (carry straight on into the riding code, so the bike is placed before the frame is drawn: no flash at the origin)
     }
     // ---- riding ----
     st.x += SPEED * dt;

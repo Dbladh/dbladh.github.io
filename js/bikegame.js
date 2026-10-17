@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017085705';
-import { createTrack } from './track.js?v=20261017085705';
-import { createRagdoll } from './ragdoll.js?v=20261017085705';
-import { createPuffs } from './puffs.js?v=20261017085705';
-import { createCoins } from './coins.js?v=20261017085705';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017090404';
+import { createTrack } from './track.js?v=20261017090404';
+import { createRagdoll } from './ragdoll.js?v=20261017090404';
+import { createPuffs } from './puffs.js?v=20261017090404';
+import { createCoins } from './coins.js?v=20261017090404';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -75,25 +75,22 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 60);   // clips the village (everything nearer the camera than the cut); the terrain itself is left whole
   const clipped = [], hiddenObjs = [];
-  function applyClip(on) {
-    if (on) {
-      renderer.localClippingEnabled = true;
-      scene.traverse((o) => {
-        if (o.userData?.hideInGame && o.visible) { o.visible = false; hiddenObjs.push(o); return; }
-        const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-        for (const m of ms) {
-          if (m === world.terrainMaterial || m.isShaderMaterial || m.isPointsMaterial || clipped.some((c) => c.m === m)) continue;
-          clipped.push({ m, planes: m.clippingPlanes, shadows: m.clipShadows }); m.clippingPlanes = [clip]; m.clipShadows = true;
-        }
-      });
-    } else {
-      for (const c of clipped) { c.m.clippingPlanes = c.planes; c.m.clipShadows = c.shadows; }
-      clipped.length = 0;
-      for (const o of hiddenObjs) o.visible = true;
-      hiddenObjs.length = 0;
-      renderer.localClippingEnabled = false;
+  // The village-slicing plane is wired into every home-scene material once, up front (at constant 60 it clips nothing), so starting the game
+  // never has to recompile shaders; the plane is only moved into place while playing.
+  renderer.localClippingEnabled = true;
+  scene.traverse((o) => {
+    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of ms) {
+      if (m === world.terrainMaterial || m.isShaderMaterial || m.isPointsMaterial || clipped.some((c) => c.m === m)) continue;
+      clipped.push({ m }); m.clippingPlanes = [clip]; m.clipShadows = true;
     }
+  });
+  /** Hide the things that belong to the village (chimney smoke) while the game runs. */
+  function applyClip(on) {
+    if (on) scene.traverse((o) => { if (o.userData?.hideInGame && o.visible) { o.visible = false; hiddenObjs.push(o); } });
+    else { for (const o of hiddenObjs) o.visible = true; hiddenObjs.length = 0; }
   }
+
   const CUT = track.cutZ + 0.4;
   const st = {
     mode: 'off', t: 0, from: { pos: new THREE.Vector3(), look: new THREE.Vector3() },
@@ -490,6 +487,17 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     },
     get coinsDebug() { return coins; },
     get track() { return track; },                                                                     // (for tests)
+    /** Compile the game's own shaders (bike, coins, puffs, mud, landing circle) in the background, so the first click does not stall the scene. */
+    async warmUp() {
+      if (st.warmed || st.mode !== 'off') return;
+      st.warmed = true;
+      const prev = bike.root.position.y;
+      bike.root.position.y = -800; landMark.position.y = -800;
+      bike.root.visible = true; landMark.visible = true; coins.visible = true; puffs.visible = true; track.visible = true;
+      try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { /* not fatal */ }
+      if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; puffs.visible = false; track.visible = false; }
+      bike.root.position.y = prev;
+    },
     get paused() { return st.paused; },
     /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */
     pause() {
