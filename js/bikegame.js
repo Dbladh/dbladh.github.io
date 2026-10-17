@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017090743';
-import { createTrack } from './track.js?v=20261017090743';
-import { createRagdoll } from './ragdoll.js?v=20261017090743';
-import { createPuffs } from './puffs.js?v=20261017090743';
-import { createCoins } from './coins.js?v=20261017090743';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017090935';
+import { createTrack } from './track.js?v=20261017090935';
+import { createRagdoll } from './ragdoll.js?v=20261017090935';
+import { createPuffs } from './puffs.js?v=20261017090935';
+import { createCoins } from './coins.js?v=20261017090935';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -173,6 +173,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const phi = Math.atan2(gF - gR, 2 * HW);
     return { y: (gR + gF) / 2 + R / Math.cos(phi), phi };
   }
+
+  /** Ground height for the drifting life: over a gap, the rim rather than the bottom of the pit. */
+  const lifeGround = (x, z) => { const pt = track.pitSpan(x); return pt ? track.groundAt(pt.x0 - 0.5, z) : track.groundAt(x, z); };
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
@@ -633,7 +636,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       track.update(cam.position.x, st.camY);
       coins.update(cam.position.x, st.t);
       guideTick();
-      world.setFollow(true, cam.position.x, st.camY - 1.5, laneZ + 10);                  // fireflies and butterflies keep drifting along with the ride
+      world.setFollow(true, cam.position.x, lifeGround, laneZ + 10);                      // fireflies and butterflies live in the game's world (the player rides past them)
       if (floatEl) {                                                                      // alerts, warnings and the multiplier float right above the rider
         cam.updateMatrixWorld();
         pv.set(st.x, st.y + 3.4 * (SC / SCALE), laneZ).project(cam);

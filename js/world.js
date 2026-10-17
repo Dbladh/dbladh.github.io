@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017090743';
+import { PAL } from './palette.js?v=20261017090935';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017090743';
+} from './houses.js?v=20261017090935';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1757,7 +1757,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   }
 
   // The dirt-bike game carries the drifting life of the scene (fireflies, butterflies) along with the camera.
-  const follow = { on: false, x: 0, y: 0, z: 0 };
+  // Fixed in the game's world, not on the camera: each one has its own spot, repeated every `period` units along the ride, and fades out
+  // well before it would be recycled, so the player rides past them like anything else in the scene.
+  const follow = { on: false, camX: 0, z: 0, period: 160, ground: (x, z) => 0 };
+  const wrapTo = (a, P) => ((a + P / 2) % P + P) % P - P / 2;
+  const hashI = (i) => { const v = Math.sin((i + 1) * 12.9898) * 43758.5453; return v - Math.floor(v); };
+  const edgeFade = (dx) => { const h = follow.period / 2, t = Math.min(1, Math.max(0, (Math.abs(dx) - h * 0.72) / (h * 0.28))); return 1 - t * t * (3 - 2 * t); };
 
   // ---- Butterflies: a few drifting about the meadow by day ----
   const butterflies = [];
@@ -2249,8 +2254,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     get bikeLaneZ() { return LANE_Z; },
     get terrainMaterial() { return terrainMat; },
     terrainColor, scatter, sceneryBuildings,
-    /** Move the drifting life (fireflies, butterflies) to follow the game's camera: offsets from where they were made. */
-    setFollow(on, x = 0, y = 0, z = 0) { follow.on = on; follow.x = on ? x : 0; follow.y = on ? y : 0; follow.z = on ? z : 0; },
+    /** Carry the drifting life (fireflies, butterflies) into the game: they stay put in the world, one set of spots repeating along the ride. */
+    setFollow(on, camX = 0, ground = null, z = 0) { follow.on = on; follow.camX = camX; if (ground) follow.ground = ground; follow.z = on ? z : 0; },
     /**
      * Seat every sign for the current screen shape. Each slides inward along its hill until it fits the
      * visible width (never past the hill's crest), steps to its zig-zag depth as the screen gets narrow,
@@ -2436,28 +2441,40 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         sp.material.uniforms.uOpacity.value = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12);
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
-      for (const bf of butterflies) {
+      butterflies.forEach((bf, bi) => {
         const u = bf.userData, t = time * u.sp + u.ph;
+        let gx = u.bx, gy = u.by, gz = u.bz, fade = 1;
+        if (follow.on) {                                                    // anchored in the game's world
+          u.dy ??= u.by - heightAt(u.bx, u.bz);
+          const dx = wrapTo(hashI(bi) * follow.period - follow.camX, follow.period);
+          gx = follow.camX + dx; gz = u.bz + follow.z; gy = follow.ground(gx, gz) + u.dy; fade = edgeFade(dx);
+        }
         const blk = blockedBy(bf.position);
-        u.vis = (u.vis ?? 1) + ((blk ? 0 : 1) - (u.vis ?? 1)) * Math.min(1, dt * 6);
+        u.vis = (u.vis ?? 1) + ((blk ? 0 : fade) - (u.vis ?? 1)) * Math.min(1, dt * 6);
         bf.scale.setScalar(Math.max(0.001, u.vis));
         bf.visible = night < 0.5 && u.vis > 0.03;
-        bf.position.set(u.bx + Math.sin(t) * 3.2 + Math.sin(t * 2.3) * 0.8 + follow.x, u.by + Math.sin(t * 1.7) * 0.5 + follow.y, u.bz + Math.cos(t * 0.8) * 3.0 + follow.z);
+        bf.position.set(gx + Math.sin(t) * 3.2 + Math.sin(t * 2.3) * 0.8, gy + Math.sin(t * 1.7) * 0.5, gz + Math.cos(t * 0.8) * 3.0);
         bf.rotation.y = t + Math.PI / 2;
         const flap = Math.sin(time * 22 + u.ph) * 0.9;
         u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
-      }
+      });
       const a = ffGeo.attributes.position;
       const pos = new THREE.Vector3();
       for (let i = 0; i < FF; i++) {
         const f = ffData[i];
         const amp = f.gi === 0 ? 1.8 : 1.3;
+        let gx = f.x, gy = f.y, gz = f.z, fade = 1;
+        if (follow.on) {                                                    // anchored in the game's world, spread along the ride
+          f.dy ??= f.y - heightAt(f.x, f.z);
+          const dx = wrapTo(hashI(i + 50) * follow.period - follow.camX, follow.period);
+          gx = follow.camX + dx; gz = f.z + follow.z; gy = follow.ground(gx, gz) + f.dy; fade = edgeFade(dx);
+        }
         a.setXYZ(i,
-          f.x + Math.sin(time * 0.35 + f.ph) * amp + follow.x,
-          f.y + Math.sin(time * 0.8 + f.ph * 2) * 0.7 + follow.y,
-          f.z + Math.cos(time * 0.3 + f.ph * 1.3) * amp + follow.z);
+          gx + Math.sin(time * 0.35 + f.ph) * amp,
+          gy + Math.sin(time * 0.8 + f.ph * 2) * 0.7,
+          gz + Math.cos(time * 0.3 + f.ph * 1.3) * amp);
         pos.fromBufferAttribute(a, i);
-        const tv = blockedBy(pos) ? 0 : 1;
+        const tv = blockedBy(pos) ? 0 : fade;
         ffVis[i] += (tv - ffVis[i]) * Math.min(1, dt * 6);
       }
       a.needsUpdate = true;
