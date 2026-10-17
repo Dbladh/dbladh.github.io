@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017144902';
-import { createTrack } from './track.js?v=20261017144902';
-import { createRagdoll } from './ragdoll.js?v=20261017144902';
-import { createFx } from './fx.js?v=20261017144902';
-import { createAudio } from './audio.js?v=20261017144902';
-import { createPuffs } from './puffs.js?v=20261017144902';
-import { createDirt } from './dirt.js?v=20261017144902';
-import { createMudCoat } from './mudcoat.js?v=20261017144902';
-import { createCoins } from './coins.js?v=20261017144902';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017145000';
+import { createTrack } from './track.js?v=20261017145000';
+import { createRagdoll } from './ragdoll.js?v=20261017145000';
+import { createFx } from './fx.js?v=20261017145000';
+import { createAudio } from './audio.js?v=20261017145000';
+import { createPuffs } from './puffs.js?v=20261017145000';
+import { createDirt } from './dirt.js?v=20261017145000';
+import { createMudCoat } from './mudcoat.js?v=20261017145000';
+import { createCoins } from './coins.js?v=20261017145000';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -103,6 +103,16 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         if (o.userData?.hideInGame && o.visible) { o.visible = false; hiddenObjs.push(o); }
         if (o.isMesh && o.castShadow && !mine.has(o)) { o.castShadow = false; castOff.push(o); }   // only the bike casts live shadows in the game: the shadow pass shrinks from ~800 draw calls to a handful
       });
+      // Village objects wholly in front of the slicing plane are drawn only to be clipped away: not drawn at all while riding. (Anything animated, such as
+      // fireflies and butterflies, is left alone: its bounding box cannot be trusted.)
+      const box = new THREE.Box3();
+      for (const c of scene.children) {
+        if (!c.visible || c === track.group || c.isLight || c.isCamera || mine.has(c)) continue;
+        let dynamic = false; c.traverse((o) => { if (o.isPoints || o.isSprite || o.isSkinnedMesh || (o.isMesh && o.frustumCulled === false)) dynamic = true; });
+        if (dynamic) continue;
+        box.setFromObject(c);
+        if (!box.isEmpty() && box.min.z > track.cutZ + 1.4) { c.visible = false; hiddenObjs.push(c); }
+      }
     } else {
       for (const o of hiddenObjs) o.visible = true; hiddenObjs.length = 0;
       for (const o of castOff) o.castShadow = true; castOff.length = 0;
