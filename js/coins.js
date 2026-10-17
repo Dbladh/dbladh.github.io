@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017100938';
+import { PAL } from './palette.js?v=20261017101334';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -12,8 +12,51 @@ function mulberry32(a) {
 }
 
 export function createCoins(scene, track, laneZ) {
-  const geo = new THREE.CylinderGeometry(0.62, 0.62, 0.14, 14).rotateX(Math.PI / 2);
-  const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(PAL.marigold), emissive: new THREE.Color(PAL.marigold).multiplyScalar(0.7), flatShading: true });
+  // A shiny gold coin: a thin cylinder whose two faces carry a painted "DB" medallion (canvas texture) and whose rim is plain gold.
+  // One instanced mesh, one draw call; the shine (a light sweep across the face and a glint as it turns) is a few lines of shader.
+  const geo = new THREE.CylinderGeometry(0.64, 0.64, 0.16, 22).rotateX(Math.PI / 2);
+  {
+    const uv = geo.attributes.uv, idx = geo.index, groups = geo.groups;            // group 0 = rim, 1 = front face, 2 = back face
+    const seen = new Set();
+    for (const g of groups) for (let i = g.start; i < g.start + g.count; i++) {
+      const v = idx.getX(i); if (seen.has(v)) continue; seen.add(v);
+      if (g.materialIndex === 0) uv.setXY(v, 0.02, 0.02);                          // the rim samples a plain gold corner of the texture
+      else if (g.materialIndex === 2) uv.setX(v, 1 - uv.getX(v));                  // the back face reads the right way round
+    }
+  }
+  const faceTex = (() => {
+    const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+    const x = c.getContext('2d');
+    x.fillStyle = '#d99a1c'; x.fillRect(0, 0, S, S);                                // (the corner pixel is the rim colour)
+    const R = S / 2, cx = R, cy = R;
+    const disc = (r, c0, c1) => { const g = x.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r); g.addColorStop(0, c0); g.addColorStop(1, c1); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.fill(); };
+    disc(R * 0.99, '#ffe27a', '#c9840f');                                           // outer rim, bevelled
+    disc(R * 0.86, '#a96e0b', '#ffd45a');                                           // the groove between rim and field (dark at the edge, light inside)
+    disc(R * 0.80, '#ffe9a0', '#f2b52a');                                           // the field
+    x.strokeStyle = 'rgba(120,70,5,.55)'; x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, R * 0.8, 0, 6.2832); x.stroke();
+    x.save(); x.translate(cx, cy);                                                  // little beads around the rim
+    for (let i = 0; i < 28; i++) { x.rotate(6.2832 / 28); x.fillStyle = 'rgba(130,80,8,.6)'; x.beginPath(); x.arc(R * 0.93, 0, 3, 0, 6.2832); x.fill(); }
+    x.restore();
+    x.font = '800 118px "Outfit", "Avenir Next", "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = 'rgba(255,248,210,.9)'; x.fillText('DB', cx + 3, cy + 8);          // embossed: a light edge below-right, a dark one above-left
+    x.fillStyle = 'rgba(120,70,5,.85)'; x.fillText('DB', cx - 2, cy + 3);
+    x.fillStyle = '#e1a21c'; x.fillText('DB', cx, cy + 5.5);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; t.anisotropy = 4; t.generateMipmaps = true; return t;
+  })();
+  const uTime = { value: 0 };
+  const mat = new THREE.MeshLambertMaterial({ map: faceTex, emissive: new THREE.Color('#ffd46a'), emissiveMap: faceTex, emissiveIntensity: 0.55 });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vPh;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvPh = instanceMatrix[3].x * 0.37;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying float vPh;')
+      .replace('#include <opaque_fragment>', `
+        // metal: a bright specular band as the coin turns, and a diagonal glint that sweeps across the face now and then
+        float spec = pow(max(dot(normalize(normal), normalize(vec3(0.45, 0.55, 0.7))), 0.0), 18.0);
+        float sw = fract((vMapUv.x + vMapUv.y) * 0.6 - uTime * 0.45 + vPh);
+        float glint = smoothstep(0.035, 0.0, abs(sw - 0.5)) * step(0.1, vMapUv.x) * step(vMapUv.x, 0.98);
+        outgoingLight += vec3(1.0, 0.93, 0.68) * (spec * 0.75 + glint * 0.75);
+        #include <opaque_fragment>`);
+  };
   const mesh = new THREE.InstancedMesh(geo, mat, CAP);
   mesh.frustumCulled = false; mesh.count = 0; mesh.visible = false;
   scene.add(mesh);
@@ -102,7 +145,7 @@ export function createCoins(scene, track, laneZ) {
     get blockSize() { return BLOCK; },
     /** Redraw the coins near the camera. */
     update(camX, time) {
-      let n = 0;
+      let n = 0; uTime.value = time;
       const b0 = Math.floor((camX - WIN_L) / BLOCK), b1 = Math.floor((camX + WIN_R) / BLOCK);
       for (let b = b0; b <= b1 && n < CAP; b++) for (const c of blockOf(b)) {
         if (c.got || n >= CAP) continue;
@@ -118,13 +161,16 @@ export function createCoins(scene, track, laneZ) {
     /** Take every coin touching the bike (centre x, y; ~3.6 units long). Returns how many. */
     /** The coins taken by the latest collect() call (for the pop effect). */
     hits: [],
-    collect(x, y, k = 1) {
+    collect(x, y, k = 1, dt = 1 / 60) {
       let got = 0; this.hits.length = 0;
-      const b0 = Math.floor((x - 3) / BLOCK), b1 = Math.floor((x + 3) / BLOCK);
+      const px = x, py = y + 0.4 * k, pull = 1 - Math.exp(-dt * 11);
+      const b0 = Math.floor((x - 10) / BLOCK), b1 = Math.floor((x + 10) / BLOCK);
       for (let b = b0; b <= b1; b++) for (const c of blockOf(b)) {
         if (c.got) continue;
-        const dx = (c.x - x) / (2.1 * k), dy = (c.y - (y + 0.4 * k)) / (2.3 * k);
-        if (dx * dx + dy * dy < 1) { c.got = true; got++; this.hits.push({ x: c.x, y: c.y }); }
+        const dx = c.x - px, dy = c.y - py;
+        if ((dx * dx) / (5.2 * k * 5.2 * k) + (dy * dy) / (6.2 * k * 6.2 * k) > 1 && !c.mag) continue;                          // out of reach
+        if ((dx * dx) / (2.1 * k * 2.1 * k) + (dy * dy) / (2.3 * k * 2.3 * k) < 1) { c.got = true; got++; this.hits.push({ x: c.x, y: c.y }); continue; }
+        c.mag = true; c.x += (px - c.x) * pull; c.y += (py - c.y) * pull;                                                       // a coin near the bike is drawn in (so a slightly different line still picks it up)
       }
       return got;
     },
