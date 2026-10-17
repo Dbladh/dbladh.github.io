@@ -1,10 +1,10 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261015230126';
-import { buildWorld } from './world.js?v=20261015230126';
-import { createSky } from './sky.js?v=20261015230126';
-import { createDOF } from './dof.js?v=20261015230126';
+import { PAL } from './palette.js?v=20261016192353';
+import { buildWorld } from './world.js?v=20261016192353';
+import { createSky } from './sky.js?v=20261016192353';
+import { createDOF } from './dof.js?v=20261016192353';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -221,7 +221,7 @@ function start() {
     const MAX = 4.5;                                                                // cap extreme stretches
     const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
     const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);
-    const barPx = Math.min(64, Math.max(54, (h / upp) * 0.0694)); // tall enough to hold a 44px back button with air
+    const barPx = Math.min(78, Math.max(68, (h / upp) * 0.0694)); // tall enough to hold a 56px back button with air
     return {
       w, h,
       ox: ((x0 + x1) / 2 - vw / 2) * upp,

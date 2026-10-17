@@ -532,3 +532,9 @@ body:not(.scene-mode) #simple-toggle:hover { background: var(--gold); border-col
   body.scene-mode #stopnav::before { top: 6px; bottom: 6px; }
   body.scene-mode #stopnav a::after { bottom: 4px; }
 }
+
+/* Phones: a bigger Back button (56px tall, larger type and arrow); the sign's colour bar is taller to hold it. */
+@media (max-width: 600px) {
+  body.scene-mode .back { min-height: 56px; padding: 0 22px 0 18px; gap: 0.6em; font-size: 1.08rem; border-width: 2px; }
+  body.scene-mode .back .ico { width: 1.45em; height: 1.45em; stroke-width: 2.6; }
+}
