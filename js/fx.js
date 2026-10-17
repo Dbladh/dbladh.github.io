@@ -18,7 +18,7 @@ export function createFx(scene, camera, renderer, { low = false } = {}) {
 
   // ---------- speed lines: thin streaks in the top and bottom bands of the view, attached to the camera ----------
   if (!camera.parent) scene.add(camera);
-  const LINES = low ? 22 : 44;
+  const LINES = low ? 8 : 16;
   const lineGroup = new THREE.Group(); lineGroup.visible = false; camera.add(lineGroup);
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xf6f3e6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, fog: false });
   const lines = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), lineMat, LINES);

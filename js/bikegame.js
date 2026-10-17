@@ -2,12 +2,12 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017092952';
-import { createTrack } from './track.js?v=20261017092952';
-import { createRagdoll } from './ragdoll.js?v=20261017092952';
-import { createFx } from './fx.js?v=20261017092952';
-import { createPuffs } from './puffs.js?v=20261017092952';
-import { createCoins } from './coins.js?v=20261017092952';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017093322';
+import { createTrack } from './track.js?v=20261017093322';
+import { createRagdoll } from './ragdoll.js?v=20261017093322';
+import { createFx } from './fx.js?v=20261017093322';
+import { createPuffs } from './puffs.js?v=20261017093322';
+import { createCoins } from './coins.js?v=20261017093322';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -23,10 +23,8 @@ const TAU = Math.PI * 2;
 const TRICK_TIME = 0.75;           // every trick takes exactly this long
 // The tricks, in the order a double-tap cycles through them (a flip needs enough air left, so it is skipped for the next trick when there is not).
 const TRICKS = [
-  { id: 'back', flip: 1, label: 'Backflip!', pts: 400 }, { id: 'hands', pose: 'hands', label: 'No-hander!', pts: 150 },
-  { id: 'front', flip: -1, label: 'Front flip!', pts: 400 }, { id: 'super', pose: 'super', label: 'Superman!', pts: 220 },
-  { id: 'cancan', pose: 'cancan', label: 'Can-can!', pts: 250 }, { id: 'nacnac', pose: 'nacnac', label: 'Nac-nac!', pts: 250 },
-  { id: 'heel', pose: 'heel', label: 'Heel clicker!', pts: 300 }, { id: 'cliff', pose: 'cliff', label: 'Cliffhanger!', pts: 300 },
+  { id: 'back', flip: 1, label: 'Backflip!', pts: 400 }, { id: 'spin', spin: 1, label: '360 spin!', pts: 300 },
+  { id: 'front', flip: -1, label: 'Front flip!', pts: 400 }, { id: 'spinb', spin: -1, label: '360 spin!', pts: 300 },
 ];
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
@@ -101,7 +99,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, bigAir: false, hz: null, viewW: 0, squash: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, hz: null, viewW: 0, squash: 0, spinA: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -184,7 +182,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
-    st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear();
+    st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
@@ -280,7 +278,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   // ---- tricks: double-tap in the air ----
   function trickDone() { if (st.guideOn && st.guideStep >= 4) endGuide(true); }
-  const TRICK_COL = { back: '#ff8a72', front: '#ff8a72', hands: '#ffd36b', super: '#ffd36b', cancan: '#6fd8c8', nacnac: '#6fd8c8', heel: '#6fd8c8', cliff: '#6fd8c8' };
+  const TRICK_COL = { back: '#ff8a72', front: '#ff8a72', spin: '#6fd8c8', spinb: '#6fd8c8' };
   const trickColor = () => TRICK_COL[st.trick?.def?.id] || '#ffd36b';
   /** A trick has been landed: burst, ring, a beat of hit-stop. */
   function trickFx(id) {
@@ -296,11 +294,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       if (!tr.flip || tti > TRICK_TIME + 0.05) { pick = tr; st.trickIdx = (st.trickIdx + k + 1) % TRICKS.length; }
     }
     if (!pick) return;
-    st.trick = pick.flip ? { kind: 'flip', dir: pick.flip, left: TAU, def: pick } : { kind: 'pose', pose: pick.pose, t: 0, dur: TRICK_TIME, def: pick };
+    st.trick = pick.flip ? { kind: 'flip', dir: pick.flip, left: TAU, def: pick } : { kind: 'spin', dir: pick.spin, t: 0, dur: TRICK_TIME, def: pick };
     juice.ring(st.x, st.y + 0.3, laneZ + 0.4, trickColor(), 0.6, 2.6, 0.35, false, 0.8); juice.halo(trickColor(), 5, TRICK_TIME, 0.4);
   }
   function finishPose(award_) {
-    const t = st.trick; if (!t || t.kind !== 'pose') return;
+    const t = st.trick; if (!t || t.kind !== 'spin') return;
     st.trick = null;
     if (award_) { groove(0.25); award(t.def.pts, t.def.label); trickDone(); trickFx(t.def.id); }
   }
@@ -383,7 +381,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const step = Math.min(st.trick.left, (TAU / TRICK_TIME) * h); st.trick.left -= step;
       dth = step * st.trick.dir; assistOn = false; st.om = 0; st.kickW = 0;
       if (st.trick.left <= 1e-6) st.trick = null;
-    } else if (st.trick && st.trick.kind === 'pose') {
+    } else if (st.trick && st.trick.kind === 'spin') {
       st.trick.t += h;
       if (st.trick.t >= st.trick.dur) finishPose(true);
     }
@@ -428,7 +426,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.grounded = true; st.om = 0; st.kickW = 0; st.diveOK = false;
     const air = st.airT;
     if (track.inPit(st.x) || track.inPit(st.x - HW * Math.cos(st.th) * 0.9 + 0.7)) { crash('Into the pit!'); return; }   // fell short of the far bank
-    if (st.trick) { if (st.trick.kind === 'pose' && st.trick.t > 0.35) finishPose(true); st.trick = null; }
+    if (st.trick) { if (st.trick.kind === 'spin' && st.trick.t > 0.35) finishPose(true); st.trick = null; }
     if (delta > 1.15 || delta < -0.95) { crash(); return; }
     st.y = p.y;
     st.vy = st.vx * Math.tan(p.phi);
@@ -648,11 +646,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const crouchT = st.charging && st.grounded ? st.charge : 0;
       st.crouch += (crouchT - st.crouch) * Math.min(1, dt * (crouchT > st.crouch ? 6 : 14));
       if (!ragdoll.active) {
-        const tr = st.trick && st.trick.kind === 'pose' ? st.trick : null;
-        poseRider(bike.rider, st.lean, st.crouch, tr ? Math.sin(Math.PI * Math.min(1, tr.t / tr.dur)) : 0, tr ? tr.pose : '');
+        poseRider(bike.rider, st.lean, st.crouch, 0, '');
         const shake = st.maxed ? (Math.sin(st.t * 70) * 0.012) : 0;           // at full charge the rider trembles, ready to go
         bike.rider.group.position.y = shake;
       }
+      const sp = st.trick && st.trick.kind === 'spin' ? st.trick : null;                // the sideways spin turns the whole bike about its vertical axis (eases back to straight if cut short by the landing)
+      if (sp) st.spinA = sp.dir * TAU * ease(Math.min(1, sp.t / sp.dur)); else st.spinA = wrap(st.spinA) * Math.exp(-14 * dt);
+      bike.model.rotation.y = ragdoll.active ? 0 : st.spinA;
       st.squash *= Math.exp(-11 * dt);
       bike.model.scale.y = (1 - 0.05 * st.crouch) * (1 - 0.14 * st.squash);   // the bike squats on its suspension (and squashes on a landing, stretches off a big jump)
       if (st.trick && st.mode === 'play') { const c0 = Math.cos(st.th), s0 = Math.sin(st.th); juice.trail(st.x - 0.9 * c0, st.y - 0.9 * s0, laneZ - 0.2, trickColor()); juice.trail(st.x + 0.9 * c0, st.y + 0.9 * s0, laneZ - 0.2, trickColor()); }
