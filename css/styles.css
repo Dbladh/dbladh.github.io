@@ -689,3 +689,30 @@ body.game-over .gh-jump, body.game-paused .gh-jump { display: none; }
 
 /* In the game the sky canvas is drawn at a lower resolution (which softens it just as well), so the CSS blur on top of it is dropped: a full-screen filter pass per redraw is costly. */
 body.game-mode #sky { filter: none; }
+
+/* Start-up splash: from the very first paint until the scene has drawn its first frame, so the plain page never flashes before the landscape. */
+#boot { display: none; }
+html.boot #boot {
+  display: flex; position: fixed; inset: 0; z-index: 99999; align-items: center; justify-content: center;
+  background: linear-gradient(#3f6fd0 0%, #79aeea 55%, #cde5f6 100%); color: #fff; transition: opacity .55s ease;
+}
+html.boot #boot::before, html.boot #boot::after { content: ""; position: absolute; left: -10%; right: -10%; bottom: -8vh; height: 38vh; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+html.boot #boot::before { background: #5aa65d; transform: translateX(-18%); height: 34vh; }
+html.boot #boot::after { background: #7bbd6b; transform: translateX(22%); height: 28vh; }
+html.boot #boot.done { opacity: 0; pointer-events: none; }
+html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
+#boot .boot-card { position: relative; z-index: 1; text-align: center; padding: 0 24px; }
+#boot .boot-name { font-family: var(--name-font, "Outfit", system-ui, sans-serif); font-weight: 700; font-size: clamp(2.4rem, 9vw, 4.6rem); letter-spacing: .01em; text-shadow: 0 3px 18px rgba(20, 40, 90, .35); }
+#boot .boot-sub { margin-top: .4rem; font-family: var(--name-font, "Outfit", system-ui, sans-serif); font-weight: 500; font-size: clamp(.95rem, 3vw, 1.2rem); opacity: .9; letter-spacing: .06em; }
+#boot .boot-dots { margin-top: 1.1rem; display: flex; gap: 9px; justify-content: center; }
+#boot .boot-dots i { width: 9px; height: 9px; border-radius: 50%; background: #fff; opacity: .35; animation: bootdot 1s ease-in-out infinite; }
+#boot .boot-dots i:nth-child(2) { animation-delay: .15s; } #boot .boot-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes bootdot { 0%, 100% { opacity: .3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) { #boot .boot-dots i { animation: none; opacity: .8; } html.boot #boot { transition: none; } }
+
+/* Shown for a moment if the bike is clicked before the game's shaders have been prepared in the background. */
+.gh-loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; display: inline-flex; align-items: center; gap: 12px; padding: 12px 20px; border-radius: 999px; background: color-mix(in srgb, var(--cream, #fbf8f0) 94%, transparent); border: 1.5px solid var(--sage, #b8c4a8); box-shadow: 0 8px 28px rgba(30, 40, 30, .28); font: 700 1rem var(--name-font, system-ui); color: var(--ink, #2a2f2a); }
+.gh-loading[hidden] { display: none; }
+.gh-loading .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid currentColor; border-right-color: transparent; animation: ghspin .8s linear infinite; }
+@keyframes ghspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gh-loading .spin { animation: none; } }

@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017152757';
-import { buildWorld } from './world.js?v=20261017152757';
-import { createSky } from './sky.js?v=20261017152757';
-import { createDOF } from './dof.js?v=20261017152757';
-import { createRide } from './ride.js?v=20261017152757';
-import { createGame } from './bikegame.js?v=20261017152757';
+import { PAL } from './palette.js?v=20261017155504';
+import { buildWorld } from './world.js?v=20261017155504';
+import { createSky } from './sky.js?v=20261017155504';
+import { createDOF } from './dof.js?v=20261017155504';
+import { createRide } from './ride.js?v=20261017155504';
+import { createGame } from './bikegame.js?v=20261017155504';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -47,6 +47,13 @@ const tagline = document.getElementById('tagline');
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ORDER = ['home', 'creativity', 'ai', 'about'];
 
+/** Lift the start-up splash (see index.html / the #boot rules in styles.css): fade it out, then let the page show. */
+let bootLifted = false;
+function hideBoot() {
+  const d = document.documentElement; if (bootLifted || !d.classList.contains('boot')) return; bootLifted = true;
+  document.getElementById('boot')?.classList.add('done');
+  setTimeout(() => d.classList.remove('boot'), 600);
+}
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode etc. */ } },
@@ -86,7 +93,7 @@ try {
   console.warn('WebGL unavailable, staying in simple view.', err);
 }
 
-if (renderer) start(); // otherwise the plain HTML page is all there is
+if (renderer) start(); else hideBoot(); // otherwise the plain HTML page is all there is
 
 function start() {
   // Pixels drawn are capped (see pixelRatioFor): a big window on a 2x display would otherwise be 8+ megapixels.
@@ -133,6 +140,7 @@ function start() {
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce });
   const bikeBtn = document.getElementById('bike-play');
   const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world);
+  if (game) game.compileHook = (sc, cam) => dof.compileAsync(sc, cam);        // (programs for the offscreen target the scene is drawn into)
 
   // ---- Camera stops ----
   const HOME = { pos: new THREE.Vector3(0, 7, 22), look: new THREE.Vector3(0, 17, -40) };
@@ -465,11 +473,17 @@ function start() {
     ray.setFromCamera(ndc, camera);
     return ray.intersectObject(ride.hitTarget, false).length > 0;
   }
-  function playBike() {
-    if (!game || game.active || active !== 'home' || openId) return;
-    const bx = ride?.riding ? ride.position.x : 0;
+  let starting = false;
+  async function playBike() {
+    if (!game || game.active || starting || active !== 'home' || openId) return;
+    const bx = ride?.riding ? ride.position.x : 0, homeCam = { pos: camera.position.clone(), look: look.clone() };
+    if (!game.ready) {                                   // clicked before the background preparation finished: a short loading card instead of a stall
+      starting = true; const card = document.getElementById('gh-loading'); if (card) card.hidden = false;
+      try { await Promise.race([game.whenReady(), new Promise((r) => setTimeout(r, 8000))]); } finally { if (card) card.hidden = true; starting = false; }
+      if (game.active || active !== 'home' || openId) return;
+    }
     ride?.reset();
-    game.start({ pos: camera.position.clone(), look: look.clone() }, bx);
+    game.start(homeCam, bx);
   }
   bikeBtn?.addEventListener('click', playBike);
   if (game) {
@@ -748,6 +762,7 @@ function start() {
       slow.t = 0; slow.n = 0;
     }
   }
-  try { frame(); } catch (err) { console.error('Render loop failed:', err); }
+  try { frame(); } catch (err) { console.error('Render loop failed:', err); hideBoot(); }
+  requestAnimationFrame(() => requestAnimationFrame(hideBoot)); setTimeout(hideBoot, 450);   // the first scene frame has been drawn: lift the splash (the timer covers a background tab, where frames do not run)
   window.__portfolio = { dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }

@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017152757';
-import { createTrack } from './track.js?v=20261017152757';
-import { createRagdoll } from './ragdoll.js?v=20261017152757';
-import { createFx } from './fx.js?v=20261017152757';
-import { createAudio } from './audio.js?v=20261017152757';
-import { createPuffs } from './puffs.js?v=20261017152757';
-import { createDirt } from './dirt.js?v=20261017152757';
-import { createMudCoat } from './mudcoat.js?v=20261017152757';
-import { createCoins } from './coins.js?v=20261017152757';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017155504';
+import { createTrack } from './track.js?v=20261017155504';
+import { createRagdoll } from './ragdoll.js?v=20261017155504';
+import { createFx } from './fx.js?v=20261017155504';
+import { createAudio } from './audio.js?v=20261017155504';
+import { createPuffs } from './puffs.js?v=20261017155504';
+import { createDirt } from './dirt.js?v=20261017155504';
+import { createMudCoat } from './mudcoat.js?v=20261017155504';
+import { createCoins } from './coins.js?v=20261017155504';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -182,6 +182,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
     return dist;
   }
+  let warmPromise = null, warmDone = false;
   const hudLast = { score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 };       // (touch the page only when a value actually changed)
   function setHud() {
     const sc = Math.floor(st.score);
@@ -619,17 +620,28 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     get mudCoatDebug() { return mudCoat; },
     get ragdollDebug() { return ragdoll; },                                                                     // (for tests)
     /** Compile the game's own shaders (bike, coins, puffs, mud, landing circle) in the background, so the first click does not stall the scene. */
-    async warmUp() {
-      if (st.warmed || st.mode !== 'off') return;
+    /** True once the background preparation (shader compile, the houses) has finished: the first ride then starts without a stall. */
+    get ready() { return warmDone; },
+    /** Resolves when it is ready (starting the preparation now if it has not begun). */
+    whenReady() { return warmDone ? Promise.resolve() : api.warmUp(); },
+    /** main.js sets this to compile against the offscreen target the scene is really drawn into. */
+    compileHook: null,
+    warmUp() {
+      if (warmPromise) return warmPromise;
+      if (st.mode !== 'off') return Promise.resolve();
       st.warmed = true;
-      const prev = bike.root.position.y;
-      bike.root.position.y = -800; landMark.position.y = -800;
-      bike.root.visible = true; landMark.visible = true; coins.visible = true; puffs.visible = true; dirt.visible = true; track.visible = true; track.prewarm(true);
-      try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { /* not fatal */ }
-      if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; track.visible = false; }
-      track.prewarm(false);
-      bike.root.position.y = prev;
-      for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 90)); if (!world.warmHouse?.()) break; }      // the background houses, built one at a time while idle
+      warmPromise = (async () => {
+        const prev = bike.root.position.y;
+        bike.root.position.y = -800; landMark.position.y = -800;
+        bike.root.visible = true; landMark.visible = true; coins.visible = true; puffs.visible = true; dirt.visible = true; track.visible = true; track.prewarm(true);
+        try { if (api.compileHook) await api.compileHook(scene, camera); else if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { /* not fatal */ }
+        if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; track.visible = false; }
+        track.prewarm(false);
+        bike.root.position.y = prev;
+        for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 90)); if (!world.warmHouse?.()) break; }      // the background houses, built one at a time while idle
+        warmDone = true;
+      })();
+      return warmPromise;
     },
     get paused() { return st.paused; },
     /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */

@@ -13,12 +13,24 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261017152757">
+  <link rel="stylesheet" href="css/styles.css?v=20261017155504">
+  <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
+  <script>
+    (function () {
+      try {
+        var d = document.documentElement, store = localStorage.getItem('simple'), simple = store === '1' || (store === null && matchMedia('(prefers-reduced-motion: reduce)').matches) || /[?&]simple=1/.test(location.search);
+        var c = document.createElement('canvas'), ok = !!(c.getContext('webgl2') || c.getContext('webgl'));
+        if (!simple && ok) { d.classList.add('boot'); setTimeout(function () { d.classList.remove('boot'); }, 12000); }
+      } catch (e) { /* the plain page just shows */ }
+    })();
+  </script>
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
 </head>
 <body>
+  <div id="boot" aria-hidden="true"><div class="boot-card"><div class="boot-name">Danny Bladh</div><div class="boot-sub">Loading the landscape</div><div class="boot-dots"><i></i><i></i><i></i></div></div></div>
+  <div id="gh-loading" class="gh-loading" role="status" hidden><span class="spin" aria-hidden="true"></span><span>Getting the ride ready</span></div>
   <a class="skip" href="#content">Skip to content</a>
 
   <!-- The 3D scene is decoration: all real content lives in <main> below. -->
@@ -202,6 +214,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261017152757"></script>
+  <script type="module" src="js/main.js?v=20261017155504"></script>
 </body>
 </html>
