@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017095425';
-import { heightAt as terrainAt } from './world.js?v=20261017095425';
+import { PAL } from './palette.js?v=20261017095654';
+import { heightAt as terrainAt } from './world.js?v=20261017095654';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -56,9 +56,10 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     const y0 = last(), n = Math.round(rise / slope / DX);
     for (let i = 1; i <= n; i++) push(y0 + rise * (i / n) * (i < 6 ? 0.55 + 0.45 * smooth01(i / 6) : 1));
     const lipY = last(), x0 = xNow();
-    // width: from a gap the bare ramp clears, up to one that needs most of a full charge (never wider than a charged jump can cross)
-    const vy = vx * slope * 1.25 + 2, passive = (vx * 2 * vy / 24) * 0.85, charged = (vx * 2 * (vy + 15) / 24) * 0.8;
-    const G = Math.min(charged * 0.85, Math.max(9, passive * (0.55 + 0.6 * rng() + 0.7 * d)));
+    // width: always one a rider who is a little slow, and does not charge at all, still clears from the bare ramp with plenty of air time to square up
+    // (a charged jump, or the speed you normally have, flies well past it); gaps grow only with how fast the rider will be and a little with distance
+    const vs = vx - 3, vy = vs * slope * 1.15 + 1.5, flight = (vs * 2 * vy) / 24;
+    const G = Math.max(8, flight * (0.42 + 0.3 * rng() + 0.15 * d));
     const floor = lipY - 14;
     for (let i = 0; i < Math.round(G / DX) - 1; i++) push(floor);
     push(lipY - rng() * 1.2);                                                       // the far bank, a touch lower than the lip

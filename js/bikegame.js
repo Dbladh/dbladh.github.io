@@ -2,12 +2,12 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017095425';
-import { createTrack } from './track.js?v=20261017095425';
-import { createRagdoll } from './ragdoll.js?v=20261017095425';
-import { createFx } from './fx.js?v=20261017095425';
-import { createPuffs } from './puffs.js?v=20261017095425';
-import { createCoins } from './coins.js?v=20261017095425';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017095654';
+import { createTrack } from './track.js?v=20261017095654';
+import { createRagdoll } from './ragdoll.js?v=20261017095654';
+import { createFx } from './fx.js?v=20261017095654';
+import { createPuffs } from './puffs.js?v=20261017095654';
+import { createCoins } from './coins.js?v=20261017095654';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -15,9 +15,9 @@ const GRAV = 24;
 const JUMP_MIN = 5.5, JUMP_MAX = 15;   // upward kick: a tap hops, a full charge flies
 const CHARGE_TIME = 1.1;               // seconds of holding to reach full charge (it then stays maxed)
 const BOOST_CAP = 4.5;                 // extra speed from charging and landings
-const BACK_W = 2.2, BACK_RATE = 1.2;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
+const BACK_W = 1.7, BACK_RATE = 0.9;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
 const BUFFER_WINDOW = 0.14;            // a press this close to touchdown is held over and applies on landing
-const TAP_KICK = 3.4;                  // nose-down kick of one tap (rad/s, it fades quickly)
+const TAP_KICK = 4.6;                  // nose-down kick of one tap (rad/s, it fades quickly)
 const DIVE_GRAV = 4.6;           // gravity while the button is held in the air: the bike drops much faster (ramps in over a moment)
 const TAU = Math.PI * 2;
 const TRICK_TIME = 0.75;           // every trick takes exactly this long
@@ -372,8 +372,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.x += st.vx * h; st.y += st.vy * h;
     // The nose wants to tip backward (softer during the first 45 s of a run); a hold dives it, a tap gives a quick kick forward.
     const back = BACK_W * (0.5 + 0.5 * Math.min(1, st.runT / 45));
-    const want = diving ? -2.8 : back;                                 // holding eases the nose forward, slowly
-    const rate = diving ? 4 : (st.om < 0 ? 6 : BACK_RATE);
+    const want = diving ? -3.8 : back;                                 // holding eases the nose forward, slowly
+    const rate = diving ? 6 : (st.om < 0 ? 8 : BACK_RATE);
     st.om += (want - st.om) * Math.min(1, rate * h);
     st.kickW *= Math.exp(-7 * h);
     let dth = (st.om + st.kickW) * h, assistOn = true;
