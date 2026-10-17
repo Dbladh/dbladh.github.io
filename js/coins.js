@@ -1,10 +1,11 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016224802';
+import { PAL } from './palette.js?v=20261016225440';
 
 const BLOCK = 48;
-const CAP = 220;
+const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
+const CAP = 700;
 
 function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -30,7 +31,7 @@ export function createCoins(scene, track, laneZ) {
     for (let x = x0; x < x1; x += 0.5) {
       if (out.length && x - out[out.length - 1] < 14) continue;
       const s1 = track.slopeAt(x - 1);
-      if (s1 > 0.3 && track.slopeAt(x + 1) < s1 - 0.25) out.push(x);
+      if (s1 > 0.3 && s1 < 1.6 && track.slopeAt(x + 1) < s1 - 0.25) out.push(x);          // (a near-vertical wall, like the far bank of a gap, is not a ramp)
     }
     return out;
   };
@@ -56,13 +57,18 @@ export function createCoins(scene, track, laneZ) {
     const pit = track.pitAfter?.(lx);                                                                   // a gap right after this lip?
     const land = pit ? (x) => (x < pit.x1 ? -1e9 : track.laneAt(x)) : (x) => track.laneAt(x);
     if (pit) {
-      arcCoins(lx, vx, vy0 + JUMP_VY(0.8), land, 16, out);                                              // across a gap: the line of a well-charged jump (about 80%)
-      if (rng() < 0.5) arcCoins(lx, vx, vy0 + JUMP_VY(1.0), land, 16, out);                              // and a higher line for a full charge
+      // across a gap: the gentlest line that still clears the far bank with a little to spare (so the arc is never taller than it has to be)
+      let c = 1;
+      for (let k = 0.25; k <= 1.0001; k += 0.05) {
+        const vy = vy0 + JUMP_VY(k); let clears = false;
+        for (let t = 0.1; t < 5; t += 0.03) { const x = lx + vx * t, y = track.laneAt(lx) + 1.0 + vy * t - 0.5 * G * t * t; if (x >= pit.x1 + 1) { clears = y >= track.laneAt(x) + 1.8; break; } }
+        if (clears) { c = Math.min(1, k + 0.12); break; }
+      }
+      arcCoins(lx, vx, vy0 + JUMP_VY(c), land, 18, out);
     } else {
-      arcCoins(lx, vx, vy0, land, 12, out);                                                              // off a kicker: the line you get with no jump at all
-      if (rng() < 0.55) arcCoins(lx, vx, vy0 + JUMP_VY(1.0), land, 14, out);                             // a higher line, for a fully charged jump
+      arcCoins(lx, vx, vy0, land, 14, out);                                                              // off a kicker: the line you get with no jump at all
     }
-    return out;
+    return out.length >= 5 ? out : [];                                                                   // a little crest is not worth an arc
   }
 
   function build(b) {
@@ -97,12 +103,14 @@ export function createCoins(scene, track, laneZ) {
     /** Redraw the coins near the camera. */
     update(camX, time) {
       let n = 0;
-      const b0 = Math.floor((camX - 30) / BLOCK), b1 = Math.floor((camX + 80) / BLOCK);
+      const b0 = Math.floor((camX - WIN_L) / BLOCK), b1 = Math.floor((camX + WIN_R) / BLOCK);
       for (let b = b0; b <= b1 && n < CAP; b++) for (const c of blockOf(b)) {
         if (c.got || n >= CAP) continue;
+        const f = Math.min(1, Math.max(0, (camX + WIN_R - c.x) / 30)) * Math.min(1, Math.max(0, (c.x - (camX - WIN_L)) / 20));   // grow in at the edges of the window, which lie well off screen
+        if (f <= 0.01) continue;
         dummy.position.set(c.x, c.y + Math.sin(time * 2.2 + c.x) * 0.14, laneZ);
         dummy.rotation.set(0, time * 3.2 + c.x * 0.7, 0);
-        dummy.scale.setScalar(1); dummy.updateMatrix();
+        dummy.scale.setScalar(f); dummy.updateMatrix();
         mesh.setMatrixAt(n++, dummy.matrix);
       }
       mesh.count = n; mesh.instanceMatrix.needsUpdate = true;
