@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017115441';
-import { createTrack } from './track.js?v=20261017115441';
-import { createRagdoll } from './ragdoll.js?v=20261017115441';
-import { createFx } from './fx.js?v=20261017115441';
-import { createAudio } from './audio.js?v=20261017115441';
-import { createPuffs } from './puffs.js?v=20261017115441';
-import { createDirt } from './dirt.js?v=20261017115441';
-import { createMudCoat } from './mudcoat.js?v=20261017115441';
-import { createCoins } from './coins.js?v=20261017115441';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017115803';
+import { createTrack } from './track.js?v=20261017115803';
+import { createRagdoll } from './ragdoll.js?v=20261017115803';
+import { createFx } from './fx.js?v=20261017115803';
+import { createAudio } from './audio.js?v=20261017115803';
+import { createPuffs } from './puffs.js?v=20261017115803';
+import { createDirt } from './dirt.js?v=20261017115803';
+import { createMudCoat } from './mudcoat.js?v=20261017115803';
+import { createCoins } from './coins.js?v=20261017115803';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -198,7 +198,15 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     ragdoll.restore();
   }
 
+  /** Hide the per-round overlays (the JUMP markers, the toast, the combo pop-up): after a crash, on a restart, and on leaving. */
+  function clearRoundUi(hintToo = false) {
+    for (const e of jumpEls) e.hidden = true;
+    if (toastEl) { toastEl.textContent = ''; toastEl.classList.remove('show'); }
+    if (multFxEl) { multFxEl.hidden = true; multFxEl.classList.remove('show'); clearTimeout(st.multT); }
+    if (hintToo && hint) { hint.hidden = true; clearTimeout(st.hintT); }
+  }
   function newRun() {
+    clearRoundUi(!st.guideOn);
     st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.comboT = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
@@ -215,7 +223,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.score = scoreNow();
     const final = Math.floor(st.score), isBest = final > st.best;
     if (isBest) { st.best = final; saveBest(final); }
-    audio.over(isBest && final > 0);
+    audio.over(isBest && final > 0); for (const e of jumpEls) e.hidden = true;
     if (!overEl) return;
     $('go-score').textContent = final.toLocaleString();
     $('go-best').textContent = st.best.toLocaleString();
@@ -494,6 +502,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     events.onCrash?.();
     toast(msg);
     const pit = /pit/i.test(msg); audio.crash(pit);
+    for (const e of jumpEls) e.hidden = true;
     juice.flash(pit ? '#10161c' : '#ffffff', pit ? 0.35 : 0.34, pit ? 220 : 120); juice.slowmo(0.35, 450); juice.shake(0.7, 380);
     if (pit) dirt.burst(st.x, st.y, laneZ, 28, 1.1, 0.8); else { juice.burst('crash', st.x, st.y, laneZ, 18, '#ffd9a0'); dirt.burst(st.x, groundY(st.x), laneZ, 18, 1, 0.2); } juice.ring(st.x, groundY(st.x) + 0.2, laneZ, '#ffffff', 0.6, 5, 0.5, true, 0.7);
     for (let i = 0; i < 12; i++) puffs.emit(st.x + (Math.random() - 0.5) * 2, st.y - 0.4, laneZ + 0.3, (Math.random() - 0.5) * 10, 1 + Math.random() * 4, 0.7, 2.2, 0.9, pit ? '#6b5238' : '#b79b78', 0.6);
@@ -547,6 +556,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     },
     stop() {
       if (st.mode === 'off' || st.mode === 'out') return;
+      clearRoundUi(true);
       st.mode = 'out'; st.t = 0; st.leaveFrom = { pos: camera.position.clone(), look: lookV.clone() };
       st.down = false;
       if (hud) hud.hidden = true;
@@ -580,7 +590,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     /** Freeze the ride (auto on losing focus, the pause button or P) and show the pause card. */
     pause() {
       if (st.mode !== 'play' || st.paused) return;
-      st.paused = true; st.down = false; st.charging = false; st.buf = null; st.charge = 0; audio.pause();
+      st.paused = true; st.down = false; st.charging = false; st.buf = null; st.charge = 0; audio.pause(); for (const e of jumpEls) e.hidden = true;
       if (hint) hint.hidden = true;
       document.body.classList.add('game-paused');
       if (pauseEl) { pauseEl.hidden = false; setTimeout(() => { if (st.paused) document.getElementById('gp-resume')?.focus({ preventScroll: true }); }, 50); }
