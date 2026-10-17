@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017144654';
-import { buildWorld } from './world.js?v=20261017144654';
-import { createSky } from './sky.js?v=20261017144654';
-import { createDOF } from './dof.js?v=20261017144654';
-import { createRide } from './ride.js?v=20261017144654';
-import { createGame } from './bikegame.js?v=20261017144654';
+import { PAL } from './palette.js?v=20261017144902';
+import { buildWorld } from './world.js?v=20261017144902';
+import { createSky } from './sky.js?v=20261017144902';
+import { createDOF } from './dof.js?v=20261017144902';
+import { createRide } from './ride.js?v=20261017144902';
+import { createGame } from './bikegame.js?v=20261017144902';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -377,7 +377,7 @@ function start() {
         `nav ${Math.round(nv.top)}..${Math.round(nv.bottom)}`,
         `html ${document.documentElement.clientHeight}  body ${document.body.clientHeight}  scrollY ${Math.round(scrollY)}`,
         `frame ${fa.toFixed(1)}ms avg  p95 ${p95.toFixed(1)}  worst ${worst.toFixed(1)}  (${(1000 / fa).toFixed(0)} fps)   long(>20ms) ${longN}/${m}`,
-        `cpu: time ${prof.sec.time.toFixed(2)}  game ${prof.sec.game.toFixed(2)}  world ${prof.sec.world.toFixed(2)}  draw ${perf.cpu.toFixed(2)}ms   shadow redraws ${shadowPS.toFixed(1)}/s   scale ${quality.scale.toFixed(2)}  ratio ${renderer.getPixelRatio().toFixed(2)}`,
+        `cpu: time ${prof.sec.time.toFixed(2)}  game ${prof.sec.game.toFixed(2)}  world ${prof.sec.world.toFixed(2)}  draw ${perf.cpu.toFixed(2)}ms   shadow redraws ${shadowPS.toFixed(1)}/s   scale ${quality.scale.toFixed(2)}x${dyn.scale.toFixed(2)}  ratio ${renderer.getPixelRatio().toFixed(2)}`,
         `perf ${perf.fps.toFixed(0)}fps  cpu ${perf.cpu.toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k  geo ${renderer.info.memory.geometries}`,
         `village seed ${seed} (${world.themeName})`,
         `css ${css}`,
@@ -389,11 +389,14 @@ function start() {
   const PIXEL_BUDGET = lowEnd ? 1.1e6 : 2.6e6;     // drawing-buffer pixels we are willing to shade per frame
   const GAME_PIXEL_BUDGET = lowEnd ? 0.8e6 : 2.2e6;  // the dirt-bike game is soft-focus and busy: fewer pixels keep it smooth
   let gameWasActive = false, skyN = 0, halfForced = false;   // (the game blurs at half resolution and drops bloom: much cheaper, looks the same)
-  const quality = { scale: 1 };                     // the watchdog lowers this before it ever drops depth of field
+  const quality = { scale: 1 };
+  // The game's own, quicker resolution controller (see frame()): nudges the drawing resolution so the frame time stays near 60 fps on whatever machine this is.
+  const dyn = { scale: 1, t: 0, n: 0, stable: 0, wait: 8, lastUp: 0 };
+  const DYN_MIN = 0.62;                     // the watchdog lowers this before it ever drops depth of field
   function pixelRatioFor(w, h) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const budget = Math.sqrt((game?.active ? GAME_PIXEL_BUDGET : PIXEL_BUDGET) / (w * h));
-    return Math.max(0.6, Math.min(dpr, budget) * quality.scale);
+    return Math.max(0.55, Math.min(dpr, budget) * quality.scale * (game?.active ? dyn.scale : 1));
   }
   /** Only the drawing resolution (the game draws fewer pixels than the overview): no relayout. */
   function applyPixelRatio() {
@@ -635,6 +638,20 @@ function start() {
     perf.cpu += (performance.now() - t0 - perf.cpu) * 0.1;
   }
 
+  /** In the game: keep the frame time near 60 fps by nudging the resolution (down fast when slow, back up slowly and carefully when it has been smooth). */
+  function dynTick(rawDt) {
+    if (!(game?.active && !game.paused && !tween && !morph && performance.now() >= slow.hold)) return;
+    dyn.t += rawDt; dyn.n++; if (rawDt > 0.25) dyn.bad = true;
+    if (dyn.t < 1) return;
+    const avg = (dyn.t / dyn.n) * 1000, now = performance.now(), bad = dyn.bad; dyn.t = 0; dyn.n = 0; dyn.bad = false;
+    if (bad) return;
+    if (avg > 19.5 && dyn.scale > DYN_MIN) {
+      if (now - dyn.lastUp < 7000) dyn.wait = Math.min(64, dyn.wait * 2);                    // lowering soon after raising: wait longer before trying again
+      dyn.scale = Math.max(DYN_MIN, dyn.scale * (avg > 28 ? 0.84 : 0.92)); dyn.stable = 0; applyPixelRatio();
+    } else if (avg <= 17.6) {
+      if (++dyn.stable >= dyn.wait && dyn.scale < 1) { dyn.scale = Math.min(1, dyn.scale * 1.05); dyn.stable = 0; dyn.lastUp = now; applyPixelRatio(); }
+    } else dyn.stable = 0;
+  }
   function frame() {
     requestAnimationFrame(frame);
     if (simple || document.hidden) { clock.getDelta(); return; }
@@ -703,6 +720,7 @@ function start() {
 
     draw(dt);
 
+    dynTick(rawDt);
     // If the machine struggles, drop soft focus first, then resolution.
     if (performance.now() < slow.hold || tween || morph) { slow.t = 0; slow.n = 0; return; } // transitions and resizes don't count
     slow.t += dt; slow.n++;
@@ -730,5 +748,5 @@ function start() {
     }
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); }
-  window.__portfolio = { prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }
