@@ -65,4 +65,4 @@ The game's ground continues the real terrain: the same terrain material and colo
 
 **Tricks:** double-tap in the air. Each double-tap performs the next trick in a cycle: backflip, no-hander, front flip, superman, can-can, nac-nac, heel clicker, cliffhanger (a flip is skipped for the next trick when there is not enough air left). Every trick takes the same time (0.75 s); flips are worth 400, the rest 150-300, times your groove.
 
-**Steering the landing:** holding in the air pulls the bike down about 2.3 times as hard as gravity (ramping in over about 0.1 s) and eases the nose forward, so you choose where it lands. A hold started just after take-off cut a 1.12 s, 19-unit flight to 0.69 s and 12 units in testing.
+**Steering the landing:** holding in the air pulls the bike down about 4.6 times as hard as gravity (ramping in over about 0.06 s) and eases the nose forward, so you choose where it lands. A hold started just after take-off cut a 1.12 s, 19-unit flight to 0.49 s and 8.6 units in testing.
