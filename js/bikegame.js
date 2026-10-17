@@ -2,13 +2,14 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017111228';
-import { createTrack } from './track.js?v=20261017111228';
-import { createRagdoll } from './ragdoll.js?v=20261017111228';
-import { createFx } from './fx.js?v=20261017111228';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017112025';
+import { createTrack } from './track.js?v=20261017112025';
+import { createRagdoll } from './ragdoll.js?v=20261017112025';
+import { createFx } from './fx.js?v=20261017112025';
 import { createAudio } from './audio.js?v=20261017103819';
-import { createPuffs } from './puffs.js?v=20261017111228';
-import { createCoins } from './coins.js?v=20261017111228';
+import { createPuffs } from './puffs.js?v=20261017112025';
+import { createDirt } from './dirt.js?v=20261017111228';
+import { createCoins } from './coins.js?v=20261017112025';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -52,6 +53,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
   const puffs = createPuffs(scene);
+  const dirt = createDirt(scene, (x) => track.laneAt(x));
   const audio = createAudio();
   const juice = createFx(scene, camera, renderer, { low: matchMedia('(max-width: 700px)').matches });
   const baseFov = () => (camera.aspect < 0.8 ? 70 : 55);                    // (the same rule as the page uses when it is resized)
@@ -186,7 +188,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
-    st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear();
+    st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear(); dirt.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
@@ -195,7 +197,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.comboT = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
-    track.reset(sd); coins.reset(sd, st.startX);
+    track.reset(sd); track.setTrailStart(st.startX); coins.reset(sd, st.startX);
     startRun(st.startX);
     if (overEl) overEl.hidden = true;
     document.body.classList.remove('game-over');
@@ -493,7 +495,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.home = { pos: homeCam.pos.clone(), look: homeCam.look.clone() };
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
       setBikeScale();
-      track.visible = true; coins.visible = true; puffs.visible = true; juice.reset(); juice.visible = true;
+      track.visible = true; coins.visible = true; puffs.visible = true; dirt.visible = true; juice.reset(); juice.visible = true;
       audio.unlock(); audio.start();
       newRun();
       bike.root.visible = true;
@@ -534,9 +536,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.warmed = true;
       const prev = bike.root.position.y;
       bike.root.position.y = -800; landMark.position.y = -800;
-      bike.root.visible = true; landMark.visible = true; coins.visible = true; puffs.visible = true; track.visible = true;
+      bike.root.visible = true; landMark.visible = true; coins.visible = true; puffs.visible = true; dirt.visible = true; track.visible = true;
       try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { /* not fatal */ }
-      if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; puffs.visible = false; track.visible = false; }
+      if (st.mode === 'off') { bike.root.visible = false; landMark.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; track.visible = false; }
       bike.root.position.y = prev;
       for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 90)); if (!world.warmHouse?.()) break; }      // the background houses, built one at a time while idle
     },
@@ -581,9 +583,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         const k = reduceMotion ? 1 : ease(Math.min(1, st.t / (ENTER_SECONDS * 0.8)));
         cam.position.lerpVectors(st.leaveFrom.pos, st.home.pos, k);
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
-        clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
+        clip.constant = THREE.MathUtils.lerp(CUT, 60, k); track.setTrailFade(1 - k);
         if (k >= 1) {
-          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false; landMark.visible = false;
+          st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; puffs.visible = false; dirt.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
@@ -630,9 +632,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           juice.shake(0.05, 120);
           st.mudT = (st.mudT ?? 0) - dt;
           if (st.mudT <= 0) {
-            st.mudT = 0.06;
+            st.mudT = 0.035;
             const c = Math.cos(st.th), s2 = Math.sin(st.th);
-            puffs.emit(st.x - HW * c, st.y - HW * s2 - R * 0.6, laneZ + 0.2, -4 - Math.random() * 3, 3 + Math.random() * 3, 0.6, 1.5, 0.7, '#4a3a2a', 0.7);
+            puffs.emit(st.x - HW * c, st.y - HW * s2 - R * 0.6, laneZ + 0.2, -4 - Math.random() * 4, 3 + Math.random() * 4, 0.9, 2.6, 0.8, '#33251a', 0.8);
           }
         }
       }
@@ -665,6 +667,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       bike.wheels.rear.rotation.z = -st.spinR; bike.wheels.front.rotation.z = -st.spinF;
       // dirt kicked from the rear wheel and a little exhaust while charging
       const spK = THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), dustK = Math.max(st.charge, spK * 0.7);
+      if (st.grounded && st.mode === 'play') {                                            // clods of dirt thrown back from the wheels (darker, bigger and more in mud)
+        const mudD = THREE.MathUtils.clamp(track.mudAt(st.x), 0, 1), power = Math.max(st.charge, THREE.MathUtils.clamp((st.vx - 7) / 15, 0, 1) * 0.85), cc = Math.cos(st.th), ss = Math.sin(st.th);
+        dirt.spray(dt, st.x - HW * cc, st.y - HW * ss - R * 0.95, laneZ + 0.2, st.vx, power, mudD);
+        if (mudD > 0.2) dirt.spray(dt, st.x + HW * cc, st.y + HW * ss - R * 0.95, laneZ + 0.2, st.vx, power * 0.8, mudD, true);
+      }
       if (st.grounded && st.mode === 'play' && dustK > 0.05 && (st.charging || st.vx > 14)) {
         st.puffT -= dt;
         if (st.puffT <= 0) {
@@ -676,7 +683,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         }
       }
       st.camZoom += (st.crouch - st.camZoom) * Math.min(1, dt * 3);
-      puffs.update(dt, renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))));
+      { const px = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))); puffs.update(dt, px); dirt.update(dt, px); }
       bike.root.position.set(st.x, st.y, laneZ);
       bike.root.rotation.z = st.th;
       setHud();
@@ -692,7 +699,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const ox = juice.shakeX, oy = juice.shakeY + juice.bumpY;
       cam.position.x += ox; cam.position.y += oy; lookV.x += ox; lookV.y += oy;
       cam.lookAt(lookV);
-      clip.constant = THREE.MathUtils.lerp(60, CUT, k);
+      clip.constant = THREE.MathUtils.lerp(60, CUT, k); track.setTrailFade(k);
       st.camPos.copy(cam.position); st.camLook.copy(lookV);
       track.update(cam.position.x, st.camY);
       coins.update(cam.position.x, st.t);

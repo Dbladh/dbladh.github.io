@@ -1,7 +1,7 @@
 // A tiny pool of soft smoke/dust puffs (one Points draw call) for the bike: dirt kicked up and exhaust while a jump charges.
 import * as THREE from 'three';
 
-const N = 48;
+const N = 72;
 
 export function createPuffs(scene) {
   const geo = new THREE.BufferGeometry();

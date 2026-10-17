@@ -6,8 +6,9 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017111228';
-import { heightAt as terrainAt } from './world.js?v=20261017111228';
+import { createTrail } from './trail.js?v=20261017111228';
+import { PAL } from './palette.js?v=20261017112025';
+import { heightAt as terrainAt } from './world.js?v=20261017112025';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -315,6 +316,8 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   scene.add(group);
   group.visible = false;
 
+  const trail = createTrail(group, { laneZ, groundAt, inPit });                                 // the worn dirt trail along the lane
+
   return {
     group, laneAt, groundAt, slopeAt, inPit, pitSpan, mudAt, hazardAhead, speedAt, pitAfter, XT, cutZ: CUTZ,
     get seed() { return seedNow; },
@@ -325,13 +328,17 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
       for (const pool of [near, far]) for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; }
       clearScenery();
       for (const k of [...mudMeshes.keys()]) dropMud(k);
+      trail.relay();
     },
+    /** The ride starts at x: the dirt trail begins there. */
+    setTrailStart(x) { trail.reset(x); },
+    setTrailFade(k) { trail.setFade(k); },
     /** Keep the ground chunks and their scenery around the camera (call every frame with the camera's x and y). */
     update(camX) {
       ensure(camX + FAR_R + 60);
       const dl = warm > 0 ? Infinity : performance.now() + 2.5; warm--;                // after the first moments, do at most a few ms of building per frame
       refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2); runJobs(dl);
-      syncMud(camX);
+      syncMud(camX); trail.update(camX);
       const first = Math.floor((camX - PLANT_R - X0) / CHUNK), lastC = Math.floor((camX + PLANT_R - X0) / CHUNK);
       for (const k of [...scenery.keys()]) if (k < first || k > lastC) dropScenery(k);
       if (performance.now() < dl) {
