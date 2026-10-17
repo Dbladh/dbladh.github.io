@@ -2,11 +2,11 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016221330';
-import { createTrack } from './track.js?v=20261016221330';
-import { createRagdoll } from './ragdoll.js?v=20261016221330';
-import { createPuffs } from './puffs.js?v=20261016221330';
-import { createCoins } from './coins.js?v=20261016221330';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016221809';
+import { createTrack } from './track.js?v=20261016221809';
+import { createRagdoll } from './ragdoll.js?v=20261016221809';
+import { createPuffs } from './puffs.js?v=20261016221809';
+import { createCoins } from './coins.js?v=20261016221809';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -91,7 +91,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    toggle: false, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    toggle: false, bigAir: false, zoom: 1, frameDt: 0.016, trick: null, lastAirTap: -9, poseCycle: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -575,7 +575,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       guideTick();
       // landing indicator
       const im = st.impact;
-      if (im && im.t < 1.8 && st.airT > 0.15 && st.mode === 'play') {
+      if (st.grounded) st.bigAir = false;
+      else if (!st.bigAir) {                                                       // only real jumps get a landing circle, not bumps: the flight has to climb well clear of the ground
+        const h = st.y - R - groundY(st.x), apex = h + (st.vy > 0 ? (st.vy * st.vy) / (2 * GRAV) : 0);
+        if (apex > 1.7) st.bigAir = true;
+      }
+      if (st.bigAir && im && im.t < 1.8 && st.airT > 0.15 && st.mode === 'play') {
         const d = wrap(st.th - im.phi), ad = Math.abs(d);
         const q = d > 1.15 || d < -0.95 ? 'crash' : ad > 0.5 ? 'rough' : ad < 0.22 ? 'perfect' : 'clean';
         landMat.color.lerp(LAND_COL[q], Math.min(1, dt * 12)); landDiscMat.color.copy(landMat.color);
