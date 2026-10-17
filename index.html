@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261016203104">
+  <link rel="stylesheet" href="css/styles.css?v=20261016204247">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -168,8 +168,9 @@
   <div id="game-hud" class="game-hud" hidden>
     <div class="gh-stats" aria-live="off"><span class="gh-score"><b id="gh-score">0</b> pts</span><span class="gh-coins"><i class="gh-coin" aria-hidden="true"></i><b id="gh-coins">0</b></span></div>
     <div id="gh-groove" class="gh-groove" hidden aria-label="Groove multiplier"><span id="gh-mult">×1</span><small>groove</small></div>
+    <div id="gh-charge" class="gh-charge" hidden aria-hidden="true"><svg viewBox="0 0 44 44"><circle class="trk" cx="22" cy="22" r="18"/><circle class="bar" cx="22" cy="22" r="18" pathLength="100"/></svg></div>
     <p id="gh-toast" class="gh-toast" aria-live="polite"></p>
-    <p id="gh-hint" class="gh-hint" hidden>Tap to jump &middot; hold in the air to dive</p>
+    <p id="gh-hint" class="gh-hint" hidden>Hold to crouch &middot; release to jump &middot; tap in the air to level out</p>
     <button id="gh-quit" class="gh-quit" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back to the landscape</span></button>
   </div>
   <div id="game-over" class="gh-panel" role="dialog" aria-labelledby="go-title" hidden>
@@ -191,6 +192,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261016203104"></script>
+  <script type="module" src="js/main.js?v=20261016204247"></script>
 </body>
 </html>

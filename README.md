@@ -51,7 +51,7 @@ The town's colours live in `js/palette.js` (cream, sage, gold, blue-green, soft 
 A small dirt bike rides across the sign hills now and then (first pass about 8 s after load, then every 40-60 s). Click or tap it
 (or Tab to the hidden "Play the dirt bike game" button) to start a one-button game that continues the real terrain to the right.
 
-- **Controls:** on the ground a click, tap, Space or Enter jumps; in the air press and hold to dive the nose (and fall faster); release to level out. Esc or the Back pill leaves.
+- **Controls:** on the ground hold (click, touch, Space or Enter) to crouch, build speed and charge a jump (about 1.1 s to full); release to jump, higher the longer you held. In the air the nose tips backward on its own: tap to kick it forward, hold to dive (front flips). Esc or the Back pill leaves.
 - **Scoring:** coins, landings and flips build a groove multiplier (x1 to x5). A crash ends the run (ragdoll rider); the best score is kept in `localStorage`.
 - **Test switches:** `?bike=1` sends a bike straight away and keeps them coming, `?game=1` starts the game, `?course=NN` fixes the generated course.
 - The bike and game are off when the visitor prefers reduced motion and in Simple View.

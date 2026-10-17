@@ -2,15 +2,20 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016203104';
-import { createTrack } from './track.js?v=20261016203104';
-import { createRagdoll } from './ragdoll.js?v=20261016203104';
-import { createCoins } from './coins.js?v=20261016203104';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016204247';
+import { createTrack } from './track.js?v=20261016204247';
+import { createRagdoll } from './ragdoll.js?v=20261016204247';
+import { createPuffs } from './puffs.js?v=20261016204247';
+import { createCoins } from './coins.js?v=20261016204247';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
 const GRAV = 24;
-const JUMP = 9.5;                // upward kick from the ground
+const JUMP_MIN = 5.5, JUMP_MAX = 15;   // upward kick: a tap hops, a full charge flies
+const CHARGE_TIME = 1.1;               // seconds of holding to reach full charge (it then stays maxed)
+const BOOST_CAP = 4.5;                 // extra speed from charging and landings
+const BACK_W = 2.2, BACK_RATE = 1.2;   // in the air the nose wants to rotate backward: target rad/s and how fast it gets there
+const TAP_KICK = 3.4;                  // nose-down kick of one tap (rad/s, it fades quickly)
 const DIVE_GRAV = 1.2;           // extra gravity while nose-diving
 const TAU = Math.PI * 2;
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -21,6 +26,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const scoreEl = document.getElementById('gh-score');
   const coinsEl = document.getElementById('gh-coins');
   const hint = document.getElementById('gh-hint');
+  const chargeEl = document.getElementById('gh-charge');
+  const chargeBar = document.getElementById('gh-charge-bar');
   const toastEl = document.getElementById('gh-toast');
   const grooveEl = document.getElementById('gh-groove');
   const multEl = document.getElementById('gh-mult');
@@ -31,6 +38,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const track = createTrack(scene, { laneZ, material: world.terrainMaterial, seed: 1 });
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
+  const puffs = createPuffs(scene);
   const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
   bike.root.scale.setScalar(SCALE);
   bike.root.visible = false;
@@ -45,16 +53,18 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, meter: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
+    charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
   const lookV = new THREE.Vector3();
+  const pv = new THREE.Vector3();
   const events = { onLand: null, onFlip: null, onCrash: null };
 
   function frame() {
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
-    const dist = THREE.MathUtils.clamp((30 - 8 * tall) / (2 * tanH * camera.aspect), 18, 60);
+    const dist = THREE.MathUtils.clamp((30 - 8 * tall) / (2 * tanH * camera.aspect), 18, 60) * (1 + 0.03 * st.camZoom);   // a very slight pull-out while a jump charges
     const ahead = 6 + st.vx * 0.2;
     target.pos.set(st.x + ahead, st.camY + 2.5 + dist * 0.1, laneZ + dist);
     target.look.set(st.x + ahead, st.camY + 3 + dist * (0.05 + tall * 0.16), laneZ);
@@ -94,12 +104,13 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function startRun(x) {
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
+    st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; puffs.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
     ragdoll.restore();
   }
 
   function newRun() {
-    st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.meter = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0;
+    st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.meter = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
     const m = /[?&]course=(\d+)/.exec(location.search);
     const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
     track.reset(sd); coins.reset(sd, st.startX);
@@ -133,7 +144,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   /** One fixed physics step of `h` seconds. */
   function physics(h) {
-    const diving = st.down && st.diveOK;
+    const diving = st.down && st.diveOK && st.airHold > 0.18;   // a hold (not a tap) dives continuously
     if (st.mode === 'crash' || st.mode === 'over') {
       st.vx *= Math.exp(-2.2 * h);
       st.x += st.vx * h;
@@ -155,11 +166,12 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       for (let t = 0.04; t <= 0.121 && !leaves; t += 0.04) leaves = prevY + st.vy * t - 0.5 * GRAV * t * t > groundPose(st.x + st.vx * t).y + 0.1;
       st.coyote = 0.08;
       if (st.jumpReq > 0) {                                   // jump: the carried ground velocity plus a kick
-        st.jumpReq = 0; st.grounded = false; st.vy += JUMP; st.om = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.y = prevY;
+        st.jumpReq = 0; st.grounded = false; st.vy += st.jumpVy; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
         return;
       }
       if (leaves && st.vx > 4) {              // the ground fell away faster than gravity: we take off
-        st.grounded = false; st.om = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.y = prevY;
+        st.grounded = false; st.om = 0; st.kickW = 0; st.rot = 0; st.airT = 0; st.diveOK = false; st.airHold = 0; st.y = prevY;
+        if (st.charging) { st.vy += st.charge * 6; st.charging = false; }   // still holding at the lip: the charge becomes a smaller pop
         return;
       }
       st.vy = (q.y - prevY) / h;
@@ -170,16 +182,21 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     // ---- in the air ----
     st.airT += h;
     st.coyote -= h;
-    if (st.jumpReq > 0 && st.coyote > 0) { st.jumpReq = 0; st.vy = Math.max(st.vy, 0) + JUMP; st.coyote = 0; }   // a jump pressed just after the lip
+    if (st.down && st.diveOK) st.airHold += h; else st.airHold = 0;
+    if (st.jumpReq > 0 && st.coyote > 0) { st.jumpReq = 0; st.vy = Math.max(st.vy, 0) + st.jumpVy; st.coyote = 0; }   // a jump pressed just after the lip
     st.vy -= GRAV * (diving ? DIVE_GRAV : 1) * h;
     st.x += st.vx * h; st.y += st.vy * h;
-    const want = diving ? -8.5 : 0.7;                          // hold: nose goes down fast; release: it drifts gently back up
-    st.om += (want - st.om) * Math.min(1, (diving ? 18 : 3) * h);
-    let dth = st.om * h;
+    // The nose wants to tip backward (softer during the first 45 s of a run); a hold dives it, a tap gives a quick kick forward.
+    const back = BACK_W * (0.5 + 0.5 * Math.min(1, st.runT / 45));
+    const want = diving ? -8.5 : back;
+    const rate = diving ? 18 : (st.om < 0 ? 6 : BACK_RATE);
+    st.om += (want - st.om) * Math.min(1, rate * h);
+    st.kickW *= Math.exp(-7 * h);
+    let dth = (st.om + st.kickW) * h;
     // Landing assist: close to the ground and falling, the suspension and the rider square the bike up with the slope.
     const gp = groundPose(st.x + st.vx * 0.12);
     const above = st.y - R - groundY(st.x);
-    if (st.vy < 0 && above < 3.2 && st.airT > 0.2) { const k = Math.min(1, 3.2 * h * (1 - above / 3.2 + 0.3)); dth += wrap(gp.phi - st.th) * k; }
+    if (st.vy < 0 && above < 2.4 && st.airT > 0.2) { const k = Math.min(1, 2.0 * h * (1 - above / 2.4 + 0.3)); dth += wrap(gp.phi - st.th) * k; }
     st.th += dth; st.rot += dth;
     if (st.rot >= TAU - 1.1) { st.rot -= TAU; st.flips++; st.flipsTotal++; events.onFlip?.('back'); groove(0.4); award(400, 'Backflip!'); }
     else if (st.rot <= -(TAU - 1.1)) { st.rot += TAU; st.flips++; st.flipsTotal++; events.onFlip?.('front'); groove(0.4); award(400, 'Front flip!'); }
@@ -197,7 +214,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function land() {
     const p = groundPose(st.x);
     const delta = wrap(st.th - p.phi);                         // + nose up, - nose down
-    st.grounded = true; st.om = 0; st.diveOK = false;
+    st.grounded = true; st.om = 0; st.kickW = 0; st.diveOK = false;
     const air = st.airT;
     if (delta > 1.15 || delta < -0.95) { crash(); return; }
     st.y = p.y;
@@ -207,13 +224,14 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.bestAir = Math.max(st.bestAir, air);
     if (rough) { st.vx *= 0.72; st.mult = Math.max(1, st.mult - 1); st.meter = 0; toast('Rough landing'); }
     else {
-      st.boost = Math.min(4, st.boost + (perfect ? 1.2 : 0.5));
+      st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 1.2 : 0.5));
       if (air > 0.45) {
         groove(perfect ? 0.34 : 0.2);
         award((perfect ? 150 : 60) + Math.max(0, air - 0.5) * 90, perfect ? 'Stuck it!' : 'Clean landing');
       }
     }
     st.rot = 0;
+    if (st.down) { st.charging = true; st.holdT = 0; }          // still holding at touchdown: start charging the next jump straight away
     events.onLand?.({ air, delta, perfect, rough, flips: st.flips });
     st.flips = 0;
   }
@@ -232,7 +250,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const api = {
     get active() { return st.mode !== 'off'; },
     /** Debug / test access. */
-    get state() { return { x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
+    get state() { return { charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
     events,
     focusDistance: 26,
     onQuit: null,
@@ -241,7 +259,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.t = 0; st.down = false; st.startX = startX; st.best = loadBest();
       st.home = { pos: homeCam.pos.clone(), look: homeCam.look.clone() };
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
-      track.visible = true; coins.visible = true;
+      track.visible = true; coins.visible = true; puffs.visible = true;
       newRun();
       bike.root.visible = true;
       renderer.clippingPlanes = [clip]; clip.constant = 60;
@@ -257,20 +275,28 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.down = false;
       if (hud) hud.hidden = true;
       if (overEl) overEl.hidden = true;
+      if (chargeEl) chargeEl.hidden = true;
       document.body.classList.remove('game-over');
       clearTimeout(st.hintT);
       document.body.classList.remove('game-mode');
     },
     /** Ride again (the buttons on the game-over panel). */
     again() { if (st.mode === 'over') newRun(); },
-    /** The one button. On the ground a press jumps; in the air a press (held) dives the nose. */
+    /** The one button. On the ground: hold to crouch and charge, release to jump. In the air: tap to kick the nose down, hold to dive. */
     press() {
       if (st.mode === 'off' || st.mode === 'out' || st.mode === 'over') return;
       st.down = true;
-      if (st.grounded || st.coyote > 0) { st.jumpReq = 0.12; st.diveOK = false; }
-      else st.diveOK = true;
+      if (st.grounded || st.coyote > 0) { st.charging = true; st.holdT = 0; st.diveOK = false; }
+      else { st.diveOK = true; st.airHold = 0; st.kickW = Math.max(-6, st.kickW - TAP_KICK); }
     },
-    release() { st.down = false; st.diveOK = false; },
+    release() {
+      if (st.charging) {                                                   // let go: jump, higher the longer it was held
+        const c = st.charge;
+        st.jumpVy = JUMP_MIN + (JUMP_MAX - JUMP_MIN) * (1 - (1 - c) * (1 - c));
+        st.jumpReq = 0.12; st.charging = false;
+      }
+      st.down = false; st.diveOK = false;
+    },
     update(dt, cam) {
       if (st.mode === 'off') return false;
       if (st.mode === 'out') {
@@ -280,13 +306,19 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k);
         if (k >= 1) {
-          st.mode = 'off'; renderer.clippingPlanes = []; track.visible = false; coins.visible = false; bike.root.visible = false;
+          st.mode = 'off'; renderer.clippingPlanes = []; track.visible = false; coins.visible = false; puffs.visible = false; bike.root.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
         }
         return true;
       }
-      st.t += dt;
+      st.t += dt; if (st.mode === 'play') st.runT += dt;
+      if (st.charging && st.grounded && st.mode === 'play') {
+        st.holdT += dt; st.charge = Math.min(1, st.holdT / CHARGE_TIME);
+        st.boost = Math.min(BOOST_CAP, st.boost + 2.5 * dt);                 // the bike slowly speeds up while crouched
+        if (st.charge >= 1 && !st.maxed) { st.maxed = true; try { navigator.vibrate?.(10); } catch (e) { /* not supported */ } }
+      } else { st.charge = Math.max(0, st.charge - dt * 6); if (!st.charging) st.maxed = false; }
+      if (st.mode !== 'play') st.charging = false;
       const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n;
       for (let i = 0; i < n; i++) {
         physics(h);
@@ -310,9 +342,30 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       // looks
       const leanT = st.mode === 'crash' ? 0.2 : st.grounded ? 0.7 : (st.down && st.diveOK ? 1.15 : 0.35);
       st.lean += (leanT - st.lean) * Math.min(1, dt * 8);
-      if (!ragdoll.active) poseRider(bike.rider, st.lean);
-      st.spin += (st.vx * dt) / R;
-      bike.wheels.rear.rotation.z = bike.wheels.front.rotation.z = -st.spin;
+      const crouchT = st.charging && st.grounded ? st.charge : 0;
+      st.crouch += (crouchT - st.crouch) * Math.min(1, dt * (crouchT > st.crouch ? 6 : 14));
+      if (!ragdoll.active) {
+        poseRider(bike.rider, st.lean, st.crouch);
+        const shake = st.maxed ? (Math.sin(st.t * 70) * 0.012) : 0;           // at full charge the rider trembles, ready to go
+        bike.rider.group.position.y = shake;
+      }
+      bike.model.scale.y = 1 - 0.05 * st.crouch;                              // the bike squats on its suspension
+      st.spinF += (st.vx * dt) / R;
+      st.spinR += (st.vx * (1 + 1.6 * st.crouch) * dt) / R;                    // the rear wheel spins up while charging
+      bike.wheels.rear.rotation.z = -st.spinR; bike.wheels.front.rotation.z = -st.spinF;
+      // dirt kicked from the rear wheel and a little exhaust while charging
+      if (st.charging && st.grounded && st.mode === 'play' && st.charge > 0.05) {
+        st.puffT -= dt;
+        if (st.puffT <= 0) {
+          st.puffT = 0.11 - 0.07 * st.charge;
+          const c = Math.cos(st.th), s2 = Math.sin(st.th);
+          const wx = st.x - HW * c, wy = st.y - HW * s2 - R * 0.7;
+          puffs.emit(wx, wy, laneZ + 0.2, -3 - 4 * st.charge + (Math.random() - 0.5) * 2, 1.5 + 2.5 * st.charge, 0.5, 1.3 + st.charge, 0.7, '#a98a63', 0.55);
+          puffs.emit(st.x - HW * c * 1.5, st.y - HW * s2 * 0.4 + 0.5, laneZ - 0.3, -2.2 - 2 * st.charge, 0.9 + st.charge, 0.35, 0.9, 0.8, '#efeee5', 0.38);
+        }
+      }
+      st.camZoom += (st.crouch - st.camZoom) * Math.min(1, dt * 3);
+      puffs.update(dt, renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))));
       bike.root.position.set(st.x, st.y, laneZ);
       bike.root.rotation.z = st.th;
       setHud();
@@ -325,6 +378,20 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       clip.constant = THREE.MathUtils.lerp(60, CUT, k);
       track.update(cam.position.x, st.camY);
       coins.update(cam.position.x, st.t);
+      if (chargeEl) {                                                          // the charge ring floats above the bike
+        const show = st.mode === 'play' && (st.charging || st.charge > 0.02) && st.grounded;
+        chargeEl.hidden = !show;
+        if (show) {
+          cam.updateMatrixWorld();
+          pv.set(st.x, st.y + 3.6, laneZ).project(cam);
+          const r = renderer.domElement.getBoundingClientRect();
+          chargeEl.style.left = (r.left + (pv.x * 0.5 + 0.5) * r.width) + 'px';
+          chargeEl.style.top = (r.top + (-pv.y * 0.5 + 0.5) * r.height) + 'px';
+          chargeEl.style.setProperty('--p', st.charge.toFixed(3));
+          chargeEl.classList.toggle('max', st.charge >= 1);
+          chargeEl.classList.toggle('hot', st.charge > 0.7);
+        }
+      }
       return true;
     },
   };

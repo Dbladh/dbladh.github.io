@@ -618,3 +618,16 @@ body.game-over .gh-quit { display: none; }   /* the card has its own Back button
   .go-actions { grid-template-columns: 1fr 1fr; }
   .gh-groove { width: 56px; height: 56px; }
 }
+
+/* Jump charge ring (floats above the bike) */
+.gh-charge { position: fixed; width: 46px; height: 46px; transform: translate(-50%, -50%); pointer-events: none; z-index: 26; filter: drop-shadow(0 2px 4px rgba(30, 36, 40, .35)); }
+.gh-charge[hidden] { display: none; }
+.gh-charge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.gh-charge circle { fill: none; stroke-width: 6; }
+.gh-charge .trk { stroke: color-mix(in srgb, var(--cream) 78%, transparent); }
+.gh-charge .bar { stroke: var(--gold); stroke-linecap: round; stroke-dasharray: calc(var(--p, 0) * 100) 100; }
+.gh-charge.hot .bar { stroke: var(--marigold, #E3B04B); }
+.gh-charge.max .bar { stroke: var(--coral); }
+.gh-charge.max { animation: ghmax .35s ease-in-out infinite alternate; }
+@keyframes ghmax { from { transform: translate(-50%, -50%) scale(1); } to { transform: translate(-50%, -50%) scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { .gh-charge.max { animation: none; } }
