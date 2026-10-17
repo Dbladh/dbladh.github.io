@@ -2,15 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017150224';
-import { createTrack } from './track.js?v=20261017150224';
-import { createRagdoll } from './ragdoll.js?v=20261017150224';
-import { createFx } from './fx.js?v=20261017150224';
-import { createAudio } from './audio.js?v=20261017150224';
-import { createPuffs } from './puffs.js?v=20261017150224';
-import { createDirt } from './dirt.js?v=20261017150224';
-import { createMudCoat } from './mudcoat.js?v=20261017150224';
-import { createCoins } from './coins.js?v=20261017150224';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017150733';
+import { createTrack } from './track.js?v=20261017150733';
+import { createRagdoll } from './ragdoll.js?v=20261017150733';
+import { createFx } from './fx.js?v=20261017150733';
+import { createAudio } from './audio.js?v=20261017150733';
+import { createPuffs } from './puffs.js?v=20261017150733';
+import { createDirt } from './dirt.js?v=20261017150733';
+import { createMudCoat } from './mudcoat.js?v=20261017150733';
+import { createCoins } from './coins.js?v=20261017150733';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -131,7 +131,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     rot: 0, flips: 0, airT: 0, camY: 0, score: 0, coins: 0, down: false, spin: 0, lean: 0.7,
     crashT: 0, inv: 0, boost: 0, startX: 0, best: 0,
     bonus: 0, dist: 0, mult: 1, comboT: 0, lastTrick: 0, flipsTotal: 0, bestAir: 0, bestMult: 1, overAt: 0,
-    bigAir: false, hz: null, viewW: 0, squash: 0, warnedObs: -1, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
+    bigAir: false, hz: null, viewW: 0, squash: 0, lift: 0, warnedObs: -1, spinA: 0, cx: 0, cy: 0, calmT: 0, warnedX: -1, mudT: 0, zoom: 1, frameDt: 0.016, multT: 0, trick: null, lastAirTap: -9, trickIdx: 0, paused: false, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(), guideStep: 0, guideOn: false, guideTapped: false, cleanLandings: 0, impact: null, impactAt: 0, buf: null, charging: false, charge: 0, holdT: 0, jumpVy: 9, airHold: 0, kickW: 0, runT: 0, crouch: 0, maxed: false, spinR: 0, spinF: 0, puffT: 0, camZoom: 0,
     rider: null, onQuit: null, hintT: 0, toastT: 0,
   };
   const target = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -166,6 +166,18 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     const ahead = (0.26 * st.viewW + st.vx * 0.08) * (1 - 0.45 * wipe);                // (after a crash the camera settles with the rider nearer the middle)                           // look well ahead (the bike sits about a quarter of the way in from the left)
     target.pos.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 2.5 + dist * 0.11, laneZ + dist);
     target.look.set(st.cx + ahead * (1 + 0.6 * (st.zoom - 1)), st.camY + 3 + dist * c, laneZ);
+    // A clear view of the rider: if ground nearer the camera (a hill on the slope toward the viewer) would hide the bike, the camera lifts over it.
+    {
+      const bx = st.cx, by = st.cy + 1.2, tx = target.pos.x, ty = target.pos.y, tz = target.pos.z;
+      let need = 0;
+      for (let k = 1; k <= 12; k++) {
+        const t = k / 14, gx = tx + (bx - tx) * t, gz = tz + (laneZ - tz) * t, yNeed = (track.groundAt(gx, gz) + 1.4 - by * t) / (1 - t);   // the camera height at which the line of sight clears this ground
+        if (yNeed - ty > need) need = yNeed - ty;
+      }
+      need = Math.min(need, 18);
+      st.lift += (need - st.lift) * (1 - Math.exp(-(need > st.lift ? 7 : 1.3) * st.frameDt));                  // up quickly, down slowly
+      target.pos.y += st.lift;
+    }
     return dist;
   }
   const hudLast = { score: -1, coins: -1, hidden: null, p: '', level: -1, mult: -1 };       // (touch the page only when a value actually changed)
@@ -221,7 +233,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const lifeGround = (x, z) => { const pt = track.pitSpan(x); return pt ? track.groundAt(pt.x0 - 0.5, z) : track.groundAt(x, z); };
 
   function startRun(x) {
-    st.warnedObs = -1; st.warnedX = -1; mudCoat.reset();
+    st.warnedObs = -1; st.warnedX = -1; st.lift = 0; mudCoat.reset();
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
     st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear(); dirt.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
@@ -557,7 +569,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const api = {
     get active() { return st.mode !== 'off'; },
     /** Debug / test access. */
-    get state() { return { trick: st.trick && (st.trick.def.id), jumpVy: st.jumpVy, impact: st.impact, buf: !!st.buf, charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
+    get state() { return { lift: st.lift, trick: st.trick && (st.trick.def.id), jumpVy: st.jumpVy, impact: st.impact, buf: !!st.buf, charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
     events,
     focusDistance: 26,
     onQuit: null,
