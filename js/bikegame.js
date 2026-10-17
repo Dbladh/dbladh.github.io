@@ -2,14 +2,15 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017114135';
-import { createTrack } from './track.js?v=20261017114135';
-import { createRagdoll } from './ragdoll.js?v=20261017114135';
-import { createFx } from './fx.js?v=20261017114135';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017114411';
+import { createTrack } from './track.js?v=20261017114411';
+import { createRagdoll } from './ragdoll.js?v=20261017114411';
+import { createFx } from './fx.js?v=20261017114411';
 import { createAudio } from './audio.js?v=20261017103819';
-import { createPuffs } from './puffs.js?v=20261017114135';
+import { createPuffs } from './puffs.js?v=20261017114411';
 import { createDirt } from './dirt.js?v=20261017111228';
-import { createCoins } from './coins.js?v=20261017114135';
+import { createMudCoat } from './mudcoat.js?v=20261017111228';
+import { createCoins } from './coins.js?v=20261017114411';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -52,6 +53,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const track = createTrack(scene, { laneZ, material: world.terrainMaterial, world, seed: 1 });
   const coins = createCoins(scene, track, laneZ);
   const bike = buildBike();
+  const mudCoat = createMudCoat(bike.root);                                    // mud that sticks to the bike and rider, then dries and falls away
   const puffs = createPuffs(scene);
   const dirt = createDirt(scene, (x) => track.laneAt(x));
   const audio = createAudio();
@@ -187,7 +189,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const lifeGround = (x, z) => { const pt = track.pitSpan(x); return pt ? track.groundAt(pt.x0 - 0.5, z) : track.groundAt(x, z); };
 
   function startRun(x) {
-    st.warnedObs = -1; st.warnedX = -1;
+    st.warnedObs = -1; st.warnedX = -1; mudCoat.reset();
     st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
     st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear(); dirt.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
@@ -557,6 +559,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     get coinsDebug() { return coins; },
     get track() { return track; },
     get audioDebug() { return audio; },
+    get mudCoatDebug() { return mudCoat; },
     get ragdollDebug() { return ragdoll; },                                                                     // (for tests)
     /** Compile the game's own shaders (bike, coins, puffs, mud, landing circle) in the background, so the first click does not stall the scene. */
     async warmUp() {
@@ -639,6 +642,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.impact = predictLanding(); st.impactAt = st.t;
       juice.setIntensity(st.mode === 'play' ? THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1) : 0, st.boost / BOOST_CAP, st.charge); juice.setAnchor(st.x, st.y + 0.3, laneZ - 0.6);
       audio.update({ playing: st.mode === 'play', speedK: THREE.MathUtils.clamp((st.vx - 13) / 11, 0, 1), charge: st.charging && st.grounded ? st.charge : 0, boost: st.boost / BOOST_CAP, grounded: st.grounded, mud: st.grounded ? track.mudAt(st.x) : 0, camDist: cam.position.z - laneZ, dt });
+      mudCoat.update(dt, st.mode === 'play' && st.grounded ? track.mudAt(st.x) : 0);
+      if (mudCoat.coat > 0.15 && st.mode === 'play') { st.flakeT = (st.flakeT || 0) - dt; if (st.flakeT <= 0) { st.flakeT = 0.4 / mudCoat.coat; dirt.burst(st.x - 0.4 + Math.random() * 0.8, st.y - R * 0.9, laneZ + 0.3, 1, 0.3, 1); } }                       // lumps drop off as it dries
       if (st.mode === 'play') {
         st.dist = Math.max(st.dist, st.x - st.startX); st.boost *= Math.exp(-0.35 * dt);
         checkObstacles();

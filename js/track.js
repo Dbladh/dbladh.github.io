@@ -8,8 +8,8 @@
 import * as THREE from 'three';
 import { createTrail } from './trail.js?v=20261017111228';
 import { KINDS, buildObstacle } from './obstacles.js?v=20261017111228';
-import { PAL } from './palette.js?v=20261017114135';
-import { heightAt as terrainAt } from './world.js?v=20261017114135';
+import { PAL } from './palette.js?v=20261017114411';
+import { heightAt as terrainAt } from './world.js?v=20261017114411';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
