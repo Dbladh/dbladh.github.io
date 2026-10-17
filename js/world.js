@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016192353';
+import { PAL } from './palette.js?v=20261016192803';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261016192353';
+} from './houses.js?v=20261016192803';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -501,6 +501,7 @@ export function buildWorld(scene, sections, opts = {}) {
   });
 
   const sites = [];
+  let villageSide = 1;
   const farFromOthers = (x, z, min) => sites.every((o) => Math.hypot(o.x - x, o.z - z) >= min);
   const tryMainSite = (zc, side) => {
     const slope = pathX(zc + 0.5) - pathX(zc - 0.5);          // dx/dz of the path
@@ -517,16 +518,19 @@ export function buildWorld(scene, sections, opts = {}) {
     return true;
   };
   {
-    const target = 5 + Math.floor(TR() * 4);                  // 5-8 houses along the main path
-    let zc = -5 - TR() * 4, last = TR() < 0.5 ? -1 : 1, n = 0, guardM = 0;
+    // A calm village: just 2-3 houses along the main path, all on one side (chosen per visit), so the scene
+    // stays quiet and the billboards stay the focus.
+    const SIDE = TR() < 0.5 ? -1 : 1;
+    const target = 2 + Math.floor(TR() * 2);
+    let zc = -5 - TR() * 4, n = 0, guardM = 0;
     while (zc > -56 && n < target && guardM++ < 40) {
-      const side = TR() < 0.72 ? -last : last;
-      if (tryMainSite(zc, side)) { n++; last = side; }
+      if (tryMainSite(zc, SIDE)) n++;
       zc -= 6.5 + TR() * 5.5;
     }
-    for (let t = 0; n < 5 && t < 80; t++) {                    // top up if rejections left the village thin
-      if (tryMainSite(-5 - TR() * 50, TR() < 0.5 ? -1 : 1)) n++;
+    for (let t = 0; n < 2 && t < 80; t++) {                    // top up if rejections left the village thin
+      if (tryMainSite(-5 - TR() * 50, SIDE)) n++;
     }
+    villageSide = SIDE;
   }
 
   // Hamlets: 1-3 houses along each branch path, sides and spacing from the seed.
@@ -542,7 +546,7 @@ export function buildWorld(scene, sections, opts = {}) {
     return true;
   };
   for (let bi = 0; bi < 2; bi++) {
-    const want = 1 + Math.floor(TR() * 3);
+    const want = bi === (villageSide < 0 ? 0 : 1) ? 1 : 0;      // a single hamlet house, on the village's side only
     let got = 0;
     for (let t = 0; got < want && t < 14; t++) {
       if (tryBranchSite(bi, 0.3 + TR() * 0.58, TR() < 0.5 ? -1 : 1)) got++;
@@ -553,7 +557,7 @@ export function buildWorld(scene, sections, opts = {}) {
   {
     let steads = 0;
     for (const st of sites.filter((q) => !q.hamlet)) {
-      if (steads >= 2) break;
+      if (steads >= 0) break;                                   // (farmsteads switched off for the calm village)
       const lx = st.fz, lz = -st.fx;                           // lateral direction (along the house's front)
       let done = false;
       for (const sgn of TR() < 0.5 ? [1, -1] : [-1, 1]) {
@@ -584,8 +588,6 @@ export function buildWorld(scene, sections, opts = {}) {
     const WMX = -23, WMZ = -92, wy = rawHeight(WMX, WMZ);
     farm.push({ kind: 'windmill', x: WMX, z: WMZ, y: wy });
     PADS.push({ x: WMX, z: WMZ, r: 5, y: wy });
-    farm.push({ kind: 'barn', x: bb[0] + 2.5, z: bb[1] - 1, y: by, rot: Math.atan2(-(bb[0] + 2.5), 22 - (bb[1] - 1)) + 0.5 });
-    PADS.push({ x: bb[0] + 2.5, z: bb[1] - 1, r: 5.5, y: by });
   }
   sites.sort((p, q) => q.z - p.z);                           // nearest the camera first (they get the real lights)
   // Up to two houses on the flanks or at the back are two storeys, and only where they cannot hide a sign.
@@ -1124,7 +1126,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
 
   // Forest clusters (denser where noise is high); clear of the path, houses, signs and pond.
   let placedTrees = 0, guard = 0;
-  const treeTarget = Math.round(165 * D);
+  const treeTarget = Math.round(215 * D);               // more forest now that the village is small
   while (placedTrees < treeTarget && guard++ < 9000) {
     const x = (rand() - 0.5) * 220, z = -150 + rand() * 175;
     if (z > -6 && Math.abs(x) < 30) continue;                     // open meadow in front of the camera
@@ -1300,8 +1302,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       got++;
     }
   };
-  cluster(-30, -7, 11, Math.round(14 * D));  cluster(-46, -14, 12, Math.round(14 * D));  cluster(-20, 10, 9, Math.round(7 * D));
-  cluster(30, -2, 11, Math.round(14 * D));   cluster(46, -10, 12, Math.round(14 * D));   cluster(22, 12, 9, Math.round(7 * D));
+  cluster(-30, -7, 11, Math.round(21 * D));  cluster(-46, -14, 12, Math.round(21 * D));  cluster(-20, 10, 9, Math.round(10 * D));
+  cluster(30, -2, 11, Math.round(21 * D));   cluster(46, -10, 12, Math.round(21 * D));   cluster(22, 12, 9, Math.round(10 * D));
   for (const f of farm) for (let k = 0; k < Math.round(7 * D); k++) {   // garden bushes and tall grass round the farm buildings
     const a = rand() * 6.28, r = 3 + rand() * 3, x = f.x + Math.cos(a) * r, z = f.z + Math.sin(a) * r;
     if (free(x, z, 0) && !branches.some((b) => distToPolyline(x, z, b) < 2)) addBush(x, z, 0.5 + rand() * 0.5);
@@ -1370,7 +1372,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       street.add(box(0.46, 0.08, 0.46, dark, x, y + 2.92, z));
       street.add(box(0.3, 0.1, 0.3, dark, x, y + 0.05, z));
     };
-    [[11, 1], [3, -1], [-9, 1], [-21, -1], [-33, 1]].forEach(([z, side]) => {
+    [[8, 1], [-12, -1], [-30, 1]].forEach(([z, side]) => {
       const x = pathX(z) + side * 2.7;
       if (clear(x, z, 0.8)) lamp(x, z);
     });
@@ -1384,7 +1386,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       }
     }
     // a market stall beside the path, in the first clear spot
-    for (const [z, side] of [[-2, -1], [-12, 1], [-26, -1], [-16, -1], [4, 1]]) {
+    for (const [z, side] of []) {                                    // (market stall removed for the calm village)
       const sx = pathX(z) + side * 4.6;
       if (!clear(sx, z, 2.4)) continue;
       const y = heightAt(sx, z), face = Math.atan2(-side, 0.1);
@@ -1424,7 +1426,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           s.rotation.y = TR() * 3.14;
           street.add(s);
         }
-        if (++n >= 6) break;
+        if (++n >= 2) break;
       }
     }
     // a small arched footbridge across the pond's narrow side
@@ -1668,9 +1670,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // ---- Fireflies: spread through the whole depth of the scene ----
   // Near ones sit right in front of the camera (big, soft bokeh), far ones twinkle on the hills.
   const FF_GROUPS = [
-    { n: 30, xr: 14, z0: 8, z1: 19 },     // close to the camera
-    { n: 36, xr: 32, z0: -22, z1: 8 },    // middle distance
-    { n: 28, xr: 62, z0: -64, z1: -22 },  // far away
+    { n: 10, xr: 14, z0: 8, z1: 19 },     // close to the camera
+    { n: 14, xr: 32, z0: -22, z1: 8 },    // middle distance
+    { n: 10, xr: 62, z0: -64, z1: -22 },  // far away
   ];
   const FF_COLORS = ['#d8ff6a', '#ffe27a', '#9dffb0', '#ffd0a0', '#c6ff8a'].map((h) => new THREE.Color(h));
   const ffData = [];

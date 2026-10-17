@@ -3,7 +3,7 @@
 // so the same seed always builds the same village. `mergeByMaterial` then collapses each house into a
 // handful of draw calls.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016192353';
+import { PAL } from './palette.js?v=20261016192803';
 
 // ---------------------------------------------------------------- small helpers
 
@@ -978,7 +978,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- round corner turret on a few houses: a drum with a conical roof and a window, at the free front corner
-  if (!low && !compact && !tall && !opts.far && chStyle !== 'bigstone' && R() < 0.14) {
+  if (!low && !compact && !tall && !opts.far && chStyle !== 'bigstone' && R() < 0.08) {
     const tr = 0.85, tx = freeSide * (w / 2 - 0.05), tz = d / 2 - 0.1;
     const th = h + 0.9;
     const drum = new THREE.Mesh(new THREE.CylinderGeometry(tr, tr + 0.05, th, 14), wallPlain);
@@ -996,7 +996,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- trellis with a climbing plant on the free side wall
-  if (!low && !compact && !opts.far && chStyle !== 'bigstone' && R() < 0.3) {
+  if (!low && !compact && !opts.far && chStyle !== 'bigstone' && R() < 0.15) {
     const tz2 = -d * 0.28, tx2 = freeSide * (w / 2 + 0.05);
     const lat = mat(PAL.cream), leaf = mat(PAL.leaf), leaf2 = mat(PAL.leaf2);
     for (let k = 0; k < 4; k++) g.add(box(0.04, 1.9, 0.05, lat, tx2, 1.4, tz2 - 0.6 + k * 0.4));
@@ -1011,7 +1011,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- detached outbuilding on the free side, built parallel to the house with its front in line
-  if (!low && !compact && !opts.far && R() < 0.62) {
+  if (!low && !compact && !opts.far && R() < 0.3) {
     const kind = pick(['shed', 'shed', 'greenhouse', 'woodstore', 'stable']);
     const ow = kind === 'stable' ? 2.7 : 1.9, od = kind === 'stable' ? 2.2 : 1.7, oh = kind === 'stable' ? 1.9 : 1.6;
     const ox = freeSide * (w / 2 + 1.55 + ow / 2), oz = d / 2 - od / 2;
@@ -1052,7 +1052,7 @@ function makeHouse(R, theme, opts) {
   }
 
   // --- yard: one or two small things in front of the house, off the path to the door
-  if (!low && !compact && !opts.far) {
+  if (!low && !compact && !opts.far && R() < 0.3) {
     const yardKinds = ['well', 'haystack', 'woodpile', 'laundry', 'garden', 'bench', 'fence', 'fence'];
     const yx = -doorSide * (w * 0.18 + 1.4 + R() * 1.0), yz = d / 2 + 2.2 + R() * 0.7, y0 = 0.07;
     const count = 1 + (R() < 0.45 ? 1 : 0);
@@ -1103,7 +1103,7 @@ function makeHouse(R, theme, opts) {
   const merged = mergeByMaterial(g);
   return {
     group: merged, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d,
-    chimneys, smoke: chimneys.length > 0 && !low && R() < 0.8,
+    chimneys, smoke: chimneys.length > 0 && !low && R() < 0.5,
     sig: `${wallSpec.kind}${wallSpec.hex}${mix}${spec2.kind}|${roofSpec.kind}${roofSpec.hex}|${shape}`,
   };
 }
