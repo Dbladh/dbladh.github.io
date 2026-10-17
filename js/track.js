@@ -6,8 +6,8 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016224103';
-import { heightAt as terrainAt } from './world.js?v=20261016224103';
+import { PAL } from './palette.js?v=20261016224344';
+import { heightAt as terrainAt } from './world.js?v=20261016224344';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -138,12 +138,6 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     if (x > XT) {
       let pit = 0; for (const g of gaps) if (x > g.x0 - 0.7 && x < g.x1 + 0.7) pit = 1;                              // gaps: bare dark earth in the pit and up its walls
       if (pit) tc.lerp(PIT_C, 0.9).offsetHSL(0, 0, (hash(x * 3.1, z * 1.7) - 0.5) * 0.05);
-      const dz = z - laneZ, mud = mudAt(x) * (dz > 0 ? 1 - smooth01(dz / 24) : 1 - smooth01(-dz / 9));                // mud: a wide wet brown patch, reaching well toward the camera so it reads on small screens
-      if (mud > 0.01) {
-        tc.lerp(MUD_C, 0.97 * mud);
-        const wet = smooth01((Math.sin(x * 0.85 + z * 0.2) * Math.cos(z * 0.55 - x * 0.3) - 0.15) / 0.5) * mud;                    // darker puddles dotted through it
-        if (wet > 0.01) tc.lerp(PUDDLE_C, 0.8 * wet);
-      }
     }
     return tc;
   }
@@ -208,6 +202,71 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   function dropScenery(idx) { const g = scenery.get(idx); if (g) { g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); group.remove(g); } scenery.delete(idx); }
   function clearScenery() { for (const k of [...scenery.keys()]) dropScenery(k); }
 
+  // ---------------- mud patches: a crisp, lumpy blob lying on the ground (own geometry, not painted on the terrain) ----------------
+  const mudMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const puddleMat = new THREE.MeshPhongMaterial({ color: '#4a3b30', shininess: 90, specular: new THREE.Color('#9fb0bc'), flatShading: true });
+  const clumpMat = new THREE.MeshLambertMaterial({ color: '#5a3f27', flatShading: true });
+  const MUD_COLS = ['#6f4d2e', '#5a3f27', '#7c5936', '#493322'].map((h) => new THREE.Color(h));
+  const mudMeshes = new Map();          // mud index -> Group
+  function buildMud(u, seedN) {
+    const r = mulberry32((Math.floor(u.x0 * 10) + seedN * 131) >>> 0), cx = (u.x0 + u.x1) / 2, cz = laneZ + 2.5, rx = (u.x1 - u.x0) / 2 + 1.5, rz = 10.5;
+    const SEG = 48, RINGS = 6, ph = [r() * 6, r() * 6, r() * 6];
+    const outline = (a) => 1 + 0.13 * Math.sin(a * 3 + ph[0]) + 0.08 * Math.sin(a * 5 + ph[1]) + 0.05 * Math.sin(a * 9 + ph[2]);   // a lumpy, irregular outline
+    const pos = [], col = [], idx = [];
+    const heightOn = (px, pz, rf) => {
+      const lane = Math.exp(-Math.pow((pz - laneZ) / 2.2, 2));                       // keep the lane itself smooth so the bike is not buried
+      const lumps = (0.1 * Math.sin(px * 1.3 + ph[0]) * Math.cos(pz * 1.1 + ph[1]) + 0.07 * Math.sin(px * 2.7 + pz * 2.1)) * (1 - 0.8 * lane) * Math.min(1, (1 - rf) * 5);
+      const rim = 0.2 * Math.exp(-Math.pow((rf - 0.92) / 0.07, 2));                  // a raised lip of churned mud around the edge
+      return groundAt(px, pz) + 0.2 + lumps + rim;                                  // always above the terrain, so no grass shows through
+    };
+    const vtx = (rf, a) => {
+      const n = outline(a);
+      const px = cx + Math.cos(a) * rx * n * rf, pz = cz + Math.sin(a) * rz * n * rf;
+      const y = heightOn(px, pz, rf) - (rf >= 0.999 ? 0.1 : 0);                       // the very edge tucks into the ground
+      pos.push(px, y, pz);
+      const t = 0.5 + 0.5 * Math.sin(px * 0.9 + ph[1]) * Math.cos(pz * 0.8 + ph[2]);   // mottled browns, a lighter damp ring at the edge
+      const c = MUD_COLS[1].clone().lerp(MUD_COLS[2], t * 0.8).lerp(MUD_COLS[3], Math.max(0, 0.6 - rf) * 0.8 * (1 - t));
+      if (rf > 0.8) c.lerp(MUD_COLS[0], (rf - 0.8) * 3);
+      c.offsetHSL(0, 0, (r() - 0.5) * 0.05);
+      col.push(c.r, c.g, c.b);
+    };
+    pos.push(cx, heightOn(cx, cz, 0), cz); col.push(0.3, 0.2, 0.13);
+    for (let k = 1; k <= RINGS; k++) for (let j = 0; j < SEG; j++) vtx(k / RINGS, (j / SEG) * Math.PI * 2);
+    for (let j = 0; j < SEG; j++) idx.push(0, 1 + ((j + 1) % SEG), 1 + j);
+    for (let k = 0; k < RINGS - 1; k++) for (let j = 0; j < SEG; j++) {
+      const a = 1 + k * SEG + j, b = 1 + k * SEG + ((j + 1) % SEG), c2 = 1 + (k + 1) * SEG + j, d = 1 + (k + 1) * SEG + ((j + 1) % SEG);
+      idx.push(a, b, c2, b, d, c2);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+    g.computeVertexNormals();
+    const grp = new THREE.Group();
+    const blob = new THREE.Mesh(g, mudMat); blob.receiveShadow = true; grp.add(blob);
+    // wet puddles and lumps of churned earth
+    for (let k = 0; k < 7; k++) {
+      const a = r() * 6.28, rf = 0.15 + r() * 0.65, n = outline(a), px = cx + Math.cos(a) * rx * n * rf, pz = cz + Math.sin(a) * rz * n * rf;
+      const rad = 0.8 + r() * 1.5, p = new THREE.Mesh(new THREE.CircleGeometry(rad, 9).rotateX(-Math.PI / 2), puddleMat);
+      p.scale.set(1.5, 1, 1); p.position.set(px, heightOn(px, pz, rf) + 0.07, pz); p.rotation.y = r() * 3; grp.add(p);
+    }
+    const clumps = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), clumpMat, 46), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v3 = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (let k = 0; k < 46; k++) {
+      const a = r() * 6.28, rf = Math.sqrt(r()) * 0.97, n = outline(a), px = cx + Math.cos(a) * rx * n * rf, pz = cz + Math.sin(a) * rz * n * rf, s0 = 0.14 + r() * 0.32;
+      if (Math.abs(pz - laneZ) < 1.6) { m4.makeScale(0, 0, 0); clumps.setMatrixAt(k, m4); continue; }                // keep the lane clear
+      e.set(r() * 3, r() * 6, r() * 3); q.setFromEuler(e);
+      m4.compose(v3.set(px, heightOn(px, pz, rf) + s0 * 0.25, pz), q, sc.set(s0 * 1.4, s0 * 0.7, s0)); clumps.setMatrixAt(k, m4);
+    }
+    clumps.castShadow = false; grp.add(clumps);
+    return grp;
+  }
+  function dropMud(i) { const g = mudMeshes.get(i); if (!g) return; g.traverse((o) => { if (o.isMesh) { if (o.geometry && o !== undefined) o.geometry.dispose(); if (o.isInstancedMesh) o.dispose(); } }); group.remove(g); mudMeshes.delete(i); }
+  function syncMud(camX) {
+    for (let i = 0; i < muds.length; i++) {
+      const u = muds[i], near = u.x1 > camX - 130 && u.x0 < camX + 170;
+      if (near && !mudMeshes.has(i)) { const g = buildMud(u, seedNow); group.add(g); mudMeshes.set(i, g); }
+      else if (!near && mudMeshes.has(i)) dropMud(i);
+    }
+  }
+
   scene.add(group);
   group.visible = false;
 
@@ -220,11 +279,13 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
       H = [0]; gaps.length = 0; muds.length = 0; lastHazard = -1e9; flat(30);
       for (const pool of [near, far]) for (const c of pool.chunks) { c.idx = -999; c.mesh.visible = false; }
       clearScenery();
+      for (const k of [...mudMeshes.keys()]) dropMud(k);
     },
     /** Keep the ground chunks and their scenery around the camera (call every frame with the camera's x and y). */
     update(camX) {
       ensure(camX + FAR_R + 60);
       refresh(near, camX, NEAR_R, 3); refresh(far, camX, FAR_R, 2);
+      syncMud(camX);
       const first = Math.floor((camX - PLANT_R - X0) / CHUNK), lastC = Math.floor((camX + PLANT_R - X0) / CHUNK);
       for (const k of [...scenery.keys()]) if (k < first || k > lastC) dropScenery(k);
       for (let i = first; i <= lastC; i++) if (!scenery.has(i)) { plant(i); break; }          // at most one new stretch of planting per frame

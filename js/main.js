@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261016224103';
-import { buildWorld } from './world.js?v=20261016224103';
-import { createSky } from './sky.js?v=20261016224103';
-import { createDOF } from './dof.js?v=20261016224103';
-import { createRide } from './ride.js?v=20261016224103';
-import { createGame } from './bikegame.js?v=20261016224103';
+import { PAL } from './palette.js?v=20261016224344';
+import { buildWorld } from './world.js?v=20261016224344';
+import { createSky } from './sky.js?v=20261016224344';
+import { createDOF } from './dof.js?v=20261016224344';
+import { createRide } from './ride.js?v=20261016224344';
+import { createGame } from './bikegame.js?v=20261016224344';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
