@@ -2,10 +2,10 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261016202331';
-import { createTrack } from './track.js?v=20261016202331';
-import { createRagdoll } from './ragdoll.js?v=20261016202331';
-import { createCoins } from './coins.js?v=20261016202331';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261016203104';
+import { createTrack } from './track.js?v=20261016203104';
+import { createRagdoll } from './ragdoll.js?v=20261016203104';
+import { createCoins } from './coins.js?v=20261016203104';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.8;
@@ -53,10 +53,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
 
   function frame() {
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const dist = THREE.MathUtils.clamp(30 / (2 * tanH * camera.aspect), 18, 60);
+    const tall = THREE.MathUtils.clamp((1 - camera.aspect) / 0.5, 0, 1);   // portrait phones: closer in, so the bike is not tiny, and the view looks higher so the ground fills more of the screen
+    const dist = THREE.MathUtils.clamp((30 - 8 * tall) / (2 * tanH * camera.aspect), 18, 60);
     const ahead = 6 + st.vx * 0.2;
     target.pos.set(st.x + ahead, st.camY + 2.5 + dist * 0.1, laneZ + dist);
-    target.look.set(st.x + ahead, st.camY + 3 + dist * 0.05, laneZ);
+    target.look.set(st.x + ahead, st.camY + 3 + dist * (0.05 + tall * 0.16), laneZ);
     return dist;
   }
   function setHud() {
@@ -104,6 +105,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     track.reset(sd); coins.reset(sd, st.startX);
     startRun(st.startX);
     if (overEl) overEl.hidden = true;
+    document.body.classList.remove('game-over');
     setHud();
   }
 
@@ -123,6 +125,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     $('go-groove').textContent = '×' + st.bestMult;
     $('go-new').hidden = !isBest || final === 0;
     overEl.hidden = false;
+    document.body.classList.add('game-over');
     if (grooveEl) grooveEl.hidden = true;
     const again = $('go-again'); again.disabled = true;
     setTimeout(() => { again.disabled = false; if (st.mode === 'over') again.focus({ preventScroll: true }); }, 650);   // so a panicked tap cannot restart at once
@@ -243,6 +246,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       bike.root.visible = true;
       renderer.clippingPlanes = [clip]; clip.constant = 60;
       document.body.classList.add('game-mode');
+      document.activeElement?.blur?.();                        // keyboard focus must not stay on a button that is about to disappear: Space has to reach the game
       if (hud) hud.hidden = false;
       if (hint) { hint.hidden = false; clearTimeout(st.hintT); st.hintT = setTimeout(() => { hint.hidden = true; }, 6000); }
       setHud();
@@ -253,6 +257,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       st.down = false;
       if (hud) hud.hidden = true;
       if (overEl) overEl.hidden = true;
+      document.body.classList.remove('game-over');
       clearTimeout(st.hintT);
       document.body.classList.remove('game-mode');
     },

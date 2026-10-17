@@ -45,3 +45,14 @@ Push this folder to a repo named `dbladh.github.io` on the `main` branch; Pages 
 ## Colour scheme
 
 The town's colours live in `js/palette.js` (cream, sage, gold, blue-green, soft blue, coral plus supporting stone, roof and wood tones). The six village themes in `js/houses.js` are different arrangements of that palette; edit a hex in `palette.js` and it changes everywhere.
+
+## Dirt bike easter egg
+
+A small dirt bike rides across the sign hills now and then (first pass about 8 s after load, then every 40-60 s). Click or tap it
+(or Tab to the hidden "Play the dirt bike game" button) to start a one-button game that continues the real terrain to the right.
+
+- **Controls:** on the ground a click, tap, Space or Enter jumps; in the air press and hold to dive the nose (and fall faster); release to level out. Esc or the Back pill leaves.
+- **Scoring:** coins, landings and flips build a groove multiplier (x1 to x5). A crash ends the run (ragdoll rider); the best score is kept in `localStorage`.
+- **Test switches:** `?bike=1` sends a bike straight away and keeps them coming, `?game=1` starts the game, `?course=NN` fixes the generated course.
+- The bike and game are off when the visitor prefers reduced motion and in Simple View.
+- Code: `js/bike.js` (models), `js/ride.js` (ambient pass), `js/bikegame.js` (shell, physics, scoring), `js/track.js` (ground), `js/coins.js`, `js/ragdoll.js`.

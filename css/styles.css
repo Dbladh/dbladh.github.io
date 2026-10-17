@@ -603,3 +603,18 @@ body.game-mode #stopnav, body.game-mode #controls, body.game-mode .hero, body.ga
 @media (max-width: 600px) { .gh-groove { width: 62px; height: 62px; } .gh-groove span { font-size: 1.25rem; } .go-btn { min-height: 56px; } }
 @media (prefers-reduced-motion: reduce) { .gh-panel { animation: none; } }
 .gh-groove[hidden] { display: none; }
+
+/* While playing, the page is a game surface: no double-tap zoom, no text selection, no pull-to-refresh */
+body.game-mode { touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+body.game-mode canvas { touch-action: none; }
+
+.go-new[hidden] { display: none; }
+body.game-over .gh-quit { display: none; }   /* the card has its own Back button */
+@media (max-height: 520px) {                 /* landscape phones: a compact card */
+  .gh-panel { padding: 14px 18px; width: min(560px, calc(100vw - 32px)); }
+  .gh-panel h2 { font-size: 1.5rem; }
+  .go-stats { grid-template-columns: repeat(4, 1fr); margin: 8px 0 10px; gap: 6px; }
+  .go-stats .go-big { grid-column: span 2; }
+  .go-actions { grid-template-columns: 1fr 1fr; }
+  .gh-groove { width: 56px; height: 56px; }
+}
