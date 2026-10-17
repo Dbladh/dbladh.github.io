@@ -37,14 +37,10 @@ def write(name, s, sr, q=3):
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', wav, '-codec:a', 'libmp3lame', '-qscale:a', str(q), f'{OUT}/{name}.mp3'], check=True)
     print(f'{name}: {len(s) / sr:.2f}s, {os.path.getsize(f"{OUT}/{name}.mp3") // 1024} KB')
 
-# The engine is played as overlapping random "grains" of these two steady regions (so there is no short loop to hear repeat), pitched up for
+# The engine is played as overlapping "grains" of this steady stretch of the idle clip (see js/audio.js), pitched up for
 # high revs. (The high-rev clip's loud part is a rider blipping the throttle, which always sounds like the same "braap", so it is not used.)
 sr = 24000; x = load('bike_idle', sr)
 write('engine_idle', norm(fade(seg(x, sr, 1.8, 8.8), sr, 0.005, 0.005)), sr)
-# a second, steady stretch (a slightly lower idle) found at the end of the high-rev clip: grains alternate between the two so there is more to draw from
-sr = 24000; x = load('bike_highrev', sr)
-write('engine_idle2', norm(fade(seg(x, sr, 8.0, 13.2), sr, 0.005, 0.005)), sr)
-
 # the throttle blip (used when the rider lets go to jump)
 sr = 44100; x = load('bike_midrev', sr)
 write('rev_blip', norm(fade(seg(x, sr, 0.42, 2.45), sr, 0.03, 0.35), -18), sr)

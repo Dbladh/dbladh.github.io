@@ -11,12 +11,14 @@ const KEY = 'dirtbike-sound';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
+// ?engine=synth plays a synthesised engine (audio/engine-worklet.js) instead of the recording, for comparing by ear
+const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
 const loadOn = () => { try { return localStorage.getItem(KEY) !== '0'; } catch (e) { return true; } };
 
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let ctx = null, master = null, bus = null, lp = null, ready = false, loading = null, on = loadOn(), running = false;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, ready = false, loading = null, on = loadOn(), running = false;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -33,8 +35,9 @@ export function createAudio({ base = 'audio/' } = {}) {
   const decode = (data) => new Promise((res, rej) => { const p = ctx.decodeAudioData(data, res, rej); if (p?.catch) p.catch(rej); });
   const load = () => {
     if (loading) return loading;
-    const names = ['engine_idle', 'engine_idle2', 'rev_blip', 'crash', 'bounce'];
-    loading = Promise.all(names.map((n) => fetch(`${base}${n}.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf[n] = b; }).catch(() => { /* a missing file just stays silent */ }))).then(() => { ready = true; });
+    const names = ['engine_idle', 'rev_blip', 'crash', 'bounce'];
+    const synth = VARIANT === 'synth' && ctx.audioWorklet ? ctx.audioWorklet.addModule(`${base}engine-worklet.js`).then(() => { synthOK = true; }).catch(() => { /* falls back to the recording */ }) : null;
+    loading = Promise.all([synth, ...names.map((n) => fetch(`${base}${n}.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf[n] = b; }).catch(() => { /* a missing file just stays silent */ }))]).then(() => { ready = true; });
     return loading;
   };
   // a looping noise buffer for wind, dirt and mud
@@ -48,36 +51,60 @@ export function createAudio({ base = 'audio/' } = {}) {
   };
   const loopSrc = (b, rate = 1) => { const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.playbackRate.value = rate; return s; };
 
-  // The engine layers are played as grains: short slices (about 0.45 s) taken from random places in a longer recording, each faded in and out
-  // and overlapped by half, so the sound never settles into a short loop you can hear repeating.
-  const GRAIN = 0.45;
-  const win = (() => { const w = new Float32Array(48); for (let i = 0; i < w.length; i++) { const x = Math.sin(Math.PI * i / (w.length - 1)); w[i] = x * x; } return w; })();
-  function grainLayer(bufs, pitch) {
-    const bus = ctx.createGain(); bus.gain.value = 0; bus.connect(lp);
-    return { bufs, pitch, bus, next: 0, rate: 1, last: [-9, -9] };
+  // The engine is played as grains: short slices (0.5 s) of a longer recording, faded in and out and overlapped by half. The important
+  // detail is *where* each new slice starts: either exactly where the playing one would carry on, or at a different place in the recording
+  // chosen so that its waveform lines up with the playing one (found by a short cross-correlation). Slices taken from random places
+  // without that would have their firing pulses out of step, and the overlap would beat and pulse like a rapid loop.
+  const GRAIN = 0.5;
+  const win = (() => { const w = new Float32Array(48); for (let i = 0; i < w.length; i++) { const x = Math.sin(Math.PI * i / (w.length - 1)); w[i] = x * x; } return w; })();   // (sums to 1 for aligned overlaps)
+  function grainLayer(b) { const bus = ctx.createGain(); bus.gain.value = 0; bus.connect(lp); return { b, data: b.getChannelData(0), bus, next: 0, rate: 1, pr: 1, pos: -1 }; }
+  /** The start in the recording, near `cand`, whose next 60 ms best matches what is playing from `cont` (seconds). */
+  function align(L, cont, cand) {
+    const d = L.data, sr = L.b.sampleRate, W = Math.floor(0.06 * sr), R = Math.floor(0.036 * sr), c0 = Math.floor(cont * sr), k0 = Math.floor(cand * sr);
+    if (c0 < 0 || c0 + W >= d.length) return cand;
+    let e1 = 1e-9; for (let i = 0; i < W; i += 2) e1 += d[c0 + i] * d[c0 + i];
+    let best = -2, bd = 0;
+    for (let sh = -R; sh <= R; sh += 2) {
+      const k = k0 + sh; if (k < 0 || k + W >= d.length) continue;
+      let dot = 0, e2 = 1e-9; for (let i = 0; i < W; i += 2) { const v = d[k + i]; dot += d[c0 + i] * v; e2 += v * v; }
+      const sc = dot / Math.sqrt(e1 * e2); if (sc > best) { best = sc; bd = sh; }
+    }
+    return (k0 + bd) / sr;
   }
   function grain(L, t) {
-    const i = L.bufs.length > 1 && Math.random() < 0.42 ? 1 : 0, b = L.bufs[i];                        // grains alternate between the recordings
-    const rate = L.rate * L.pitch[i] * (1 + (Math.random() - 0.5) * 0.03), span = Math.max(0.05, b.duration - GRAIN * rate - 0.05);
-    let off = Math.random() * span; if (Math.abs(off - L.last[i]) < span * 0.25) off = (off + span * 0.5) % span;      // never the same place twice in a row
-    L.last[i] = off;
-    const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.playbackRate.value = rate;
-    g.gain.setValueAtTime(0, t); g.gain.setValueCurveAtTime(win, t, GRAIN * (0.95 + Math.random() * 0.1));
-    s.connect(g); g.connect(L.bus); s.start(t, off, GRAIN * rate + 0.02); s.onended = () => { try { s.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
+    const dur = L.b.duration, lo = 0.05, hi = dur - GRAIN * L.rate - 0.05;
+    let pos;
+    if (L.pos < 0) pos = lo + Math.random() * Math.max(0.01, hi - lo);
+    else {
+      const cont = L.pos + GRAIN * 0.5 * L.pr;                                                     // where the playing slice has got to
+      if (cont > hi || Math.random() < 0.45) {                                                      // carry on, or hop somewhere else (always a place that lines up)
+        let cand = lo + Math.random() * Math.max(0.01, hi - lo);
+        if (Math.abs(cand - cont) < 0.4) cand = cont > (lo + hi) / 2 ? cand - 0.8 : cand + 0.8;
+        cand = Math.min(hi, Math.max(lo, cand));
+        pos = cont > hi ? align(L, Math.min(cont, dur - 0.2), cand) : align(L, cont, cand);
+      } else pos = cont;
+    }
+    pos = Math.min(hi, Math.max(lo, pos)); L.pos = pos; L.pr = L.rate;
+    const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = L.b; s.playbackRate.value = L.rate;
+    g.gain.setValueAtTime(0, t); g.gain.setValueCurveAtTime(win, t, GRAIN);
+    s.connect(g); g.connect(L.bus); s.start(t, pos, GRAIN * L.rate + 0.02); s.onended = () => { try { s.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
   }
   function pump(L) {                                                                        // keep the next ~0.15 s of grains scheduled
     const now = ctx.currentTime;
     if (L.next < now) L.next = now + 0.01;
-    while (L.next < now + 0.15) { grain(L, L.next); L.next += GRAIN * 0.5 * (0.9 + Math.random() * 0.2); }
+    while (L.next < now + 0.15) { grain(L, L.next); L.next += GRAIN * 0.5; }
   }
   function buildEngine() {
     if (engine || !buf.engine_idle) return;
-    engine = { idle: grainLayer(buf.engine_idle2 ? [buf.engine_idle, buf.engine_idle2] : [buf.engine_idle], [1, 1.2]) };       // (the second recording idles a little lower: pitched to match)
+    if (synthOK) {
+      const node = new AudioWorkletNode(ctx, 'dirt-engine', { numberOfInputs: 0, outputChannelCount: [1] }), bus = ctx.createGain(); bus.gain.value = 0; node.connect(bus); bus.connect(lp);
+      engine = { synth: { node, bus } };
+    } else engine = { idle: grainLayer(buf.engine_idle) };
     const mkN = (type, f, q) => { const s = loopSrc(noise()), fl = ctx.createBiquadFilter(), g = ctx.createGain(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(bus); s.start(0, Math.random()); return { s, g, fl }; };
     ambience = { wind: mkN('bandpass', 900, 0.4), dirt: mkN('lowpass', 320, 0.7), mud: mkN('bandpass', 420, 1.2) };
   }
   function killEngine() {
-    for (const L of [engine?.idle, engine?.high]) { try { L?.bus.disconnect(); } catch (e) { /* gone */ } }
+    for (const L of [engine?.idle, engine?.synth]) { try { L?.bus.disconnect(); L?.node?.disconnect(); } catch (e) { /* gone */ } }
     for (const n of [ambience?.wind, ambience?.dirt, ambience?.mud]) { try { n?.s.stop(); n?.s.disconnect(); n?.g.disconnect(); } catch (e) { /* already stopped */ } }
     engine = ambience = null;
   }
@@ -146,8 +173,14 @@ export function createAudio({ base = 'audio/' } = {}) {
       const now = ctx.currentTime;
       const wander = 0.012 * Math.sin(now * 0.9) + 0.008 * Math.sin(now * 2.3 + 1.7) + 0.005 * Math.sin(now * 5.1 + 0.4);   // a living engine never holds one pitch
       const r = clamp(st.rpm + (s.playing && s.grounded ? wander : wander * 0.5)), loud = (0.35 + 0.65 * r) * st.eng * ENGINE_GAIN;
-      engine.idle.rate = 0.9 + 1.75 * r + st.chargeW; at(engine.idle.bus.gain, loud * (1 - 0.25 * r), 0.05);   // one steady engine, pitched up with the revs
-      pump(engine.idle);
+      if (engine.synth) {                                                                           // the synthesised engine: revs and throttle drive it directly
+        const load = s.playing ? clamp(s.grounded ? 0.25 + 0.65 * s.charge + 0.25 * s.speedK : 0.55 + 0.3 * s.speedK) : 0;
+        engine.synth.node.parameters.get('rpm').setTargetAtTime(r, now, 0.04); engine.synth.node.parameters.get('load').setTargetAtTime(load, now, 0.06);
+        at(engine.synth.bus.gain, loud * 1.1, 0.05);
+      } else {
+        engine.idle.rate = 0.9 + 1.75 * r + st.chargeW; at(engine.idle.bus.gain, loud * (1 - 0.25 * r), 0.05);   // one steady engine, pitched up with the revs
+        pump(engine.idle);
+      }
       at(lp.frequency, 14000 - 10500 * clamp(((s.camDist || 26) - 24) / 40), 0.2);                   // far camera: a more distant, duller engine
       // wind, tyres on dirt and mud
       const sp = s.playing ? s.speedK : 0;
