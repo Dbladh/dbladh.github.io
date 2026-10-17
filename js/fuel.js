@@ -100,8 +100,9 @@ export function createFuel(scene, track, coins, laneZ) {
   function easeArc(target, lx, rr, list) {
     const s = track.slopeAt(lx - 1.2); let n = 0, ok = 0;
     for (const v of speeds(lx)) for (const c of CHARGES) {
-      n++; const vy = v * s + POP(s, v) + (c < 0 ? 0 : JUMP_VY(c));
-      if (flies(lx, v, vy, target, rr, list)) ok++;
+      const w = c < 0 ? 4 : c === 0 ? 2 : 1;                       // most riders go off a ramp with no jump, or a tap
+      n += w; const vy = v * s + POP(s, v) + (c < 0 ? 0 : JUMP_VY(c));
+      if (flies(lx, v, vy, target, rr, list)) ok += w;
     }
     return ok / n;
   }
@@ -136,23 +137,31 @@ export function createFuel(scene, track, coins, laneZ) {
         list.push({ type: 'behind', x: bx, y: tg.y, ease: easeFrom(tg, o.x - o.hw - 15, o.x - o.hw - 0.6, near, rr) });
       }
     }
-    // 4. at the top of a kicker's arc
-    for (const a of coins.arcs(tx - 10, x1 + 10)) {
-      if (a.apex.x < tx || a.apex.x > x1 + 10) continue;
-      const near = track.obstaclesIn(a.lx - 5, a.apex.x + 20);
-      list.push({ type: a.pit ? 'gap' : 'arc', x: a.apex.x, y: a.apex.y + 0.45, ease: easeArc({ x: a.apex.x, y: a.apex.y + 0.45 }, a.lx, rr, near) });
+    // 4. off a kicker or across a gap: at the top of the arc, further down the flight (where a big jump is still in the air), and just past the far bank of a gap
+    for (const a of coins.arcs(tx - 32, x1 + 10)) {
+      if (a.apex.x < (a.pit ? tx - 30 : tx) || a.apex.x > x1 + 10) continue;
+      const near = track.obstaclesIn(a.lx - 5, a.apex.x + 30), rr2 = rr * 1.25;
+      const top = { x: a.apex.x, y: a.apex.y + 0.45 };
+      list.push({ type: a.pit ? 'gap' : 'arc', x: top.x, y: top.y, ease: easeArc(top, a.lx, rr2, near), r: rr2 });
+      const late = a.pts[Math.min(a.pts.length - 1, Math.floor(a.pts.length * 0.72))];     // on the way down
+      if (late && late.x > top.x + 3) { const tg = { x: late.x, y: late.y + 0.45 }; list.push({ type: a.pit ? 'gap' : 'air', x: tg.x, y: tg.y, ease: easeArc(tg, a.lx, rr2, near), r: rr2 }); }
+      if (a.pit && a.x1) {
+        const gx = a.x1 + 3.5 + rng() * 3;
+        if (flatSafe(gx, 1.5)) { const tg = { x: gx, y: track.laneAt(gx) + 1.0, ground: true }; list.push({ type: 'gapland', x: gx, y: tg.y, ease: easeArc(tg, a.lx, rr, near) }); }
+      }
     }
     // the wanted ease falls with distance; a spot that nearly nobody reaches is never used
     const want = lerp(0.92, 0.1, Math.pow(d, 0.85));
     let best = null, bs = 1e9;
     for (const c of list) {
       if (c.type !== 'ground' && c.ease < 0.08) continue;
-      const sc = Math.abs(c.ease - want) + rng() * 0.12 + (c.type === lastType && c.type !== 'ground' ? 0.12 : 0) + (c.type === 'ground' && d > 0.3 ? 0.25 * d : 0);
+      const aerial = c.type === 'gap' || c.type === 'gapland' || c.type === 'air' || c.type === 'arc';
+      const sc = Math.abs(c.ease - want) - (aerial ? 0.5 : 0) + (c.type === 'float' ? 0.12 : 0) + rng() * 0.12 + (c.type === lastType && c.type !== 'ground' ? 0.1 : 0) + (c.type === 'ground' && d > 0.3 ? 0.25 * d : 0);
       if (sc < bs) { bs = sc; best = c; }
     }
     if (!best) best = { type: 'ground', x: tx + 8, y: track.laneAt(tx + 8) + 1.0, ease: 1 };   // (cannot happen on a normal course, but never leave a hole)
     lastType = best.type;
-    return { x: best.x, y: best.y, type: best.type, ease: best.ease, r: rr, got: false, d };
+    return { x: best.x, y: best.y, type: best.type, ease: best.ease, r: best.r || rr, got: false, d };
   }
 
   const gapFor = (d) => lerp(130, 190, d);                        // the nominal distance between cans: sparser with distance, never more than one tank of fuel's worth apart

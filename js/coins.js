@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017164424';
+import { PAL } from './palette.js?v=20261017165333';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -114,7 +114,7 @@ export function createCoins(scene, track, laneZ) {
     } else {
       arcCoins(lx, vx, vy0, land, 14, out);                                                              // off a kicker: the line you get with no jump at all
     }
-    out.meta = { lx, vx, pit: !!pit };
+    out.meta = { lx, vx, pit: !!pit, x1: pit ? pit.x1 : 0 };
     return out.length >= 5 ? out : [];                                                                   // a little crest is not worth an arc
   }
 
@@ -162,7 +162,7 @@ export function createCoins(scene, track, laneZ) {
         if (lx0 < x0 || lx0 > x1) continue;
         const pts = lipCoins(lx0); if (!pts.length) continue;
         let top = pts[0]; for (const q of pts) if (q.y > top.y) top = q;
-        out.push({ lx: pts.meta.lx, apex: top, pit: pts.meta.pit });
+        out.push({ lx: pts.meta.lx, apex: top, pit: pts.meta.pit, x1: pts.meta.x1, pts });
       }
       return out;
     },                       // (for tests)
