@@ -3,7 +3,7 @@
 // camera moves, so the cost stays small (about twenty small meshes, one material).
 import * as THREE from 'three';
 
-const SEG = 12, STEP = 0.5, COLS = SEG / STEP + 1, ROWS = 7, HALF = 3.6;     // segment length, spacing along it, rows across, half the ribbon's width
+const SEG = 24, STEP = 0.5, COLS = SEG / STEP + 1, ROWS = 7, HALF = 3.6;     // segment length, spacing along it, rows across, half the ribbon's width
 const R = 130;                                                                // how far either side of the camera the trail is laid
 
 /** The trail's texture: u runs along the trail (it tiles), v across it. Packed pale dirt in the middle, two darker ruts, ragged feathered edges. */

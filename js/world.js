@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017145000';
+import { PAL } from './palette.js?v=20261017145711';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017145000';
+} from './houses.js?v=20261017145711';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1737,12 +1737,18 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     hs.group.traverse((o) => { if (o.isMesh && o.geometry) sharedGeo.add(o.geometry); });
     houseCache.push(hs); return true;
   }
+  /** A windmill's rotor is 25 little meshes (hub, spars, sails, slats): merge them by material (2 draw calls) and keep the spin (it turns about the rotor's own origin). */
+  function slimRotor(rotor) {
+    const p = rotor.position.clone(), merged = mergeByMaterial(rotor);          // (baked with the rotor's position, which is taken back out below)
+    for (const c of [...rotor.children]) { rotor.remove(c); c.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
+    for (const m of [...merged.children]) { m.position.sub(p); rotor.add(m); }
+  }
   function sceneryBuildings({ list, hFn, seed }) {
     const R = rngFrom(seed >>> 0), group = new THREE.Group(), glass = [], rotors = [];
     const plinthMat = mat(PAL.stoneWarm);
     for (const b of list) {
       let obj, r = b.r;
-      if (b.kind === 'windmill') { const wm = buildWindmill(); obj = wm.group; rotors.push(wm.rotor); obj.scale.setScalar(1.25); r = 3.4 * 1.25; }
+      if (b.kind === 'windmill') { const wm = buildWindmill(); slimRotor(wm.rotor); obj = wm.group; rotors.push(wm.rotor); obj.scale.setScalar(1.25); r = 3.4 * 1.25; }
       else {
         const tall = R() < 0.25;
         let hs;

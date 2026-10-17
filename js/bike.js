@@ -3,7 +3,7 @@
 // so the group's origin is the axle line (so pitching the bike turns it about its wheels). The rider is made of separate
 // limb groups (pivot at the top, hanging down) so the game can let go of them for the crash ragdoll.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017145000';
+import { PAL } from './palette.js?v=20261017145711';
 
 export const BIKE = { wheelR: 0.36, rearX: -0.68, frontX: 0.68, wheelbase: 1.36, hip: [-0.22, 1.02], hands: [0.6, 1.2], feet: [0.0, 0.48] };
 
@@ -41,6 +41,10 @@ function tube(parent, m, pts, r, segs = 14, radial = 6) {
 }
 
 /** Merge a group's meshes into one mesh per material (positions baked in the group's own frame), skipping anything in `skip`. */
+// Every plain flat-shaded Lambert part of the bike and rider shares ONE vertex-coloured material (each part's own colour is baked into its vertices),
+// so a part is one draw call instead of one per colour: the bike goes from ~70 draw calls to ~15, looking exactly the same.
+const SOLID = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const isSolid = (m) => m.isMeshLambertMaterial && !m.map && !m.transparent && m.flatShading && !m.vertexColors && m.side === THREE.FrontSide && m.emissive.getHex() === 0 && m.opacity === 1;
 function bake(group, skip = []) {
   group.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(group.matrixWorld).invert(), rel = new THREE.Matrix4();
@@ -48,23 +52,25 @@ function bake(group, skip = []) {
   const buckets = new Map();
   group.traverse((o) => {
     if (!o.isMesh || skipSet.has(o)) return;
-    const key = o.material.uuid + (o.castShadow ? 'c' : 'n');
-    if (!buckets.has(key)) buckets.set(key, { material: o.material, cast: o.castShadow, list: [] });
+    const solid = isSolid(o.material), key = (solid ? 'solid' : o.material.uuid) + (o.castShadow ? 'c' : 'n');
+    if (!buckets.has(key)) buckets.set(key, { material: solid ? SOLID : o.material, solid, cast: o.castShadow, list: [] });
     buckets.get(key).list.push(o);
   });
   for (const b of buckets.values()) {
     let total = 0;
     const geos = b.list.map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(rel.multiplyMatrices(inv, o.matrixWorld)); total += g.attributes.position.count; return g; });
-    const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2);
-    let at = 0;
+    const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2), colr = b.solid ? new Float32Array(total * 3) : null;
+    let at = 0, gi = 0;
     for (const g of geos) {
       const n = g.attributes.position.count;
+      if (colr) { const c = b.list[gi++].material.color; for (let i = 0; i < n; i++) { colr[(at + i) * 3] = c.r; colr[(at + i) * 3 + 1] = c.g; colr[(at + i) * 3 + 2] = c.b; } }
       pos.set(g.attributes.position.array, at * 3); nor.set(g.attributes.normal.array, at * 3);
       if (g.attributes.uv) uv.set(g.attributes.uv.array, at * 2);
       at += n; g.dispose();
     }
     const merged = new THREE.BufferGeometry();
     merged.setAttribute('position', new THREE.BufferAttribute(pos, 3)); merged.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    if (colr) merged.setAttribute('color', new THREE.BufferAttribute(colr, 3));
     const mesh = new THREE.Mesh(merged, b.material); mesh.castShadow = b.cast;
     for (const o of b.list) { o.removeFromParent(); o.geometry.dispose(); }
     group.add(mesh);
