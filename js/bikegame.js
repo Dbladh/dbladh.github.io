@@ -2,17 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261018011316';
-import { createTrack } from './track.js?v=20261018011316';
-import { createRagdoll } from './ragdoll.js?v=20261018011316';
-import { createFx } from './fx.js?v=20261018011316';
-import { createAudio } from './audio.js?v=20261018011316';
-import { createPuffs } from './puffs.js?v=20261018011316';
-import { createTracks } from './tracks.js?v=20261018011316';
-import { createDirt } from './dirt.js?v=20261018011316';
-import { createMudCoat } from './mudcoat.js?v=20261018011316';
-import { createCoins } from './coins.js?v=20261018011316';
-import { createFuel } from './fuel.js?v=20261018011316';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261018011729';
+import { createTrack } from './track.js?v=20261018011729';
+import { createRagdoll } from './ragdoll.js?v=20261018011729';
+import { createFx } from './fx.js?v=20261018011729';
+import { createAudio } from './audio.js?v=20261018011729';
+import { createPuffs } from './puffs.js?v=20261018011729';
+import { createTracks } from './tracks.js?v=20261018011729';
+import { createDirt } from './dirt.js?v=20261018011729';
+import { createMudCoat } from './mudcoat.js?v=20261018011729';
+import { createCoins } from './coins.js?v=20261018011729';
+import { createFuel } from './fuel.js?v=20261018011729';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -541,10 +541,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.th = p.phi + delta * 0.55;                              // the suspension absorbs part of the angle
     const perfect = Math.abs(delta) < 0.22, rough = Math.abs(delta) > 0.5;
     st.bestAir = Math.max(st.bestAir, air);
-    if (rough && air > 0.3) { if (st.mult > 1) audio.comboLost(); st.vx *= 0.62; st.boost *= 0.5; st.daze = DAZE_TIME; st.fuelK = 2.2; st.fuelT = 5; juice.shake(0.35, 260); st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
+    if (rough && air > 0.3) { if (st.mult > 1) audio.comboLost(); st.vx *= 0.62; st.boost *= 0.5; st.daze = DAZE_TIME; st.fuelK = 2.2; st.fuelT = 2; juice.shake(0.35, 260); st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
     else {
       if (air > 0.45) {
-        st.fuelK = perfect ? 0.45 : 0.65; st.fuelT = perfect ? 6 : 4.5;                              // a smooth landing: the fuel lasts longer for a few seconds (a rough one burns it faster)
+        st.fuelK = perfect ? 0.45 : 0.65; st.fuelT = perfect ? 2.5 : 1.8;                              // a smooth landing: the fuel lasts longer for a few seconds (a rough one burns it faster)
         st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 2.6 : 0.5)); if (perfect) st.vx += 2.5;       // a perfect landing: a real kick of speed
         combo(perfect);
         award((perfect ? 150 : 60) + Math.max(0, air - 0.5) * 90, perfect ? 'Stuck it!' : 'Clean landing');

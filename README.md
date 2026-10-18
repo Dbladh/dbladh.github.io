@@ -99,4 +99,4 @@ The game's ground continues the real terrain: the same terrain material and colo
 
 **Refuelling while coasting (dirt-bike game):** if the tank runs dry but a fuel can is grabbed before the bike has rolled to a stop, the engine restarts (a sputter, a warm flash and an "Engine restarted!" message) and the ride goes on instead of ending. The low-fuel beep is now louder and brighter so it cuts through the engine and music.
 
-**Landings and fuel (dirt-bike game):** a rough landing makes the tank drain 2.2 times faster for 5 s; a clean landing makes it drain at 0.65 times the normal rate for 4.5 s and a perfect landing at 0.45 times for 6 s (`fuelK` and `fuelT` in `js/bikegame.js`; the effect eases off over its last half second, and a new landing replaces the old effect).
+**Landings and fuel (dirt-bike game):** a rough landing makes the tank drain 2.2 times faster for 2 s; a clean landing makes it drain at 0.65 times the normal rate for 1.8 s and a perfect landing at 0.45 times for 2.5 s (`fuelK` and `fuelT` in `js/bikegame.js`; the effect eases off over its last half second, and a new landing replaces the old effect).
