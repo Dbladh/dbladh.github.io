@@ -197,9 +197,14 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   let envTarget = null, envHour = -99;
   const _c = new THREE.Color();
 
-  function updateEnv(hour, s, sunPos, night) {
+  let envAt = 0;
+  function updateEnv(hour, s, sunPos, night, dim = 0) {
     const dh = ((hour - envHour + 36) % 24) - 12;                          // signed hour difference, midnight-safe
     if (Math.abs(dh) < 0.8 && envTarget) return;                           // close enough: reuse the reflection map
+    if (envTarget && dim > 0.01 && dim < 0.99) return;                      // (while a house song is moving the scene into or out of the night the map is left alone: it is rebuilt once the change has settled)
+    const nowMs = performance.now();
+    if (envTarget && nowMs - envAt < 1600) return;                          // (building the map is costly: while the hour is racing, as when a house song changes the time of day, it is rebuilt at most about every 1.6 s)
+    envAt = nowMs;
     envHour = hour;
     const pos = envGeo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
@@ -262,7 +267,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     sunMesh.visible = sy > -6 && dim < 0.995;
     moonMesh.visible = -sy > -6 && dim < 0.995;
 
-    updateEnv(hour, s, sunMesh.position, night);
+    updateEnv(hour, s, sunMesh.position, night, dim);
 
     root.style.setProperty('--sky-top', '#' + s.top.getHexString());
     root.style.setProperty('--sky-bot', '#' + s.bot.getHexString());

@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017225200';
-import { buildWorld } from './world.js?v=20261017225200';
-import { createSky } from './sky.js?v=20261017225200';
-import { createDOF } from './dof.js?v=20261017225200';
-import { createRide } from './ride.js?v=20261017225200';
-import { createGame } from './bikegame.js?v=20261017225200';
-import { createAurora } from './aurora.js?v=20261017225200';
-import { createAudio, pickFlicker } from './audio.js?v=20261017225200';
+import { PAL } from './palette.js?v=20261017230011';
+import { buildWorld } from './world.js?v=20261017230011';
+import { createSky } from './sky.js?v=20261017230011';
+import { createDOF } from './dof.js?v=20261017230011';
+import { createRide } from './ride.js?v=20261017230011';
+import { createGame } from './bikegame.js?v=20261017230011';
+import { createAurora } from './aurora.js?v=20261017230011';
+import { createAudio, pickFlicker } from './audio.js?v=20261017230011';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -751,8 +751,8 @@ function start() {
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
-      songSun = st < 0 ? 0 : smooth01(67.5, 70.5, st) * (1 - smooth01(86, 89, st));
-      const darkTarget = playing ? 1 - songSun : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 1.2 : 1.0)));
+      songSun = st < 0 ? 0 : smooth01(65.5, 70.5, st) * (1 - smooth01(86, 91, st));
+      const darkTarget = playing ? 1 - songSun : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5)));
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
       aurora.update(dt, spec, nightK, playing && songSun < 0.5);
       world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), spec, audio.songBeatPos());

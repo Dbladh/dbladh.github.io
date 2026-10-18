@@ -84,7 +84,7 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
      * Every frame. `spec`: audio.songSpectrum's result; `night` 0..1; `on`: is a song playing (the aurora fades in over about 2.5 s and out over 3 s).
      */
     update(dt, spec, night, on) {
-      level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 1.2 : 1.0)));
+      level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
       if (!on && level < 0.004) { level = 0; mesh.visible = false; api.strength = 0; return; }
       mesh.visible = true; mesh.position.copy(camera.position);
       hue = (hue + dt * 0.012) % 1;
