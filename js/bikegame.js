@@ -2,17 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261018010151';
-import { createTrack } from './track.js?v=20261018010151';
-import { createRagdoll } from './ragdoll.js?v=20261018010151';
-import { createFx } from './fx.js?v=20261018010151';
-import { createAudio } from './audio.js?v=20261018010151';
-import { createPuffs } from './puffs.js?v=20261018010151';
-import { createTracks } from './tracks.js?v=20261018010151';
-import { createDirt } from './dirt.js?v=20261018010151';
-import { createMudCoat } from './mudcoat.js?v=20261018010151';
-import { createCoins } from './coins.js?v=20261018010151';
-import { createFuel } from './fuel.js?v=20261018010151';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261018010232';
+import { createTrack } from './track.js?v=20261018010232';
+import { createRagdoll } from './ragdoll.js?v=20261018010232';
+import { createFx } from './fx.js?v=20261018010232';
+import { createAudio } from './audio.js?v=20261018010232';
+import { createPuffs } from './puffs.js?v=20261018010232';
+import { createTracks } from './tracks.js?v=20261018010232';
+import { createDirt } from './dirt.js?v=20261018010232';
+import { createMudCoat } from './mudcoat.js?v=20261018010232';
+import { createCoins } from './coins.js?v=20261018010232';
+import { createFuel } from './fuel.js?v=20261018010232';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -77,7 +77,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const landDiscMat = landMat.clone();
   const landRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 48).rotateX(-Math.PI / 2), landMat), landDisc = new THREE.Mesh(new THREE.CircleGeometry(0.72, 48).rotateX(-Math.PI / 2), landDiscMat);   // lying flat on the ground
   landRing.renderOrder = landDisc.renderOrder = 6; landMark.add(landDisc, landRing); landMark.visible = false; scene.add(landMark);
-  const DAZE_TIME = 2.4;                                                  // seconds a rough landing keeps the bike slow
+  const DAZE_TIME = 1.6;                                                  // seconds a rough landing keeps the bike slow
   const LAND_COL = { perfect: new THREE.Color('#8fd081'), clean: new THREE.Color('#e8c24a'), rough: new THREE.Color('#ec8a3c'), crash: new THREE.Color('#d15e4d') };
   const ragdoll = createRagdoll(scene, bike.rider, (x) => track.laneAt(x));
   ragdoll.onBounce = (v) => audio.bounce(v);
@@ -434,9 +434,9 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const p = groundPose(st.x + st.vx * h);
       const slope = Math.tan(p.phi);
       const mud = track.mudAt(st.x);
-      const dz = st.daze > 0 ? 0.42 + 0.58 * (1 - st.daze / DAZE_TIME) ** 2 : 1;                 // a rough landing: the bike is held to under half its pace, then slowly gets its speed back
-      const aim = st.engineOut ? 0 : (base + st.boost * (st.daze > 0 ? 0.3 : 1) - Math.max(-3, Math.min(5, slope * 6))) * (1 - 0.58 * mud) * dz;               // mud drags the bike down to a crawl
-      st.vx += (aim - st.vx) * Math.min(1, (mud > 0.2 ? 4 : st.daze > 0 ? 1.4 : 2.5) * h);
+      const dz = st.daze > 0 ? 0.64 + 0.36 * (1 - st.daze / DAZE_TIME) ** 2 : 1;                 // a rough landing: the bike is held to about two thirds of its pace, then slowly gets its speed back
+      const aim = st.engineOut ? 0 : (base + st.boost * (st.daze > 0 ? 0.5 : 1) - Math.max(-3, Math.min(5, slope * 6))) * (1 - 0.58 * mud) * dz;               // mud drags the bike down to a crawl
+      st.vx += (aim - st.vx) * Math.min(1, (mud > 0.2 ? 4 : st.daze > 0 ? 2 : 2.5) * h);
       if (mud > 0.2) st.boost *= Math.exp(-2 * h);
       if (track.inPit(st.x) || track.inPit(st.x - HW * 0.9 + 0.7)) { crash('Into the pit!'); return; }       // driven over the edge of a gap
       st.x += st.vx * h;
@@ -541,7 +541,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.th = p.phi + delta * 0.55;                              // the suspension absorbs part of the angle
     const perfect = Math.abs(delta) < 0.22, rough = Math.abs(delta) > 0.5;
     st.bestAir = Math.max(st.bestAir, air);
-    if (rough && air > 0.3) { if (st.mult > 1) audio.comboLost(); st.vx *= 0.45; st.boost *= 0.3; st.daze = DAZE_TIME; juice.shake(0.35, 260); st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
+    if (rough && air > 0.3) { if (st.mult > 1) audio.comboLost(); st.vx *= 0.62; st.boost *= 0.5; st.daze = DAZE_TIME; juice.shake(0.35, 260); st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
     else {
       if (air > 0.45) {
         st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 2.6 : 0.5)); if (perfect) st.vx += 2.5;       // a perfect landing: a real kick of speed
