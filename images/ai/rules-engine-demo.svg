@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <rect width="640" height="480" fill="#EFEEE5"/>
+  <rect x="16" y="16" width="608" height="448" rx="18" fill="#FDFCF8" stroke="#ACAD97" stroke-width="2"/>
+
+  <!-- header -->
+  <text x="40" y="62" font-size="26" font-weight="700" fill="#443F42">Shipping rules</text>
+  <rect x="468" y="36" width="136" height="38" rx="19" fill="#8ec5ff"/>
+  <text x="536" y="61" font-size="18" font-weight="700" fill="#443F42" text-anchor="middle">+ New rule</text>
+
+  <!-- expanded rule -->
+  <rect x="32" y="92" width="576" height="190" rx="14" fill="#F6F4EE" stroke="#8ec5ff" stroke-width="3"/>
+  <circle cx="62" cy="124" r="15" fill="#443F42"/>
+  <text x="62" y="130" font-size="17" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+  <text x="88" y="131" font-size="21" font-weight="700" fill="#443F42">Free shipping for members</text>
+  <rect x="540" y="110" width="52" height="28" rx="14" fill="#9fdc8c"/>
+  <circle cx="577" cy="124" r="11" fill="#fff"/>
+
+  <!-- IF row -->
+  <text x="52" y="184" font-size="16" font-weight="700" fill="#8a8586" letter-spacing="1.5">IF</text>
+  <rect x="96" y="160" width="146" height="36" rx="10" fill="#fff" stroke="#ACAD97" stroke-width="1.5"/>
+  <text x="169" y="185" font-size="18" fill="#443F42" text-anchor="middle">Order total</text>
+  <rect x="252" y="160" width="46" height="36" rx="10" fill="#DACA9C"/>
+  <text x="275" y="185" font-size="20" font-weight="700" fill="#443F42" text-anchor="middle">≥</text>
+  <rect x="308" y="160" width="76" height="36" rx="10" fill="#fff" stroke="#ACAD97" stroke-width="1.5"/>
+  <text x="346" y="185" font-size="18" fill="#443F42" text-anchor="middle">$50</text>
+
+  <!-- AND row -->
+  <text x="44" y="228" font-size="16" font-weight="700" fill="#8a8586" letter-spacing="1.5">AND</text>
+  <rect x="96" y="204" width="146" height="36" rx="10" fill="#fff" stroke="#ACAD97" stroke-width="1.5"/>
+  <text x="169" y="229" font-size="18" fill="#443F42" text-anchor="middle">Customer</text>
+  <rect x="252" y="204" width="46" height="36" rx="10" fill="#DACA9C"/>
+  <text x="275" y="229" font-size="18" font-weight="700" fill="#443F42" text-anchor="middle">is</text>
+  <rect x="308" y="204" width="110" height="36" rx="10" fill="#fff" stroke="#ACAD97" stroke-width="1.5"/>
+  <text x="363" y="229" font-size="18" fill="#443F42" text-anchor="middle">Member</text>
+
+  <!-- THEN row -->
+  <text x="38" y="268" font-size="16" font-weight="700" fill="#D15E4D" letter-spacing="1.5">THEN</text>
+  <rect x="96" y="244" width="146" height="30" rx="10" fill="#fff" stroke="#ACAD97" stroke-width="1.5" transform="translate(0 4)"/>
+  <text x="169" y="269" font-size="18" fill="#443F42" text-anchor="middle">Shipping</text>
+  <rect x="252" y="248" width="110" height="30" rx="10" fill="#9fdc8c"/>
+  <text x="307" y="270" font-size="18" font-weight="700" fill="#443F42" text-anchor="middle">is Free</text>
+
+  <!-- collapsed rules -->
+  <rect x="32" y="298" width="576" height="46" rx="12" fill="#fff" stroke="#ACAD97" stroke-width="1.5"/>
+  <circle cx="62" cy="321" r="13" fill="#ACAD97"/>
+  <text x="62" y="327" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+  <text x="88" y="328" font-size="19" fill="#443F42">Heavy items add $12</text>
+  <rect x="540" y="307" width="52" height="28" rx="14" fill="#9fdc8c"/>
+  <circle cx="577" cy="321" r="11" fill="#fff"/>
+
+  <rect x="32" y="354" width="576" height="46" rx="12" fill="#fff" stroke="#ACAD97" stroke-width="1.5"/>
+  <circle cx="62" cy="377" r="13" fill="#ACAD97"/>
+  <text x="62" y="383" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+  <text x="88" y="384" font-size="19" fill="#443F42">Holiday pause</text>
+  <rect x="540" y="363" width="52" height="28" rx="14" fill="#cfcdc4"/>
+  <circle cx="555" cy="377" r="11" fill="#fff"/>
+
+  <!-- warning -->
+  <rect x="32" y="410" width="576" height="44" rx="12" fill="#FBE6E2" stroke="#D15E4D" stroke-width="1.5"/>
+  <path d="M60 424 L72 446 L48 446 Z" fill="#D15E4D"/>
+  <text x="60" y="443" font-size="14" font-weight="800" fill="#fff" text-anchor="middle">!</text>
+  <text x="88" y="438" font-size="18" font-weight="600" fill="#8c3a2f">Rules 1 and 2 overlap. Which one wins?</text>
+</svg>
