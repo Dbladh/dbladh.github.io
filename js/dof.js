@@ -31,6 +31,7 @@ const FRAG = /* glsl */ `
   uniform float hazeAmt;    // 0 = off
   uniform float hazeNear;   // distance where the haze begins
   uniform float bloom;      // 0 = off
+  uniform float glow;       // music mode: a softer, wider, more generous bloom (0..1; only does anything where bloom is on)
   uniform float gradeAmt;   // 0 = classic (ungraded)
   varying vec2 vUv;
 
@@ -81,17 +82,17 @@ const FRAG = /* glsl */ `
       c = mix(c, hazeColor, hazeAmt * 0.65 * smoothstep(hazeNear, hazeNear + 145.0, dz));
       // Cheap bloom: bright neighbours (lit windows, lanterns, sun glints) spill softly.
       if (bloom > 0.0) {
-        vec3 glow = vec3(0.0);
+        vec3 glowSum = vec3(0.0);
         for (int i = 0; i < 8; i++) {
           float ang = float(i) * 0.785398;
           for (int k = 1; k <= 2; k++) {
-            vec2 o = vec2(cos(ang), sin(ang)) * float(k) * 7.0 * texel * (texel.x * 900.0 + 0.5);
+            vec2 o = vec2(cos(ang), sin(ang)) * float(k) * (7.0 + 6.0 * glow) * texel * (texel.x * 900.0 + 0.5);
             vec4 s = texture2D(tColor, vUv + o);
             vec3 sc = s.a > 0.001 ? s.rgb / s.a : s.rgb;
-            glow += max(sc - vec3(1.0), 0.0) * s.a / float(k);
+            glowSum += max(sc - vec3(1.0 - 0.3 * glow), 0.0) * s.a / float(k);
           }
         }
-        c += glow * bloom * 0.09;
+        c += glowSum * bloom * (0.09 + 0.1 * glow);
       }
     }
     vec3 c0 = c;
@@ -145,6 +146,7 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       hazeAmt: { value: 1 },
       hazeNear: { value: 55 },
       bloom: { value: 1 },
+      glow: { value: 0 },
       gradeAmt: { value: 1 },
       tBlur: { value: blurTarget ? blurTarget.texture : null },
   };
@@ -211,6 +213,9 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       if (horizon) material.uniforms.hazeColor.value.copy(horizon);
       if (bloom !== undefined) material.uniforms.bloom.value = bloom;
     },
+
+    /** Music mode's softer, wider bloom (0..1). It rides on the existing bloom taps, so it costs nothing extra, and does nothing where bloom is off (phones, slow machines). */
+    setGlow(v) { material.uniforms.glow.value = v; },
 
     /** Where the aerial haze starts (the dirt-bike game pushes it out so the ride itself stays clear). */
     setHazeNear(d) { material.uniforms.hazeNear.value = d; },

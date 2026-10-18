@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017233800';
-import { buildWorld } from './world.js?v=20261017233800';
-import { createSky } from './sky.js?v=20261017233800';
-import { createDOF } from './dof.js?v=20261017233800';
-import { createRide } from './ride.js?v=20261017233800';
-import { createGame } from './bikegame.js?v=20261017233800';
-import { createAurora, setWarm } from './aurora.js?v=20261017233800';
-import { createAudio, pickFlicker } from './audio.js?v=20261017233800';
+import { PAL } from './palette.js?v=20261017233930';
+import { buildWorld } from './world.js?v=20261017233930';
+import { createSky } from './sky.js?v=20261017233930';
+import { createDOF } from './dof.js?v=20261017233930';
+import { createRide } from './ride.js?v=20261017233930';
+import { createGame } from './bikegame.js?v=20261017233930';
+import { createAurora, setWarm } from './aurora.js?v=20261017233930';
+import { createAudio, pickFlicker } from './audio.js?v=20261017233930';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -803,6 +803,7 @@ function start() {
       aurora.update(dt, spec, nightK, playing);
       world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), spec, audio.songBeatPos());
       songFade += ((playing ? 1 - 0.45 * smooth01(112, 123, st) : 1) - songFade) * (1 - Math.exp(-dt * (playing ? 2 : 0.5)));   // the light sinks a little over the closing ritardando
+      dof?.setGlow(aurora.level * songFade);
       if (aurora.level > 0) { aurora.light(sky.lights, world, lowEnd); sky.lights.hemi.intensity *= songFade; sky.lights.moon.intensity *= songFade; sky.lights.rim.intensity *= songFade; }
       else if (aurora.strength !== 0) { aurora.strength = 0; world.setAurora(null, 0); setTime(hour); }       // (the lights are put back as the sky sets them)
     }
