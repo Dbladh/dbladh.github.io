@@ -222,6 +222,7 @@ body.scene-mode .controls {
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   color: var(--ui-ink); font-family: var(--name-font);
 }
+body.scene-mode .controls .time { display: none; }          /* the time-of-day slider is gone from the scene (the day still runs on its own) */
 body.scene-mode .controls .time { font-family: var(--name-font); font-weight: 500; font-size: 0.82rem; letter-spacing: 0.03em; }
 body.scene-mode .controls .time input { accent-color: var(--ui-coral); }
 body.scene-mode #simple-toggle {
@@ -279,7 +280,7 @@ body.scene-mode .back:active { background: var(--ink); color: #fff; }
 
 @media (max-width: 600px) {
   body { font-size: 17px; }
-  body.scene-mode .controls { left: 12px; right: 12px; flex-wrap: nowrap; justify-content: space-between; gap: 8px; padding: 6px 10px; }
+  body.scene-mode .controls { left: auto; right: 12px; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; padding: 6px 10px; }
   .time { gap: 6px; font-size: 0.72rem; }
   .time input { width: 84px; }
   #time-label { min-width: 0; white-space: nowrap; }
@@ -730,3 +731,12 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 .gh-loading .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid currentColor; border-right-color: transparent; animation: ghspin .8s linear infinite; }
 @keyframes ghspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .gh-loading .spin { animation: none; } }
+
+
+/* ---------- Roomy windows (at least 900px wide and 601px tall): the section nav moves to the top left ----------
+   Narrower or shorter windows keep it at the bottom centre, so it never meets the name, the tagline or the Simple view button. */
+@media (min-width: 900px) and (min-height: 601px) {
+  body.scene-mode #stopnav {
+    left: max(14px, env(safe-area-inset-left)); right: auto; top: max(12px, env(safe-area-inset-top)); bottom: auto; transform: none;
+  }
+}

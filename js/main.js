@@ -1,12 +1,12 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017184109';
-import { buildWorld } from './world.js?v=20261017184109';
-import { createSky } from './sky.js?v=20261017184109';
-import { createDOF } from './dof.js?v=20261017184109';
-import { createRide } from './ride.js?v=20261017184109';
-import { createGame } from './bikegame.js?v=20261017184109';
+import { PAL } from './palette.js?v=20261017184818';
+import { buildWorld } from './world.js?v=20261017184818';
+import { createSky } from './sky.js?v=20261017184818';
+import { createDOF } from './dof.js?v=20261017184818';
+import { createRide } from './ride.js?v=20261017184818';
+import { createGame } from './bikegame.js?v=20261017184818';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -227,11 +227,12 @@ function start() {
     const m = compact ? 2 : 12;
     const nr = nav.getBoundingClientRect();
     // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
-    const topEdge = body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom;
+    const navOnTop = nr.top < vh / 2;                 // roomy windows keep the nav at the top left (see CSS)
+    const topEdge = Math.max(body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom, navOnTop ? nr.bottom : 0);
     const x0 = m, x1 = vw - m;
     const EDGE = 18;                                   // the solid edge strips (see CSS) take the top and bottom 16px
     const y0 = Math.max(m, EDGE, topEdge + (compact ? 0 : 8));
-    const y1 = navHidden ? safeH - Math.max(m, EDGE) : Math.min(safeH - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
+    const y1 = navHidden || navOnTop ? safeH - Math.max(m, EDGE) : Math.min(safeH - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
