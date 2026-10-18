@@ -221,15 +221,15 @@ export function createAudio({ base = 'audio/' } = {}) {
         src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
       };
       const sk = kind === 'out' ? 0.4 : kind === 'across' ? 0.5 : 0.62;
-      if (kind === 'in') { layer('bandpass', 350, 3600, 0.7, 0.34, sk); layer('lowpass', 500, 2200, 0.8, 0.26, sk); }
-      else if (kind === 'out') { layer('bandpass', 3400, 300, 0.7, 0.32, sk); layer('lowpass', 2400, 350, 0.8, 0.26, sk); }
-      else { layer('bandpass', 600, 2600, 0.8, 0.3, sk); layer('lowpass', 900, 700, 0.9, 0.22, sk); }
+      if (kind === 'in') { layer('bandpass', 350, 3600, 0.7, 0.19, sk); layer('lowpass', 500, 2200, 0.8, 0.14, sk); }
+      else if (kind === 'out') { layer('bandpass', 3400, 300, 0.7, 0.18, sk); layer('lowpass', 2400, 350, 0.8, 0.14, sk); }
+      else { layer('bandpass', 600, 2600, 0.8, 0.17, sk); layer('lowpass', 900, 700, 0.9, 0.12, sk); }
       // a low rush under it, and a soft rising or falling tone so it feels like travel
       const o = ctx.createOscillator(), og = ctx.createGain();
       o.type = 'sine'; o.frequency.setValueAtTime(up ? 70 : 150, t0); o.frequency.exponentialRampToValueAtTime(up ? 190 : 55, t0 + dur);
-      og.gain.setValueAtTime(0, t0); og.gain.setValueCurveAtTime(env(0.16, sk), t0, dur); o.connect(og); og.connect(bus); o.start(t0); o.stop(t0 + dur + 0.1);
+      og.gain.setValueAtTime(0, t0); og.gain.setValueCurveAtTime(env(0.09, sk), t0, dur); o.connect(og); og.connect(bus); o.start(t0); o.stop(t0 + dur + 0.1);
       o.onended = () => { try { o.disconnect(); og.disconnect(); } catch (e) { /* done */ } };
-      if (kind !== 'across') tone(up ? 196 : 392, dur * 0.9, { type: 'sine', gain: 0.045, slide: up ? 440 : 175, dest: soft, attack: dur * 0.3 });
+      if (kind !== 'across') tone(up ? 196 : 392, dur * 0.9, { type: 'sine', gain: 0.025, slide: up ? 440 : 175, dest: soft, attack: dur * 0.3 });
     },
     /** A billboard's lamps start to flicker (`pat` from pickFlicker): the recorded flicker (its low mains hum filtered out, only the bright crackle left). */
     flicker(pat) {
