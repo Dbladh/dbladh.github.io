@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017235345';
-import { buildWorld } from './world.js?v=20261017235345';
-import { createSky } from './sky.js?v=20261017235345';
-import { createDOF } from './dof.js?v=20261017235345';
-import { createRide } from './ride.js?v=20261017235345';
-import { createGame } from './bikegame.js?v=20261017235345';
-import { createAurora, setWarm } from './aurora.js?v=20261017235345';
-import { createAudio, pickFlicker } from './audio.js?v=20261017235345';
+import { PAL } from './palette.js?v=20261018000604';
+import { buildWorld } from './world.js?v=20261018000604';
+import { createSky } from './sky.js?v=20261018000604';
+import { createDOF } from './dof.js?v=20261018000604';
+import { createRide } from './ride.js?v=20261018000604';
+import { createGame } from './bikegame.js?v=20261018000604';
+import { createAurora, setWarm } from './aurora.js?v=20261018000604';
+import { createAudio, pickFlicker } from './audio.js?v=20261018000604';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -133,7 +133,7 @@ function start() {
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
-  const aurora = createAurora(skyScene, camera, { low: lowEnd });
+  const aurora = createAurora(skyScene, camera, { low: lowEnd, scene });
   const zoomCam = new THREE.PerspectiveCamera(), zoomPos = new THREE.Vector3(), zoomV = new THREE.Vector3(), zoomLook = new THREE.Vector3();
   /** Would all three billboards still be wholly on screen with the camera at `pos` (looking at `look`)? `margin`: how close to the screen edge they may come (1 = the very edge). */
   function boardsInView(pos, margin, lk = look) {
@@ -826,7 +826,7 @@ function start() {
       specA.bass = Math.min(1, spec.bass * amp); specA.mid = Math.min(1, spec.mid * amp); specA.treble = Math.min(1, spec.treble * amp); specA.energy = Math.min(1, spec.energy * amp); specA.centroid = spec.centroid; specA.beat = spec.beat;
       aurora.layers = curtains;
       const visualsOn = playing && st < 115;                                                       // the last note (1:55) starts the fade: the aurora, fireflies and lights all ease away...
-      aurora.update(dt, specA, nightK, visualsOn);
+      aurora.update(dt, specA, nightK, visualsOn, playing ? audio.songBeatPos() : -1);
       world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), specA, audio.songBeatPos(), pace);
       if (fadeEl) {                                                                                // ...and the scene sinks almost to black, then comes back to normal as the song ends
         const bt = playing ? 0.94 * smooth01(115.5, 122, st) : 0;

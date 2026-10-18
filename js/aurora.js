@@ -73,7 +73,7 @@ const FRAG = /* glsl */ `
     gl_FragColor = vec4(clamp(col, 0.0, 1.0), a);
   }`;
 
-export function createAurora(skyScene, camera, { low = false } = {}) {
+export function createAurora(skyScene, camera, { low = false, scene = skyScene } = {}) {
   const U = { uWarm: { value: 0 }, uTime: { value: 0 }, uPS: { value: 0 }, uPR: { value: 0 }, uPF: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uTreble: { value: 0 }, uEnergy: { value: 0 }, uCentroid: { value: 0 }, uBeat: { value: 0 },
     uLevel: { value: 0 }, uDay: { value: 0 }, uHue: { value: 0 }, uLayers: { value: low ? 2 : 3 } };
   const mat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthTest: false, side: THREE.BackSide, fog: false });
@@ -82,15 +82,15 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
   skyScene.add(mesh);
   // A rare shooting star: a thin streak that crosses the upper sky now and then while the song plays (one small quad, drawn in the sky canvas).
   const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
-    uniforms: { uA: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { uA: { value: 0 } }, transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform float uA; varying vec2 vUv; void main() { float v = abs(vUv.y * 2.0 - 1.0); float a = pow(vUv.x, 3.0) * (1.0 - v * v) * smoothstep(1.0, 0.55, v + 0.0) * uA; if (a < 0.004) discard; gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * 1.6, a); }',
+    fragmentShader: 'uniform float uA; varying vec2 vUv; void main() { float v = abs(vUv.y * 2.0 - 1.0); float a = pow(vUv.x, 3.0) * (1.0 - v * v) * smoothstep(1.0, 0.55, v + 0.0) * uA; if (a < 0.004) discard; gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * 1.6, clamp(a * 1.8, 0.0, 1.0)); }',
   }));
-  star.renderOrder = -9; star.frustumCulled = false; star.visible = false; skyScene.add(star);
+  star.renderOrder = 5; star.frustumCulled = false; star.visible = false; scene.add(star);
   let starT = -1, starNext = 9, sx = 0, sy = 0; const sq = new THREE.Quaternion(), sz = new THREE.Quaternion(), sv = new THREE.Vector3();
   const starTick = (dt) => {
     starNext -= dt;
-    if (starT < 0) { if (starNext > 0 || level < 0.8) { star.visible = false; return; } starT = 0; sx = 0.1 + Math.random() * 0.7; sy = 0.4 + Math.random() * 0.4; }
+    if (starT < 0) { if (starNext > 0 || level < 0.8) { star.visible = false; return; } starT = 0; sx = 0.1 + Math.random() * 0.7; sy = 0.6 + Math.random() * 0.35; }
     starT += dt / 1.4; if (starT >= 1) { starT = -1; starNext = 14 + Math.random() * 16; star.visible = false; return; }
     const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect, ang = Math.PI + 0.38;
     const e = 1 - (1 - starT) * (1 - starT), dx = Math.cos(ang), dy = Math.sin(ang), len = 0.2 * hw, run = 0.65 * hw * e;
@@ -100,6 +100,45 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
     star.scale.set(len, Math.max(0.6, hh * 0.012), 1);
     star.material.uniforms.uA.value = Math.pow(Math.sin(Math.PI * starT), 0.8) * level; star.visible = true;
   };
+  // The meteor shower (the warm passage, 1:10-1:26): a streak is launched on every beat of the song (two on each bar's downbeat, one big), all running the same way across the sky
+  // like a real shower; they are warm-coloured, last about a second each, and come from a small pool of the same one-quad streaks.
+  const METEORS = 7, ms = [];
+  for (let i = 0; i < METEORS; i++) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uA: { value: 0 }, uC: { value: new THREE.Color(1, 0.8, 0.5) } }, transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform float uA; uniform vec3 uC; varying vec2 vUv; void main() { float v = abs(vUv.y * 2.0 - 1.0); float a = pow(vUv.x, 3.0) * (1.0 - v * v) * smoothstep(1.0, 0.55, v) * uA; if (a < 0.004) discard; gl_FragColor = vec4(mix(uC, vec3(1.0), pow(vUv.x, 6.0)) * 1.7, clamp(a * 1.8, 0.0, 1.0)); }',
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); mesh.renderOrder = 5; mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh);
+    ms.push({ mesh, t: -1, sx: 0, sy: 0, ang: 0, len: 0, run: 0, amp: 1, dur: 1 });
+  }
+  let lastBeat = -1;
+  const MCOL = [new THREE.Color(1, 0.62, 0.3), new THREE.Color(1, 0.78, 0.42), new THREE.Color(1, 0.5, 0.28), new THREE.Color(1, 0.9, 0.62)];
+  const launch = (amp, delay) => {
+    const m = ms.find((q) => q.t < 0); if (!m) return;
+    m.t = -delay; m.amp = amp; m.sx = -0.3 + Math.random() * 1.3; m.sy = 0.7 + Math.random() * 0.45; m.ang = Math.PI + 0.55 + (Math.random() - 0.5) * 0.12;
+    m.len = (0.16 + 0.14 * amp) * 1; m.run = 0.3 + 0.25 * amp; m.dur = 0.95 + 0.5 * amp * Math.random();
+    m.mesh.material.uniforms.uC.value.copy(MCOL[(Math.random() * MCOL.length) | 0]);
+  };
+  const meteorTick = (dt, bp) => {
+    const shower = WARM > 0.35 && level > 0.5 && bp >= 0;
+    const bi = bp >= 0 ? Math.floor(bp) : -1;
+    if (bi !== lastBeat) { if (shower && lastBeat >= 0 && bi - lastBeat < 3) { const down = bi % 3 === 0; launch(down ? 1 : 0.7, 0); if (down) launch(0.55, 0.12); } lastBeat = bi; }
+    const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect;
+    for (const m of ms) {
+      if (m.t === -1) { m.mesh.visible = false; continue; }
+      m.t += dt / m.dur;
+      if (m.t >= 1) { m.t = -1; m.mesh.visible = false; continue; }
+      if (m.t < 0) { m.mesh.visible = false; continue; }                                        // (waiting out its small delay)
+      const e = 1 - (1 - m.t) * (1 - m.t), dx = Math.cos(m.ang), dy = Math.sin(m.ang), len = m.len * hw, run = m.run * hw * e;
+      sv.set(m.sx * hw + dx * run - dx * len / 2, m.sy * hh + dy * run - dy * len / 2, -d).applyQuaternion(camera.quaternion).add(camera.position); m.mesh.position.copy(sv);
+      sq.copy(camera.quaternion); sz.setFromAxisAngle(zAxis, m.ang); m.mesh.quaternion.copy(sq.multiply(sz));
+      m.mesh.scale.set(len, Math.max(0.9, hh * 0.02 * (0.6 + 0.5 * m.amp)), 1);
+      m.mesh.material.uniforms.uA.value = Math.pow(Math.sin(Math.PI * m.t), 0.7) * (0.55 + 0.45 * m.amp) * level;
+      m.mesh.visible = true;
+    }
+  };
+  const zAxis = new THREE.Vector3(0, 0, 1);
   let level = 0, hue = 0;
   const sm = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };                // (the song's levels, eased again here: the aurora should glide, not jitter)
   const TAU = { bass: 0.5, mid: 0.8, treble: 1.0, energy: 1.6, centroid: 3.0, beat: 0.45 };
@@ -113,10 +152,10 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
     /**
      * Every frame. `spec`: audio.songSpectrum's result; `night` 0..1; `on`: is a song playing (the aurora fades in over about 2.5 s and out over 3 s).
      */
-    update(dt, spec, night, on) {
+    update(dt, spec, night, on, beatPos = -1) {
       level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
-      if (!on && level < 0.004) { level = 0; mesh.visible = false; star.visible = false; starT = -1; api.strength = 0; return; }
-      mesh.visible = true; mesh.position.copy(camera.position); starTick(dt);
+      if (!on && level < 0.004) { level = 0; mesh.visible = false; star.visible = false; starT = -1; for (const m of ms) { m.t = -1; m.mesh.visible = false; } api.strength = 0; return; }
+      mesh.visible = true; mesh.position.copy(camera.position); starTick(dt); meteorTick(dt, beatPos);
       hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM; sweep += dt * 0.09;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
       for (const k in sm) sm[k] += (spec[k] - sm[k]) * (1 - Math.exp(-dt / TAU[k]));
