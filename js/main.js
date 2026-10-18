@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018160415';
-import { buildWorld } from './world.js?v=20261018160415';
-import { createSky } from './sky.js?v=20261018160415';
-import { createDOF } from './dof.js?v=20261018160415';
-import { createRide } from './ride.js?v=20261018160415';
-import { createGame } from './bikegame.js?v=20261018160415';
-import { createAurora, setWarm } from './aurora.js?v=20261018160415';
-import { createAudio, pickFlicker } from './audio.js?v=20261018160415';
+import { PAL } from './palette.js?v=20261018165353';
+import { buildWorld } from './world.js?v=20261018165353';
+import { createSky } from './sky.js?v=20261018165353';
+import { createDOF } from './dof.js?v=20261018165353';
+import { createRide } from './ride.js?v=20261018165353';
+import { createGame } from './bikegame.js?v=20261018165353';
+import { createAurora, setWarm } from './aurora.js?v=20261018165353';
+import { createAudio, pickFlicker } from './audio.js?v=20261018165353';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -83,6 +83,23 @@ document.querySelectorAll('.stop').forEach((el) => {
     vids.forEach((v) => { v.controls = true; });
   }
 }
+
+// Skill chips: tap, click or press Enter to open the short note about how I use the tool; one note per group at a time.
+document.querySelectorAll('.about-skills .chips').forEach((list) => {
+  list.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const open = chip.getAttribute('aria-expanded') === 'true';
+    list.querySelectorAll('.chip').forEach((b) => {
+      b.setAttribute('aria-expanded', 'false');
+      document.getElementById(b.getAttribute('aria-controls')).hidden = true;
+    });
+    if (!open) {
+      chip.setAttribute('aria-expanded', 'true');
+      document.getElementById(chip.getAttribute('aria-controls')).hidden = false;
+    }
+  });
+});
 
 // Each section is a labelled region (screen readers announce its heading).
 document.querySelectorAll('.stop').forEach((el) => {
