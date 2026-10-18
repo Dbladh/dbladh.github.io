@@ -121,6 +121,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
   background: #f6f4ee; border-radius: 14px;
 }
 .story h3 { margin-top: 0; }
+.story .hook { font-weight: 600; margin: 0 0 0.6em; }
 .story dt {
   font-family: var(--mono); font-weight: 700; font-size: 0.75rem;
   text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px;
