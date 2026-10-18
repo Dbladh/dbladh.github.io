@@ -78,7 +78,7 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
   const colour = new THREE.Color(), tmp = new THREE.Color();
   const api = {
     /** The colour and strength (0..1) the aurora is casting on the world right now: the scene's lights, ground and pond take these. */
-    colour, strength: 0,
+    colour, strength: 0, sm,
     get level() { return level; },
     /**
      * Every frame. `spec`: audio.songSpectrum's result; `night` 0..1; `on`: is a song playing (the aurora fades in over about 2.5 s and out over 3 s).
@@ -105,7 +105,7 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
         lights.hemi.color.lerp(colour, Math.min(0.75, s * 1.4)); lights.hemi.intensity *= 1 + s * 1.1;
         lights.moon.color.lerp(colour, Math.min(0.7, s * 1.3)); lights.moon.intensity += s * 1.1;
         lights.fog.color.lerp(colour, Math.min(0.3, s * 0.5));
-        lights.rim.color.copy(colour); lights.rim.intensity = level * (0.9 + 2.2 * s);        // from behind the village: the crests and edges of the hills, trees and roofs catch it
+        lights.rim.color.copy(colour); lights.rim.intensity = level * (1.5 + 3.8 * s);        // from behind the village: the crests and edges of the hills, trees and roofs catch it
       }
       world.setAurora(s > 0.002 && !lowEnd ? colour : null, s);
     },

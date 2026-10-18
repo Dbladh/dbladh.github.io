@@ -223,7 +223,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
   function set(hour, dim = 0) {
     const s = sample(((hour % 24) + 24) % 24);
-    if (dim > 0) { s.top.multiplyScalar(1 - 0.82 * dim); s.bot.multiplyScalar(1 - 0.82 * dim); }          // (the aurora's night: the sky itself nearly black)
+    if (dim > 0) { s.top.multiplyScalar(1 - 0.94 * dim); s.bot.multiplyScalar(1 - 0.94 * dim); }          // (the aurora's night: the sky itself nearly black)
 
     // Sun arcs from east (hour 6) up and over to west (hour 18).
     const a = ((hour - 6) / 12) * Math.PI;
@@ -240,8 +240,8 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     const night = THREE.MathUtils.clamp(1 - (sy + 8) / 18, 0, 1);
     sunLight.color.copy(s.sun);
     sunLight.intensity = s.sunI * 1.75;
-    moonLight.intensity = (classic ? 0.35 : 0.6) * night * (1 - 0.92 * dim);
-    hemi.intensity = s.hemi * 1.45 * (1 - 0.88 * dim); // soft fill, kept low enough that shadows still read
+    moonLight.intensity = (classic ? 0.35 : 0.6) * night * (1 - 0.99 * dim);
+    hemi.intensity = s.hemi * 1.45 * (1 - 0.975 * dim); // soft fill, kept low enough that shadows still read
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
     skyHemi.intensity = hemi.intensity;
     rimLight.position.set(-sx * 0.7, 38, -150);

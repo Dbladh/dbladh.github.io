@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017223018';
-import { buildWorld } from './world.js?v=20261017223018';
-import { createSky } from './sky.js?v=20261017223018';
-import { createDOF } from './dof.js?v=20261017223018';
-import { createRide } from './ride.js?v=20261017223018';
-import { createGame } from './bikegame.js?v=20261017223018';
-import { createAurora } from './aurora.js?v=20261017223018';
-import { createAudio, pickFlicker } from './audio.js?v=20261017223018';
+import { PAL } from './palette.js?v=20261017223457';
+import { buildWorld } from './world.js?v=20261017223457';
+import { createSky } from './sky.js?v=20261017223457';
+import { createDOF } from './dof.js?v=20261017223457';
+import { createRide } from './ride.js?v=20261017223457';
+import { createGame } from './bikegame.js?v=20261017223457';
+import { createAurora } from './aurora.js?v=20261017223457';
+import { createAudio, pickFlicker } from './audio.js?v=20261017223457';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -748,6 +748,7 @@ function start() {
       const playing = songHouse >= 0 && audio.songPlaying;
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
       aurora.update(dt, spec, nightK, playing);
+      world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), aurora.sm);
       if (aurora.level > 0) aurora.light(sky.lights, world, lowEnd);
       else if (aurora.strength !== 0) { aurora.strength = 0; world.setAurora(null, 0); setTime(hour); }       // (the lights are put back as the sky sets them)
     }
