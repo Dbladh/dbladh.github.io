@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261017184818">
+  <link rel="stylesheet" href="css/styles.css?v=20261017190152">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -62,6 +62,7 @@
       <input id="time" type="range" min="0" max="24" step="0.25" value="16"
              aria-label="Time of day">
     </label>
+    <button id="scene-sound" class="scene-sound" type="button" aria-label="Sound off" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.8a7.5 7.5 0 0 1 0 10.4"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
     <button id="simple-toggle" type="button" aria-pressed="false">Simple view</button>
   </div>
 
@@ -214,6 +215,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261017184818"></script>
+  <script type="module" src="js/main.js?v=20261017190152"></script>
 </body>
 </html>

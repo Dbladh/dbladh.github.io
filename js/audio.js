@@ -13,12 +13,14 @@ const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 // ?engine=synth plays a synthesised engine (audio/engine-worklet.js) instead of the recording, for comparing by ear
 const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
-const loadOn = () => { try { return localStorage.getItem(KEY) !== '0'; } catch (e) { return true; } };
+// Sound is off until the player turns it on (the speaker buttons remember the choice). Clicking the bike to start the game turns it on for that visit
+// unless the player has switched it off on purpose.
+const loadPref = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
 
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = loadOn(), running = false;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = loadPref() === '1', running = false, scn = null, scnLoading = null;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -59,7 +61,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   // without that would have their firing pulses out of step, and the overlap would beat and pulse like a rapid loop.
   const GRAIN = 0.5;
   const win = (() => { const w = new Float32Array(48); for (let i = 0; i < w.length; i++) { const x = Math.sin(Math.PI * i / (w.length - 1)); w[i] = x * x; } return w; })();   // (sums to 1 for aligned overlaps)
-  function grainLayer(b) { const bus = ctx.createGain(); bus.gain.value = 0; bus.connect(lp); return { b, data: b.getChannelData(0), bus, next: 0, rate: 1, pr: 1, pos: -1 }; }
+  function grainLayer(b, dest = lp) { const bus = ctx.createGain(); bus.gain.value = 0; bus.connect(dest); return { b, data: b.getChannelData(0), bus, next: 0, rate: 1, pr: 1, pos: -1 }; }
   /** The start in the recording, near `cand`, whose next 60 ms best matches what is playing from `cont` (seconds). */
   function align(L, cont, cand) {
     const d = L.data, sr = L.b.sampleRate, W = Math.floor(0.06 * sr), R = Math.floor(0.036 * sr), c0 = Math.floor(cont * sr), k0 = Math.floor(cand * sr);
@@ -114,6 +116,33 @@ export function createAudio({ base = 'audio/' } = {}) {
     engine = ambience = fx = null;
   }
 
+  // ---- the landscape: day and night ambience, a faint windmill, and the far-off dirt bike when it rides through ----
+  const SCENE_FILES = ['amb_day', 'amb_night', 'amb_windmill'];
+  function loadScene() {
+    if (scnLoading || !ctx) return scnLoading;
+    scnLoading = Promise.all(SCENE_FILES.map((n) => fetch(`${base}${n}.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf[n] = b; }).catch(() => { /* stays silent */ })))
+      .then(() => loading).then(() => buildScene());
+    return scnLoading;
+  }
+  function buildScene() {
+    if (scn || !ctx || !buf.amb_day || !buf.amb_night) return;
+    const out = ctx.createGain(); out.gain.value = 1; out.connect(master);
+    const loop = (name, { lpf = 0, pan = false } = {}) => {
+      const src = loopSrc(buf[name]), g = ctx.createGain(); g.gain.value = 0; let node = src;
+      if (lpf) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lpf; node.connect(f); node = f; }
+      node.connect(g); let p = null;
+      if (pan && ctx.createStereoPanner) { p = ctx.createStereoPanner(); g.connect(p); p.connect(out); } else g.connect(out);
+      src.start(0, Math.random() * buf[name].duration);
+      return { src, g, p };
+    };
+    scn = { out, day: loop('amb_day'), night: loop('amb_night'), wind: buf.amb_windmill ? loop('amb_windmill', { lpf: 2400, pan: true }) : null, bike: null };
+    if (buf.engine_idle) {                                                  // the bike far off: the same engine, muffled, quiet and panned
+      const g = ctx.createGain(); g.gain.value = 0; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700; g.connect(f);
+      let p = null; if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); f.connect(p); p.connect(out); } else f.connect(out);
+      const layer = grainLayer(buf.engine_idle, g); layer.bus.gain.value = 1; layer.rate = 1.12;
+      scn.bike = { g, p, layer };
+    }
+  }
   const at = (p, v, tc = 0.05) => p.setTargetAtTime(v, ctx.currentTime, tc);
   const ok = () => ctx && ready && on && ctx.state === 'running';
 
@@ -145,13 +174,43 @@ export function createAudio({ base = 'audio/' } = {}) {
   const thud = (gain = 0.5, f = 120) => { tone(f, 0.22, { gain, slide: f * 0.4, type: 'sine' }); swoosh(0.16, 900, 120, { gain: gain * 0.7, type: 'lowpass', q: 0.7 }); };
 
   const api = {
-    get _debug() { return { ctx, buf, st, engine, ambience, ready }; },   // (for tests)
+    get _debug() { return { ctx, buf, st, engine, ambience, ready, scn }; },   // (for tests)
     get enabled() { return on; },
     set enabled(v) {
       on = !!v; try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) { /* private mode */ }
       if (ctx) at(master.gain, on ? 0.8 : 0, 0.04);
-      if (on && ctx) ctx.resume?.();
+      if (on && ctx) { ctx.resume?.(); loadScene(); }
       for (const f of listeners) f(on);
+    },
+    /** Turn sound on for this visit (not remembered) if the player has never chosen: the game and the bike easter egg. */
+    autoOn() {
+      if (on || loadPref() !== null) return;
+      on = true; if (ctx) { at(master.gain, 0.8, 0.04); ctx.resume?.(); loadScene(); }
+      for (const f of listeners) f(on);
+    },
+    /** Every frame in the landscape. s: { night 0..1, quiet (the game is on), windPan -1..1, bike: { gain, pan } | null } */
+    sceneUpdate(s) {
+      if (!ctx || !on || !scn) return;
+      const k = s.quiet ? 0.25 : 1;
+      at(scn.day.g.gain, 0.62 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.55 * s.night * k, 1.4);
+      if (scn.wind) { at(scn.wind.g.gain, s.quiet ? 0 : 0.045, 0.9); if (scn.wind.p) at(scn.wind.p.pan, clamp(s.windPan || 0, -1, 1) * 0.7, 0.4); }
+      if (scn.bike) {
+        const g = !s.quiet && s.bike ? s.bike.gain : 0; at(scn.bike.g.gain, g, 0.3);
+        if (g > 0.002) { if (scn.bike.p) at(scn.bike.p.pan, clamp(s.bike.pan, -1, 1) * 0.8, 0.2); pump(scn.bike.layer); }
+      }
+    },
+    /** The camera flies into a billboard ('in'), back out to the view ('out') or between billboards ('across'): a soft whoosh. */
+    zoom(kind = 'in') {
+      if (!ctx || !gate('zoom', 0.3)) return;
+      if (kind === 'in') { swoosh(0.95, 450, 2800, { gain: 0.13, q: 0.8 }); tone(196, 0.8, { type: 'sine', gain: 0.035, slide: 392, dest: soft }); }
+      else if (kind === 'out') { swoosh(1.0, 2800, 380, { gain: 0.12, q: 0.8 }); tone(392, 0.9, { type: 'sine', gain: 0.03, slide: 196, dest: soft }); }
+      else swoosh(0.6, 700, 2000, { gain: 0.09, q: 1.0 });
+    },
+    /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
+    easter() {
+      if (!ctx) return;
+      [659, 784, 988, 1175, 1319, 1568, 1976].forEach((f, i) => { tone(f, 0.5, { type: 'sine', gain: 0.1, delay: i * 0.07, dest: soft }); tone(f * 2.01, 0.3, { type: 'triangle', gain: 0.025, delay: i * 0.07, dest: soft }); });
+      [1319, 1659, 1976].forEach((f, i) => tone(f, 0.9, { type: 'sine', gain: 0.06, delay: 0.55 + i * 0.05, dest: soft }));
     },
     onChange(f) { listeners.push(f); },
     /** Call from a tap (the game's start or its first press): the browser only allows sound after one. */
@@ -160,6 +219,7 @@ export function createAudio({ base = 'audio/' } = {}) {
       try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }   // iOS: play even with the silent switch on
       if (ctx.state !== 'running') ctx.resume?.();
       if (!loading) load().then(() => { if (running) buildEngine(); });
+      if (on) loadScene();
     },
     /** A ride begins: the engine starts. */
     start() { running = true; st.rpm = 0.2; st.eng = 0; if (ready) buildEngine(); },
@@ -267,6 +327,8 @@ export function createAudio({ base = 'audio/' } = {}) {
     /** Buttons and cards: soft ticks. */
     ui(kind = 'tap') {
       if (!ctx) return;
+      if (kind === 'hover') { if (!gate('hover', 0.06)) return; tone(1320, 0.05, { type: 'sine', gain: 0.022, dest: soft }); return; }
+      if (kind === 'click') { tone(740, 0.07, { type: 'sine', gain: 0.06, dest: soft }); tone(1110, 0.09, { type: 'sine', gain: 0.035, delay: 0.035, dest: soft }); return; }
       if (kind === 'confirm') { tone(523, 0.09, { type: 'sine', gain: 0.07, dest: soft }); tone(784, 0.12, { type: 'sine', gain: 0.06, delay: 0.06, dest: soft }); }
       else if (kind === 'back') { tone(440, 0.08, { type: 'sine', gain: 0.06, dest: soft }); tone(330, 0.1, { type: 'sine', gain: 0.05, delay: 0.05, dest: soft }); }
       else if (kind === 'cardIn') tone(494, 0.14, { type: 'sine', gain: 0.05, dest: soft });
@@ -289,6 +351,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom']) out[n] = f;
   return out;
 }

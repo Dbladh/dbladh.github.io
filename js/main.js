@@ -1,12 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017184818';
-import { buildWorld } from './world.js?v=20261017184818';
-import { createSky } from './sky.js?v=20261017184818';
-import { createDOF } from './dof.js?v=20261017184818';
-import { createRide } from './ride.js?v=20261017184818';
-import { createGame } from './bikegame.js?v=20261017184818';
+import { PAL } from './palette.js?v=20261017190152';
+import { buildWorld } from './world.js?v=20261017190152';
+import { createSky } from './sky.js?v=20261017190152';
+import { createDOF } from './dof.js?v=20261017190152';
+import { createRide } from './ride.js?v=20261017190152';
+import { createGame } from './bikegame.js?v=20261017190152';
+import { createAudio } from './audio.js?v=20261017190152';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -139,7 +140,8 @@ function start() {
   const bikeForce = /[?&]bike=1\b/.test(location.search);
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce });
   const bikeBtn = document.getElementById('bike-play');
-  const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world);
+  const audio = createAudio();                       // one sound system for the landscape and the game (silent until the player turns it on)
+  const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world, { audio });
   if (game) game.compileHook = (sc, cam) => dof.compileAsync(sc, cam);        // (programs for the offscreen target the scene is drawn into)
 
   // ---- Camera stops ----
@@ -262,6 +264,7 @@ function start() {
 
   function flyTo(target, quick) {
     tween?.done();
+    if (!quick) audio.zoom(target === stops.home ? 'out' : cur.pos.distanceTo(stops.home.pos) < 2 ? 'in' : 'across');
     if (quick) { cur.pos.copy(target.pos); cur.look.copy(target.look); tween = null; return Promise.resolve(); }
     return new Promise((resolve) => {
       tween = { fromP: cur.pos.clone(), fromL: cur.look.clone(), to: target, t: 0, dur: 1.6, done: resolve };
@@ -483,6 +486,7 @@ function start() {
       try { await Promise.race([game.whenReady(), new Promise((r) => setTimeout(r, 8000))]); } finally { if (card) card.hidden = true; starting = false; }
       if (game.active || active !== 'home' || openId) return;
     }
+    audio.unlock(); audio.autoOn(); audio.easter();                    // a chime: the easter egg was found (sound comes on for the visit unless the player turned it off)
     ride?.reset();
     game.start(homeCam, bx);
   }
@@ -562,9 +566,10 @@ function start() {
   // Dragging the slider sets the time; the clock carries on from there (and waits while you drag).
   const DAY_SECONDS = 300;
   let hour = 12, shownMinute = -1, dragging = false, lightsWarm = false, idleReady = false;
+  let nightK = 0; const sndV = new THREE.Vector3(), sndB = new THREE.Vector3();
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
-    const { night, horizon } = sky.set(hour);
+    const { night, horizon } = sky.set(hour); nightK = night;
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
     world.setClouds(night, horizon);
@@ -584,6 +589,16 @@ function start() {
   timeInput.addEventListener('keydown', () => { dragging = true; setTimeout(() => { dragging = false; }, 1200); });
 
   simpleBtn.addEventListener('click', () => setSimple(!simple));
+  // The landscape's sound button (sound is off until it is pressed)
+  const sndBtn = document.getElementById('scene-sound');
+  const showSnd = () => { if (!sndBtn) return; sndBtn.setAttribute('aria-pressed', String(audio.enabled)); sndBtn.setAttribute('aria-label', audio.enabled ? 'Sound on' : 'Sound off'); };
+  sndBtn?.addEventListener('click', () => { audio.unlock(); audio.enabled = !audio.enabled; if (audio.enabled) audio.ui('tap'); showSnd(); });
+  audio.onChange(showSnd); showSnd();
+  window.addEventListener('pointerdown', () => { if (audio.enabled) audio.unlock(); }, { once: true, capture: true });
+  // Hover and click ticks on the landscape's buttons (a mouse only: touch has no hover)
+  const UI_SEL = '#stopnav a, #simple-toggle, #scene-sound, .back, #bike-play, .gh-pausebtn, .gh-panel button';
+  document.addEventListener('pointerover', (e) => { if (e.pointerType !== 'mouse') return; const t = e.target.closest?.(UI_SEL); if (t && !t.contains(e.relatedTarget)) audio.ui('hover'); });
+  document.addEventListener('click', (e) => { const t = e.target.closest?.('#stopnav a, #simple-toggle, .back'); if (t) audio.ui('click'); }, true);
 
   // ---- Rotating tagline (static when reduced motion is on) ----
   // The phrase lives in an inner span so its fade does not fight the tagline's own
@@ -708,6 +723,16 @@ function start() {
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
+    if (audio.enabled) {                                                      // the landscape's sound: day/night, the windmill, the far-off bike
+      const gameOn = !!game?.active;
+      if (!gameOn) { sndV.set(-23, 10, -92).project(camera); }
+      let bike = null;
+      if (!gameOn && ride?.riding) {
+        sndB.copy(ride.position); const d = camera.position.distanceTo(sndB); sndB.project(camera);
+        const q = Math.max(0, 1 - d / 120); bike = { gain: 0.2 * q * q, pan: sndB.x };
+      }
+      audio.sceneUpdate({ night: nightK, quiet: gameOn, windPan: sndV.x, bike });
+    }
     if (!!game?.active !== gameWasActive) { gameWasActive = !!game?.active; applyPixelRatio(); if (dof) { dof.samples = gameWasActive ? 0 : 2; dof.half = gameWasActive || halfForced; dof.setLook(null, gameWasActive || lowEnd || quality.scale < 1 ? 0 : 1); } }          // the game draws fewer pixels
 
     const wT = performance.now(); if (!reduceMotion) world.update(dt, camera); secT('world', wT);

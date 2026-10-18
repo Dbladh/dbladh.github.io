@@ -214,20 +214,31 @@ body.scene-mode #stopnav a[aria-current="page"] { color: var(--ui-ink); animatio
 body.scene-mode #stopnav a[aria-current="page"]::after { transform: scale(0); }
 @keyframes navPop { 0% { transform: scale(0.92); } 60% { transform: scale(1.07); } 100% { transform: scale(1); } }
 
-body.scene-mode .controls {
+body.scene-mode .controls {          /* no container: the sound button and Simple view are two separate buttons */
   position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 20; max-width: none;
-  margin: 0; padding: 7px 12px; background: color-mix(in srgb, var(--ui-cream) 94%, transparent);
-  border: 1.5px solid var(--ui-sage); border-radius: 999px;
-  box-shadow: 0 6px 22px rgba(40, 52, 44, 0.2), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  margin: 0; padding: 0; background: none; border: 0; box-shadow: none; display: flex; align-items: center; gap: 10px;
   color: var(--ui-ink); font-family: var(--name-font);
 }
+body.scene-mode #simple-toggle, body.scene-mode .scene-sound {
+  background: color-mix(in srgb, var(--ui-cream) 94%, transparent); border: 1.5px solid var(--ui-sage); border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(40, 52, 44, 0.2), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--ui-ink); cursor: pointer;
+}
+body.scene-mode .scene-sound { width: 42px; height: 42px; padding: 0; display: grid; place-items: center; transition: background-color 0.2s ease, transform 0.2s ease; }
+body.scene-mode .scene-sound:hover { background: var(--ui-gold); transform: translateY(-1px); }
+body.scene-mode .scene-sound:active { transform: scale(0.94); }
+.scene-sound svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.scene-sound .spk { fill: currentColor; }
+.scene-sound .mute { display: none; }
+.scene-sound[aria-pressed="false"] .wave { display: none; }
+.scene-sound[aria-pressed="false"] .mute { display: inline; }
+body:not(.scene-mode) .scene-sound { display: none; }
 body.scene-mode .controls .time { display: none; }          /* the time-of-day slider is gone from the scene (the day still runs on its own) */
 body.scene-mode .controls .time { font-family: var(--name-font); font-weight: 500; font-size: 0.82rem; letter-spacing: 0.03em; }
 body.scene-mode .controls .time input { accent-color: var(--ui-coral); }
 body.scene-mode #simple-toggle {
   font-family: var(--name-font); font-weight: 600; letter-spacing: 0.07em; font-size: 0.78rem;
-  color: var(--ui-ink); background: transparent; border: 1.5px solid var(--ui-sage); padding: 6px 14px;
+  padding: 10px 18px;
   transition: background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 body.scene-mode #simple-toggle:hover { background: var(--ui-gold); border-color: var(--ui-gold); transform: translateY(-1px); }
@@ -285,6 +296,8 @@ body.scene-mode .back:active { background: var(--ink); color: #fff; }
   .time input { width: 84px; }
   #time-label { min-width: 0; white-space: nowrap; }
   #simple-toggle { font-size: 0.7rem; padding: 5px 10px; white-space: nowrap; }
+  body.scene-mode #simple-toggle { padding: 9px 14px; }
+  body.scene-mode .scene-sound { width: 38px; height: 38px; }
   body.scene-mode { --name-size: clamp(2.4rem, 13vw, 4rem); --name-top: calc(88px + env(safe-area-inset-top, 0px)); }
 }
 
@@ -732,11 +745,3 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 @keyframes ghspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .gh-loading .spin { animation: none; } }
 
-
-/* ---------- Roomy windows (at least 900px wide and 601px tall): the section nav moves to the top left ----------
-   Narrower or shorter windows keep it at the bottom centre, so it never meets the name, the tagline or the Simple view button. */
-@media (min-width: 900px) and (min-height: 601px) {
-  body.scene-mode #stopnav {
-    left: max(14px, env(safe-area-inset-left)); right: auto; top: max(12px, env(safe-area-inset-top)); bottom: auto; transform: none;
-  }
-}
