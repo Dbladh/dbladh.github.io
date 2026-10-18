@@ -2,16 +2,16 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017192317';
-import { createTrack } from './track.js?v=20261017192317';
-import { createRagdoll } from './ragdoll.js?v=20261017192317';
-import { createFx } from './fx.js?v=20261017192317';
-import { createAudio } from './audio.js?v=20261017192317';
-import { createPuffs } from './puffs.js?v=20261017192317';
-import { createDirt } from './dirt.js?v=20261017192317';
-import { createMudCoat } from './mudcoat.js?v=20261017192317';
-import { createCoins } from './coins.js?v=20261017192317';
-import { createFuel } from './fuel.js?v=20261017192317';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017193556';
+import { createTrack } from './track.js?v=20261017193556';
+import { createRagdoll } from './ragdoll.js?v=20261017193556';
+import { createFx } from './fx.js?v=20261017193556';
+import { createAudio } from './audio.js?v=20261017193556';
+import { createPuffs } from './puffs.js?v=20261017193556';
+import { createDirt } from './dirt.js?v=20261017193556';
+import { createMudCoat } from './mudcoat.js?v=20261017193556';
+import { createCoins } from './coins.js?v=20261017193556';
+import { createFuel } from './fuel.js?v=20261017193556';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -102,7 +102,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
   });
   /** Hide the things that belong to the village (chimney smoke) while the game runs. */
-  const castOff = [], villageX = [], boards = [];                                                                      // meshes that stop casting shadows while the game runs
+  const castOff = [], villageX = [], boards = [], straddlers = [];                                                                      // meshes that stop casting shadows while the game runs
   function applyClip(on) {
     if (on) {
       const mine = new Set(); bike.root.traverse((o) => mine.add(o));
@@ -122,6 +122,23 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         if (box.min.z > track.cutZ + 1.4) { c.visible = false; hiddenObjs.push(c); }
         else villageX.push({ o: c, x0: box.min.x, x1: box.max.x });                  // (the sign glows are never frustum-culled: they are hidden by distance instead)
       }
+      // Trees and bushes that stand across the slicing plane would be cut in half (a crown with its front missing): take those few out for the ride.
+      {
+        const inTrack = new Set(); track.group.traverse((o) => inTrack.add(o));
+        const m4 = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+        scene.traverse((o) => {
+          if (!o.isInstancedMesh || inTrack.has(o) || mine.has(o) || !o.visible) return;
+          if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+          const rad = o.geometry.boundingSphere.radius, cz = o.geometry.boundingSphere.center.z;
+          let hit = false;
+          for (let i = 0; i < o.count; i++) {
+            o.getMatrixAt(i, m4); const e = m4.elements;
+            const sc = Math.max(Math.hypot(e[0], e[1], e[2]), Math.hypot(e[4], e[5], e[6]), Math.hypot(e[8], e[9], e[10]));
+            if (Math.abs(e[14] + cz * sc - CUT) < rad * sc + 0.4) { straddlers.push({ o, i, m: m4.clone() }); o.setMatrixAt(i, zero); hit = true; }
+          }
+          if (hit) o.instanceMatrix.needsUpdate = true;
+        });
+      }
       const bg = scene.getObjectByName('billboards');                           // a billboard standing in the lane slides back out of the rider's way (just the sign structure, never the terrain)
       boards.length = 0;
       if (bg) for (const c of bg.children) {
@@ -133,6 +150,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       for (const o of castOff) o.castShadow = true; castOff.length = 0;
       for (const v of villageX) v.o.visible = true; villageX.length = 0;
       for (const b of boards) b.o.position.z = b.z0; boards.length = 0;
+      for (const t of straddlers) { t.o.setMatrixAt(t.i, t.m); t.o.instanceMatrix.needsUpdate = true; } straddlers.length = 0;
     }
   }
 
