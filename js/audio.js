@@ -214,10 +214,23 @@ export function createAudio({ base = 'audio/' } = {}) {
       else if (kind === 'out') { swoosh(1.0, 2800, 380, { gain: 0.12, q: 0.8 }); tone(392, 0.9, { type: 'sine', gain: 0.03, slide: 196, dest: soft }); }
       else swoosh(0.6, 700, 2000, { gain: 0.09, q: 1.0 });
     },
+    /** One electrical zap at `delay` s: a rapidly gated burst of bright static, a buzzing 120 Hz pulse underneath and a tiny click at the start. */
+    _zap(delay, len, amp) {
+      const t0 = ctx.currentTime + delay, L = Math.max(0.09, len + 0.06), nb = noise();
+      const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = nb; src.loop = true; bp.type = 'bandpass'; bp.frequency.value = 3800 + Math.random() * 3800; bp.Q.value = 0.7;
+      g.gain.setValueAtTime(0, t0);
+      for (let k = 0; k * 0.011 < L; k++) g.gain.setValueAtTime((Math.random() < 0.72 ? 0.15 + Math.random() * 0.85 : 0.02) * amp * 0.9 * (1 - 0.45 * (k * 0.011) / L), t0 + k * 0.011);
+      g.gain.setValueAtTime(0, t0 + L);
+      src.connect(bp); bp.connect(g); g.connect(soft); src.start(t0, Math.random() * 1.5); src.stop(t0 + L + 0.05);
+      src.onended = () => { try { src.disconnect(); bp.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
+      tone(120, L, { type: 'sawtooth', gain: 0.07 * amp, delay, dest: dull });                 // the mains buzz
+      tone(2400 + Math.random() * 1500, 0.02, { type: 'square', gain: 0.05 * amp, delay, dest: soft });   // the click as the arc strikes
+    },
     /** A billboard's lamps start to flicker (`pat`: one of FLICKERS): the crackle sounds, then a faint electrical hum while they stay lit. */
     flicker(pat) {
       if (!ctx || !on) return;
-      (pat.snd || []).forEach((n, i) => play(n, { gain: 1.0, delay: (pat.at && pat.at[i]) || 0, rate: 0.96 + Math.random() * 0.08 }));
+      pat.events.forEach(([t, d, a]) => api._zap(t, d, a));                                    // (synthesised: the recorded crackles sounded like clanks when cut out alone)
       if (!buf.fl_hum) return;
       if (!hum) { const src = loopSrc(buf.fl_hum), g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(soft); src.start(0, Math.random() * 4); hum = { src, g }; }
       const end = Math.max(...pat.events.map((e) => e[0] + e[1])) + 0.05;
@@ -228,7 +241,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     flickerOff() {
       if (!ctx || !on) return;
       if (hum) { hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0, ctx.currentTime, 0.08); }
-      play('fl_tick2', { gain: 0.4, rate: 0.8 });
+      api._zap(0.0, 0.05, 0.6);
     },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {
