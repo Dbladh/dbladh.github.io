@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017223914';
-import { auroraColour } from './aurora.js?v=20261017223914';
+import { PAL } from './palette.js?v=20261017224338';
+import { auroraColour } from './aurora.js?v=20261017224338';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017223914';
+} from './houses.js?v=20261017224338';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1889,7 +1889,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // The fireflies' dance (while a house song plays): each depth group forms a slow ring that turns, rises and falls in a travelling wave, breathes with the bass and
   // pulses in brightness along the ring with the beat. Everything is added up frame by frame, so it glides and never jumps.
   const RINGS = [{ cx: 0, cz: 12, R: 8.5, y: 1.6, amp: 2.6, dir: 1 }, { cx: 0, cz: -8, R: 20, y: 2.0, amp: 3.4, dir: -1 }, { cx: 0, cz: -40, R: 42, y: 2.6, amp: 4.2, dir: 1 }];
-  const dance = { w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
+  const dance = { beatPos: -1, w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
   const ffGeo = new THREE.BufferGeometry();
   const ffPos = new Float32Array(FF * 3), ffCol = new Float32Array(FF * 3), ffSeed = new Float32Array(FF);
   const ffVis = new Float32Array(FF).fill(1);   // fades to 0 while a firefly would drift in front of a sign
@@ -2342,7 +2342,15 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       if (h.light) { h.light.color.copy(h.baseLightCol ??= h.light.color.clone()).lerp(c, 0.9 * w); h.light.intensity += w * HOUSE_I * (0.15 + 1.1 * p); }
     });
     showTone(5, showCol2); lanternMat.color.lerp(showCol2, w * (0.45 + 0.5 * showPulse(5)));
-    boards.forEach((b, j) => { showTone(9 + j * 2, showCol2); b.show?.(w, showPulse(9 + j * 2), showCol2); });
+    boards.forEach((b, j) => {                                              // the three billboards light up one at a time, on the beats of a 3/4 bar (left, middle, right)
+      showTone(9 + j * 2, showCol2);
+      let p;
+      if (dance.beatPos >= 0) {
+        const d = (((dance.beatPos - j) % 3) + 3) % 3;                       // beats since this sign's turn
+        const attack = Math.min(1, d / 0.09); p = 0.07 + (j === 0 ? 1.5 : 1.2) * Math.exp(-2.4 * d) * (0.3 + 0.7 * attack * attack * (3 - 2 * attack));
+      } else p = showPulse(9 + j * 2);
+      b.show?.(w, p, showCol2);
+    });
   }
   let time = 0, night = 0, songK = 0;
   const HOUSE_I = 20, FF_I = 9;
@@ -2529,7 +2537,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     },
     /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
     /** The music's levels for the fireflies' dance (smoothed values from the aurora); `w` 0..1 is how far the dance has begun. */
-    setDance(w, sm) { dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
+    setDance(w, sm, beatPos = -1) { dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
@@ -2601,8 +2609,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         const flap = Math.sin(time * 22 + u.ph) * 0.9;
         u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
       });
-      dance.ang += dt * (0.05 + 0.425 * dance.bass + 0.75 * dance.beat + 0.175 * dance.treble) * dance.w;      // (they speed up on the bass, surge on every beat and ease off in the quiet)
-      dance.wave += dt * (0.45 + 1.1 * dance.mid + 0.4 * dance.beat) * dance.w; dance.morph += dt * (0.0225 + 0.06 * dance.energy) * dance.w;
+      dance.ang += dt * (0.025 + 0.2 * dance.bass + 0.3 * dance.beat + 0.08 * dance.treble) * dance.w;      // (they speed up on the bass, surge on every beat and ease off in the quiet)
+      dance.wave += dt * (0.25 + 0.55 * dance.mid + 0.15 * dance.beat) * dance.w; dance.morph += dt * (0.012 + 0.03 * dance.energy) * dance.w;
       dance.chase += dt * (1.3 + 2.0 * dance.bass + 1.0 * dance.energy) * dance.w; dance.hue = (dance.hue + dt * 0.025 * dance.w) % 1;
       lightShow();
       const a = ffGeo.attributes.position;
@@ -2619,10 +2627,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         let px = gx + Math.sin(time * 0.35 + f.ph) * amp, py = gy + Math.sin(time * 0.8 + f.ph * 2) * 0.7, pz = gz + Math.cos(time * 0.3 + f.ph * 1.3) * amp, boost = 1;
         if (dance.w > 0.002 && !follow.on) {                                // the dance: they gather into rings (one after another) and move with the music
           const rg = RINGS[f.gi], base = (f.k / f.n) * 6.2832;
-          const th = base + dance.ang * rg.dir * (1 + 0.25 * f.gi) + 0.3 * dance.mid * Math.sin(dance.wave * 0.6 + base * 3);          // (the spacing along the ring ripples with the mids)
+          const th = base + dance.ang * rg.dir * (1 + 0.25 * f.gi) + 0.15 * dance.mid * Math.sin(dance.wave * 0.6 + base * 3);          // (the spacing along the ring ripples with the mids)
           const f8 = 0.5 + 0.5 * Math.sin(dance.morph * 2.0 + f.gi * 1.7);                      // the shape drifts, over the song, between a ring and a figure of eight
-          const R = rg.R * (1 + 0.2 * dance.bass + 0.14 * dance.beat), tx = rg.cx + Math.cos(th) * R * 1.5, tz = rg.cz + (Math.sin(th) * (1 - f8) + Math.sin(2 * th) * 0.9 * f8) * R * 0.8;
-          const sw = 0.5 + 0.5 * Math.sin(dance.wave * rg.dir - th * 3), hop = dance.beat * (0.5 + 0.5 * Math.sin(f.k * 1.9 + f.gi)) * (1.2 + 0.8 * f.gi);   // each beat throws them up, the wave carries them around
+          const R = rg.R * (1 + 0.09 * dance.bass + 0.05 * dance.beat), tx = rg.cx + Math.cos(th) * R * 1.5, tz = rg.cz + (Math.sin(th) * (1 - f8) + Math.sin(2 * th) * 0.9 * f8) * R * 0.8;
+          const sw = 0.5 + 0.5 * Math.sin(dance.wave * rg.dir - th * 3), hop = dance.beat * (0.5 + 0.5 * Math.sin(f.k * 1.9 + f.gi)) * (0.45 + 0.3 * f.gi);   // each beat throws them up, the wave carries them around
           const ty = heightAt(tx, tz) + rg.y + rg.amp * sw * (0.55 + 0.7 * dance.mid) + hop;
           const e = Math.min(1, Math.max(0, dance.w * 1.6 - (f.k / f.n) * 0.6)), wi = e * e * (3 - 2 * e);
           px += (tx - px) * wi; py += (ty - py) * wi; pz += (tz - pz) * wi;

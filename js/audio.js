@@ -19,6 +19,9 @@ const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
  *  the flickers are heard in it, as [start s, length s, strength 0..1]: the lamps flash in step (see world.setHover). Each billboard plays it a little higher or lower. */
 const FLICKER_EVENTS = [[0.055, 0.04, 0.28], [0.175, 0.04, 0.55], [0.305, 0.07, 1], [0.43, 0.075, 0.72], [0.555, 0.05, 0.54]];
 const BOARD_PITCH = { creativity: 0.95, ai: 1.0, about: 1.06 };
+/** When the beats of the house song fall (seconds from its start), found by analysing the recording (audio/tools/find_beats.py): about 87.6 beats a minute in 3/4 time,
+ *  so every third beat is a downbeat (beat 0, 3, 6...). The billboards light up one on each beat, in turn. */
+const SONG_BEATS = [0.06,0.74,1.43,2.14,2.86,3.56,4.27,4.99,5.70,6.41,7.12,7.83,8.54,9.25,9.96,10.66,11.37,12.07,12.77,13.47,14.18,14.87,15.57,16.28,16.98,17.68,18.38,19.07,19.78,20.48,21.18,21.86,22.56,23.24,23.94,24.64,25.33,26.01,26.71,27.39,28.09,28.78,29.45,30.15,30.84,31.52,32.21,32.88,33.56,34.25,34.93,35.61,36.29,36.98,37.66,38.34,39.02,39.70,40.38,41.06,41.75,42.43,43.12,43.78,44.48,45.16,45.84,46.51,47.21,47.88,48.56,49.25,49.94,50.62,51.29,51.98,52.66,53.34,54.03,54.71,55.39,56.06,56.75,57.44,58.12,58.79,59.48,60.16,60.85,61.52,62.20,62.89,63.58,64.25,64.94,65.61,66.29,66.97,67.63,68.29,68.99,69.68,70.38,71.08,71.76,72.46,73.15,73.85,74.55,75.24,75.94,76.64,77.33,78.03,78.72,79.41,80.10,80.78,81.47,82.16,82.86,83.56,84.25,84.94,85.64,86.33,87.03,87.72,88.42,89.11,89.78,90.47,91.15,91.83,92.52,93.20,93.88,94.56,95.25,95.92,96.59,97.29,97.97,98.65,99.33,100.02,100.70,101.38,102.06,102.75,103.43,104.12,104.79,105.48,106.15,106.83,107.52,108.20,108.88,109.56,110.24,110.94,111.65,112.34,113.02,113.71,114.39,115.08,115.76,116.45,117.13,117.82,118.50,119.19,119.87,120.56,121.24,121.93,122.61,123.30];
 export const pickFlicker = (id) => {
   const rate = (BOARD_PITCH[id] || 1) * (0.99 + Math.random() * 0.02);
   return { snd: 'fl_start', rate, events: FLICKER_EVENTS.map(([t, d, a]) => [t / rate, d / rate, a]) };       // (a slower sound is a longer one: the flashes stretch with it)
@@ -280,6 +283,15 @@ export function createAudio({ base = 'audio/' } = {}) {
     },
     songPan(pan) { if (song && song.p) song.p.pan.setTargetAtTime(clamp(pan, -1, 1) * (0.6 - 0.35 * clamp((ctx.currentTime - song.t0) / 60)), ctx.currentTime, 0.2); },           // (less to one side as it comes forward)
     get songPlaying() { return !!song; },
+    /** Where the song is in its beats: a number whose whole part is the beat count (0, 1, 2...; the bar position is that modulo 3) and whose fraction is how far into the beat it is; -1 if no song. */
+    songBeatPos() {
+      if (!song || !ctx) return -1;
+      const t = ctx.currentTime - song.t0, B = SONG_BEATS;
+      if (t <= B[0]) return t / 0.7 - 0;
+      if (t >= B[B.length - 1]) return B.length - 1 + (t - B[B.length - 1]) / 0.685;
+      let lo = 0, hi = B.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
+      return lo + (t - B[lo]) / (B[lo + 1] - B[lo]);
+    },
     /** The song's sound this instant, for the aurora: bass, mid, treble and energy (0..1, each scaled to the song's own loudest), centroid (how bright it is, 0..1)
      *  and beat (a spike on a sudden bass hit). Fills and returns `out`; all zeros when no song plays. */
     songSpectrum(out, dt = 0.016) {
@@ -445,6 +457,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos']) out[n] = f;
   return out;
 }
