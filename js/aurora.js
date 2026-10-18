@@ -9,6 +9,7 @@ import * as THREE from 'three';
 
 const PAL = [[0.25, 1.0, 0.45], [0.12, 0.92, 0.78], [0.35, 0.55, 1.0], [0.72, 0.38, 1.0], [1.0, 0.3, 0.78], [1.0, 0.32, 0.42]];       // green, teal, blue, violet, magenta, red
 const WARM_PAL = [[1.0, 0.88, 0.34], [1.0, 0.68, 0.22], [1.0, 0.46, 0.15], [1.0, 0.3, 0.12], [0.95, 0.2, 0.18], [1.0, 0.62, 0.3]];       // yellow, amber, orange, red-orange, red, soft orange
+const HAZE = new THREE.Color('#ffb070'); let sweep = 0;
 let WARM = 0;                                                         // 0 = the cool palette (greens, blues, magentas); 1 = the warm one (yellows, oranges, reds)
 export const setWarm = (w) => { WARM = w; };
 export const auroraColour = (t, out = new THREE.Color()) => {
@@ -93,7 +94,7 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
       level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
       if (!on && level < 0.004) { level = 0; mesh.visible = false; api.strength = 0; return; }
       mesh.visible = true; mesh.position.copy(camera.position);
-      hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM;
+      hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM; sweep += dt * 0.09;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
       for (const k in sm) sm[k] += (spec[k] - sm[k]) * (1 - Math.exp(-dt / TAU[k]));
       U.uTime.value += dt * (0.4 + sm.energy * 0.3);
@@ -111,6 +112,8 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
         lights.hemi.color.lerp(colour, Math.min(0.75, s * 1.4)); lights.hemi.intensity *= 1 + s * 1.1;
         lights.moon.color.lerp(colour, Math.min(0.7, s * 1.3)); lights.moon.intensity += s * 1.1;
         lights.fog.color.lerp(colour, Math.min(0.3, s * 0.5));
+        if (WARM > 0.002) { lights.fog.color.lerp(HAZE, 0.4 * WARM); lights.hemi.color.lerp(HAZE, 0.25 * WARM); }       // the warm passage: a soft golden haze in the air
+        lights.rim.position.set(Math.sin(sweep) * 120, 36 + Math.sin(sweep * 0.7 + 1) * 10, -150);                      // the edge light drifts slowly across behind the village, so the rims of the hills and roofs sweep
         lights.rim.color.copy(colour); lights.rim.intensity = level * (1.5 + 3.8 * s);        // from behind the village: the crests and edges of the hills, trees and roofs catch it
       }
       world.setAurora(s > 0.002 && !lowEnd ? colour : null, s);
