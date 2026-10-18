@@ -1,7 +1,7 @@
 // Collectible coins along the ride: lines on the ground and arcs off the kicker lips. Generated per 48-unit block from the
 // course seed (so the same course always has the same coins), drawn as one instanced mesh and spun/bobbed per frame.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017172219';
+import { PAL } from './palette.js?v=20261017182527';
 
 const BLOCK = 48;
 const WIN_L = 90, WIN_R = 190;   // how far either side of the camera coins are drawn (the screen can show well over 100 units at speed, so the edges stay off screen)
@@ -188,14 +188,14 @@ export function createCoins(scene, track, laneZ) {
     collect(x, y, k = 1, dt = 1 / 60, vx = 0) {
       let got = 0; this.hits.length = 0;
       const py = y + 0.4 * k, aimX = x + vx * 0.05, pull = 1 - Math.exp(-dt * 16);
-      const inner = (dx, dy) => (dx * dx) / (2.1 * k * 2.1 * k) + (dy * dy) / (2.3 * k * 2.3 * k) < 1;
+      const inner = (dx, dy) => (dx * dx) / (2.6 * k * 2.6 * k) + (dy * dy) / (2.8 * k * 2.8 * k) < 1;
       const take = (c) => { c.got = true; got++; this.hits.push({ x: c.x, y: c.y }); drawnIn.delete(c); };
       // coins newly within reach of the magnet (or right on the bike): taken at once, or started drawing in
-      const b0 = Math.floor((x - 10) / BLOCK), b1 = Math.floor((x + 10) / BLOCK);
+      const b0 = Math.floor((x - 12) / BLOCK), b1 = Math.floor((x + 12) / BLOCK);
       for (let b = b0; b <= b1; b++) for (const c of blockOf(b)) {
         if (c.got || c.mag) continue;
         const dx = c.x - x, dy = c.y - py;
-        if ((dx * dx) / (5.2 * k * 5.2 * k) + (dy * dy) / (6.2 * k * 6.2 * k) > 1) continue;                                   // out of reach
+        if ((dx * dx) / (6.2 * k * 6.2 * k) + (dy * dy) / (7.0 * k * 7.0 * k) > 1) continue;                                   // out of reach
         if (inner(dx, dy)) take(c); else { c.mag = true; c.magT = 0; drawnIn.add(c); }
       }
       // coins being drawn in (wherever they are now: one that falls behind the bike must still be finished off): they aim a little ahead of the bike so a fast bike

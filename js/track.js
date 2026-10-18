@@ -6,10 +6,10 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { createTrail } from './trail.js?v=20261017172219';
-import { KINDS, buildObstacle } from './obstacles.js?v=20261017172219';
-import { PAL } from './palette.js?v=20261017172219';
-import { heightAt as terrainAt } from './world.js?v=20261017172219';
+import { createTrail } from './trail.js?v=20261017182527';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261017182527';
+import { PAL } from './palette.js?v=20261017182527';
+import { heightAt as terrainAt } from './world.js?v=20261017182527';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -383,6 +383,8 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
     for (let oi = obsFrom(a); oi < obs.length && obs[oi].x <= b; oi++) { const o = obs[oi]; if (obsMesh.has(o.id)) continue; { const g = buildObstacle(o, laneAt(o.x), laneZ); obsGroup.add(g); obsMesh.set(o.id, { o, g, hitAt: 0 }); } }
   }
   return {
+    /** Is this obstacle's mesh in the world and showing (so a marker over it points at something real)? */
+    obstacleShown: (o) => { const e = obsMesh.get(o.id); return !!e && e.g.visible && !o.hit; },
     obstaclesIn: (x0, x1) => { laneAt(x1 + 30); const out = []; for (let i = obsFrom(x0); i < obs.length && obs[i].x <= x1; i++) out.push(obs[i]); return out; },
     /** The next obstacle not yet hit, starting within `range` ahead of x. */
     obstacleAhead: (x, range) => { laneAt(x + range + 20); for (let i = obsFrom(x + 1e-6); i < obs.length && obs[i].x < x + range; i++) if (!obs[i].hit) return obs[i]; return null; },

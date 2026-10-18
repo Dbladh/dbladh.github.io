@@ -2,16 +2,16 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017172219';
-import { createTrack } from './track.js?v=20261017172219';
-import { createRagdoll } from './ragdoll.js?v=20261017172219';
-import { createFx } from './fx.js?v=20261017172219';
-import { createAudio } from './audio.js?v=20261017172219';
-import { createPuffs } from './puffs.js?v=20261017172219';
-import { createDirt } from './dirt.js?v=20261017172219';
-import { createMudCoat } from './mudcoat.js?v=20261017172219';
-import { createCoins } from './coins.js?v=20261017172219';
-import { createFuel } from './fuel.js?v=20261017172219';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017182527';
+import { createTrack } from './track.js?v=20261017182527';
+import { createRagdoll } from './ragdoll.js?v=20261017182527';
+import { createFx } from './fx.js?v=20261017182527';
+import { createAudio } from './audio.js?v=20261017182527';
+import { createPuffs } from './puffs.js?v=20261017182527';
+import { createDirt } from './dirt.js?v=20261017182527';
+import { createMudCoat } from './mudcoat.js?v=20261017182527';
+import { createCoins } from './coins.js?v=20261017182527';
+import { createFuel } from './fuel.js?v=20261017182527';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -48,6 +48,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   let rectCache = null; window.addEventListener('resize', () => { rectCache = null; });
   const canvasRect = () => rectCache || (rectCache = renderer.domElement.getBoundingClientRect());     // (measured once per frame)
   // "JUMP" markers floating over the next obstacles (up to two)
+  setInterval(() => { const now = performance.now(); for (const e of jumpEls) if (!e.hidden && now - (e._t || 0) > 250) e.hidden = true; }, 120);     // (a marker nothing is updating is never left behind)
   const jumpEls = [0, 1].map(() => { const d = document.createElement('div'); d.className = 'gh-jump'; d.hidden = true; d.innerHTML = '<span class="t">JUMP</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l7 7 7-7M5 12l7 7 7-7"/></svg>'; (hud || document.body).appendChild(d); return d; });
   const multFxEl = document.getElementById('gh-multfx');
   const grooveEl = document.getElementById('gh-groove');
@@ -887,7 +888,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         let upcoming = [];
         if (st.mode === 'play' && !st.paused) {
           const passed = track.obstaclesIn(st.x - 14, st.x - 1).pop();
-          if (!(passed && st.x - passed.x < 8)) upcoming = track.obstaclesIn(st.x - 1, st.x + 50).filter((o) => !o.hit && o.x > st.x - 1 && !(passed && o.x - passed.x < 12));   // (and none for a moment after passing one, so each marker visibly goes away)
+          if (!(passed && st.x - passed.x < 8)) upcoming = track.obstaclesIn(st.x - 1, st.x + 50).filter((o) => track.obstacleShown(o) && o.x > st.x - 1 && !(passed && o.x - passed.x < 12));   // (and none for a moment after passing one, so each marker visibly goes away)
         }
         let k = 0;
         for (let i = 0; i < upcoming.length && k < 2; i++) {
@@ -895,10 +896,10 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           let group = 1; for (let j = i + 1; j < upcoming.length && upcoming[j].x - upcoming[j - 1].x < 12; j++) group++;
           const big = o.big || group > 1 || upcoming.slice(i, i + group).some((q) => q.big), el = jumpEls[k++];
           pv.set(o.x, track.laneAt(o.x) + o.h + 2.2 * (SC / SCALE), laneZ).project(cam);
-          el.hidden = pv.z > 1 || pv.x < -1.1; el.classList.toggle('edge', pv.x > 0.88);          // (beyond the right edge it stays pinned there with an arrow)
-          el.firstChild.textContent = big ? 'BIG JUMP' : 'JUMP'; el.classList.toggle('big', big);
-          el.style.left = THREE.MathUtils.clamp(rc.left + (pv.x * 0.5 + 0.5) * rc.width, rc.left + 50, rc.right - 50) + 'px';
-          el.style.top = THREE.MathUtils.clamp(rc.top + (-pv.y * 0.5 + 0.5) * rc.height, rc.top + 120, rc.bottom - 140) + 'px';
+          el.hidden = pv.z > 1 || pv.x < -1.05 || pv.x > 1.0; el._t = performance.now();                 // (only over an obstacle that is on screen: nothing pinned to an edge)
+          el.firstChild.textContent = big ? 'BIG JUMP' : 'JUMP'; el.classList.toggle('big', big); el.classList.remove('edge');
+          el.style.left = THREE.MathUtils.clamp((pv.x * 0.5 + 0.5) * innerWidth, 50, innerWidth - 50) + 'px';       // (viewport coordinates, like the fixed marker itself)
+          el.style.top = THREE.MathUtils.clamp((-pv.y * 0.5 + 0.5) * innerHeight, 120, innerHeight - 140) + 'px';
         }
         for (; k < 2; k++) jumpEls[k].hidden = true;
       }
