@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018000604';
-import { auroraColour } from './aurora.js?v=20261018000604';
+import { PAL } from './palette.js?v=20261018002055';
+import { auroraColour } from './aurora.js?v=20261018002055';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018000604';
+} from './houses.js?v=20261018002055';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2388,12 +2388,13 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       showTone(9 + j * 2, showCol2);
       let p;
       if (dance.beatPos >= 0) {
-        const d = (((dance.beatPos - j) % 3) + 3) % 3;                       // beats since this sign's turn
-        const attack = Math.min(1, d / 0.09); p = 0.07 + (j === 0 ? 1.5 : 1.2) * Math.exp(-2.4 * d) * (0.3 + 0.7 * attack * attack * (3 - 2 * attack));
+        const d = (((dance.beatPos + SIGN_LEAD - j) % 3) + 3) % 3;           // beats since this sign's turn (counted a touch early: the lights are a frame or two late and the eye is hard on the beat)
+        p = 0.07 + (j === 0 ? 1.6 : 1.3) * Math.exp(-3.1 * d);                  // (it hits at full strength on the beat itself, no ramp, then falls away quickly)
       } else p = showPulse(9 + j * 2);
       b.show?.(w, p, showCol2);
     });
   }
+  const SIGN_LEAD = 0.1;                                                   // (in beats, about 70 ms at the song's tempo)
   let time = 0, night = 0, songK = 0;
   const HOUSE_I = 20, FF_I = 9;
   const glow = glowMats();
