@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261018114752">
+  <link rel="stylesheet" href="css/styles.css?v=20261018115007">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018114752 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018115007 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -116,17 +116,29 @@
 
       <h3>How I use AI: at work</h3>
       <p>In my day-to-day UX work, I use AI to compress discovery time and test complex ideas fast.</p>
-      <article class="story">
+      <div class="story-wrap">
+      <article class="story has-media">
         <h4>Rapid prototyping &amp; stress testing</h4>
         <p class="hook">While working on a complex rules engine with nearly endless logic scenarios, I led a two-and-a-half-day discovery sprint with domain experts.</p>
+        <figure class="story-media">
+          <div class="media-slot" role="img" aria-label="Placeholder: screenshot of the AI-built rules engine prototype"><span>Image slot</span></div>
+          <figcaption>Placeholder caption: say what this image shows.</figcaption>
+        </figure>
         <p>As we talked through the problem, I used AI to prompt and build a working prototype in real time. We immediately stress-tested it against complex scenarios to catch missing functionality in days rather than waiting weeks or months.</p>
         <p>From there, I took those insights and refined them into fully documented Figma designs and design system specs.</p>
       </article>
-      <article class="story">
+      </div>
+      <div class="story-wrap">
+      <article class="story has-media">
         <h4>Team culture &amp; physical products</h4>
         <p class="hook">I’ve also used AI to create memorable team-building experiences—from designing a custom, playable card game featuring members of our department to producing an animated series.</p>
+        <figure class="story-media">
+          <div class="media-slot" role="img" aria-label="Placeholder: photo of the playable department card game"><span>Image slot</span></div>
+          <figcaption>Placeholder caption: say what this image shows.</figcaption>
+        </figure>
         <p>AI handled the heavy lifting, allowing me to focus on the strategy, storytelling, and bringing people together.</p>
       </article>
+      </div>
 
       <h3>How I use AI: personal projects</h3>
       <div class="app-wrap">
@@ -216,6 +228,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261018114752"></script>
+  <script type="module" src="js/main.js?v=20261018115007"></script>
 </body>
 </html>
