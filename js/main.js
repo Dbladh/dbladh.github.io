@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017231141';
-import { buildWorld } from './world.js?v=20261017231141';
-import { createSky } from './sky.js?v=20261017231141';
-import { createDOF } from './dof.js?v=20261017231141';
-import { createRide } from './ride.js?v=20261017231141';
-import { createGame } from './bikegame.js?v=20261017231141';
-import { createAurora, setWarm } from './aurora.js?v=20261017231141';
-import { createAudio, pickFlicker } from './audio.js?v=20261017231141';
+import { PAL } from './palette.js?v=20261017231434';
+import { buildWorld } from './world.js?v=20261017231434';
+import { createSky } from './sky.js?v=20261017231434';
+import { createDOF } from './dof.js?v=20261017231434';
+import { createRide } from './ride.js?v=20261017231434';
+import { createGame } from './bikegame.js?v=20261017231434';
+import { createAurora, setWarm } from './aurora.js?v=20261017231434';
+import { createAudio, pickFlicker } from './audio.js?v=20261017231434';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -589,7 +589,7 @@ function start() {
   // While a house song plays the whole scene turns to night (so the aurora is the star): the sky is shown at a later hour, eased in and out with the aurora.
   // Between 1:10 and 1:26 of the song the colours turn warm (yellows, oranges and reds instead of greens, blues and magentas) and the camera slowly moves in on the scene (keeping all
   // three billboards in view); from there it slowly eases back out until the song ends. `songWarm` is eased in and out over a few seconds.
-  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0;                               // how far the scene is into the night, into the warm passage, and into the camera's move
+  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0;                               // how far the scene is into the night, into the warm passage, and into the camera's move
   const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
     if (songDark < 0.002) return h;
@@ -758,10 +758,15 @@ function start() {
     look.copy(cur.look);
     look.x += pointer.sx * 0.5 * parallax;
     if ((songZoomWant > 0.0005 || songZoom > 0.0005) && active === 'home' && !openId && !tween && !game?.active) {       // the slow move in on the scene during a song (all three billboards stay in view)
-      const base = camera.position.clone(); let room = 0.4;                                          // (the most it may move in with all three billboards still in view)
-      for (let it = 0; it < 12 && room > 0.001; it++) { zoomPos.copy(base).lerp(look, room); if (boardsInView(zoomPos, 0.96)) break; room *= 0.85; }
-      if (room <= 0.001) room = 0;
-      songRoom += (room - songRoom) * (1 - Math.exp(-dt * 2));
+      const base = camera.position.clone();
+      if (songRoomT <= 0 || performance.now() - songRoomT > 400) {                                    // (re-measured a few times a second from the fixed view, not the pointer-shifted one, so it cannot jitter)
+        songRoomT = performance.now(); let lo = 0, hi = 0.4;
+        zoomPos.copy(cur.pos).lerp(cur.look, hi);
+        if (boardsInView(zoomPos, 0.96)) lo = hi; else for (let it = 0; it < 9; it++) { const m = (lo + hi) / 2; zoomPos.copy(cur.pos).lerp(cur.look, m); if (boardsInView(zoomPos, 0.96)) lo = m; else hi = m; }
+        songRoomWant = lo;
+      }
+      const room = songRoomWant;
+      songRoom += (room - songRoom) * (1 - Math.exp(-dt * 1));
       songZoom += (songZoomWant * songRoom - songZoom) * (1 - Math.exp(-dt * 6));                   // (progress runs evenly across the whole passage, so it keeps moving in the full 16 s)
       camera.position.lerp(look, songZoom);
     }
