@@ -101,6 +101,7 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
     /** Tint the scene's lights, fog and (via `world.setAurora`) the ground and pond; call after sky.set each frame. */
     light(lights, world, lowEnd) {
       const s = api.strength;
+      lights.hemi.intensity *= 1 - 0.3 * level;                                   // a little darker overall, so the aurora's own light is what you see
       if (s > 0.002) {
         lights.hemi.color.lerp(colour, Math.min(0.75, s * 1.4)); lights.hemi.intensity *= 1 + s * 1.1;
         lights.moon.color.lerp(colour, Math.min(0.7, s * 1.3)); lights.moon.intensity += s * 1.1;

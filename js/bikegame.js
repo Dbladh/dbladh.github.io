@@ -2,17 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017221127';
-import { createTrack } from './track.js?v=20261017221127';
-import { createRagdoll } from './ragdoll.js?v=20261017221127';
-import { createFx } from './fx.js?v=20261017221127';
-import { createAudio } from './audio.js?v=20261017221127';
-import { createPuffs } from './puffs.js?v=20261017221127';
-import { createTracks } from './tracks.js?v=20261017221127';
-import { createDirt } from './dirt.js?v=20261017221127';
-import { createMudCoat } from './mudcoat.js?v=20261017221127';
-import { createCoins } from './coins.js?v=20261017221127';
-import { createFuel } from './fuel.js?v=20261017221127';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017222225';
+import { createTrack } from './track.js?v=20261017222225';
+import { createRagdoll } from './ragdoll.js?v=20261017222225';
+import { createFx } from './fx.js?v=20261017222225';
+import { createAudio } from './audio.js?v=20261017222225';
+import { createPuffs } from './puffs.js?v=20261017222225';
+import { createTracks } from './tracks.js?v=20261017222225';
+import { createDirt } from './dirt.js?v=20261017222225';
+import { createMudCoat } from './mudcoat.js?v=20261017222225';
+import { createCoins } from './coins.js?v=20261017222225';
+import { createFuel } from './fuel.js?v=20261017222225';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
