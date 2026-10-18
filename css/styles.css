@@ -362,7 +362,9 @@ body.scene-mode::before {
 @container (min-width: 480px) {
   .about-top { grid-template-columns: 200px minmax(0, 1fr); gap: 1.6em; }
 }
-.stop .about-hello { margin: 1.3em 0 0.3em; font-size: 1.55em; }
+.stop .about-hello { margin: 0 0 0.3em; font-size: 1.7em; line-height: 1.1; }
+.about-intro .lede { margin: 0 0 1em; }
+.about-intro .about-links h3 { font-size: 0.95em; margin: 0 0 0.3em; }
 .stop .about-skills h3 { margin-top: 1.6em; }
 .stop .about-skills h4 { margin: 1.1em 0 0.5em; font-size: 0.8em; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0; padding: 0; list-style: none; }
