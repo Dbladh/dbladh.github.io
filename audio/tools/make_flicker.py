@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Cut audio/raw/light_flicker.mp3 (about 18 s of mains hum, then three bursts of buzzing flicker near 18 s, a click at 27.8 s and another at 29.2 s)
-into the sounds for the billboard lamps: fl_start (the first part: the hum and the first cluster of flickers) and fl_hum (a seamless loop of the hum).
+into the sound for the billboard lamps: fl_start (the first part of the recording, with the low hum filtered out, from just before its first flicker).
 It also prints when the crackles happen inside each clip, which js/audio.js uses so the lamps flash in step with what is heard.
 Run from the project root:  python3 audio/tools/make_flicker.py     (needs ffmpeg, numpy)"""
 import subprocess, os, numpy as np, wave
 SR = 32000
-def load(hp=0):
-    af = ['-af', f'highpass=f={hp}'] if hp else []
+CLEAN = 'highpass=f=1500,highpass=f=1500,bandreject=f=10600:width_type=h:w=300'      # the recording's low mains hum (60/120 Hz and its harmonics) and its steady 10.6 kHz whine are filtered out: only the bright crackle is wanted
+def load(hp=0, clean=True):
+    af = ['-af', (CLEAN if clean else f'highpass=f={hp}')] if (clean or hp) else []
     p = subprocess.run(['ffmpeg', '-v', 'error', '-i', 'audio/raw/light_flicker.mp3', '-ac', '1', '-ar', str(SR), *af, '-f', 'f32le', '-'], capture_output=True, check=True)
     return np.frombuffer(p.stdout, dtype=np.float32).astype(np.float64)
-x, h = load(), load(300)
+x, h = load(), load(300, clean=False)
 
 def write(name, s, q=4):
     wav = f'/tmp/_{name}.wav'
@@ -39,8 +40,3 @@ def clip(name, t0, t1, fin=0.01, fout=0.04, peak=0.85):
     write(name, s); print('  events', events(t0, t1))
 
 clip('fl_start', 1.15, 3.00, fin=0.008, fout=0.25, peak=0.8)       # the first part of the recording, trimmed to start just before its first flicker (at about 1.2 s)
-# the hum: a steady stretch, made to loop, normalised (it is a quiet background under the crackles)
-hum = x[int(3 * SR):int(13 * SR)].copy(); n = int(1.0 * SR); L = len(hum) - n; t = np.linspace(0, np.pi / 2, n)
-loop = hum[:L].copy(); loop[:n] = hum[:n] * np.sin(t) + hum[L:L + n] * np.cos(t)
-loop = loop - loop.mean(); loop *= 10 ** (-24 / 20) / (np.sqrt(np.mean(loop ** 2)) + 1e-9)
-write('fl_hum', loop, q=6)
