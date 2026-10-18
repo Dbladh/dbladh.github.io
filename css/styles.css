@@ -127,6 +127,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, h2:focus-visible {
 }
 .story dd { margin: 0 0 4px; }
 
+/* Readable measure: text areas never run wider than 720px, in the simple view and on the open billboards alike. */
+.stop h2, .stop h3, .stop h4, .stop p, .stop ul, .stop ol, .stop dl, .stop .story { max-width: 720px; }
+
 /* ---------- Landscape mode ---------- */
 
 body.scene-mode {
