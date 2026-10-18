@@ -762,3 +762,6 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 .cine-grain { position: absolute; inset: 0; display: none; opacity: calc(var(--cine) * .55); background-image: var(--grain); mix-blend-mode: soft-light; }
 @media (hover: hover) and (min-width: 900px) { .cine-grain { display: block; } }
 @media (prefers-reduced-motion: reduce) { .cine-bar { transition: none; } }
+
+/* The song's closing fade: the scene sinks almost to black behind the title and controls (opacity is set from js/main.js). */
+.cine-fade { position: fixed; inset: 0; z-index: 7; pointer-events: none; background: #02030a; opacity: 0; visibility: hidden; }

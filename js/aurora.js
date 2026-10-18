@@ -43,7 +43,8 @@ const FRAG = /* glsl */ `
     float az = atan(d.x, -d.z), el = d.y;                               // az: 0 straight ahead; el: height above the horizon (radians, about)
     vec3 acc = vec3(0.0); float a = 0.0;
     for (int k = 0; k < 3; k++) {
-      if (float(k) >= uLayers) break;
+      float lw = clamp(uLayers - float(k), 0.0, 1.0);                  // (a curtain fades in as the count rises, so none pops)
+      if (lw <= 0.0) break;
       float fi = float(k);
       // the lower edge wanders slowly; the mids make the folds bigger and quicker
       float sway = (vn(vec2(az * 1.6 + fi * 9.0, uTime * (0.05 + 0.03 * fi) + fi * 4.0)) - 0.5) * (0.2 + 0.28 * uMid)
@@ -59,7 +60,7 @@ const FRAG = /* glsl */ `
       // fine streaks and shimmer from the highs
       float fine = vn(vec2(az * 40.0 + fi * 11.0, el * 5.0 - uPF));
       float spark = smoothstep(0.72, 0.95, fine) * uTreble * smoothstep(0.1, 0.9, h);
-      float inten = (glow * rays * (0.5 + 0.75 * uBass + 0.22 * uBeat) + spark * 0.9 * body) * (1.1 - 0.25 * fi);
+      float inten = (glow * rays * (0.5 + 0.75 * uBass + 0.22 * uBeat) + spark * 0.9 * body) * (1.1 - 0.25 * fi) * lw;
       float t = uHue + 0.33 * uCentroid + 0.3 * uEnergy + 0.32 * h * (0.4 + uEnergy) + fi * 0.11;
       acc += pal(t) * inten; a += inten;
     }
@@ -107,6 +108,8 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
     /** The colour and strength (0..1) the aurora is casting on the world right now: the scene's lights, ground and pond take these. */
     colour, strength: 0, sm,
     get level() { return level; },
+    /** How many curtains (0..3, fractional: the last one fades in); the song's quiet opening shows fewer. */
+    set layers(n) { U.uLayers.value = Math.min(low ? 2 : 3, n); },
     /**
      * Every frame. `spec`: audio.songSpectrum's result; `night` 0..1; `on`: is a song playing (the aurora fades in over about 2.5 s and out over 3 s).
      */

@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017234408';
-import { buildWorld } from './world.js?v=20261017234408';
-import { createSky } from './sky.js?v=20261017234408';
-import { createDOF } from './dof.js?v=20261017234408';
-import { createRide } from './ride.js?v=20261017234408';
-import { createGame } from './bikegame.js?v=20261017234408';
-import { createAurora, setWarm } from './aurora.js?v=20261017234408';
-import { createAudio, pickFlicker } from './audio.js?v=20261017234408';
+import { PAL } from './palette.js?v=20261017235345';
+import { buildWorld } from './world.js?v=20261017235345';
+import { createSky } from './sky.js?v=20261017235345';
+import { createDOF } from './dof.js?v=20261017235345';
+import { createRide } from './ride.js?v=20261017235345';
+import { createGame } from './bikegame.js?v=20261017235345';
+import { createAurora, setWarm } from './aurora.js?v=20261017235345';
+import { createAudio, pickFlicker } from './audio.js?v=20261017235345';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -604,7 +604,7 @@ function start() {
       if (c === 1) songShot.z = Math.min(0.4, Math.max(0, v)); else if (c === 2) songShot.x = v; else songShot.y = v;
     }
     songShot.on = true;
-  } const cineEl = document.getElementById('cine'); let cineK = 0, cineV = 0.5, cineVs = 0.5; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
+  } const cineEl = document.getElementById('cine'), fadeEl = document.getElementById('cine-fade'), specA = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 }; let songBlack = 0, songBlackV = 0; let cineK = 0, cineV = 0.5, cineVs = 0.5; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
   const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
     if (songDark < 0.002) return h;
@@ -815,8 +815,24 @@ function start() {
         cineVs += (0.5 + 0.4 * spec.energy - cineVs) * (1 - Math.exp(-dt * 1.2)); if (cv > 0 && Math.abs(cineVs - cineV) > 0.01) { cineV = cineVs; cineEl.style.setProperty('--cine-v', cineVs.toFixed(2)); }
       }
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
-      aurora.update(dt, spec, nightK, playing);
-      world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), spec, audio.songBeatPos());
+      // The song's sections (see the tempo map: a quiet opening, the full band from bar ~11, the warm lift, a calmer release, a swelling finale, then the last note at 1:55 that holds):
+      // each gets its own amount of aurora and its own pace of light show, so the visuals are composed rather than only reactive.
+      let amp = 1, pace = 1, curtains = lowEnd ? 2 : 3;
+      if (playing) {
+        amp = (0.5 + 0.5 * smooth01(4, 26, st)) * (1 - 0.2 * smooth01(86, 94, st)) * (1 + 0.3 * smooth01(106, 113, st));
+        pace = (0.75 + 0.25 * smooth01(8, 30, st)) * (1 - 0.15 * smooth01(86, 94, st)) * (1 + 0.4 * smooth01(106, 113, st));
+        curtains = Math.min(curtains, 1 + smooth01(6, 20, st) + smooth01(20, 34, st));
+      }
+      specA.bass = Math.min(1, spec.bass * amp); specA.mid = Math.min(1, spec.mid * amp); specA.treble = Math.min(1, spec.treble * amp); specA.energy = Math.min(1, spec.energy * amp); specA.centroid = spec.centroid; specA.beat = spec.beat;
+      aurora.layers = curtains;
+      const visualsOn = playing && st < 115;                                                       // the last note (1:55) starts the fade: the aurora, fireflies and lights all ease away...
+      aurora.update(dt, specA, nightK, visualsOn);
+      world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), specA, audio.songBeatPos(), pace);
+      if (fadeEl) {                                                                                // ...and the scene sinks almost to black, then comes back to normal as the song ends
+        const bt = playing ? 0.94 * smooth01(115.5, 122, st) : 0;
+        songBlack += (bt - songBlack) * (1 - Math.exp(-dt * (bt > songBlack ? 3 : 0.55)));
+        if (Math.abs(songBlack - songBlackV) > 0.004 || (songBlack < 0.004 && songBlackV !== 0)) { songBlackV = songBlack < 0.004 ? 0 : songBlack; fadeEl.style.opacity = songBlackV.toFixed(3); fadeEl.style.visibility = songBlackV > 0 ? 'visible' : 'hidden'; }
+      }
       songFade += ((playing ? 1 - 0.45 * smooth01(112, 123, st) : 1) - songFade) * (1 - Math.exp(-dt * (playing ? 2 : 0.5)));   // the light sinks a little over the closing ritardando
       dof?.setGlow(aurora.level * songFade);
       if (aurora.level > 0) { aurora.light(sky.lights, world, lowEnd); sky.lights.hemi.intensity *= songFade; sky.lights.moon.intensity *= songFade; sky.lights.rim.intensity *= songFade; }

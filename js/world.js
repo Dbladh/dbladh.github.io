@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017234408';
-import { auroraColour } from './aurora.js?v=20261017234408';
+import { PAL } from './palette.js?v=20261017235345';
+import { auroraColour } from './aurora.js?v=20261017235345';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017234408';
+} from './houses.js?v=20261017235345';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -804,7 +804,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   pondHeight.generateMipmaps = false;
   pondHeight.needsUpdate = true;
   const pondU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight }, uAurora: auroraU,
+    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight }, uAurora: auroraU, uBeatPos: { value: -1 }, uRipple: { value: new THREE.Color(0, 0, 0) },
     uHT: { value: new THREE.Vector4(POND.x - PB.r, POND.z - PB.r, 1 / (PB.r * 2), 1 / (PB.r * 2)) },
     uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
     uCenter: { value: new THREE.Vector2(POND.x, POND.z) }, uR: { value: POND.r },
@@ -825,7 +825,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           #include <fog_vertex>
         }`,
       fragmentShader: `
-        uniform float uTime, uDay, uR; uniform vec3 uHorizon, uSkyTop, uAurora; uniform vec2 uCenter;
+        uniform float uTime, uDay, uR, uBeatPos; uniform vec3 uHorizon, uSkyTop, uAurora, uRipple; uniform vec2 uCenter;
         uniform sampler2D uHeightTex; uniform vec4 uHT;
         varying vec3 vW;
         #include <fog_pars_fragment>
@@ -834,6 +834,13 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           float t = fract(uTime * 0.11 + phase);
           float r = t * rmax, d = abs(length(p - c) - r);
           return smoothstep(0.16, 0.0, d) * (1.0 - t) * smoothstep(0.0, 0.08, t);
+        }
+        // Music mode: each beat of the song drops a ring on the water (a different spot on each of the bar's three beats, the downbeat's the biggest), lit in the aurora's colour.
+        float beatRing(vec2 p, float bi, float f) {
+          float idx = mod(bi, 3.0);
+          vec2 c = uCenter + (idx < 0.5 ? vec2(-1.2, 0.9) : idx < 1.5 ? vec2(1.6, -0.6) : vec2(0.3, -1.8));
+          float amp = idx < 0.5 ? 1.0 : 0.62, life = clamp(1.0 - f / 1.7, 0.0, 1.0), r = (0.15 + f * 1.7) * (idx < 0.5 ? 1.25 : 1.0);
+          return smoothstep(0.2, 0.0, abs(length(p - c) - r)) * life * life * amp;
         }
         void main() {
           float gh = texture2D(uHeightTex, (vW.xz - uHT.xy) * uHT.zw).r;
@@ -860,6 +867,11 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           col += vec3(1.0) * smoothstep(0.9, 1.0, tw) * (0.12 + 0.3 * uDay);
           float rings = ringAt(p, uCenter + vec2(-1.6, 1.2), 0.0, 2.6) + ringAt(p, uCenter + vec2(2.0, -0.8), 0.37, 2.2) + ringAt(p, uCenter + vec2(0.4, -2.4), 0.71, 2.0);
           col = mix(col, lin(vec3(0.95, 0.99, 1.0)), clamp(rings, 0.0, 1.0) * 0.55 * (0.4 + 0.6 * uDay));
+          if (uBeatPos >= 0.0 && max(uRipple.r, max(uRipple.g, uRipple.b)) > 0.002) {
+            float b0 = floor(uBeatPos), fr = uBeatPos - b0;
+            float br = beatRing(p, b0, fr) + beatRing(p, b0 - 1.0, fr + 1.0) + beatRing(p, b0 - 2.0, fr + 2.0);
+            col += uRipple * clamp(br, 0.0, 1.0) * 1.5;
+          }
           float sw = 0.14 + 0.006 * length(cameraPosition - vW);          // keep the foam line visible at distance / on small screens
           float shore = 1.0 - smoothstep(0.0, sw, depthW);
           float fn = 0.5 + 0.5 * sin(dot(p, vec2(4.0, 3.0)) + uTime * 0.8) * sin(dot(p, vec2(-3.0, 4.5)) - uTime * 0.6);
@@ -1889,7 +1901,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // The fireflies' dance (while a house song plays): each depth group forms a slow ring that turns, rises and falls in a travelling wave, breathes with the bass and
   // pulses in brightness along the ring with the beat. Everything is added up frame by frame, so it glides and never jumps.
   const RINGS = [{ cx: 0, cz: 12, R: 8.5, y: 1.6, amp: 2.6, dir: 1 }, { cx: 0, cz: -8, R: 20, y: 2.0, amp: 3.4, dir: -1 }, { cx: 0, cz: -40, R: 42, y: 2.6, amp: 4.2, dir: 1 }];
-  const dance = { beatPos: -1, w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
+  const dance = { pace: 1, beatPos: -1, w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
   const ffGeo = new THREE.BufferGeometry();
   const ffPos = new Float32Array(FF * 3), ffCol = new Float32Array(FF * 3), ffSeed = new Float32Array(FF);
   const ffVis = new Float32Array(FF).fill(1);   // fades to 0 while a firefly would drift in front of a sign
@@ -2353,6 +2365,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // music's tempo (faster with the bass, an extra flash on each beat) and take colours from the aurora's palette, each one a step further along it.
   const showColour = new THREE.Color(), showCol2 = new THREE.Color();
   const showPulse = (i) => { const sn = 0.5 + 0.5 * Math.sin(dance.chase - i * 1.25); return Math.min(1.5, 0.16 + 0.8 * sn * sn * (0.45 + 0.85 * dance.bass) + 0.85 * dance.beat * (i & 1 ? 1 : 0.5)); };
+  const rippleCol = new THREE.Color();
   const showTone = (i, out) => auroraColour((dance.hue + dance.centroid * 0.3 + i * 0.17) % 1, out);
   let showWas = false;
   function lightShow() {
@@ -2566,7 +2579,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     },
     /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
     /** The music's levels for the fireflies' dance (smoothed values from the aurora); `w` 0..1 is how far the dance has begun. */
-    setDance(w, sm, beatPos = -1) { dustU.uLevel.value = w; dust.visible = w > 0.01; dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
+    setDance(w, sm, beatPos = -1, pace = 1) { dance.pace = pace; pondU.uBeatPos.value = w > 0.01 ? beatPos : -1; showTone(0, rippleCol); pondU.uRipple.value.copy(rippleCol).multiplyScalar(w * 0.5); dustU.uLevel.value = w; dust.visible = w > 0.01; dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
     setWarm(v) { ffUniforms.uWarm.value = v; dustU.uWarm.value = v; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
@@ -2641,7 +2654,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       });
       dance.ang += dt * (0.025 + 0.2 * dance.bass + 0.3 * dance.beat + 0.08 * dance.treble) * dance.w;      // (they speed up on the bass, surge on every beat and ease off in the quiet)
       dance.wave += dt * (0.25 + 0.55 * dance.mid + 0.15 * dance.beat) * dance.w; dance.morph += dt * (0.012 + 0.03 * dance.energy) * dance.w;
-      dance.chase += dt * (1.3 + 2.0 * dance.bass + 1.0 * dance.energy) * dance.w; dance.hue = (dance.hue + dt * 0.025 * dance.w) % 1;
+      dance.chase += dt * (1.3 + 2.0 * dance.bass + 1.0 * dance.energy) * dance.w * dance.pace; dance.hue = (dance.hue + dt * 0.025 * dance.w) % 1;
       lightShow();
       const a = ffGeo.attributes.position;
       const pos = new THREE.Vector3();
