@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017233108';
-import { buildWorld } from './world.js?v=20261017233108';
-import { createSky } from './sky.js?v=20261017233108';
-import { createDOF } from './dof.js?v=20261017233108';
-import { createRide } from './ride.js?v=20261017233108';
-import { createGame } from './bikegame.js?v=20261017233108';
-import { createAurora, setWarm } from './aurora.js?v=20261017233108';
-import { createAudio, pickFlicker } from './audio.js?v=20261017233108';
+import { PAL } from './palette.js?v=20261017233315';
+import { buildWorld } from './world.js?v=20261017233315';
+import { createSky } from './sky.js?v=20261017233315';
+import { createDOF } from './dof.js?v=20261017233315';
+import { createRide } from './ride.js?v=20261017233315';
+import { createGame } from './bikegame.js?v=20261017233315';
+import { createAurora, setWarm } from './aurora.js?v=20261017233315';
+import { createAudio, pickFlicker } from './audio.js?v=20261017233315';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -589,7 +589,7 @@ function start() {
   // While a house song plays the whole scene turns to night (so the aurora is the star): the sky is shown at a later hour, eased in and out with the aurora.
   // Between 1:10 and 1:26 of the song the colours turn warm (yellows, oranges and reds instead of greens, blues and magentas) and the camera slowly moves in on the scene (keeping all
   // three billboards in view); from there it slowly eases back out until the song ends. `songWarm` is eased in and out over a few seconds.
-  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
+  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0; const cineEl = document.getElementById('cine'); let cineK = 0, cineV = 0.5, cineVs = 0.5; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
   const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
     if (songDark < 0.002) return h;
@@ -794,6 +794,11 @@ function start() {
                          // in over the 16 seconds, then slowly back out until the end
       setWarm(songWarm); world.setWarm(songWarm);
       const darkTarget = playing ? 1 : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5)));
+      if (cineEl) {                                                                                      // letterbox bars, vignette and grain follow how far into the night the scene is
+        const cv = songDark < 0.003 ? 0 : songDark * songDark * (3 - 2 * songDark);
+        if (Math.abs(cv - cineK) > 0.002 || (cv === 0 && cineK !== 0)) { cineK = cv; cineEl.style.setProperty('--cine', cv.toFixed(3)); cineEl.classList.toggle('on', cv > 0); }
+        cineVs += (0.5 + 0.4 * spec.energy - cineVs) * (1 - Math.exp(-dt * 1.2)); if (cv > 0 && Math.abs(cineVs - cineV) > 0.01) { cineV = cineVs; cineEl.style.setProperty('--cine-v', cineVs.toFixed(2)); }
+      }
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
       aurora.update(dt, spec, nightK, playing);
       world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), spec, audio.songBeatPos());

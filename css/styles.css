@@ -750,3 +750,15 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 @keyframes ghspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .gh-loading .spin { animation: none; } }
 
+
+/* ---------- Music mode: film-style letterbox, vignette and grain (see #cine in index.html; --cine 0..1 and --cine-v are set from js/main.js) ---------- */
+.cine { position: fixed; inset: 0; z-index: 12; pointer-events: none; --cine: 0; --cine-v: 0.5; visibility: hidden; }
+.cine.on { visibility: visible; }
+.cine-bar { position: absolute; left: 0; right: 0; height: clamp(16px, 5.5vh, 56px); background: #05060d; will-change: transform; }
+.cine-top { top: 0; transform: translateY(calc(-100% * (1 - var(--cine)))); }
+.cine-bot { bottom: 0; transform: translateY(calc(100% * (1 - var(--cine)))); }
+.cine-vig { position: absolute; inset: 0; opacity: calc(var(--cine) * var(--cine-v));
+  background: radial-gradient(ellipse 85% 75% at 50% 50%, transparent 55%, rgba(4, 5, 14, .72) 100%); }
+.cine-grain { position: absolute; inset: 0; display: none; opacity: calc(var(--cine) * .55); background-image: var(--grain); mix-blend-mode: soft-light; }
+@media (hover: hover) and (min-width: 900px) { .cine-grain { display: block; } }
+@media (prefers-reduced-motion: reduce) { .cine-bar { transition: none; } }

@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261017233108">
+  <link rel="stylesheet" href="css/styles.css?v=20261017233315">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -40,6 +40,9 @@
        toolbar from the colour found at the page edges; the WebGL canvas cannot be sampled, these can. -->
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
+
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261017233315 drives --cine and --cine-v while a house song plays). -->
+  <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
   <header class="hero">
     <h1>Danny Bladh</h1>
@@ -215,6 +218,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261017233108"></script>
+  <script type="module" src="js/main.js?v=20261017233315"></script>
 </body>
 </html>
