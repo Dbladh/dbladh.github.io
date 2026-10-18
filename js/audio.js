@@ -15,10 +15,20 @@ const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
 // Sound is off on every visit until the player turns it on. Clicking the bike to start the game turns it on for that visit
 // unless the player has switched it off on purpose during the visit.
 
+/** The lamp flickers (cut from audio/raw/light_flicker.mp3 by audio/tools/make_flicker.py). `events` are when the crackles are heard in each sound, as
+ *  [start s, length s, strength 0..1]: the lamps flash in step with them (see world.setHover). `at`: when each sound starts. */
+export const FLICKERS = [
+  { w: 3.5, snd: ['fl_burst'], events: [[0.13, 0.05, 0.24], [0.40, 0.09, 0.45], [0.77, 0.15, 1]] },
+  { w: 2, snd: ['fl_tick1'], events: [[0.05, 0.1, 1]] },
+  { w: 2, snd: ['fl_tick2'], events: [[0.06, 0.1, 1]] },
+  { w: 2.5, snd: ['fl_tick1', 'fl_tick2'], at: [0, 0.2], events: [[0.05, 0.08, 0.7], [0.26, 0.12, 1]] },
+];
+export const pickFlicker = () => { let r = Math.random() * FLICKERS.reduce((a, f) => a + f.w, 0); for (const f of FLICKERS) { r -= f.w; if (r <= 0) return f; } return FLICKERS[0]; };
+
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null, hum = null;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -115,7 +125,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   }
 
   // ---- the landscape: day and night ambience, a faint windmill, and the far-off dirt bike when it rides through ----
-  const SCENE_FILES = ['amb_day', 'amb_night', 'amb_windmill'];
+  const SCENE_FILES = ['amb_day', 'amb_night', 'amb_windmill', 'fl_burst', 'fl_tick1', 'fl_tick2', 'fl_hum'];
   function loadScene() {
     if (scnLoading || !ctx) return scnLoading;
     scnLoading = Promise.all(SCENE_FILES.map((n) => fetch(`${base}${n}.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf[n] = b; }).catch(() => { /* stays silent */ })))
@@ -203,6 +213,22 @@ export function createAudio({ base = 'audio/' } = {}) {
       if (kind === 'in') { swoosh(0.95, 450, 2800, { gain: 0.13, q: 0.8 }); tone(196, 0.8, { type: 'sine', gain: 0.035, slide: 392, dest: soft }); }
       else if (kind === 'out') { swoosh(1.0, 2800, 380, { gain: 0.12, q: 0.8 }); tone(392, 0.9, { type: 'sine', gain: 0.03, slide: 196, dest: soft }); }
       else swoosh(0.6, 700, 2000, { gain: 0.09, q: 1.0 });
+    },
+    /** A billboard's lamps start to flicker (`pat`: one of FLICKERS): the crackle sounds, then a faint electrical hum while they stay lit. */
+    flicker(pat) {
+      if (!ctx || !on) return;
+      (pat.snd || []).forEach((n, i) => play(n, { gain: 0.5, delay: (pat.at && pat.at[i]) || 0, rate: 0.96 + Math.random() * 0.08 }));
+      if (!buf.fl_hum) return;
+      if (!hum) { const src = loopSrc(buf.fl_hum), g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(soft); src.start(0, Math.random() * 4); hum = { src, g }; }
+      const end = Math.max(...pat.events.map((e) => e[0] + e[1])) + 0.05;
+      hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0.0, ctx.currentTime, 0.02);
+      hum.g.gain.setTargetAtTime(0.16, ctx.currentTime + end, 0.25);
+    },
+    /** The pointer left the sign: the hum fades and the lamp clicks off. */
+    flickerOff() {
+      if (!ctx || !on) return;
+      if (hum) { hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0, ctx.currentTime, 0.08); }
+      play('fl_tick2', { gain: 0.22, rate: 0.8 });
     },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {
@@ -349,6 +375,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff']) out[n] = f;
   return out;
 }

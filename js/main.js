@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017195804';
-import { buildWorld } from './world.js?v=20261017195804';
-import { createSky } from './sky.js?v=20261017195804';
-import { createDOF } from './dof.js?v=20261017195804';
-import { createRide } from './ride.js?v=20261017195804';
-import { createGame } from './bikegame.js?v=20261017195804';
-import { createAudio } from './audio.js?v=20261017195804';
+import { PAL } from './palette.js?v=20261017201920';
+import { buildWorld } from './world.js?v=20261017201920';
+import { createSky } from './sky.js?v=20261017201920';
+import { createDOF } from './dof.js?v=20261017201920';
+import { createRide } from './ride.js?v=20261017201920';
+import { createGame } from './bikegame.js?v=20261017201920';
+import { createAudio, pickFlicker } from './audio.js?v=20261017201920';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -512,14 +512,19 @@ function start() {
     const id = pick(e);
     if (id) goTo(id);
   });
+  let lastHover = null;
   canvas.addEventListener('pointermove', (e) => {
     const overBike = pickBike(e);
     if (ride) ride.hover = overBike;
     const hoverId = !game?.active && active === 'home' && !openId && e.pointerType === 'mouse' ? pick(e) : null;
-    world.setHover(hoverId);
+    if (hoverId !== lastHover) {
+      if (hoverId) { const pat = pickFlicker(); audio.flicker(pat); world.setHover(hoverId, pat.events); }
+      else { world.setHover(null); audio.flickerOff(); }
+      lastHover = hoverId;
+    }
     canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : 'default';
   });
-  canvas.addEventListener('pointerleave', () => world.setHover(null));
+  canvas.addEventListener('pointerleave', () => { world.setHover(null); if (lastHover) audio.flickerOff(); lastHover = null; });
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
   canvas.addEventListener('dblclick', () => { if (!game?.active) goTo('home'); });
 

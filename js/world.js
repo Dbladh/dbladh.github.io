@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017195804';
+import { PAL } from './palette.js?v=20261017201920';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017195804';
+} from './houses.js?v=20261017201920';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2185,8 +2185,15 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         sty.night = n; applyLight();
       },
       /** 0 or 1: the pointer is over this sign (eased in `tickHover`). */
-      hovT: 0,
+      hovT: 0, flick: null, ft: 0,
       tickHover(dt) {
+        if (board.flick) {                                                 // the lamps stutter on (events: [start, length, strength]) before they settle
+          board.ft += dt; let f = 0, end = 0;
+          for (const [t, len, a] of board.flick) { end = Math.max(end, t + len + 0.04); if (board.ft >= t && board.ft <= t + len) f = Math.max(f, a); else if (board.ft > t + len && board.ft < t + len + 0.04) f = Math.max(f, a * 0.3); }
+          sty.hover = f; applyLight();
+          if (board.ft > end + 0.02) { board.flick = null; sty.hover = 0.35; }
+          return;
+        }
         const d = board.hovT - sty.hover; if (Math.abs(d) < 0.002) { if (sty.hover !== board.hovT) { sty.hover = board.hovT; applyLight(); } return; }
         sty.hover += d * Math.min(1, dt * 9); applyLight();
       },
@@ -2435,7 +2442,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     /** How many fireflies are currently faded out because they sit in front of a sign (debug). */
     get hiddenFireflies() { let n = 0; for (let i = 0; i < FF; i++) if (ffVis[i] < 0.5) n++; return n; },
     /** The sign under the pointer (its id) lights up; null for none. */
-    setHover(id) { for (const b of boards) b.hovT = b.id === id ? 1 : 0; },
+    setHover(id, flick = null) {
+      for (const b of boards) { const on = b.id === id; if (on && flick && b.hovT === 0) { b.flick = flick; b.ft = 0; } if (!on) b.flick = null; b.hovT = on ? 1 : 0; }
+    },
     /** Every sign material, so depth of field can render them only in its sharp pass. */
     signMats,
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
