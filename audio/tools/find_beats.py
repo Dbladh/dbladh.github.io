@@ -12,18 +12,26 @@ for i in range(n):
     flux.append(0 if prev is None else np.maximum(m - prev, 0).sum()); prev = m
 flux = np.array(flux); flux = np.maximum(flux - np.convolve(flux, np.ones(43) / 43, 'same'), 0); flux /= flux.max()
 fr = sr / hop
-ac = np.correlate(flux, flux, 'full')[len(flux) - 1:]; lo, hi = int(fr * 60 / 200), int(fr * 60 / 50)
-T = max(range(lo, hi), key=lambda k: ac[k])
+# The tempo changes through the song (about 85 a minute at the start, 94 around a minute and a quarter in, a slowing at the end): find the beat period around every moment
+# (autocorrelation of the onset strength over an 8 s window, smoothed), then let the beat tracker follow that moving period.
+W = int(8 * fr); Tt = np.zeros(len(flux)); lo, hi = int(fr * 0.55), int(fr * 0.85)
+for i in range(len(flux)):
+    a, b = max(0, i - W // 2), min(len(flux), i + W // 2); seg = flux[a:b]
+    ac = np.correlate(seg, seg, 'full')[len(seg) - 1:]; ac /= ac[0] + 1e-9
+    Tt[i] = max(range(lo, min(hi, len(ac) - 1)), key=lambda k: ac[k] * (1 - 0.35 * abs(k / fr - 0.68)))
+Tt = np.convolve(np.pad(Tt, 40, mode='edge'), np.ones(81) / 81, 'valid')
 cum = flux.copy(); back = np.zeros(len(flux), int) - 1
 for i in range(len(flux)):
-    a, b = int(i - 2 * T), int(i - T / 2)
+    T = Tt[i]; a, b = int(i - 1.6 * T), int(i - T / 1.6)
     if b <= 0: continue
     idx = np.arange(max(0, a), b)
     if len(idx) == 0: continue
-    v = cum[idx] - 120.0 * (np.log((i - idx) / T)) ** 2; j = np.argmax(v); cum[i] = flux[i] + v[j]; back[i] = idx[j]
-end = int(np.argmax(cum[-int(2 * T):])) + len(cum) - int(2 * T); beats = [end]
+    v = cum[idx] - 55.0 * (np.log((i - idx) / T)) ** 2; j = np.argmax(v); cum[i] = flux[i] + v[j]; back[i] = idx[j]
+end = int(np.argmax(cum[-int(2 * Tt[-1]):])) + len(cum) - int(2 * Tt[-1]); beats = [end]
 while back[beats[-1]] >= 0: beats.append(back[beats[-1]])
 beats = np.array(beats[::-1]) * hop / sr
 st = np.array([flux[min(len(flux) - 1, int(b * fr))] for b in beats])
-print('beat period (s):', round(T / fr, 3), ' beats:', len(beats), ' strongest position in the bar:', int(np.argmax([st[k::3].sum() for k in range(3)])))
+d = np.diff(beats)
+print('beats:', len(beats), ' beat period at 0, 30, 60, 75, 90, 110 s:', [round(float(d[np.argmin(np.abs(beats[:-1] - t))]), 3) for t in (0, 30, 60, 75, 90, 110)],
+      ' strongest position in the bar:', int(np.argmax([st[k::3].sum() for k in range(3)])))
 print(','.join(f'{b:.2f}' for b in beats))
