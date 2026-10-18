@@ -382,9 +382,9 @@ body.scene-mode::before {
 /* Wide enough: text on the left, the app card in the right column beside it (stacked above the text when narrow). */
 .app-pair { margin-bottom: 1em; }
 @container (min-width: 760px) {
-  .app-pair { display: grid; grid-template-columns: minmax(0, 720px) minmax(200px, 1fr); column-gap: 1.8em; align-items: start; }
-  .app-pair > * { grid-column: 1; }
-  .app-pair > .app-card { grid-column: 2; grid-row: 1 / span 6; margin: 0.3em 0 0; width: min(220px, 100%); }
+  .app-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.2em; align-items: start; }
+  .app-grid > p { grid-column: 1 / -1; }
+  .app-pair > .app-card { width: min(260px, 100%); margin: 0 0 1em; }
 }
 
 
