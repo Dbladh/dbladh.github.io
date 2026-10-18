@@ -8,6 +8,6 @@ dur = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=d
 a, b = 0.5, dur - 1.2                                    # the part worth keeping
 fc = (f'[0:a]atrim={a}:{b},asetpts=PTS-STARTPTS,asplit=2[x][y];'
       f'[x]atrim={X}:{b - a},asetpts=PTS-STARTPTS[main];[y]atrim=0:{X},asetpts=PTS-STARTPTS[head];'
-      f'[main][head]acrossfade=d={X}:c1=qsin:c2=qsin,loudnorm=I=-20:TP=-3[o]')
+      f'[main][head]acrossfade=d={X}:c1=qsin:c2=qsin,loudnorm=I=-17:TP=-1.5[o]')
 subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', SRC, '-filter_complex', fc, '-map', '[o]', '-ar', '32000', '-codec:a', 'libmp3lame', '-qscale:a', '5', OUT], check=True)
 print(f'ride music: {dur:.1f}s -> {os.path.getsize(OUT) // 1024} KB')

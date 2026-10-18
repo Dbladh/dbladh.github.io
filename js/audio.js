@@ -121,7 +121,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   }
   // The ride's background music (audio/ride.mp3, made by audio/tools/make_ride_music.py): a seamless loop, kept low under the engine, faded in when a ride begins
   // (it carries on across restarts) and out when the game is left.
-  const RIDE_GAIN = 0.4;
+  const RIDE_GAIN = 0.55;
   let ride = null, rideLoading = null;
   function rideStart() {
     if (!ctx || ride) { if (ride) { ride.g.gain.cancelScheduledValues(ctx.currentTime); ride.g.gain.setTargetAtTime(RIDE_GAIN, ctx.currentTime, 0.8); } return; }
@@ -130,7 +130,11 @@ export function createAudio({ base = 'audio/' } = {}) {
       rideLoading.then(() => { if (running && !ride && buf.ride) rideStart(); });
       return;
     }
-    const src = loopSrc(buf.ride), g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(master); src.start();
+    const src = loopSrc(buf.ride), g = ctx.createGain(); g.gain.value = 0;
+    const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 130; shelf.gain.value = 7;      // the bass line: a fat low end...
+    const punch = ctx.createBiquadFilter(); punch.type = 'peaking'; punch.frequency.value = 70; punch.Q.value = 1.1; punch.gain.value = 3.5;   // ...with a punchy bump where the notes sit
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.012; comp.release.value = 0.14;   // (it also keeps the boosted bass from overloading)
+    src.connect(shelf); shelf.connect(punch); punch.connect(comp); comp.connect(g); g.connect(master); src.start();
     g.gain.setTargetAtTime(RIDE_GAIN, ctx.currentTime, 1.2); ride = { src, g };
   }
   function rideStop() {
