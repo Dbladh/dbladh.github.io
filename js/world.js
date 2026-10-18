@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017223840';
-import { auroraColour } from './aurora.js?v=20261017223840';
+import { PAL } from './palette.js?v=20261017223914';
+import { auroraColour } from './aurora.js?v=20261017223914';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017223840';
+} from './houses.js?v=20261017223914';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2601,8 +2601,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         const flap = Math.sin(time * 22 + u.ph) * 0.9;
         u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
       });
-      dance.ang += dt * (0.1 + 0.85 * dance.bass + 1.5 * dance.beat + 0.35 * dance.treble) * dance.w;      // (they speed up on the bass, surge on every beat and ease off in the quiet)
-      dance.wave += dt * (0.9 + 2.2 * dance.mid + 0.8 * dance.beat) * dance.w; dance.morph += dt * (0.045 + 0.12 * dance.energy) * dance.w;
+      dance.ang += dt * (0.05 + 0.425 * dance.bass + 0.75 * dance.beat + 0.175 * dance.treble) * dance.w;      // (they speed up on the bass, surge on every beat and ease off in the quiet)
+      dance.wave += dt * (0.45 + 1.1 * dance.mid + 0.4 * dance.beat) * dance.w; dance.morph += dt * (0.0225 + 0.06 * dance.energy) * dance.w;
       dance.chase += dt * (1.3 + 2.0 * dance.bass + 1.0 * dance.energy) * dance.w; dance.hue = (dance.hue + dt * 0.025 * dance.w) % 1;
       lightShow();
       const a = ffGeo.attributes.position;
