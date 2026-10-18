@@ -291,12 +291,12 @@ export function createAudio({ base = 'audio/' } = {}) {
       for (const k of ['bass', 'mid', 'treble']) {
         sp.max[k] = Math.max(sp.max[k] * Math.pow(0.97, dt), raw[k], 0.03);                       // (the loudest it has been lately: each band is read against its own)
         const n = Math.pow(clamp((raw[k] / sp.max[k] - 0.4) / 0.6), 1.2); const up = n > sp.v[k];             // (only what rises above its usual level counts, so quiet and loud passages differ)
-        sp.v[k] += (n - sp.v[k]) * (1 - Math.exp(-dt * (up ? 22 : 4.5)));                         // quick to rise, slow to fall
+        sp.v[k] += (n - sp.v[k]) * (1 - Math.exp(-dt * (up ? 6 : 1.5)));                         // quick to rise, slow to fall
       }
       const en = (sp.v.bass * 0.45 + sp.v.mid * 0.4 + sp.v.treble * 0.15), cen = clamp((sp.v.treble * 1.4 + sp.v.mid * 0.5) / (sp.v.bass + sp.v.mid + sp.v.treble + 0.2));
-      sp.v.energy += (en - sp.v.energy) * (1 - Math.exp(-dt * 3)); sp.v.centroid += (cen - sp.v.centroid) * (1 - Math.exp(-dt * 1.5));
+      sp.v.energy += (en - sp.v.energy) * (1 - Math.exp(-dt * 1.4)); sp.v.centroid += (cen - sp.v.centroid) * (1 - Math.exp(-dt * 1.5));
       const flux = raw.bass - sp.bassAvg; sp.bassAvg += (raw.bass - sp.bassAvg) * (1 - Math.exp(-dt * 2.5));
-      sp.beat = Math.max(sp.beat * Math.exp(-dt * 6), flux > 0.05 ? clamp(flux * 6) : 0);
+      sp.beat = Math.max(sp.beat * Math.exp(-dt * 2.2), flux > 0.06 ? clamp(flux * 3.5) : 0);
       o.bass = sp.v.bass; o.mid = sp.v.mid; o.treble = sp.v.treble; o.energy = sp.v.energy; o.centroid = sp.v.centroid; o.beat = sp.beat;
       return o;
     },

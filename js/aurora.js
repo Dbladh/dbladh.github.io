@@ -39,20 +39,20 @@ const FRAG = /* glsl */ `
       if (float(k) >= uLayers) break;
       float fi = float(k);
       // the lower edge wanders slowly; the mids make the folds bigger and quicker
-      float sway = (vn(vec2(az * 1.6 + fi * 9.0, uTime * (0.05 + 0.03 * fi) + fi * 4.0)) - 0.5) * (0.22 + 0.34 * uMid)
-                 + sin(az * 3.2 + uTime * (0.35 + 0.9 * uMid) + fi * 2.1) * (0.03 + 0.09 * uMid);
+      float sway = (vn(vec2(az * 1.6 + fi * 9.0, uTime * (0.05 + 0.03 * fi) + fi * 4.0)) - 0.5) * (0.2 + 0.28 * uMid)
+                 + sin(az * 3.2 + uTime * (0.16 + 0.3 * uMid) + fi * 2.1) * (0.03 + 0.07 * uMid);
       float base = 0.2 + 0.1 * fi + sway;
-      float reach = (0.34 + 0.62 * uBass + 0.3 * uEnergy + 0.12 * uBeat) * (1.0 - 0.18 * fi);      // how far up it goes: bigger with the music
+      float reach = (0.34 + 0.62 * uBass + 0.3 * uEnergy + 0.05 * uBeat) * (1.0 - 0.18 * fi);      // how far up it goes: bigger with the music
       float h = (el - base) / reach;
       float body = smoothstep(0.0, 0.05, h) * (1.0 - smoothstep(0.0, 1.0, h));
       float glow = pow(clamp(1.0 - h, 0.0, 1.0), 2.0) * body;                                          // brightest along the lower edge
       // vertical rays: noise across the sky, stretched up; more of them with the mids
-      float rays = vn(vec2(az * (14.0 + 26.0 * uMid) + fi * 3.7, uTime * 0.25 + fi));
-      rays = mix(0.45, 1.0, smoothstep(0.25, 0.85, rays));
+      float rays = vn(vec2(az * (7.0 + 11.0 * uMid) + fi * 3.7, uTime * 0.08 + fi));
+      rays = mix(0.5, 1.0, smoothstep(0.15, 0.9, rays));
       // fine streaks and shimmer from the highs
-      float fine = vn(vec2(az * 90.0 + fi * 11.0, el * 6.0 - uTime * (1.0 + 3.0 * uTreble)));
+      float fine = vn(vec2(az * 40.0 + fi * 11.0, el * 5.0 - uTime * (0.35 + 0.9 * uTreble)));
       float spark = smoothstep(0.72, 0.95, fine) * uTreble * smoothstep(0.1, 0.9, h);
-      float inten = (glow * rays * (0.45 + 0.75 * uBass + 0.5 * uBeat) + spark * 0.9 * body) * (1.1 - 0.25 * fi);
+      float inten = (glow * rays * (0.5 + 0.75 * uBass + 0.22 * uBeat) + spark * 0.9 * body) * (1.1 - 0.25 * fi);
       float t = uHue + 0.33 * uCentroid + 0.3 * uEnergy + 0.32 * h * (0.4 + uEnergy) + fi * 0.11;
       acc += pal(t) * inten; a += inten;
     }
@@ -73,6 +73,8 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
   mesh.renderOrder = -11; mesh.frustumCulled = false; mesh.visible = false;      // (drawn first: the sun, moon and stars sit over it)
   skyScene.add(mesh);
   let level = 0, hue = 0;
+  const sm = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };                // (the song's levels, eased again here: the aurora should glide, not jitter)
+  const TAU = { bass: 0.5, mid: 0.8, treble: 1.0, energy: 1.6, centroid: 3.0, beat: 0.45 };
   const colour = new THREE.Color(), tmp = new THREE.Color();
   const api = {
     /** The colour and strength (0..1) the aurora is casting on the world right now: the scene's lights, ground and pond take these. */
@@ -87,12 +89,13 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
       mesh.visible = true; mesh.position.copy(camera.position);
       hue = (hue + dt * 0.012) % 1;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
-      U.uTime.value += dt * (0.8 + spec.energy * 0.6);
-      U.uBass.value = spec.bass; U.uMid.value = spec.mid; U.uTreble.value = spec.treble; U.uEnergy.value = spec.energy; U.uCentroid.value = spec.centroid; U.uBeat.value = spec.beat;
+      for (const k in sm) sm[k] += (spec[k] - sm[k]) * (1 - Math.exp(-dt / TAU[k]));
+      U.uTime.value += dt * (0.4 + sm.energy * 0.3);
+      U.uBass.value = sm.bass; U.uMid.value = sm.mid; U.uTreble.value = sm.treble; U.uEnergy.value = sm.energy; U.uCentroid.value = sm.centroid; U.uBeat.value = sm.beat;
       U.uLevel.value = level; U.uDay.value = 1 - night; U.uHue.value = 0.06 * wob;
       // the colour it throws on the world: the middle of its palette at the moment, brightness following the loudness
-      auroraColour(U.uHue.value + 0.33 * spec.centroid + 0.3 * spec.energy + 0.12, colour);
-      api.strength = level * (0.05 + 0.24 * spec.energy + 0.08 * spec.beat) * (1 - 0.7 * (1 - night));
+      auroraColour(U.uHue.value + 0.33 * sm.centroid + 0.3 * sm.energy + 0.12, colour);
+      api.strength = level * (0.05 + 0.24 * sm.energy + 0.05 * sm.beat) * (1 - 0.7 * (1 - night));
     },
     /** Tint the scene's lights, fog and (via `world.setAurora`) the ground and pond; call after sky.set each frame. */
     light(lights, world, lowEnd) {
