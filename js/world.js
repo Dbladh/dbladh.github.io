@@ -3,11 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017223457';
+import { PAL } from './palette.js?v=20261017223840';
+import { auroraColour } from './aurora.js?v=20261017223840';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017223457';
+} from './houses.js?v=20261017223840';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -905,7 +906,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       const light = new THREE.PointLight(LIGHT_COLOR, 0, 11, 1.6);
       light.position.copy(hs.lightAnchor).applyMatrix4(hs.group.matrixWorld);
       scene.add(light);
-      houseLights.push(light);
+      houseLights.push(light); houses[houses.length - 1].light = light;
     }
   }
 
@@ -1888,7 +1889,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // The fireflies' dance (while a house song plays): each depth group forms a slow ring that turns, rises and falls in a travelling wave, breathes with the bass and
   // pulses in brightness along the ring with the beat. Everything is added up frame by frame, so it glides and never jumps.
   const RINGS = [{ cx: 0, cz: 12, R: 8.5, y: 1.6, amp: 2.6, dir: 1 }, { cx: 0, cz: -8, R: 20, y: 2.0, amp: 3.4, dir: -1 }, { cx: 0, cz: -40, R: 42, y: 2.6, amp: 4.2, dir: 1 }];
-  const dance = { w: 0, ang: 0, wave: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
+  const dance = { w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
   const ffGeo = new THREE.BufferGeometry();
   const ffPos = new Float32Array(FF * 3), ffCol = new Float32Array(FF * 3), ffSeed = new Float32Array(FF);
   const ffVis = new Float32Array(FF).fill(1);   // fades to 0 while a firefly would drift in front of a sign
@@ -2096,6 +2097,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     const accentCol = new THREE.Color(s.accent), warmWash = new THREE.Color(0xffd49a), warmBeam = new THREE.Color(0xffc476), warmHalo = new THREE.Color(0xffd9a0);
     const lampLit = new THREE.Color().copy(accentCol).lerp(new THREE.Color(0xffffff), 0.25), lampBase = new THREE.Color(0.5, 0.47, 0.4);
     const sty = { night: 0, open: false, hover: 0 };
+    const show = { w: 0, p: 0, col: new THREE.Color() };
     let songDim = 0; const songDimSet = (v) => { if (Math.abs(v - songDim) > 0.003) { songDim = v; applyLight(); } };
     const applyLight = () => {
       const k = sty.open ? 0 : sty.night;                              // an open sign is lit evenly for reading
@@ -2107,6 +2109,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       haloMat.opacity = (sty.open ? sty.night * 0.16 : sty.night * 0.3) + h * 0.42;
       washMat.color.copy(warmWash).lerp(accentCol, h); beamMat.color.copy(warmBeam).lerp(accentCol, h); haloMat.color.copy(warmHalo).lerp(accentCol, h);
       lampMat.color.copy(lampBase).lerp(lampLit, h);
+      if (show.w > 0.002) {                                                 // the light show: the lamps take a colour of the music and flash with it
+        const sp = show.w * show.p;
+        washMat.opacity += sp * 0.8; beamMat.opacity += sp * 0.1; haloMat.opacity += sp * 0.8;
+        washMat.color.lerp(show.col, 0.85 * show.w); beamMat.color.lerp(show.col, 0.85 * show.w); haloMat.color.lerp(show.col, 0.85 * show.w);
+        lampMat.color.lerp(show.col, 0.9 * show.w);
+      }
       lipMat.emissive.setRGB(0.26 * sty.night, 0.18 * sty.night, 0.07 * sty.night).lerp(accentCol, h * 0.22); // rim catches the glow
     };
 
@@ -2196,6 +2204,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         sty.night = n; applyLight();
       },
       songDim: (v) => songDimSet(v),
+      show(w, p, col) { if (Math.abs(w - show.w) > 0.002 || Math.abs(p - show.p) > 0.004) { show.w = w; show.p = p; if (col) show.col.copy(col); applyLight(); } },
       /** 0 or 1: the pointer is over this sign (eased in `tickHover`). */
       hovT: 0, flick: null, ft: 0,
       tickHover(dt) {
@@ -2310,6 +2319,30 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       n.sp.position.set(n.x + Math.sin(n.t * 1.6 + n.ph) * 0.5, n.y + 0.5 + u * 5.5, n.z);
       n.sp.material.opacity = Math.min(1, u * 5) * Math.pow(1 - u, 0.7);
     }
+  }
+  // ---- The light show (while a house song plays): the windows and lamps of the houses, the street lamps and the billboards' lamps pulse in a chase that runs with the
+  // music's tempo (faster with the bass, an extra flash on each beat) and take colours from the aurora's palette, each one a step further along it.
+  const showColour = new THREE.Color(), showCol2 = new THREE.Color();
+  const showPulse = (i) => { const sn = 0.5 + 0.5 * Math.sin(dance.chase - i * 1.25); return Math.min(1.5, 0.16 + 0.8 * sn * sn * (0.45 + 0.85 * dance.bass) + 0.85 * dance.beat * (i & 1 ? 1 : 0.5)); };
+  const showTone = (i, out) => auroraColour((dance.hue + dance.centroid * 0.3 + i * 0.17) % 1, out);
+  let showWas = false;
+  function lightShow() {
+    const w = dance.w;
+    if (w <= 0.002) {                                                      // (over: put the village's window colours back; the rest is reset every frame by setNight)
+      if (showWas) { showWas = false; for (const h of houses) if (h.baseEm) h.glass.emissive.copy(h.baseEm); }
+      for (const b of boards) b.show?.(0, 0, null);
+      return;
+    }
+    showWas = true;
+    houses.forEach((h, i) => {
+      if (!h.group || (music && music.h === h)) return;                    // (the singing house keeps its own glow)
+      h.baseEm ??= h.glass.emissive.clone();
+      const p = showPulse(i), c = showTone(i, showColour);
+      h.glass.emissive.copy(h.baseEm).lerp(c, 0.85 * w); h.glass.emissiveIntensity += w * (0.3 + 1.6 * p);
+      if (h.light) { h.light.color.copy(h.baseLightCol ??= h.light.color.clone()).lerp(c, 0.9 * w); h.light.intensity += w * HOUSE_I * (0.15 + 1.1 * p); }
+    });
+    showTone(5, showCol2); lanternMat.color.lerp(showCol2, w * (0.45 + 0.5 * showPulse(5)));
+    boards.forEach((b, j) => { showTone(9 + j * 2, showCol2); b.show?.(w, showPulse(9 + j * 2), showCol2); });
   }
   let time = 0, night = 0, songK = 0;
   const HOUSE_I = 20, FF_I = 9;
@@ -2496,7 +2529,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     },
     /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
     /** The music's levels for the fireflies' dance (smoothed values from the aurora); `w` 0..1 is how far the dance has begun. */
-    setDance(w, sm) { dance.w = w; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
+    setDance(w, sm) { dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
@@ -2568,7 +2601,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         const flap = Math.sin(time * 22 + u.ph) * 0.9;
         u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
       });
-      dance.ang += dt * (0.22 + 0.4 * dance.energy) * dance.w; dance.wave += dt * (1.1 + 1.6 * dance.mid) * dance.w;
+      dance.ang += dt * (0.1 + 0.85 * dance.bass + 1.5 * dance.beat + 0.35 * dance.treble) * dance.w;      // (they speed up on the bass, surge on every beat and ease off in the quiet)
+      dance.wave += dt * (0.9 + 2.2 * dance.mid + 0.8 * dance.beat) * dance.w; dance.morph += dt * (0.045 + 0.12 * dance.energy) * dance.w;
+      dance.chase += dt * (1.3 + 2.0 * dance.bass + 1.0 * dance.energy) * dance.w; dance.hue = (dance.hue + dt * 0.025 * dance.w) % 1;
+      lightShow();
       const a = ffGeo.attributes.position;
       const pos = new THREE.Vector3();
       for (let i = 0; i < FF; i++) {
@@ -2582,9 +2618,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         }
         let px = gx + Math.sin(time * 0.35 + f.ph) * amp, py = gy + Math.sin(time * 0.8 + f.ph * 2) * 0.7, pz = gz + Math.cos(time * 0.3 + f.ph * 1.3) * amp, boost = 1;
         if (dance.w > 0.002 && !follow.on) {                                // the dance: they gather into rings (one after another) and move with the music
-          const rg = RINGS[f.gi], th = (f.k / f.n) * 6.2832 + dance.ang * rg.dir * (1 + 0.25 * f.gi);
-          const R = rg.R * (1 + 0.1 * dance.bass), tx = rg.cx + Math.cos(th) * R * 1.5, tz = rg.cz + Math.sin(th) * R * 0.8;
-          const sw = 0.5 + 0.5 * Math.sin(dance.wave * rg.dir - th * 3), ty = heightAt(tx, tz) + rg.y + rg.amp * sw * (0.55 + 0.7 * dance.mid);
+          const rg = RINGS[f.gi], base = (f.k / f.n) * 6.2832;
+          const th = base + dance.ang * rg.dir * (1 + 0.25 * f.gi) + 0.3 * dance.mid * Math.sin(dance.wave * 0.6 + base * 3);          // (the spacing along the ring ripples with the mids)
+          const f8 = 0.5 + 0.5 * Math.sin(dance.morph * 2.0 + f.gi * 1.7);                      // the shape drifts, over the song, between a ring and a figure of eight
+          const R = rg.R * (1 + 0.2 * dance.bass + 0.14 * dance.beat), tx = rg.cx + Math.cos(th) * R * 1.5, tz = rg.cz + (Math.sin(th) * (1 - f8) + Math.sin(2 * th) * 0.9 * f8) * R * 0.8;
+          const sw = 0.5 + 0.5 * Math.sin(dance.wave * rg.dir - th * 3), hop = dance.beat * (0.5 + 0.5 * Math.sin(f.k * 1.9 + f.gi)) * (1.2 + 0.8 * f.gi);   // each beat throws them up, the wave carries them around
+          const ty = heightAt(tx, tz) + rg.y + rg.amp * sw * (0.55 + 0.7 * dance.mid) + hop;
           const e = Math.min(1, Math.max(0, dance.w * 1.6 - (f.k / f.n) * 0.6)), wi = e * e * (3 - 2 * e);
           px += (tx - px) * wi; py += (ty - py) * wi; pz += (tz - pz) * wi;
           boost = 1 + wi * (0.9 * dance.bass * (0.5 + 0.5 * Math.sin(dance.wave * 2 - th * 2)) + 0.7 * dance.beat + 0.3 * dance.treble);
