@@ -143,7 +143,7 @@ export function createAudio({ base = 'audio/' } = {}) {
       src.start(0, Math.random() * buf[name].duration);
       return { src, g, p };
     };
-    scn = { out, day: loop('amb_day'), night: loop('amb_night'), wind: buf.amb_windmill ? loop('amb_windmill', { lpf: 2400, pan: true }) : null, bike: null };
+    scn = { out, day: loop('amb_day', { lpf: 5200 }), night: loop('amb_night', { lpf: 3400 }), wind: buf.amb_windmill ? loop('amb_windmill', { lpf: 2400, pan: true }) : null, bike: null };
     if (buf.engine_idle) {                                                  // the bike far off: the same engine, muffled, quiet and panned
       const g = ctx.createGain(); g.gain.value = 0; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 950; g.connect(f);
       let p = null; if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); f.connect(p); p.connect(out); } else f.connect(out);
@@ -182,7 +182,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   const thud = (gain = 0.5, f = 120) => { tone(f, 0.22, { gain, slide: f * 0.4, type: 'sine' }); swoosh(0.16, 900, 120, { gain: gain * 0.7, type: 'lowpass', q: 0.7 }); };
 
   const api = {
-    get _debug() { return { ctx, buf, st, engine, ambience, ready, scn }; },   // (for tests)
+    get _debug() { return { ctx, buf, st, engine, ambience, ready, scn, master, hum }; },   // (for tests)
     get enabled() { return on; },
     set enabled(v) {
       on = !!v; chose = true;
@@ -200,7 +200,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     sceneUpdate(s) {
       if (!ctx || !on || !scn) return;
       const k = s.quiet ? 0.25 : 1;
-      at(scn.day.g.gain, 0.26 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.24 * s.night * k, 1.4);
+      at(scn.day.g.gain, 0.13 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.11 * s.night * k, 1.4);
       if (scn.wind) { at(scn.wind.g.gain, s.quiet ? 0 : 0.045, 0.9); if (scn.wind.p) at(scn.wind.p.pan, clamp(s.windPan || 0, -1, 1) * 0.7, 0.4); }
       if (scn.bike) {
         const g = !s.quiet && s.bike ? s.bike.gain : 0; at(scn.bike.g.gain, g, 0.3);
@@ -217,18 +217,18 @@ export function createAudio({ base = 'audio/' } = {}) {
     /** A billboard's lamps start to flicker (`pat`: one of FLICKERS): the crackle sounds, then a faint electrical hum while they stay lit. */
     flicker(pat) {
       if (!ctx || !on) return;
-      (pat.snd || []).forEach((n, i) => play(n, { gain: 0.5, delay: (pat.at && pat.at[i]) || 0, rate: 0.96 + Math.random() * 0.08 }));
+      (pat.snd || []).forEach((n, i) => play(n, { gain: 1.0, delay: (pat.at && pat.at[i]) || 0, rate: 0.96 + Math.random() * 0.08 }));
       if (!buf.fl_hum) return;
       if (!hum) { const src = loopSrc(buf.fl_hum), g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(soft); src.start(0, Math.random() * 4); hum = { src, g }; }
       const end = Math.max(...pat.events.map((e) => e[0] + e[1])) + 0.05;
       hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0.0, ctx.currentTime, 0.02);
-      hum.g.gain.setTargetAtTime(0.16, ctx.currentTime + end, 0.25);
+      hum.g.gain.setTargetAtTime(0.28, ctx.currentTime + end, 0.25);
     },
     /** The pointer left the sign: the hum fades and the lamp clicks off. */
     flickerOff() {
       if (!ctx || !on) return;
       if (hum) { hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0, ctx.currentTime, 0.08); }
-      play('fl_tick2', { gain: 0.22, rate: 0.8 });
+      play('fl_tick2', { gain: 0.4, rate: 0.8 });
     },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {
