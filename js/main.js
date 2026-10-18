@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017191454';
-import { buildWorld } from './world.js?v=20261017191454';
-import { createSky } from './sky.js?v=20261017191454';
-import { createDOF } from './dof.js?v=20261017191454';
-import { createRide } from './ride.js?v=20261017191454';
-import { createGame } from './bikegame.js?v=20261017191454';
-import { createAudio } from './audio.js?v=20261017191454';
+import { PAL } from './palette.js?v=20261017192317';
+import { buildWorld } from './world.js?v=20261017192317';
+import { createSky } from './sky.js?v=20261017192317';
+import { createDOF } from './dof.js?v=20261017192317';
+import { createRide } from './ride.js?v=20261017192317';
+import { createGame } from './bikegame.js?v=20261017192317';
+import { createAudio } from './audio.js?v=20261017192317';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -199,56 +199,37 @@ function start() {
       const px = (v.x * 0.5 + 0.5) * VW(), py = (-v.y * 0.5 + 0.5) * VH();
       x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
     }
-    const w = x1 - x0, h = y1 - y0;
-    const barPx = Math.min(h * 0.5, (b.layout.bar / b.layout.h) * h);
+    const fw = x1 - x0, fh = y1 - y0;
+    const barPx = Math.min(fh * 0.5, (b.layout.bar / b.layout.h) * fh);
+    const fy0 = y0;                                                                 // (the face runs a little past the screen edges: keep the text on screen)
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(VW(), x1); y1 = Math.min(VH(), y1);
+    const w = x1 - x0, h = y1 - y0, barVis = Math.max(0, fy0 + barPx - y0);
     // The scrolling text starts *below* the coloured bar, so it slides underneath it...
-    el.style.left = x0 + 'px'; el.style.top = (y0 + barPx) + 'px';
-    el.style.width = w + 'px'; el.style.height = (h - barPx) + 'px';
+    el.style.left = x0 + 'px'; el.style.top = (y0 + barVis) + 'px';
+    el.style.width = w + 'px'; el.style.height = (h - barVis) + 'px';
     el.style.fontSize = Math.min(24, Math.max(15, w / 52)) + 'px';
     // ...and the back link is pinned inside the bar.
     const back = el.querySelector('.back');
     if (back) {
       back.style.position = 'fixed';
       back.style.left = (x0 + Math.max(10, w * 0.025)) + 'px';
-      back.style.top = (y0 + barPx / 2) + 'px';
+      back.style.top = (y0 + barVis / 2) + 'px';
       back.style.transform = 'translateY(-50%)';
       back.style.margin = '0';
       back.style.zIndex = '2';
     }
   }
 
-  /** Where an open sign ends up: it stretches to fill the space between the controls and the nav. */
+  /** Where an open sign ends up: stretched past every edge of the screen, so only its face shows (no frame, posts or scenery). */
   function fitLayout(b) {
     const vw = VW(), vh = VH();
-    const safeH = Math.min(vh, window.innerHeight);   // bottom edge above any floating browser toolbar
-    // On short screens the nav steps aside while a sign is open (see CSS), and the sign runs nearly
-    // edge to edge; the back link in the sign's bar, Esc and the arrow keys still navigate.
-    // "Tight" = a short screen or a phone-width one: nav out of the way, sign edge to edge, rim may bleed off.
-    const compact = matchMedia('(max-height: 600px), (max-width: 600px)').matches;
-    const navHidden = matchMedia('(max-height: 600px) and (pointer: fine)').matches; // matches the CSS that hides it
-    const m = compact ? 2 : 12;
-    const nr = nav.getBoundingClientRect();
-    // The top controls fade away while a sign is open (body.sign-open), so the sign may use that space.
-    const navOnTop = nr.top < vh / 2;                 // roomy windows keep the nav at the top left (see CSS)
-    const topEdge = Math.max(body.classList.contains('sign-open') ? 0 : controls.getBoundingClientRect().bottom, navOnTop ? nr.bottom : 0);
-    const x0 = m, x1 = vw - m;
-    const EDGE = 18;                                   // the solid edge strips (see CSS) take the top and bottom 16px
-    const y0 = Math.max(m, EDGE, topEdge + (compact ? 0 : 8));
-    const y1 = navHidden || navOnTop ? safeH - Math.max(m, EDGE) : Math.min(safeH - m, nr.top - (compact ? 6 : 8));   // nav stays on touch screens
+    const BLEED = 6;                                                                // px beyond each edge: the rim, lamps and posts all end up off screen
     const st = stops[b.id];
     const dist = st.pos.distanceTo(st.look);
     const upp = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / vh; // world units per CSS px
-    const frame = (compact ? 0.1 : 0.7) * b.scale / upp + (compact ? 0 : 4);                                        // keep the frame on screen
-    const MAX = 4.5;                                                                // cap extreme stretches
-    const w = Math.min(Math.max(40, x1 - x0 - 2 * frame) * upp, b.width * MAX);
-    const h = Math.min(Math.max(40, y1 - y0 - 2 * frame) * upp, b.height * MAX);
-    const barPx = Math.min(78, Math.max(68, (h / upp) * 0.0694)); // tall enough to hold a 56px back button with air
-    return {
-      w, h,
-      ox: ((x0 + x1) / 2 - vw / 2) * upp,
-      oy: -((y0 + y1) / 2 - vh / 2) * upp,
-      bar: barPx * upp,
-    };
+    const hPx = vh + 2 * BLEED;
+    const barPx = Math.min(78, Math.max(68, hPx * 0.0694)) + BLEED;                 // tall enough to hold a 56px back button with air (the bleed hides the top few px)
+    return { w: (vw + 2 * BLEED) * upp, h: hPx * upp, ox: 0, oy: 0, bar: barPx * upp };
   }
 
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -301,6 +282,7 @@ function start() {
     const quick = instant || reduceMotion;
     active = id;
     body.dataset.stop = id;
+    body.classList.remove('sign-full');                                              // (the edge-to-edge look waits until the sign has filled the screen)
     // The top controls leave as soon as we start heading to a sign (the zoom), and return when
     // we head back to the overview. The open sign then gets the full height.
     body.classList.toggle('sign-open', id !== 'home');
@@ -337,6 +319,8 @@ function start() {
       b.setOpen(true);
       await morphBoard(b, fitLayout(b), quick ? 0 : 0.45);
       if (token !== navToken) return;
+      document.documentElement.style.setProperty('--sign-accent', b.accent || '#fff');
+      body.classList.add('sign-full');
       showText(id);
     }
   }

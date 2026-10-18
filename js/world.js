@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017191454';
+import { PAL } from './palette.js?v=20261017192317';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017191454';
+} from './houses.js?v=20261017192317';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2102,7 +2102,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     let sc = s.scale;                 // current scale of this sign (bigger on large screens, see placeBoards)
     const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
     const board = {
-      id, face, scale: s.scale, layout: null,
+      id, face, accent: s.accent, scale: s.scale, layout: null,
       width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // default size at the current scale (world units)
       /**
        * Resize and shift the sign face. `w`/`h` are world units; `ox`/`oy` move it within the

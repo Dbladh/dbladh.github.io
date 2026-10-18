@@ -417,6 +417,11 @@ html:has(body.scene-mode) { background-color: var(--sky-top); }
 /* With a sign open the soft fades go away so they never tint the sign's colour bar. */
 body.scene-mode.sign-open .edge-top::after,
 body.scene-mode.sign-open .edge-bottom::after { display: none; }
+/* Full screen: the edge strips take the sign's own colours (the bar's accent on top, the paper below) so nothing else shows at the edges. */
+body.scene-mode.sign-full .edge-top { background-color: var(--sign-accent, var(--sky-top)); }
+body.scene-mode.sign-full .edge-bottom { background-color: #fffdf8; }
+/* ...and the floating nav gets clear space under the text */
+body.scene-mode .stop.is-open { padding-bottom: calc(3.4% + 84px); }
 
 
 /* =====================================================================================================
