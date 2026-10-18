@@ -226,9 +226,13 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   const themeMeta = document.querySelector('meta[name="theme-color"]');
 
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
-  function set(hour, dim = 0) {
+  const warmDark = [new THREE.Color('#33100a'), new THREE.Color('#5a1e0c')];
+  function set(hour, dim = 0, warm = 0) {
     const s = sample(((hour % 24) + 24) % 24);
-    if (dim > 0) { s.top.multiplyScalar(1 - 0.94 * dim); s.bot.multiplyScalar(1 - 0.94 * dim); }          // (the aurora's night: the sky itself nearly black)
+    if (dim > 0) {
+      s.top.multiplyScalar(1 - 0.94 * dim); s.bot.multiplyScalar(1 - 0.94 * dim);
+      if (warm > 0) { s.top.lerp(warmDark[0], 0.5 * warm * dim); s.bot.lerp(warmDark[1], 0.55 * warm * dim); }      // (a warm passage: the dark sky takes on a deep ember tone)
+    }          // (the aurora's night: the sky itself nearly black)
 
     // Sun arcs from east (hour 6) up and over to west (hour 18).
     const a = ((hour - 6) / 12) * Math.PI;

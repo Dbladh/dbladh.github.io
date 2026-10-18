@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017230116';
-import { auroraColour } from './aurora.js?v=20261017230116';
+import { PAL } from './palette.js?v=20261017230914';
+import { auroraColour } from './aurora.js?v=20261017230914';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017230116';
+} from './houses.js?v=20261017230914';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1900,14 +1900,14 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   ffGeo.setAttribute('aSeed', new THREE.BufferAttribute(ffSeed, 1));
   ffGeo.setAttribute('aVis', new THREE.BufferAttribute(ffOut, 1));
   const ffUniforms = {
-    uNight: { value: 0 }, uTime: { value: 0 }, uScale: { value: 700 }, uBase: { value: 0.34 },
+    uNight: { value: 0 }, uWarm: { value: 0 }, uTime: { value: 0 }, uScale: { value: 700 }, uBase: { value: 0.34 },
     uFocus: { value: 55 }, uAperture: { value: 0 }, uMaxBlur: { value: 14 },
   };
   const fireflies = new THREE.Points(ffGeo, new THREE.ShaderMaterial({
     uniforms: ffUniforms,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */ `
-      uniform float uTime, uScale, uBase, uFocus, uAperture, uMaxBlur;
+      uniform float uTime, uScale, uBase, uFocus, uAperture, uMaxBlur, uWarm;
       attribute vec3 aColor; attribute float aSeed; attribute float aVis;
       varying vec3 vColor; varying float vSoft; varying float vTwinkle;
       void main() {
@@ -1921,7 +1921,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         gl_PointSize = size;
         gl_Position = projectionMatrix * mv;
         vSoft = coc * 1.8 / size;
-        vColor = aColor;
+        vColor = mix(aColor, vec3(1.0, 0.6 + 0.2 * aSeed, 0.18), uWarm);                  // (warm passage of a house song: embers)
         vTwinkle = (0.62 + 0.38 * sin(uTime * (1.4 + aSeed) + aSeed * 40.0)) * aVis;
       }`,
     fragmentShader: /* glsl */ `
@@ -2538,6 +2538,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
     /** The music's levels for the fireflies' dance (smoothed values from the aurora); `w` 0..1 is how far the dance has begun. */
     setDance(w, sm, beatPos = -1) { dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
+    setWarm(v) { ffUniforms.uWarm.value = v; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */

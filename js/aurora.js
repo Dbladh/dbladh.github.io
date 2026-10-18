@@ -8,9 +8,12 @@
 import * as THREE from 'three';
 
 const PAL = [[0.25, 1.0, 0.45], [0.12, 0.92, 0.78], [0.35, 0.55, 1.0], [0.72, 0.38, 1.0], [1.0, 0.3, 0.78], [1.0, 0.32, 0.42]];       // green, teal, blue, violet, magenta, red
+const WARM_PAL = [[1.0, 0.88, 0.34], [1.0, 0.68, 0.22], [1.0, 0.46, 0.15], [1.0, 0.3, 0.12], [0.95, 0.2, 0.18], [1.0, 0.62, 0.3]];       // yellow, amber, orange, red-orange, red, soft orange
+let WARM = 0;                                                         // 0 = the cool palette (greens, blues, magentas); 1 = the warm one (yellows, oranges, reds)
+export const setWarm = (w) => { WARM = w; };
 export const auroraColour = (t, out = new THREE.Color()) => {
-  const x = Math.min(0.9999, Math.max(0, t)) * (PAL.length - 1), i = Math.floor(x), f = x - i;
-  return out.setRGB(PAL[i][0] + (PAL[i + 1][0] - PAL[i][0]) * f, PAL[i][1] + (PAL[i + 1][1] - PAL[i][1]) * f, PAL[i][2] + (PAL[i + 1][2] - PAL[i][2]) * f);
+  const x = Math.min(0.9999, Math.max(0, t)) * (PAL.length - 1), i = Math.floor(x), f = x - i, m = (P, c) => P[i][c] + (P[i + 1][c] - P[i][c]) * f;
+  return out.setRGB(m(PAL, 0) + (m(WARM_PAL, 0) - m(PAL, 0)) * WARM, m(PAL, 1) + (m(WARM_PAL, 1) - m(PAL, 1)) * WARM, m(PAL, 2) + (m(WARM_PAL, 2) - m(PAL, 2)) * WARM);
 };
 
 const VERT = /* glsl */ `
@@ -20,7 +23,7 @@ const VERT = /* glsl */ `
 const FRAG = /* glsl */ `
   precision highp float;
   varying vec3 vDir;
-  uniform float uTime, uPS, uPR, uPF, uBass, uMid, uTreble, uEnergy, uCentroid, uBeat, uLevel, uDay, uHue, uLayers;
+  uniform float uWarm; uniform float uTime, uPS, uPR, uPF, uBass, uMid, uTreble, uEnergy, uCentroid, uBeat, uLevel, uDay, uHue, uLayers;
   float hsh(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hsh(i), hsh(i + vec2(1.0, 0.0)), f.x), mix(hsh(i + vec2(0.0, 1.0)), hsh(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -28,7 +31,10 @@ const FRAG = /* glsl */ `
     t = clamp(t, 0.0, 0.9999) * 5.0; float i = floor(t), f = fract(t);
     vec3 a = vec3(0.25, 1.0, 0.45), b = vec3(0.12, 0.92, 0.78), c = vec3(0.35, 0.55, 1.0), d = vec3(0.72, 0.38, 1.0), e = vec3(1.0, 0.3, 0.78), g = vec3(1.0, 0.32, 0.42);
     vec3 s0 = i < 0.5 ? a : i < 1.5 ? b : i < 2.5 ? c : i < 3.5 ? d : e, s1 = i < 0.5 ? b : i < 1.5 ? c : i < 2.5 ? d : i < 3.5 ? e : g;
-    return mix(s0, s1, f);
+    vec3 cool = mix(s0, s1, f);
+    vec3 wa = vec3(1.0, 0.88, 0.34), wb = vec3(1.0, 0.68, 0.22), wc = vec3(1.0, 0.46, 0.15), wd = vec3(1.0, 0.3, 0.12), we = vec3(0.95, 0.2, 0.18), wg = vec3(1.0, 0.62, 0.3);
+    vec3 w0 = i < 0.5 ? wa : i < 1.5 ? wb : i < 2.5 ? wc : i < 3.5 ? wd : we, w1 = i < 0.5 ? wb : i < 1.5 ? wc : i < 2.5 ? wd : i < 3.5 ? we : wg;
+    return mix(cool, mix(w0, w1, f), uWarm);
   }
   void main() {
     vec3 d = normalize(vDir);
@@ -66,7 +72,7 @@ const FRAG = /* glsl */ `
   }`;
 
 export function createAurora(skyScene, camera, { low = false } = {}) {
-  const U = { uTime: { value: 0 }, uPS: { value: 0 }, uPR: { value: 0 }, uPF: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uTreble: { value: 0 }, uEnergy: { value: 0 }, uCentroid: { value: 0 }, uBeat: { value: 0 },
+  const U = { uWarm: { value: 0 }, uTime: { value: 0 }, uPS: { value: 0 }, uPR: { value: 0 }, uPF: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uTreble: { value: 0 }, uEnergy: { value: 0 }, uCentroid: { value: 0 }, uBeat: { value: 0 },
     uLevel: { value: 0 }, uDay: { value: 0 }, uHue: { value: 0 }, uLayers: { value: low ? 2 : 3 } };
   const mat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthTest: false, side: THREE.BackSide, fog: false });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(250, 40, 24), mat);
@@ -87,7 +93,7 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
       level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
       if (!on && level < 0.004) { level = 0; mesh.visible = false; api.strength = 0; return; }
       mesh.visible = true; mesh.position.copy(camera.position);
-      hue = (hue + dt * 0.012) % 1;
+      hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
       for (const k in sm) sm[k] += (spec[k] - sm[k]) * (1 - Math.exp(-dt / TAU[k]));
       U.uTime.value += dt * (0.4 + sm.energy * 0.3);

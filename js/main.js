@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017230116';
-import { buildWorld } from './world.js?v=20261017230116';
-import { createSky } from './sky.js?v=20261017230116';
-import { createDOF } from './dof.js?v=20261017230116';
-import { createRide } from './ride.js?v=20261017230116';
-import { createGame } from './bikegame.js?v=20261017230116';
-import { createAurora } from './aurora.js?v=20261017230116';
-import { createAudio, pickFlicker } from './audio.js?v=20261017230116';
+import { PAL } from './palette.js?v=20261017230914';
+import { buildWorld } from './world.js?v=20261017230914';
+import { createSky } from './sky.js?v=20261017230914';
+import { createDOF } from './dof.js?v=20261017230914';
+import { createRide } from './ride.js?v=20261017230914';
+import { createGame } from './bikegame.js?v=20261017230914';
+import { createAurora, setWarm } from './aurora.js?v=20261017230914';
+import { createAudio, pickFlicker } from './audio.js?v=20261017230914';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -134,6 +134,17 @@ function start() {
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
   const aurora = createAurora(skyScene, camera, { low: lowEnd });
+  const zoomCam = new THREE.PerspectiveCamera(), zoomPos = new THREE.Vector3(), zoomV = new THREE.Vector3();
+  /** Would all three billboards still be wholly on screen with the camera at `pos` (looking at `look`)? `margin`: how close to the screen edge they may come (1 = the very edge). */
+  function boardsInView(pos, margin) {
+    zoomCam.fov = camera.fov; zoomCam.aspect = camera.aspect; zoomCam.near = camera.near; zoomCam.far = camera.far; zoomCam.position.copy(pos); zoomCam.lookAt(look);
+    zoomCam.updateProjectionMatrix(); zoomCam.updateMatrixWorld(true);
+    for (const b of world.boards) {
+      b.face.updateWorldMatrix(true, false);
+      for (const sx of [-0.5, 0.5]) for (const sy of [-0.5, 0.5]) { zoomV.set(sx, sy, 0); b.face.localToWorld(zoomV); zoomV.project(zoomCam); if (Math.abs(zoomV.x) > margin || Math.abs(zoomV.y) > margin) return false; }
+    }
+    return true;
+  }
   const spec = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };
   const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed, classic });
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
@@ -576,14 +587,14 @@ function start() {
   const DAY_SECONDS = 300;
   let hour = 12, shownMinute = -1, dragging = false, lightsWarm = false, idleReady = false;
   // While a house song plays the whole scene turns to night (so the aurora is the star): the sky is shown at a later hour, eased in and out with the aurora.
-  // Between 1:10 and 1:26 of the song the mood lifts: the whole scene lights up, bright and sunny, and then goes back to the night (`songSun`, eased in and out over a few seconds).
-  let songDark = 0, songSun = 0;                                              // how far the scene is into the night, and into the sunny passage
+  // Between 1:10 and 1:26 of the song the colours turn warm (yellows, oranges and reds instead of greens, blues and magentas) and the camera slowly moves in on the scene (keeping all
+  // three billboards in view); from there it slowly eases back out until the song ends. `songWarm` is eased in and out over a few seconds.
+  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0;                               // how far the scene is into the night, into the warm passage, and into the camera's move
   const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
-    let r = h;
-    if (songDark >= 0.002) { const e = songDark * songDark * (3 - 2 * songDark), target = h < 7 ? 0 : 23.5; r = h + (target - h) * e; }      // (from before dawn it goes back to the small hours; otherwise on through sunset to night)
-    if (songSun >= 0.002) r += (12.3 - r) * songSun;                              // the sunny passage: a bright midday
-    return r;
+    if (songDark < 0.002) return h;
+    const e = songDark * songDark * (3 - 2 * songDark), target = h < 7 ? 0 : 23.5;                    // (from before dawn it goes back to the small hours; otherwise on through sunset to night)
+    return h + (target - h) * e;
   };
   let songDimmed = false;
   const songDim = () => {
@@ -594,7 +605,7 @@ function start() {
   let nightK = 0; const sndV = new THREE.Vector3(), sndB = new THREE.Vector3();
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
-    const { night, horizon } = sky.set(songHour(hour), songDim()); nightK = night;
+    const { night, horizon } = sky.set(songHour(hour), songDim(), songWarm); nightK = night;
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
     world.setClouds(night, horizon);
@@ -746,15 +757,24 @@ function start() {
     camera.position.y += -pointer.sy * 0.4 * parallax;
     look.copy(cur.look);
     look.x += pointer.sx * 0.5 * parallax;
+    if ((songZoomWant > 0.0005 || songZoom > 0.0005) && active === 'home' && !openId && !tween && !game?.active) {       // the slow move in on the scene during a song (all three billboards stay in view)
+      const base = camera.position.clone(); let want = songZoomWant * 0.4;
+      for (let it = 0; it < 9 && want > 0.001; it++) { zoomPos.copy(base).lerp(look, want); if (boardsInView(zoomPos, 0.96)) break; want *= 0.82; }
+      if (want <= 0.001) want = 0;
+      songZoom += (want - songZoom) * (1 - Math.exp(-dt * 1.2));
+      camera.position.lerp(look, songZoom);
+    }
     camera.lookAt(look);
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
-      songSun = st < 0 ? 0 : smooth01(64, 70, st) * (1 - smooth01(86, 91, st));
-      const darkTarget = playing ? 1 - songSun : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5))); songDark = Math.min(songDark, 1 - songSun);          // (never darker than the sunny passage allows: by 1:10 it is fully bright)
+      const warmT = st < 0 ? 0 : smooth01(67, 70.5, st) * (1 - smooth01(86, 89.5, st)); songWarm += (warmT - songWarm) * (1 - Math.exp(-dt * 2));
+      songZoomWant = st < 0 ? 0 : smooth01(70, 86, st) * (1 - smooth01(86, 123, st));                    // in over the 16 seconds, then slowly back out until the end
+      setWarm(songWarm); world.setWarm(songWarm);
+      const darkTarget = playing ? 1 : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5)));
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
-      aurora.update(dt, spec, nightK, playing && songSun < 0.5);
+      aurora.update(dt, spec, nightK, playing);
       world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), spec, audio.songBeatPos());
       if (aurora.level > 0) aurora.light(sky.lights, world, lowEnd);
       else if (aurora.strength !== 0) { aurora.strength = 0; world.setAurora(null, 0); setTime(hour); }       // (the lights are put back as the sky sets them)
