@@ -121,7 +121,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   }
   // The ride's background music (audio/ride.mp3, made by audio/tools/make_ride_music.py): a seamless loop, kept low under the engine, faded in when a ride begins
   // (it carries on across restarts) and out when the game is left.
-  const RIDE_GAIN = 0.2;
+  const RIDE_GAIN = 0.4;
   let ride = null, rideLoading = null;
   function rideStart() {
     if (!ctx || ride) { if (ride) { ride.g.gain.cancelScheduledValues(ctx.currentTime); ride.g.gain.setTargetAtTime(RIDE_GAIN, ctx.currentTime, 0.8); } return; }
