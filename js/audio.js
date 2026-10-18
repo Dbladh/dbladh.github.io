@@ -27,7 +27,7 @@ export const pickFlicker = (id) => {
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null, song = null, songTok = 0, songLoading = null;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -241,6 +241,36 @@ export function createAudio({ base = 'audio/' } = {}) {
       if (!ctx || !on) return;
       play('fl_start', { gain: 0.14, rate: 1.25, offset: 0.25, dur: 0.14 });
     },
+    /** A house starts playing its song (the easter egg): far off and a little muffled, as if from inside, with a faint room echo; `pan` -1..1 is where the house is. */
+    songStart(pan = 0) {
+      if (!ctx || !on) return false;
+      api.songStop();
+      const tok = ++songTok;
+      songLoading = songLoading || fetch(`${base}song.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf.song = b; }).catch(() => { /* stays silent */ });
+      songLoading.then(() => {
+        if (tok !== songTok || !buf.song || !on) return;
+        const src = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), lpf = ctx.createBiquadFilter(), dry = ctx.createGain(), g = ctx.createGain();
+        const del = ctx.createDelay(0.5), fb = ctx.createGain(), dl = ctx.createBiquadFilter(), wet = ctx.createGain();
+        src.buffer = buf.song; hp.type = 'highpass'; hp.frequency.value = 200; lpf.type = 'lowpass'; lpf.frequency.value = 1800; lpf.Q.value = 0.4;
+        dry.gain.value = 0.8; del.delayTime.value = 0.12; fb.gain.value = 0.34; dl.type = 'lowpass'; dl.frequency.value = 1100; wet.gain.value = 0.38; g.gain.value = 0;
+        src.connect(hp); hp.connect(lpf); lpf.connect(dry); dry.connect(g); lpf.connect(del); del.connect(dl); dl.connect(fb); fb.connect(del); dl.connect(wet); wet.connect(g);
+        let p = null; if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1) * 0.6; g.connect(p); p.connect(master); } else g.connect(master);
+        g.gain.setTargetAtTime(0.3, ctx.currentTime, 1.0);
+        song = { src, g, p, nodes: [hp, lpf, dry, del, fb, dl, wet] };
+        src.onended = () => { if (song && song.src === src) { try { src.disconnect(); g.disconnect(); p?.disconnect(); song.nodes.forEach((n) => n.disconnect()); } catch (e) { /* gone */ } song = null; } };
+        src.start();
+      });
+      return true;
+    },
+    songStop() {
+      songTok++;
+      if (!song || !ctx) return;
+      const s0 = song; song = null;
+      s0.g.gain.cancelScheduledValues(ctx.currentTime); s0.g.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
+      setTimeout(() => { try { s0.src.stop(); s0.src.disconnect(); s0.g.disconnect(); s0.p?.disconnect(); s0.nodes.forEach((n) => n.disconnect()); } catch (e) { /* gone */ } }, 1500);
+    },
+    songPan(pan) { if (song && song.p) song.p.pan.setTargetAtTime(clamp(pan, -1, 1) * 0.6, ctx.currentTime, 0.2); },
+    get songPlaying() { return !!song; },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {
       if (!ctx) return;
@@ -386,6 +416,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan']) out[n] = f;
   return out;
 }

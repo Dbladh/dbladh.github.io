@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017211653';
-import { buildWorld } from './world.js?v=20261017211653';
-import { createSky } from './sky.js?v=20261017211653';
-import { createDOF } from './dof.js?v=20261017211653';
-import { createRide } from './ride.js?v=20261017211653';
-import { createGame } from './bikegame.js?v=20261017211653';
-import { createAudio, pickFlicker } from './audio.js?v=20261017211653';
+import { PAL } from './palette.js?v=20261017214310';
+import { buildWorld } from './world.js?v=20261017214310';
+import { createSky } from './sky.js?v=20261017214310';
+import { createDOF } from './dof.js?v=20261017214310';
+import { createRide } from './ride.js?v=20261017214310';
+import { createGame } from './bikegame.js?v=20261017214310';
+import { createAudio, pickFlicker } from './audio.js?v=20261017214310';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -470,7 +470,7 @@ function start() {
       try { await Promise.race([game.whenReady(), new Promise((r) => setTimeout(r, 8000))]); } finally { if (card) card.hidden = true; starting = false; }
       if (game.active || active !== 'home' || openId) return;
     }
-    audio.unlock(); audio.autoOn(); audio.easter();                    // a chime: the easter egg was found (sound comes on for the visit unless the player turned it off)
+    stopSong(); audio.unlock(); audio.autoOn(); audio.easter();                    // a chime: the easter egg was found (sound comes on for the visit unless the player turned it off)
     ride?.reset();
     game.start(homeCam, bx);
   }
@@ -506,11 +506,25 @@ function start() {
     const hit = ray.intersectObjects(faces, false)[0];
     return hit ? hit.object.userData.stopId : null;
   }
+  let songHouse = -1, songSeen = false, songAt = 0;
+  const songV = new THREE.Vector3();
+  function stopSong() { if (songHouse < 0) return; audio.songStop(); world.setMusicHouse(null); songHouse = -1; }
+  audio.onChange((on) => { if (!on) stopSong(); });
+  function toggleHouseSong(i) {
+    audio.unlock(); audio.autoOn();
+    if (songHouse === i) { stopSong(); return; }
+    if (!audio.enabled) return;                                              // (sound is off on purpose: nothing to hear, so nothing to show)
+    const hi = world.houseInfo(i); songV.set(hi.x, hi.y, hi.z).project(camera);
+    stopSong(); audio.songStart(songV.x); audio.ui('tap'); world.setMusicHouse(i); songHouse = i; songSeen = false; songAt = performance.now();
+  }
   canvas.addEventListener('click', (e) => {
     if (active !== 'home' || game?.active) return;
     if (pickBike(e)) { playBike(); return; }
     const id = pick(e);
-    if (id) goTo(id);
+    if (id) { goTo(id); return; }
+    if (openId) return;
+    const hi = world.houseAt(ray);                                           // a hidden extra: click a house and it plays a song, faint and far away
+    if (hi >= 0) toggleHouseSong(hi);
   });
   let lastHover = null;
   canvas.addEventListener('pointermove', (e) => {
@@ -715,6 +729,11 @@ function start() {
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
+    if (songHouse >= 0) {                                                     // the house's song: follow it on screen, and let the glow end with the song
+      if (audio.songPlaying) {
+        songSeen = true; const hi = world.houseInfo(songHouse); if (hi) { songV.set(hi.x, hi.y, hi.z).project(camera); audio.songPan(songV.x); }
+      } else if (songSeen || performance.now() - songAt > 9000) stopSong();
+    }
     if (audio.enabled) {                                                      // the landscape's sound: day/night, the windmill, the far-off bike
       const gameOn = !!game?.active;
       if (!gameOn) { sndV.set(-23, 10, -92).project(camera); }

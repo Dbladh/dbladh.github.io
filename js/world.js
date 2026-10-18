@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017211653';
+import { PAL } from './palette.js?v=20261017214310';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017211653';
+} from './houses.js?v=20261017214310';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -894,7 +894,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (TR() - 0.5) * 0.16; // front door faces the path
     scene.add(hs.group);
     hs.group.updateMatrixWorld(true);
-    houses.push({ x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y });
+    houses.push({ x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y, group: hs.group, glass: hs.glassMat });
     windowMats.push(hs.glassMat);
     if (hs.smoke) for (const c of hs.chimneys) smokeSrc.push(new THREE.Vector3(c[0], c[1], c[2]).applyMatrix4(hs.group.matrixWorld));
     if (houseLights.length < houseCap) {
@@ -2270,6 +2270,35 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   document.fonts?.load(`800 100px ${FACE_FONT}`).then(layoutFaces).catch(() => {});   // redo once the web font is ready
 
   // ---- per-frame + day/night ----
+  // ---- the house that plays its song (the easter egg, see main.js): its windows glow in time and little notes float up from the roof ----
+  let music = null;                                                    // { h, top, t, glow }
+  const notes = [];
+  const noteTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    x.font = '700 48px "Segoe UI Symbol", "Apple Symbols", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#fff3d6'; x.shadowColor = 'rgba(255,200,120,.9)'; x.shadowBlur = 8;
+    x.fillText('\u266A', 32, 34); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const musicTop = (h) => { const b = new THREE.Box3().setFromObject(h.group); return b.max.y; };
+  function updateMusic(dt) {
+    if (music) {
+      music.t += dt; music.glow = Math.min(1, music.glow + dt * 0.8);
+      music.h.glass.emissiveIntensity = night * 1.3 + 0.9 * music.glow * (0.65 + 0.35 * Math.sin(music.t * 2.3));
+      music.spawn -= dt;
+      if (music.spawn <= 0 && notes.filter((n) => n.live).length < 5) {
+        music.spawn = 0.75 + Math.random() * 0.5;
+        let n = notes.find((q) => !q.live);
+        if (!n) { n = { sp: new THREE.Sprite(new THREE.SpriteMaterial({ map: noteTex, transparent: true, depthWrite: false, opacity: 0 })), live: false }; scene.add(n.sp); notes.push(n); }
+        n.live = true; n.t = 0; n.x = music.h.x + (Math.random() - 0.5) * music.h.r * 0.7; n.z = music.h.z + 0.5; n.y = music.top; n.ph = Math.random() * 6; n.sp.scale.setScalar(2.3 + Math.random() * 0.9); n.sp.visible = true;
+      }
+    }
+    for (const n of notes) {
+      if (!n.live) continue;
+      n.t += dt; const u = n.t / 4.2;
+      if (u >= 1) { n.live = false; n.sp.visible = false; continue; }
+      n.sp.position.set(n.x + Math.sin(n.t * 1.6 + n.ph) * 0.5, n.y + 0.5 + u * 5.5, n.z);
+      n.sp.material.opacity = Math.min(1, u * 5) * Math.pow(1 - u, 0.7);
+    }
+  }
   let time = 0, night = 0;
   const HOUSE_I = 20, FF_I = 9;
   const glow = glowMats();
@@ -2441,6 +2470,18 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     isBlocked: (p) => blockedBy(p),
     /** How many fireflies are currently faded out because they sit in front of a sign (debug). */
     get hiddenFireflies() { let n = 0; for (let i = 0; i < FF; i++) if (ffVis[i] < 0.5) n++; return n; },
+    /** The index of the village house under a ray (a THREE.Raycaster already aimed), or -1. */
+    houseAt(ray) {
+      let best = -1, bd = Infinity;
+      houses.forEach((h, i) => { if (!h.group) return; const hit = ray.intersectObject(h.group, true)[0]; if (hit && hit.distance < bd) { bd = hit.distance; best = i; } });
+      return best;
+    },
+    houseInfo(i) { const h = houses[i]; return h && h.group ? { x: h.x, z: h.z, y: musicTop(h) } : null; },
+    /** The house (an index from houseAt) that is playing its song: windows glow and notes drift up; null to stop. */
+    setMusicHouse(i) {
+      if (music) { music.h.glass.emissiveIntensity = night * 1.3; music = null; }
+      if (i != null && houses[i] && houses[i].group) music = { h: houses[i], top: musicTop(houses[i]), t: 0, glow: 0, spawn: 0.1 };
+    },
     /** The sign under the pointer (its id) lights up; null for none. */
     setHover(id, flick = null) {
       for (const b of boards) { const on = b.id === id; if (on && flick && b.hovT === 0) { b.flick = flick; b.ft = 0; } if (!on) b.flick = null; b.hovT = on ? 1 : 0; }
@@ -2450,6 +2491,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
     update(dt, camera) {
       time += dt;
+      updateMusic(dt);
       if (camera) camPos = camera.position;
       ffUniforms.uTime.value = time;
       terrainWind.uWindTime.value = time;
