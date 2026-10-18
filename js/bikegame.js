@@ -2,16 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017194619';
-import { createTrack } from './track.js?v=20261017194619';
-import { createRagdoll } from './ragdoll.js?v=20261017194619';
-import { createFx } from './fx.js?v=20261017194619';
-import { createAudio } from './audio.js?v=20261017194619';
-import { createPuffs } from './puffs.js?v=20261017194619';
-import { createDirt } from './dirt.js?v=20261017194619';
-import { createMudCoat } from './mudcoat.js?v=20261017194619';
-import { createCoins } from './coins.js?v=20261017194619';
-import { createFuel } from './fuel.js?v=20261017194619';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017195804';
+import { createTrack } from './track.js?v=20261017195804';
+import { createRagdoll } from './ragdoll.js?v=20261017195804';
+import { createFx } from './fx.js?v=20261017195804';
+import { createAudio } from './audio.js?v=20261017195804';
+import { createPuffs } from './puffs.js?v=20261017195804';
+import { createTracks } from './tracks.js?v=20261017195804';
+import { createDirt } from './dirt.js?v=20261017195804';
+import { createMudCoat } from './mudcoat.js?v=20261017195804';
+import { createCoins } from './coins.js?v=20261017195804';
+import { createFuel } from './fuel.js?v=20261017195804';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -65,6 +66,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const mudCoat = createMudCoat(bike.root);                                    // mud that sticks to the bike and rider, then dries and falls away
   const puffs = createPuffs(scene);
   const dirt = createDirt(scene, (x) => track.laneAt(x));
+  const tracks = createTracks(scene, { groundAt: (x, z) => track.groundAt(x, z), laneZ, width: 1.5, life: 9, strength: 0.6 });       // tyre marks behind the rear wheel
   const audio = sharedAudio || createAudio();
   const juice = createFx(scene, camera, renderer, { low: matchMedia('(max-width: 700px)').matches });
   const baseFov = () => (camera.aspect < 0.8 ? 70 : 55);                    // (the same rule as the page uses when it is resized)
@@ -115,7 +117,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       const box = new THREE.Box3();
       for (const c of scene.children) {
         if (!c.visible || c === track.group || c.isLight || c.isCamera || mine.has(c)) continue;
-        let dynamic = false; c.traverse((o) => { if (o.isPoints || o.isSkinnedMesh || (o.isInstancedMesh && o.frustumCulled === false)) dynamic = true; });
+        let dynamic = false; c.traverse((o) => { if (o.isPoints || o.userData?.dynamic || o.isSkinnedMesh || (o.isInstancedMesh && o.frustumCulled === false)) dynamic = true; });
         if (dynamic) continue;
         box.setFromObject(c);
         if (box.isEmpty()) continue;
@@ -275,7 +277,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   const lifeGround = (x, z) => { const pt = track.pitSpan(x); return pt ? track.groundAt(pt.x0 - 0.5, z) : track.groundAt(x, z); };
 
   function startRun(x) {
-    st.warnedObs = -1; st.warnedX = -1; st.lift = 0; mudCoat.reset();
+    st.warnedObs = -1; st.warnedX = -1; st.lift = 0; mudCoat.reset(); tracks.clear();
     st.cpx = undefined; st.x = x; st.vx = 8; st.vy = 0; st.om = 0; st.grounded = true; st.rot = 0; st.flips = 0; st.airT = 0; st.mode = 'play'; st.crashT = 0; st.inv = 0; st.boost = 0;
     st.zoom = 1; st.viewW = 0; st.hz = null; st.charging = false; st.charge = 0; st.holdT = 0; st.airHold = 0; st.kickW = 0; st.crouch = 0; st.maxed = false; st.buf = null; st.impact = null; st.trick = null; st.spinA = 0; bike.model.rotation.y = 0; st.lastAirTap = -9; st.trickIdx = 0; puffs.clear(); dirt.clear();
     const p = groundPose(x); st.y = p.y; st.th = p.phi; st.vy = 0; st.camY = st.y;
@@ -868,7 +870,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
         }
       }
       st.camZoom += (st.crouch - st.camZoom) * Math.min(1, dt * 3);
-      { const px = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))); puffs.update(dt, px); dirt.update(dt, px); }
+      { const px = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))); puffs.update(dt, px); dirt.update(dt, px); tracks.update(dt); tracks.add(st.x - HW * Math.cos(st.th), st.mode === 'play' && st.grounded); }
       bike.root.position.set(st.x, st.y, laneZ);
       bike.root.rotation.z = st.th;
       setHud();
