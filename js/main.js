@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017230914';
-import { buildWorld } from './world.js?v=20261017230914';
-import { createSky } from './sky.js?v=20261017230914';
-import { createDOF } from './dof.js?v=20261017230914';
-import { createRide } from './ride.js?v=20261017230914';
-import { createGame } from './bikegame.js?v=20261017230914';
-import { createAurora, setWarm } from './aurora.js?v=20261017230914';
-import { createAudio, pickFlicker } from './audio.js?v=20261017230914';
+import { PAL } from './palette.js?v=20261017230939';
+import { buildWorld } from './world.js?v=20261017230939';
+import { createSky } from './sky.js?v=20261017230939';
+import { createDOF } from './dof.js?v=20261017230939';
+import { createRide } from './ride.js?v=20261017230939';
+import { createGame } from './bikegame.js?v=20261017230939';
+import { createAurora, setWarm } from './aurora.js?v=20261017230939';
+import { createAudio, pickFlicker } from './audio.js?v=20261017230939';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -769,7 +769,7 @@ function start() {
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
-      const warmT = st < 0 ? 0 : smooth01(67, 70.5, st) * (1 - smooth01(86, 89.5, st)); songWarm += (warmT - songWarm) * (1 - Math.exp(-dt * 2));
+      const warmT = st < 0 ? 0 : smooth01(70, 72, st) * (1 - smooth01(84, 86, st)); songWarm += (warmT - songWarm) * (1 - Math.exp(-dt * 5));
       songZoomWant = st < 0 ? 0 : smooth01(70, 86, st) * (1 - smooth01(86, 123, st));                    // in over the 16 seconds, then slowly back out until the end
       setWarm(songWarm); world.setWarm(songWarm);
       const darkTarget = playing ? 1 : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5)));
