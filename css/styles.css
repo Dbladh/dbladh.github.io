@@ -492,12 +492,12 @@ body:not(.scene-mode) .back { display: none; }
 .stop h2 { font-family: var(--name-font); font-weight: 700; letter-spacing: -0.025em; }
 .stop h3 { font-family: var(--name-font); font-weight: 600; letter-spacing: 0.01em; }
 .stop a:not(.back) {
-  color: var(--coral-text); text-decoration: underline wavy color-mix(in srgb, var(--coral) 70%, transparent) 1.5px; text-underline-offset: 4px;
-  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+  color: var(--coral-text); text-decoration: none; text-underline-offset: 4px;
+  transition: color 0.2s ease;
 }
 .stop .app-card figcaption a { text-decoration: none; }   /* the app names are links, but read as titles: no underline until hovered */
 .stop .app-card figcaption a:hover { text-decoration: underline; }
-.stop a:not(.back):hover { text-decoration-style: solid; text-decoration-color: var(--coral); color: var(--ink); }
+.stop a:not(.back):hover { text-decoration: underline; text-decoration-color: var(--coral); color: var(--ink); }
 
 .story {
   position: relative; margin: 22px 0 18px; padding: 16px 20px 14px; background: color-mix(in srgb, var(--cream) 78%, #fff);
