@@ -379,11 +379,12 @@ body.scene-mode::before {
   border-radius: 10px; background: #111; object-fit: cover;
 }
 .inline-icon { width: 1.25em; height: 1.25em; vertical-align: -0.28em; border-radius: 0.3em; margin: 0 0.1em; }
-/* Wide enough: let the text wrap around the cards (left / right alternating). */
-@container (min-width: 520px) {
-  .app-card { margin-top: 0.3em; }
-  .app-left  { float: left;  margin-right: 1.4em; margin-bottom: 0.8em; }
-  .app-right { float: right; margin-left: 1.4em;  margin-bottom: 0.8em; }
+/* Wide enough: text on the left, the app card in the right column beside it (stacked above the text when narrow). */
+.app-pair { margin-bottom: 1em; }
+@container (min-width: 760px) {
+  .app-pair { display: grid; grid-template-columns: minmax(0, 720px) minmax(200px, 1fr); column-gap: 1.8em; align-items: start; }
+  .app-pair > * { grid-column: 1; }
+  .app-pair > .app-card { grid-column: 2; grid-row: 1 / span 6; margin: 0.3em 0 0; width: min(220px, 100%); }
 }
 
 
