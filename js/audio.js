@@ -27,7 +27,7 @@ export const pickFlicker = (id) => {
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null, song = null, songTok = 0, songLoading = null;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null, song = null, songTok = 0, songLoading = null, an = null, anData = null;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -180,6 +180,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   const gate = (name, min) => { const t = ctx.currentTime; if (t - (lastAt[name] ?? -9) < min) return false; lastAt[name] = t; return true; };       // (no sound may stack on itself)
   const thud = (gain = 0.5, f = 120) => { tone(f, 0.22, { gain, slide: f * 0.4, type: 'sine' }); swoosh(0.16, 900, 120, { gain: gain * 0.7, type: 'lowpass', q: 0.7 }); };
 
+  let anSt = null;
   const api = {
     get _debug() { return { ctx, buf, st, engine, ambience, ready, scn, master }; },   // (for tests)
     get enabled() { return on; },
@@ -198,7 +199,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     /** Every frame in the landscape. s: { night 0..1, quiet (the game is on), windPan -1..1, bike: { gain, pan } | null } */
     sceneUpdate(s) {
       if (!ctx || !on || !scn) return;
-      const k = s.quiet ? 0.25 : 1;
+      const k = (s.quiet ? 0.25 : 1) * (song ? 1 - 0.7 * clamp((ctx.currentTime - song.t0) / 60) : 1);               // (the landscape's own sounds give way as the song comes forward)
       at(scn.day.g.gain, 0.13 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.11 * s.night * k, 1.4);
       if (scn.wind) { at(scn.wind.g.gain, s.quiet ? 0 : 0.045, 0.9); if (scn.wind.p) at(scn.wind.p.pan, clamp(s.windPan || 0, -1, 1) * 0.7, 0.4); }
       if (scn.bike) {
@@ -251,13 +252,21 @@ export function createAudio({ base = 'audio/' } = {}) {
         if (tok !== songTok || !buf.song || !on) return;
         const src = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), lpf = ctx.createBiquadFilter(), dry = ctx.createGain(), g = ctx.createGain();
         const del = ctx.createDelay(0.5), fb = ctx.createGain(), dl = ctx.createBiquadFilter(), wet = ctx.createGain();
+        anSt = null; an = ctx.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.5; anData = new Uint8Array(an.frequencyBinCount); src.connect(an);          // (listens to the song as recorded, before it is muffled; makes no sound)
         src.buffer = buf.song; hp.type = 'highpass'; hp.frequency.value = 200; lpf.type = 'lowpass'; lpf.frequency.value = 1800; lpf.Q.value = 0.4;
         dry.gain.value = 0.8; del.delayTime.value = 0.12; fb.gain.value = 0.34; dl.type = 'lowpass'; dl.frequency.value = 1100; wet.gain.value = 0.38; g.gain.value = 0;
         src.connect(hp); hp.connect(lpf); lpf.connect(dry); dry.connect(g); lpf.connect(del); del.connect(dl); dl.connect(fb); fb.connect(del); dl.connect(wet); wet.connect(g);
         let p = null; if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1) * 0.6; g.connect(p); p.connect(master); } else g.connect(master);
-        g.gain.setTargetAtTime(0.3, ctx.currentTime, 1.0);
-        song = { src, g, p, nodes: [hp, lpf, dry, del, fb, dl, wet] };
-        src.onended = () => { if (song && song.src === src) { try { src.disconnect(); g.disconnect(); p?.disconnect(); song.nodes.forEach((n) => n.disconnect()); } catch (e) { /* gone */ } song = null; } };
+        // At first it is far off, behind walls; over the first minute it comes forward: clearer, fuller, drier and louder, until it is the main thing you hear.
+        const t0 = ctx.currentTime, T = 60;
+        g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.3, t0 + 2.5); g.gain.linearRampToValueAtTime(0.85, t0 + T);
+        lpf.frequency.setValueAtTime(1800, t0); lpf.frequency.exponentialRampToValueAtTime(16000, t0 + T);
+        hp.frequency.setValueAtTime(200, t0); hp.frequency.exponentialRampToValueAtTime(40, t0 + T);
+        wet.gain.setValueAtTime(0.38, t0); wet.gain.linearRampToValueAtTime(0.05, t0 + T);
+        dry.gain.setValueAtTime(0.8, t0); dry.gain.linearRampToValueAtTime(1.0, t0 + T);
+        src.loop = false;                                                          // (it plays once, and its last seconds fade out)
+        song = { src, g, p, t0, nodes: [hp, lpf, dry, del, fb, dl, wet] };
+        src.onended = () => { if (an) { try { an.disconnect(); } catch (e) { /* gone */ } an = null; } if (song && song.src === src) { try { src.disconnect(); g.disconnect(); p?.disconnect(); song.nodes.forEach((n) => n.disconnect()); } catch (e) { /* gone */ } song = null; } };
         src.start();
       });
       return true;
@@ -265,12 +274,32 @@ export function createAudio({ base = 'audio/' } = {}) {
     songStop() {
       songTok++;
       if (!song || !ctx) return;
-      const s0 = song; song = null;
+      const s0 = song; song = null; if (an) { const a0 = an; an = null; setTimeout(() => { try { a0.disconnect(); } catch (e) { /* gone */ } }, 1500); }
       s0.g.gain.cancelScheduledValues(ctx.currentTime); s0.g.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
       setTimeout(() => { try { s0.src.stop(); s0.src.disconnect(); s0.g.disconnect(); s0.p?.disconnect(); s0.nodes.forEach((n) => n.disconnect()); } catch (e) { /* gone */ } }, 1500);
     },
-    songPan(pan) { if (song && song.p) song.p.pan.setTargetAtTime(clamp(pan, -1, 1) * 0.6, ctx.currentTime, 0.2); },
+    songPan(pan) { if (song && song.p) song.p.pan.setTargetAtTime(clamp(pan, -1, 1) * (0.6 - 0.35 * clamp((ctx.currentTime - song.t0) / 60)), ctx.currentTime, 0.2); },           // (less to one side as it comes forward)
     get songPlaying() { return !!song; },
+    /** The song's sound this instant, for the aurora: bass, mid, treble and energy (0..1, each scaled to the song's own loudest), centroid (how bright it is, 0..1)
+     *  and beat (a spike on a sudden bass hit). Fills and returns `out`; all zeros when no song plays. */
+    songSpectrum(out, dt = 0.016) {
+      const o = out || {}; if (!an || !song) { o.bass = o.mid = o.treble = o.energy = o.centroid = o.beat = 0; return o; }
+      an.getByteFrequencyData(anData);
+      const band = (a, b) => { let t = 0; for (let i = a; i < b; i++) t += anData[i]; return t / ((b - a) * 255); };
+      const raw = { bass: band(1, 6), mid: band(6, 43), treble: band(43, 214) };
+      const sp = (anSt = anSt || { max: { bass: 0.1, mid: 0.1, treble: 0.05 }, v: { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0.3 }, bassAvg: 0, beat: 0 });
+      for (const k of ['bass', 'mid', 'treble']) {
+        sp.max[k] = Math.max(sp.max[k] * Math.pow(0.97, dt), raw[k], 0.03);                       // (the loudest it has been lately: each band is read against its own)
+        const n = Math.pow(clamp((raw[k] / sp.max[k] - 0.4) / 0.6), 1.2); const up = n > sp.v[k];             // (only what rises above its usual level counts, so quiet and loud passages differ)
+        sp.v[k] += (n - sp.v[k]) * (1 - Math.exp(-dt * (up ? 22 : 4.5)));                         // quick to rise, slow to fall
+      }
+      const en = (sp.v.bass * 0.45 + sp.v.mid * 0.4 + sp.v.treble * 0.15), cen = clamp((sp.v.treble * 1.4 + sp.v.mid * 0.5) / (sp.v.bass + sp.v.mid + sp.v.treble + 0.2));
+      sp.v.energy += (en - sp.v.energy) * (1 - Math.exp(-dt * 3)); sp.v.centroid += (cen - sp.v.centroid) * (1 - Math.exp(-dt * 1.5));
+      const flux = raw.bass - sp.bassAvg; sp.bassAvg += (raw.bass - sp.bassAvg) * (1 - Math.exp(-dt * 2.5));
+      sp.beat = Math.max(sp.beat * Math.exp(-dt * 6), flux > 0.05 ? clamp(flux * 6) : 0);
+      o.bass = sp.v.bass; o.mid = sp.v.mid; o.treble = sp.v.treble; o.energy = sp.v.energy; o.centroid = sp.v.centroid; o.beat = sp.beat;
+      return o;
+    },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {
       if (!ctx) return;
@@ -416,6 +445,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum']) out[n] = f;
   return out;
 }

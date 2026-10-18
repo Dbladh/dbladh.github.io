@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017214310';
+import { PAL } from './palette.js?v=20261017215908';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017214310';
+} from './houses.js?v=20261017215908';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -684,22 +684,24 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const auroraU = { value: new THREE.Vector3() };                       // the colour the aurora is casting on the ground and the pond (zero when there is none)
   const terrainWind = { uWindTime: { value: 0 }, uDay: { value: 1 } };   // grass sway (desktop) and cloud shadows
   // Big soft cloud shadows drifting across the land by day: the same moving noise the clouds suggest, painted
   // straight into the terrain colour (no shadow maps, no geometry).
   const addCloudShadows = (sh) => {
     sh.uniforms.uShadowT = terrainWind.uWindTime;
-    sh.uniforms.uShadowDay = terrainWind.uDay;
+    sh.uniforms.uShadowDay = terrainWind.uDay; sh.uniforms.uAurora = auroraU;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uShadowT; uniform float uShadowDay; varying vec3 vCWPos;
+uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; varying vec3 vCWPos;
 float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
 float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * csN(p); p = p * 2.03 + vec2(4.1, 7.3); a *= 0.5; } return s; }`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uAurora * 0.16;')
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
   vec2 cp = vCWPos.xz * 0.02 - vec2(uShadowT * 0.07, 0.0);   // patches ~50 units across, drifting +x (the sky clouds' direction) at ~3.5 units/s   // drifts about 5 units a second
@@ -801,11 +803,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   pondHeight.generateMipmaps = false;
   pondHeight.needsUpdate = true;
   const pondU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight },
+    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight }, uAurora: auroraU,
     uHT: { value: new THREE.Vector4(POND.x - PB.r, POND.z - PB.r, 1 / (PB.r * 2), 1 / (PB.r * 2)) },
     uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
     uCenter: { value: new THREE.Vector2(POND.x, POND.z) }, uR: { value: POND.r },
   }]);
+  pondU.uAurora = auroraU;                                              // (merge copies uniforms: share the aurora's one)
   const water = new THREE.Mesh(
     new THREE.RingGeometry(0.05, POND.r * 1.12, 64, 10).rotateX(-Math.PI / 2),
     new THREE.ShaderMaterial({
@@ -821,7 +824,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           #include <fog_vertex>
         }`,
       fragmentShader: `
-        uniform float uTime, uDay, uR; uniform vec3 uHorizon, uSkyTop; uniform vec2 uCenter;
+        uniform float uTime, uDay, uR; uniform vec3 uHorizon, uSkyTop, uAurora; uniform vec2 uCenter;
         uniform sampler2D uHeightTex; uniform vec4 uHT;
         varying vec3 vW;
         #include <fog_pars_fragment>
@@ -845,6 +848,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           float fres = 0.06 + 0.94 * pow(1.0 - max(dot(N, V), 0.0), 4.0);
           vec3 R = reflect(-V, N);
           vec3 sky = mix(uHorizon, uSkyTop, smoothstep(0.0, 0.7, R.y));
+          sky += uAurora * 2.2 * smoothstep(0.0, 0.5, R.y);                 // the aurora in the water
           float depth = clamp(depthW / 1.5, 0.0, 1.0);
           vec3 body = mix(lin(vec3(0.42, 0.82, 0.78)), lin(vec3(0.18, 0.55, 0.78)), smoothstep(0.0, 1.0, depth));
           body *= 0.4 + 0.6 * uDay;
@@ -2482,6 +2486,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       if (music) { music.h.glass.emissiveIntensity = night * 1.3; music = null; }
       if (i != null && houses[i] && houses[i].group) music = { h: houses[i], top: musicTop(houses[i]), t: 0, glow: 0, spawn: 0.1 };
     },
+    /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
+    setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.8); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
     setHover(id, flick = null) {
       for (const b of boards) { const on = b.id === id; if (on && flick && b.hovT === 0) { b.flick = flick; b.ft = 0; } if (!on) b.flick = null; b.hovT = on ? 1 : 0; }

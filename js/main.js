@@ -1,13 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017214310';
-import { buildWorld } from './world.js?v=20261017214310';
-import { createSky } from './sky.js?v=20261017214310';
-import { createDOF } from './dof.js?v=20261017214310';
-import { createRide } from './ride.js?v=20261017214310';
-import { createGame } from './bikegame.js?v=20261017214310';
-import { createAudio, pickFlicker } from './audio.js?v=20261017214310';
+import { PAL } from './palette.js?v=20261017215908';
+import { buildWorld } from './world.js?v=20261017215908';
+import { createSky } from './sky.js?v=20261017215908';
+import { createDOF } from './dof.js?v=20261017215908';
+import { createRide } from './ride.js?v=20261017215908';
+import { createGame } from './bikegame.js?v=20261017215908';
+import { createAurora } from './aurora.js?v=20261017215908';
+import { createAudio, pickFlicker } from './audio.js?v=20261017215908';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -132,6 +133,8 @@ function start() {
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
+  const aurora = createAurora(skyScene, camera, { low: lowEnd });
+  const spec = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };
   const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed, classic });
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);
   const dof = reduceMotion ? null : createDOF(renderer, { half: lowEnd, classic }); // soft focus is skipped for reduced motion
@@ -729,6 +732,13 @@ function start() {
     look.x += pointer.sx * 0.5 * parallax;
     camera.lookAt(look);
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
+    {                                                                          // the aurora dances to the song (and lights the world while it does)
+      const playing = songHouse >= 0 && audio.songPlaying;
+      if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
+      aurora.update(dt, spec, nightK, playing);
+      if (aurora.level > 0) aurora.light(sky.lights, world, lowEnd);
+      else if (aurora.strength !== 0) { aurora.strength = 0; world.setAurora(null, 0); setTime(hour); }       // (the lights are put back as the sky sets them)
+    }
     if (songHouse >= 0) {                                                     // the house's song: follow it on screen, and let the glow end with the song
       if (audio.songPlaying) {
         songSeen = true; const hi = world.houseInfo(songHouse); if (hi) { songV.set(hi.x, hi.y, hi.z).project(camera); audio.songPan(songV.x); }
