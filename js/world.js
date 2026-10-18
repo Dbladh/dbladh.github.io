@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018013147';
-import { auroraColour } from './aurora.js?v=20261018013147';
+import { PAL } from './palette.js?v=20261018013851';
+import { auroraColour } from './aurora.js?v=20261018013851';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018013147';
+} from './houses.js?v=20261018013851';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -709,6 +709,13 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   float cn = csF(cp) * 0.7 + csF(cp * 2.1 + 11.0 - vec2(uShadowT * 0.03, 0.0)) * 0.3;
   float cs = smoothstep(0.44, 0.56, cn) * uShadowDay;
   diffuseColor.rgb *= mix(mix(vec3(1.0), vec3(1.06, 1.05, 0.98), uShadowDay), vec3(0.24, 0.34, 0.6), cs);   // sunlit gaps and cool, clear shade under each cloud
+  // Lawn stripes: bands of alternately lighter and darker grass, running across the view (they change with the depth z, so they lie square to the camera, never along its line of sight).
+  // Only on green ground (paths, sand and rock keep their colour), softened at the band edges and faded out where the bands would be thinner than a couple of pixels.
+  float sb = vCWPos.z / 5.0, saa = fwidth(sb) * 1.5 + 0.0001;
+  float sq = clamp(0.5 + 0.5 * sin(6.28318 * sb) / (0.3 + saa * 6.0), 0.0, 1.0);                      // (a soft-edged square wave)
+  float stripe = mix(sq, 0.5, smoothstep(0.2, 0.5, saa));                                                      // (far away the bands blend into an average instead of shimmering)
+  float grassy = smoothstep(0.015, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
+  diffuseColor.rgb *= 1.0 + grassy * (stripe - 0.5) * 0.34;
 }`);
   };
   if (low) terrainMat.onBeforeCompile = addCloudShadows;
