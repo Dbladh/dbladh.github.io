@@ -15,15 +15,14 @@ const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
 // Sound is off on every visit until the player turns it on. Clicking the bike to start the game turns it on for that visit
 // unless the player has switched it off on purpose during the visit.
 
-/** The lamp flickers (cut from audio/raw/light_flicker.mp3 by audio/tools/make_flicker.py). `events` are when the crackles are heard in each sound, as
- *  [start s, length s, strength 0..1]: the lamps flash in step with them (see world.setHover). `at`: when each sound starts. */
-export const FLICKERS = [
-  { w: 3.5, snd: ['fl_burst'], events: [[0.13, 0.05, 0.24], [0.40, 0.09, 0.45], [0.77, 0.15, 1]] },
-  { w: 2, snd: ['fl_tick1'], events: [[0.05, 0.1, 1]] },
-  { w: 2, snd: ['fl_tick2'], events: [[0.06, 0.1, 1]] },
-  { w: 2.5, snd: ['fl_tick1', 'fl_tick2'], at: [0, 0.2], events: [[0.05, 0.08, 0.7], [0.26, 0.12, 1]] },
-];
-export const pickFlicker = () => { let r = Math.random() * FLICKERS.reduce((a, f) => a + f.w, 0); for (const f of FLICKERS) { r -= f.w; if (r <= 0) return f; } return FLICKERS[0]; };
+/** The lamp flicker: the first part of audio/raw/light_flicker.mp3 (cut by audio/tools/make_flicker.py: mains hum, then a cluster of flickers). `events` are when
+ *  the flickers are heard in it, as [start s, length s, strength 0..1]: the lamps flash in step (see world.setHover). Each billboard plays it a little higher or lower. */
+const FLICKER_EVENTS = [[0.505, 0.04, 0.28], [0.625, 0.04, 0.55], [0.755, 0.07, 1], [0.88, 0.075, 0.72], [1.005, 0.05, 0.54]];
+const BOARD_PITCH = { creativity: 0.95, ai: 1.0, about: 1.06 };
+export const pickFlicker = (id) => {
+  const rate = (BOARD_PITCH[id] || 1) * (0.99 + Math.random() * 0.02);
+  return { snd: 'fl_start', rate, events: FLICKER_EVENTS.map(([t, d, a]) => [t / rate, d / rate, a]) };       // (a slower sound is a longer one: the flashes stretch with it)
+};
 
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -125,7 +124,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   }
 
   // ---- the landscape: day and night ambience, a faint windmill, and the far-off dirt bike when it rides through ----
-  const SCENE_FILES = ['amb_day', 'amb_night', 'amb_windmill', 'fl_burst', 'fl_tick1', 'fl_tick2', 'fl_hum'];
+  const SCENE_FILES = ['amb_day', 'amb_night', 'amb_windmill', 'fl_start', 'fl_hum'];
   function loadScene() {
     if (scnLoading || !ctx) return scnLoading;
     scnLoading = Promise.all(SCENE_FILES.map((n) => fetch(`${base}${n}.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf[n] = b; }).catch(() => { /* stays silent */ })))
@@ -214,34 +213,22 @@ export function createAudio({ base = 'audio/' } = {}) {
       else if (kind === 'out') { swoosh(1.0, 2800, 380, { gain: 0.12, q: 0.8 }); tone(392, 0.9, { type: 'sine', gain: 0.03, slide: 196, dest: soft }); }
       else swoosh(0.6, 700, 2000, { gain: 0.09, q: 1.0 });
     },
-    /** One electrical zap at `delay` s: a rapidly gated burst of bright static, a buzzing 120 Hz pulse underneath and a tiny click at the start. */
-    _zap(delay, len, amp) {
-      const t0 = ctx.currentTime + delay, L = Math.max(0.09, len + 0.06), nb = noise();
-      const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
-      src.buffer = nb; src.loop = true; bp.type = 'bandpass'; bp.frequency.value = 3800 + Math.random() * 3800; bp.Q.value = 0.7;
-      g.gain.setValueAtTime(0, t0);
-      for (let k = 0; k * 0.011 < L; k++) g.gain.setValueAtTime((Math.random() < 0.72 ? 0.15 + Math.random() * 0.85 : 0.02) * amp * 0.9 * (1 - 0.45 * (k * 0.011) / L), t0 + k * 0.011);
-      g.gain.setValueAtTime(0, t0 + L);
-      src.connect(bp); bp.connect(g); g.connect(soft); src.start(t0, Math.random() * 1.5); src.stop(t0 + L + 0.05);
-      src.onended = () => { try { src.disconnect(); bp.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
-      tone(120, L, { type: 'sawtooth', gain: 0.07 * amp, delay, dest: dull });                 // the mains buzz
-      tone(2400 + Math.random() * 1500, 0.02, { type: 'square', gain: 0.05 * amp, delay, dest: soft });   // the click as the arc strikes
-    },
-    /** A billboard's lamps start to flicker (`pat`: one of FLICKERS): the crackle sounds, then a faint electrical hum while they stay lit. */
+    /** A billboard's lamps start to flicker (`pat` from pickFlicker): the recorded flicker, then a faint electrical hum while they stay lit. */
     flicker(pat) {
       if (!ctx || !on) return;
-      pat.events.forEach(([t, d, a]) => api._zap(t, d, a));                                    // (synthesised: the recorded crackles sounded like clanks when cut out alone)
+      play(pat.snd, { gain: 0.9, rate: pat.rate });
       if (!buf.fl_hum) return;
       if (!hum) { const src = loopSrc(buf.fl_hum), g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(soft); src.start(0, Math.random() * 4); hum = { src, g }; }
-      const end = Math.max(...pat.events.map((e) => e[0] + e[1])) + 0.05;
+      hum.src.playbackRate.value = pat.rate;
+      const end = Math.max(...pat.events.map((e) => e[0] + e[1])) + 0.3;
       hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0.0, ctx.currentTime, 0.02);
-      hum.g.gain.setTargetAtTime(0.28, ctx.currentTime + end, 0.25);
+      hum.g.gain.setTargetAtTime(0.25, ctx.currentTime + end, 0.4);
     },
     /** The pointer left the sign: the hum fades and the lamp clicks off. */
     flickerOff() {
       if (!ctx || !on) return;
       if (hum) { hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0, ctx.currentTime, 0.08); }
-      api._zap(0.0, 0.05, 0.6);
+      play('fl_start', { gain: 0.3, rate: 1.25, offset: 0.7, dur: 0.14 });
     },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {

@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017202432';
-import { buildWorld } from './world.js?v=20261017202432';
-import { createSky } from './sky.js?v=20261017202432';
-import { createDOF } from './dof.js?v=20261017202432';
-import { createRide } from './ride.js?v=20261017202432';
-import { createGame } from './bikegame.js?v=20261017202432';
-import { createAudio, pickFlicker } from './audio.js?v=20261017202432';
+import { PAL } from './palette.js?v=20261017202810';
+import { buildWorld } from './world.js?v=20261017202810';
+import { createSky } from './sky.js?v=20261017202810';
+import { createDOF } from './dof.js?v=20261017202810';
+import { createRide } from './ride.js?v=20261017202810';
+import { createGame } from './bikegame.js?v=20261017202810';
+import { createAudio, pickFlicker } from './audio.js?v=20261017202810';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -518,7 +518,7 @@ function start() {
     if (ride) ride.hover = overBike;
     const hoverId = !game?.active && active === 'home' && !openId && e.pointerType === 'mouse' ? pick(e) : null;
     if (hoverId !== lastHover) {
-      if (hoverId) { const pat = pickFlicker(); audio.flicker(pat); world.setHover(hoverId, pat.events); }
+      if (hoverId) { const pat = pickFlicker(hoverId); audio.flicker(pat); world.setHover(hoverId, pat.events); }
       else { world.setHover(null); audio.flickerOff(); }
       lastHover = hoverId;
     }
