@@ -490,17 +490,13 @@ body:not(.scene-mode) .back { display: none; }
 
 /* ---------- Sign content: headings, links, cards ---------- */
 .stop h2 { font-family: var(--name-font); font-weight: 700; letter-spacing: -0.025em; }
-.stop h2::after {            /* a hand-drawn wavy underline in the sign's own accent colour */
-  content: ""; display: block; width: min(6.5em, 70%); height: 0.28em; margin-top: 0.12em;
-  background: var(--accent-stripe, var(--gold));
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q6 0 12 4 T24 4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50% / 24px 100%;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q6 0 12 4 T24 4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50% / 24px 100%;
-}
 .stop h3 { font-family: var(--name-font); font-weight: 600; letter-spacing: 0.01em; }
 .stop a:not(.back) {
   color: var(--coral-text); text-decoration: underline wavy color-mix(in srgb, var(--coral) 70%, transparent) 1.5px; text-underline-offset: 4px;
   transition: color 0.2s ease, text-decoration-color 0.2s ease;
 }
+.stop .app-card figcaption a { text-decoration: none; }   /* the app names are links, but read as titles: no underline until hovered */
+.stop .app-card figcaption a:hover { text-decoration: underline; }
 .stop a:not(.back):hover { text-decoration-style: solid; text-decoration-color: var(--coral); color: var(--ink); }
 
 .story {
