@@ -135,7 +135,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     };
     scn = { out, day: loop('amb_day'), night: loop('amb_night'), wind: buf.amb_windmill ? loop('amb_windmill', { lpf: 2400, pan: true }) : null, bike: null };
     if (buf.engine_idle) {                                                  // the bike far off: the same engine, muffled, quiet and panned
-      const g = ctx.createGain(); g.gain.value = 0; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700; g.connect(f);
+      const g = ctx.createGain(); g.gain.value = 0; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 950; g.connect(f);
       let p = null; if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); f.connect(p); p.connect(out); } else f.connect(out);
       const layer = grainLayer(buf.engine_idle, g); layer.bus.gain.value = 1; layer.rate = 1.12;
       scn.bike = { g, p, layer };

@@ -1,15 +1,17 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017193556';
-import { heightAt } from './world.js?v=20261017193556';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017193556';
+import { PAL } from './palette.js?v=20261017194410';
+import { heightAt } from './world.js?v=20261017194410';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017194410';
+import { createDirt } from './dirt.js?v=20261017194410';
+import { createPuffs } from './puffs.js?v=20261017194410';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
 const GRAV = 18;
 
-export function createRide(scene, world, camera, { force = false } = {}) {
+export function createRide(scene, world, camera, { force = false, renderer = null } = {}) {
   const laneZ = world.bikeLaneZ;
   const bike = buildBike();
   const root = bike.root;
@@ -77,7 +79,16 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     st.landPitch = Math.atan2(groundAt(lx + frontX) - groundAt(lx + rear), frontX - rear);
   }
 
+  // Dirt kicked up and dust, as in the game (the same particle systems), so the bike looks alive as it rides through.
+  const dirt = createDirt(scene, (x) => groundAt(x)), puffs = createPuffs(scene);
+  dirt.visible = true; puffs.visible = true;
+  let dustT = 0;
+  function particles(dt) {
+    const px = (renderer ? renderer.domElement.height : innerHeight * Math.min(devicePixelRatio || 1, 2)) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    puffs.update(dt, px); dirt.update(dt, px);
+  }
   function update(dt, active) {
+    particles(dt);
     if (!active) { if (st.state === 'ride') { st.state = 'wait'; root.visible = false; hit.visible = false; sparks.visible = false; } return; }
     if (st.state === 'wait') {
       st.timer -= dt;
@@ -118,6 +129,13 @@ export function createRide(scene, world, camera, { force = false } = {}) {
     bike.wheels.rear.rotation.z = bike.wheels.front.rotation.z = -st.wheelSpin;
     root.position.set(st.x, st.y, laneZ);
     root.rotation.z = st.pitch;
+    if (st.grounded) {                                                                // the rear wheel throws dirt and a little dust
+      const wx = st.x + rear, wy = groundAt(wx) + 0.1;
+      dirt.spray(dt, wx, wy, laneZ + 0.2, SPEED * 1.7, 0.55, 0);
+      dustT -= dt; if (dustT <= 0) { dustT = 0.07; puffs.emit(wx, wy + 0.2, laneZ + 0.2, -2.5 - Math.random() * 2, 1 + Math.random() * 1.5, 0.5, 1.4, 0.8, '#a98a63', 0.5); }
+    }
+    if (st.wasAir && st.grounded) { dirt.burst(st.x, groundAt(st.x) + 0.1, laneZ, 9, 0.8, 0); for (let i = 0; i < 5; i++) puffs.emit(st.x + (Math.random() - 0.5), groundAt(st.x) + 0.3, laneZ + 0.2, (Math.random() - 0.5) * 6, 1 + Math.random() * 2, 0.6, 1.8, 0.8, '#a98a63', 0.55); }
+    st.wasAir = !st.grounded;
     root.scale.setScalar(S * (1 + st.hover * 0.06));
     const dist = Math.hypot(camera.position.x - st.x, camera.position.y - st.y, camera.position.z - laneZ);
     const k = Math.max(1, (dist * 0.1) / 3.4);                                        // never smaller than ~10% of the distance: easy to tap far away

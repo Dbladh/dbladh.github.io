@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017193556';
-import { buildWorld } from './world.js?v=20261017193556';
-import { createSky } from './sky.js?v=20261017193556';
-import { createDOF } from './dof.js?v=20261017193556';
-import { createRide } from './ride.js?v=20261017193556';
-import { createGame } from './bikegame.js?v=20261017193556';
-import { createAudio } from './audio.js?v=20261017193556';
+import { PAL } from './palette.js?v=20261017194410';
+import { buildWorld } from './world.js?v=20261017194410';
+import { createSky } from './sky.js?v=20261017194410';
+import { createDOF } from './dof.js?v=20261017194410';
+import { createRide } from './ride.js?v=20261017194410';
+import { createGame } from './bikegame.js?v=20261017194410';
+import { createAudio } from './audio.js?v=20261017194410';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -138,7 +138,7 @@ function start() {
   let focus = 60;
   // Easter egg: a dirt bike now and then rides across the hills (?bike=1 sends one straight away and keeps them coming).
   const bikeForce = /[?&]bike=1\b/.test(location.search);
-  const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce });
+  const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce, renderer });
   const bikeBtn = document.getElementById('bike-play');
   const audio = createAudio();                       // one sound system for the landscape and the game (silent until the player turns it on)
   const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world, { audio });
@@ -716,7 +716,7 @@ function start() {
       let bike = null;
       if (!gameOn && ride?.riding) {
         sndB.copy(ride.position); const d = camera.position.distanceTo(sndB); sndB.project(camera);
-        const q = Math.max(0, 1 - d / 120); bike = { gain: 0.2 * q * q, pan: sndB.x };
+        const q = Math.max(0, 1 - d / 190); bike = { gain: 0.38 * Math.pow(q, 1.5), pan: sndB.x };
       }
       audio.sceneUpdate({ night: nightK, quiet: gameOn, windPan: sndV.x, bike });
     }
