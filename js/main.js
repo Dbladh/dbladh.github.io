@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017233930';
-import { buildWorld } from './world.js?v=20261017233930';
-import { createSky } from './sky.js?v=20261017233930';
-import { createDOF } from './dof.js?v=20261017233930';
-import { createRide } from './ride.js?v=20261017233930';
-import { createGame } from './bikegame.js?v=20261017233930';
-import { createAurora, setWarm } from './aurora.js?v=20261017233930';
-import { createAudio, pickFlicker } from './audio.js?v=20261017233930';
+import { PAL } from './palette.js?v=20261017234408';
+import { buildWorld } from './world.js?v=20261017234408';
+import { createSky } from './sky.js?v=20261017234408';
+import { createDOF } from './dof.js?v=20261017234408';
+import { createRide } from './ride.js?v=20261017234408';
+import { createGame } from './bikegame.js?v=20261017234408';
+import { createAurora, setWarm } from './aurora.js?v=20261017234408';
+import { createAudio, pickFlicker } from './audio.js?v=20261017234408';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -134,10 +134,10 @@ function start() {
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
   const aurora = createAurora(skyScene, camera, { low: lowEnd });
-  const zoomCam = new THREE.PerspectiveCamera(), zoomPos = new THREE.Vector3(), zoomV = new THREE.Vector3();
+  const zoomCam = new THREE.PerspectiveCamera(), zoomPos = new THREE.Vector3(), zoomV = new THREE.Vector3(), zoomLook = new THREE.Vector3();
   /** Would all three billboards still be wholly on screen with the camera at `pos` (looking at `look`)? `margin`: how close to the screen edge they may come (1 = the very edge). */
-  function boardsInView(pos, margin) {
-    zoomCam.fov = camera.fov; zoomCam.aspect = camera.aspect; zoomCam.near = camera.near; zoomCam.far = camera.far; zoomCam.position.copy(pos); zoomCam.lookAt(look);
+  function boardsInView(pos, margin, lk = look) {
+    zoomCam.fov = camera.fov; zoomCam.aspect = camera.aspect; zoomCam.near = camera.near; zoomCam.far = camera.far; zoomCam.position.copy(pos); zoomCam.lookAt(lk);
     zoomCam.updateProjectionMatrix(); zoomCam.updateMatrixWorld(true);
     for (const b of world.boards) {
       b.face.updateWorldMatrix(true, false);
@@ -589,7 +589,22 @@ function start() {
   // While a house song plays the whole scene turns to night (so the aurora is the star): the sky is shown at a later hour, eased in and out with the aurora.
   // Between 1:10 and 1:26 of the song the colours turn warm (yellows, oranges and reds instead of greens, blues and magentas) and the camera slowly moves in on the scene (keeping all
   // three billboards in view); from there it slowly eases back out until the song ends. `songWarm` is eased in and out over a few seconds.
-  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0, songFade = 1; const cineEl = document.getElementById('cine'); let cineK = 0, cineV = 0.5, cineVs = 0.5; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
+  let songDark = 0, songWarm = 0, songZoom = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0, songFade = 1;
+  // The camera's shot across the song: key times (seconds), how far in (fraction of the way to the look point), sideways and up. Joined with smooth cubic curves (no sudden starts or stops).
+  const SHOT = [[0, 0, 0, 0], [10, 0.03, -1.5, 0.2], [32, 0.1, -4, 0.7], [54, 0.13, 2, 1.1], [70, 0.16, 3.2, 0.7], [86, 0.4, 0, 0], [100, 0.2, -3, 0.8], [113, 0.07, -1, 1.3], [123, 0, 0, 0.2]];
+  const songShot = { z: 0, x: 0, y: 0, on: false }, songShotS = { z: 0, x: 0, y: 0 };
+  function songShotAt(st) {
+    if (st < 0) { songShot.z = songShot.x = songShot.y = 0; songShot.on = false; return; }
+    const n = SHOT.length; let i = 0; while (i < n - 2 && st >= SHOT[i + 1][0]) i++;
+    const p0 = SHOT[i], p1 = SHOT[i + 1], h = p1[0] - p0[0], u = Math.min(1, Math.max(0, (st - p0[0]) / h)), u2 = u * u, u3 = u2 * u;
+    const pm = SHOT[i - 1] || p0, pn = SHOT[i + 2] || p1;
+    for (let c = 1; c <= 3; c++) {
+      const m0 = i > 0 ? (p1[c] - pm[c]) / (p1[0] - pm[0]) * h : 0, m1 = i < n - 2 ? (pn[c] - p0[c]) / (pn[0] - p0[0]) * h : 0;     // (tangents from the neighbours: Catmull-Rom)
+      const v = (2 * u3 - 3 * u2 + 1) * p0[c] + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1[c] + (u3 - u2) * m1;
+      if (c === 1) songShot.z = Math.min(0.4, Math.max(0, v)); else if (c === 2) songShot.x = v; else songShot.y = v;
+    }
+    songShot.on = true;
+  } const cineEl = document.getElementById('cine'); let cineK = 0, cineV = 0.5, cineVs = 0.5; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
   const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
     if (songDark < 0.002) return h;
@@ -757,18 +772,19 @@ function start() {
     camera.position.y += -pointer.sy * 0.4 * parallax;
     look.copy(cur.look);
     look.x += pointer.sx * 0.5 * parallax;
-    if ((songZoomWant > 0.0005 || songZoom > 0.0005) && active === 'home' && !openId && !tween && !game?.active) {       // the slow move in on the scene during a song (all three billboards stay in view)
-      const base = camera.position.clone();
-      if (songRoomT <= 0 || performance.now() - songRoomT > 400) {                                    // (re-measured a few times a second from the fixed view, not the pointer-shifted one, so it cannot jitter)
-        songRoomT = performance.now(); let lo = 0, hi = 0.4;
-        zoomPos.copy(cur.pos).lerp(cur.look, hi);
-        if (boardsInView(zoomPos, 0.96)) lo = hi; else for (let it = 0; it < 9; it++) { const m = (lo + hi) / 2; zoomPos.copy(cur.pos).lerp(cur.look, m); if (boardsInView(zoomPos, 0.96)) lo = m; else hi = m; }
+    if ((songShot.on || songShotS.z > 0.0005 || Math.abs(songShotS.x) > 0.01) && active === 'home' && !openId && !tween && !game?.active) {       // the camera's shot across the song: a slow push, an orbit to one side and the other, the 1:10 push-in, then a long pull-back (all three billboards stay in view)
+      const base = camera.position.clone(), T = songShot;
+      if (songRoomT <= 0 || performance.now() - songRoomT > 400) {                                    // (how much of the shot fits with all three billboards in view: bisected a few times a second from the fixed view, so it cannot jitter)
+        songRoomT = performance.now();
+        const fits = (s) => { zoomPos.copy(cur.pos).lerp(cur.look, T.z * s); zoomPos.x += T.x * s; zoomPos.y += T.y * s; zoomLook.copy(cur.look); zoomLook.x += T.x * s * 0.5; return boardsInView(zoomPos, 0.96, zoomLook); };
+        let lo = 0, hi = 1;
+        if (fits(1)) lo = 1; else for (let it = 0; it < 8; it++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
         songRoomWant = lo;
       }
-      const room = songRoomWant;
-      songRoom += (room - songRoom) * (1 - Math.exp(-dt * 1));
-      songZoom += (songZoomWant * songRoom - songZoom) * (1 - Math.exp(-dt * 2.5));                 // (progress runs evenly across the whole passage, so it keeps moving in the full 16 s)
-      camera.position.lerp(look, songZoom);
+      songRoom += (songRoomWant - songRoom) * (1 - Math.exp(-dt * 1));
+      const k = 1 - Math.exp(-dt * 1.6), S = songShotS;                                                // (and the shot itself is low-passed once more)
+      S.z += (T.z * songRoom - S.z) * k; S.x += (T.x * songRoom - S.x) * k; S.y += (T.y * songRoom - S.y) * k; songZoom = S.z;
+      camera.position.lerp(look, S.z); camera.position.x += S.x; camera.position.y += S.y; look.x += S.x * 0.5;
     }
     let songRoll = 0;
     if ((songDark > 0.01 || songDrift.env > 0.002) && active === 'home' && !openId && !tween && !game?.active) {   // the film-style drift: a slow, heavily smoothed sway and a very gentle swell once a bar, all counted in beats (so it slows with the final ritardando)
@@ -790,8 +806,7 @@ function start() {
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
       const warmT = st < 0 ? 0 : smooth01(70, 72, st) * (1 - smooth01(84, 86, st)); songWarm += (warmT - songWarm) * (1 - Math.exp(-dt * 5));
-      songZoomWant = st < 0 ? 0 : (() => { const e = (x) => x * 0.55 + x * x * (3 - 2 * x) * 0.45, up = Math.min(1, Math.max(0, (st - 70) / 16)), down = Math.min(1, Math.max(0, (st - 86) / 37)); return e(up) * (1 - e(down)); })();   // (eased at both ends, so no sudden start or stop of the move)
-                         // in over the 16 seconds, then slowly back out until the end
+      songShotAt(st);
       setWarm(songWarm); world.setWarm(songWarm);
       const darkTarget = playing ? 1 : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5)));
       if (cineEl) {                                                                                      // letterbox bars, vignette and grain follow how far into the night the scene is
