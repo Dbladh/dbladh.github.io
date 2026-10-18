@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018011729';
-import { buildWorld } from './world.js?v=20261018011729';
-import { createSky } from './sky.js?v=20261018011729';
-import { createDOF } from './dof.js?v=20261018011729';
-import { createRide } from './ride.js?v=20261018011729';
-import { createGame } from './bikegame.js?v=20261018011729';
-import { createAurora, setWarm } from './aurora.js?v=20261018011729';
-import { createAudio, pickFlicker } from './audio.js?v=20261018011729';
+import { PAL } from './palette.js?v=20261018012643';
+import { buildWorld } from './world.js?v=20261018012643';
+import { createSky } from './sky.js?v=20261018012643';
+import { createDOF } from './dof.js?v=20261018012643';
+import { createRide } from './ride.js?v=20261018012643';
+import { createGame } from './bikegame.js?v=20261018012643';
+import { createAurora, setWarm } from './aurora.js?v=20261018012643';
+import { createAudio, pickFlicker } from './audio.js?v=20261018012643';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -857,6 +857,7 @@ function start() {
 
     const wT = performance.now(); if (!reduceMotion) world.update(dt, camera); secT('world', wT);
     if (ride) {
+      ride.hold = songDark > 0.02 || (songHouse >= 0 && audio.songPlaying);                          // music mode: no new bike (one already riding carries on)
       ride.update(dt, active === 'home' && !openId && !tween && !game?.active);
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }

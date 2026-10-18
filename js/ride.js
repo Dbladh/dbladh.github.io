@@ -1,12 +1,12 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018011729';
-import { heightAt } from './world.js?v=20261018011729';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261018011729';
-import { createTracks } from './tracks.js?v=20261018011729';
-import { createDirt } from './dirt.js?v=20261018011729';
-import { createPuffs } from './puffs.js?v=20261018011729';
+import { PAL } from './palette.js?v=20261018012643';
+import { heightAt } from './world.js?v=20261018012643';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261018012643';
+import { createTracks } from './tracks.js?v=20261018012643';
+import { createDirt } from './dirt.js?v=20261018012643';
+import { createPuffs } from './puffs.js?v=20261018012643';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
@@ -71,10 +71,12 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     const px = (renderer ? renderer.domElement.height : innerHeight * Math.min(devicePixelRatio || 1, 2)) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
     puffs.update(dt, px); dirt.update(dt, px); tracks.update(dt);
   }
+  let hold = false;
   function update(dt, active) {
     particles(dt);
     if (!active) { if (st.state === 'ride') { st.state = 'wait'; root.visible = false; hit.visible = false; } return; }
     if (st.state === 'wait') {
+      if (hold) { st.timer = Math.max(st.timer, 3); return; }                // (music mode: no new bike until it is over; one already riding carries on to the end of its pass)
       st.timer -= dt;
       if (st.timer > 0) return;
       start();                                              // (carry straight on into the riding code, so the bike is placed before the frame is drawn: no flash at the origin)
@@ -136,6 +138,8 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     update,
     /** Is the bike on screen right now (and so worth offering a keyboard button for)? */
     get riding() { return st.state === 'ride'; },
+    /** While true no new bike is sent (music mode); a bike already on its way is left alone. */
+    set hold(v) { hold = !!v; },
     get hitTarget() { return hit; },
     get root() { return root; },
     get position() { return root.position; },
