@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261018131458">
+  <link rel="stylesheet" href="css/styles.css?v=20261018154738">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018131458 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018154738 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -170,21 +170,42 @@
       <a class="back" href="#home"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Back to the landscape</span></a>
       <h2 tabindex="-1">About &amp; contact</h2>
       <div class="about-layout">
-       <div class="about-grid">
+        <div class="about-top">
+          <figure class="about-photo">
+            <img src="images/about_me_image.jpg" width="1000" height="955" alt="Danny Bladh smiling in a Japanese garden, wearing a cap and glasses" loading="lazy" decoding="async">
+          </figure>
+          <div class="about-links">
+            <h3>Get in touch</h3>
+            <ul>
+              <li><a href="https://www.linkedin.com/in/danielbladh/" target="_blank" rel="noopener noreferrer">LinkedIn: in/danielbladh</a></li>
+              <li><a href="https://github.com/Dbladh" target="_blank" rel="noopener noreferrer">GitHub: Dbladh</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 class="about-hello">Hello! My name is Danny.</h3>
         <div class="about-copy">
-          <p class="lede">Hello! My name is Danny. I’m a UX designer who values genuine creativity and looks for any opportunity to build something truly unique. My approach blends human-centered UX craft with modern AI prototyping tools—allowing me to take complex product ideas from initial user flows and wireframes to fully interactive, testable prototypes.</p>
+          <p class="lede">I’m a UX designer who’s working toward becoming a builder.</p>
+          <p>I value genuine creativity and look for any chance to build something truly unique. I blend human-centered UX craft with modern AI prototyping tools, so I can take a product idea from user flows and wireframes to an interactive prototype that people can test.</p>
           <p>What energizes me most is people. Working with cross-functional teams, learning from user research, and designing clear, intuitive solutions that make a real impact. I believe the best products come from continuous curiosity, sharp problem-solving, and close collaboration.</p>
           <p>When I take off the designer hat, I’m usually making music on guitar, tinkering with side projects, or spending time with my wife and kids.</p>
-          <h3>Get in touch</h3>
-          <ul>
-            <li><a href="https://www.linkedin.com/in/danielbladh/" target="_blank" rel="noopener noreferrer">LinkedIn: in/danielbladh</a></li>
-            <li><a href="https://github.com/Dbladh" target="_blank" rel="noopener noreferrer">GitHub: Dbladh</a></li>
+        </div>
+
+        <div class="about-skills">
+          <h3>Skills and tools</h3>
+          <h4>I know well</h4>
+          <ul class="chips">
+            <li>Figma (design and prototyping)</li><li>Photoshop</li><li>Illustrator</li><li>Maze</li><li>Useberry</li><li>Pendo</li><li>Claude</li><li>Gemini</li><li>ChatGPT</li>
+          </ul>
+          <h4>I’m learning</h4>
+          <ul class="chips">
+            <li>After Effects</li><li>Rive</li><li>GitHub</li><li>Jira</li>
+          </ul>
+          <h4>I know a little</h4>
+          <ul class="chips">
+            <li>HTML</li><li>CSS</li>
           </ul>
         </div>
-        <figure class="about-photo">
-          <img src="images/about_me_image.jpg" width="1000" height="955" alt="Danny Bladh smiling in a Japanese garden, wearing a cap and glasses" loading="lazy" decoding="async">
-        </figure>
-       </div>
       </div>
     </section>
 
@@ -228,6 +249,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261018131458"></script>
+  <script type="module" src="js/main.js?v=20261018154738"></script>
 </body>
 </html>
