@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018165848';
-import { buildWorld } from './world.js?v=20261018165848';
-import { createSky } from './sky.js?v=20261018165848';
-import { createDOF } from './dof.js?v=20261018165848';
-import { createRide } from './ride.js?v=20261018165848';
-import { createGame } from './bikegame.js?v=20261018165848';
-import { createAurora, setWarm } from './aurora.js?v=20261018165848';
-import { createAudio, pickFlicker } from './audio.js?v=20261018165848';
+import { PAL } from './palette.js?v=20261018170307';
+import { buildWorld } from './world.js?v=20261018170307';
+import { createSky } from './sky.js?v=20261018170307';
+import { createDOF } from './dof.js?v=20261018170307';
+import { createRide } from './ride.js?v=20261018170307';
+import { createGame } from './bikegame.js?v=20261018170307';
+import { createAurora, setWarm } from './aurora.js?v=20261018170307';
+import { createAudio, pickFlicker } from './audio.js?v=20261018170307';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -100,6 +100,37 @@ document.querySelectorAll('.about-skills .chips').forEach((list) => {
     }
   });
 });
+
+// Image viewer: any picture inside a section (except the little app icons) opens full screen on click, tap, Enter or Space.
+// Click anywhere, the close button or Esc dismisses it, and focus goes back to the picture.
+{
+  const box = document.getElementById('lightbox');
+  const big = box?.querySelector('img');
+  const cap = box?.querySelector('figcaption');
+  const sel = '.stop img:not(.app-icon):not(.inline-icon)';
+  let from = null;
+  const open = (img) => {
+    from = img;
+    big.src = img.currentSrc || img.src;
+    big.alt = img.alt;
+    cap.textContent = img.closest('figure')?.querySelector('figcaption')?.textContent || '';
+    box.showModal();
+  };
+  if (box && typeof box.showModal === 'function') {
+    document.querySelectorAll(sel).forEach((img) => {
+      img.tabIndex = 0;
+      img.setAttribute('role', 'button');
+      img.setAttribute('aria-label', 'View full size: ' + (img.alt || 'image'));
+    });
+    document.addEventListener('click', (e) => { const img = e.target.closest?.(sel); if (img) open(img); });
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.(sel)) { e.preventDefault(); open(e.target); }
+    });
+    box.addEventListener('click', () => box.close());
+    box.addEventListener('keydown', (e) => e.stopPropagation());       // the arrow keys must not move the camera behind the viewer
+    box.addEventListener('close', () => { big.removeAttribute('src'); from?.focus({ preventScroll: true }); from = null; });
+  }
+}
 
 // Each section is a labelled region (screen readers announce its heading).
 document.querySelectorAll('.stop').forEach((el) => {

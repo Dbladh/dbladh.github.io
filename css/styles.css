@@ -814,3 +814,24 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
   .story.has-media > * { grid-column: 1; }
   .story.has-media > .story-media { grid-column: 2; grid-row: 1 / span 6; margin: 0; }
 }
+
+
+/* ---------- Image viewer: click or tap a picture in a section to see it full screen ---------- */
+.stop img:not(.app-icon):not(.inline-icon) { cursor: zoom-in; }
+.stop img:not(.app-icon):not(.inline-icon):focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.lightbox { border: 0; padding: 0; margin: 0; max-width: none; max-height: none; width: 100vw; height: 100vh; height: 100dvh; background: rgba(20, 22, 26, 0.92); color: #fff; overflow: hidden; }
+.lightbox:not([open]) { display: none; }
+.lightbox[open] { display: grid; place-items: center; animation: lbIn 0.2s ease; cursor: zoom-out; }
+.lightbox::backdrop { background: transparent; }
+.lightbox figure { margin: 0; max-width: 96vw; max-height: 94vh; max-height: 94dvh; display: grid; justify-items: center; gap: 0.6em; }
+.lightbox img { width: 96vw; height: calc(94dvh - 2.6em); object-fit: contain; }   /* fills the screen; the picture keeps its shape */
+.lightbox figcaption { font-size: 0.95rem; max-width: 720px; text-align: center; opacity: 0.9; }
+.lightbox figcaption:empty { display: none; }
+.lb-close {
+  position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); width: 48px; height: 48px;
+  display: grid; place-items: center; border-radius: 50%; border: 0; cursor: pointer; color: #fff; background: rgba(255, 255, 255, 0.16);
+}
+.lb-close:hover { background: rgba(255, 255, 255, 0.28); }
+.lb-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+@keyframes lbIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .lightbox[open] { animation: none; } }

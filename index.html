@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261018165848">
+  <link rel="stylesheet" href="css/styles.css?v=20261018170307">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018165848 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018170307 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -285,6 +285,11 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261018165848"></script>
+  <dialog id="lightbox" class="lightbox" aria-label="Image viewer">
+    <button type="button" class="lb-close" aria-label="Close image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <figure><img alt=""><figcaption></figcaption></figure>
+  </dialog>
+
+  <script type="module" src="js/main.js?v=20261018170307"></script>
 </body>
 </html>
