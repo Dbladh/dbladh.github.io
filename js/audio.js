@@ -7,20 +7,18 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-const KEY = 'dirtbike-sound';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 // ?engine=synth plays a synthesised engine (audio/engine-worklet.js) instead of the recording, for comparing by ear
 const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
-// Sound is off until the player turns it on (the speaker buttons remember the choice). Clicking the bike to start the game turns it on for that visit
-// unless the player has switched it off on purpose.
-const loadPref = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+// Sound is off on every visit until the player turns it on. Clicking the bike to start the game turns it on for that visit
+// unless the player has switched it off on purpose during the visit.
 
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = loadPref() === '1', running = false, scn = null, scnLoading = null;
+  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -177,14 +175,14 @@ export function createAudio({ base = 'audio/' } = {}) {
     get _debug() { return { ctx, buf, st, engine, ambience, ready, scn }; },   // (for tests)
     get enabled() { return on; },
     set enabled(v) {
-      on = !!v; try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) { /* private mode */ }
+      on = !!v; chose = true;
       if (ctx) at(master.gain, on ? 0.8 : 0, 0.04);
       if (on && ctx) { ctx.resume?.(); loadScene(); }
       for (const f of listeners) f(on);
     },
     /** Turn sound on for this visit (not remembered) if the player has never chosen: the game and the bike easter egg. */
     autoOn() {
-      if (on || loadPref() !== null) return;
+      if (on || chose) return;
       on = true; if (ctx) { at(master.gain, 0.8, 0.04); ctx.resume?.(); loadScene(); }
       for (const f of listeners) f(on);
     },

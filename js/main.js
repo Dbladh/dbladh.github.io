@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017190420';
-import { buildWorld } from './world.js?v=20261017190420';
-import { createSky } from './sky.js?v=20261017190420';
-import { createDOF } from './dof.js?v=20261017190420';
-import { createRide } from './ride.js?v=20261017190420';
-import { createGame } from './bikegame.js?v=20261017190420';
-import { createAudio } from './audio.js?v=20261017190420';
+import { PAL } from './palette.js?v=20261017191454';
+import { buildWorld } from './world.js?v=20261017191454';
+import { createSky } from './sky.js?v=20261017191454';
+import { createDOF } from './dof.js?v=20261017191454';
+import { createRide } from './ride.js?v=20261017191454';
+import { createGame } from './bikegame.js?v=20261017191454';
+import { createAudio } from './audio.js?v=20261017191454';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -531,8 +531,11 @@ function start() {
   canvas.addEventListener('pointermove', (e) => {
     const overBike = pickBike(e);
     if (ride) ride.hover = overBike;
-    canvas.style.cursor = !game?.active && active === 'home' && (overBike || pick(e)) ? 'pointer' : 'default';
+    const hoverId = !game?.active && active === 'home' && !openId && e.pointerType === 'mouse' ? pick(e) : null;
+    world.setHover(hoverId);
+    canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : 'default';
   });
+  canvas.addEventListener('pointerleave', () => world.setHover(null));
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
   canvas.addEventListener('dblclick', () => { if (!game?.active) goTo('home'); });
 

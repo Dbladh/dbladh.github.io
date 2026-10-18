@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017190420';
+import { PAL } from './palette.js?v=20261017191454';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017190420';
+} from './houses.js?v=20261017191454';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2083,15 +2083,20 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     const halos = Array.from({ length: 4 }, () => { const sp = new THREE.Sprite(haloMat); g.add(sp); return sp; });
     const lightFx = [wash, ...cones, ...halos];
 
-    const sty = { night: 0, open: false };
+    const accentCol = new THREE.Color(s.accent), warmWash = new THREE.Color(0xffd49a), warmBeam = new THREE.Color(0xffc476), warmHalo = new THREE.Color(0xffd9a0);
+    const lampLit = new THREE.Color().copy(accentCol).lerp(new THREE.Color(0xffffff), 0.25), lampBase = new THREE.Color(0.5, 0.47, 0.4);
+    const sty = { night: 0, open: false, hover: 0 };
     const applyLight = () => {
       const k = sty.open ? 0 : sty.night;                              // an open sign is lit evenly for reading
+      const h = sty.open ? 0 : sty.hover;                              // under the pointer: the lamps brighten and take the colour of the bar
       const dim = 1 - 0.4 * k;                                        // the face is dim after dark...
       faceMat.color.setRGB(dim, dim * 0.98, dim * 0.94);
-      washMat.opacity = k * 0.5;                                       // ...and the lamps' pools light it up
-      beamMat.opacity = k * 0.07;
-      haloMat.opacity = sty.open ? sty.night * 0.25 : sty.night * 0.5;
-      lipMat.emissive.setRGB(0.26 * sty.night, 0.18 * sty.night, 0.07 * sty.night); // rim catches the glow
+      washMat.opacity = k * 0.32 + h * 0.3;                           // ...and the lamps' pools light it up (a little dimmer than before until hovered)
+      beamMat.opacity = k * 0.045 + h * 0.06;
+      haloMat.opacity = (sty.open ? sty.night * 0.16 : sty.night * 0.3) + h * 0.42;
+      washMat.color.copy(warmWash).lerp(accentCol, h); beamMat.color.copy(warmBeam).lerp(accentCol, h); haloMat.color.copy(warmHalo).lerp(accentCol, h);
+      lampMat.color.copy(lampBase).lerp(lampLit, h);
+      lipMat.emissive.setRGB(0.26 * sty.night, 0.18 * sty.night, 0.07 * sty.night).lerp(accentCol, h * 0.22); // rim catches the glow
     };
 
     let sc = s.scale;                 // current scale of this sign (bigger on large screens, see placeBoards)
@@ -2176,8 +2181,14 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       },
       /** Lamps glow after dark. */
       setNight(n) {
-        lampMat.color.setRGB(0.55 + 0.45 * n, 0.52 + 0.4 * n, 0.45 + 0.1 * n);
+        lampBase.setRGB(0.5 + 0.34 * n, 0.47 + 0.3 * n, 0.4 + 0.08 * n);     // (the bulbs are a bit dimmer by default)
         sty.night = n; applyLight();
+      },
+      /** 0 or 1: the pointer is over this sign (eased in `tickHover`). */
+      hovT: 0,
+      tickHover(dt) {
+        const d = board.hovT - sty.hover; if (Math.abs(d) < 0.002) { if (sty.hover !== board.hovT) { sty.hover = board.hovT; applyLight(); } return; }
+        sty.hover += d * Math.min(1, dt * 9); applyLight();
       },
     };
     board.setLayout({ w: board.width, h: board.height, ox: 0, oy: 0 });
@@ -2423,6 +2434,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     isBlocked: (p) => blockedBy(p),
     /** How many fireflies are currently faded out because they sit in front of a sign (debug). */
     get hiddenFireflies() { let n = 0; for (let i = 0; i < FF; i++) if (ffVis[i] < 0.5) n++; return n; },
+    /** The sign under the pointer (its id) lights up; null for none. */
+    setHover(id) { for (const b of boards) b.hovT = b.id === id ? 1 : 0; },
     /** Every sign material, so depth of field can render them only in its sharp pass. */
     signMats,
     /** Per-frame animation: drifting clouds, drifting fireflies (and their lights and ground pools). */
@@ -2433,6 +2446,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       terrainWind.uWindTime.value = time;
       pondU.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
+      for (const b of boards) b.tickHover?.(dt);
       if (smoke) {
         smokeMat.uniforms.uTime.value = time;
         smokeSrc.forEach((src, si) => {
