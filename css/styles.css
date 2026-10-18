@@ -355,7 +355,7 @@ body.scene-mode::before {
   display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; object-position: 50% 28%;
   border-radius: 16px; border: 2px solid var(--ink); background: #ececec;
 }
-.about-top { display: grid; gap: 1em; align-items: center; margin-bottom: 0.4em; }
+.about-top { display: grid; gap: 1em; align-items: center; margin-bottom: 0.4em; max-width: 720px; }   /* photo + text share the 720px */
 .about-top .about-photo { width: min(220px, 100%); }
 .about-top h3 { margin-top: 0; }
 .about-top ul { margin: 0; padding-left: 1.1em; }
@@ -783,7 +783,7 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 /* ---------- Stories with media: text on the left, an image or clip on the right (wide signs only) ----------
    On narrow signs and phones the figure stays right under the hook line, so it still belongs to its story. */
 .story-wrap { container-type: inline-size; }
-.story.has-media { max-width: none; }
+.story.has-media { max-width: 720px; }   /* text + media share the 720px */
 .story-media { margin: 0.2em 0 0.9em; }
 .media-slot {
   display: grid; place-items: center; aspect-ratio: 4 / 3; max-height: 320px; width: 100%;
@@ -794,8 +794,8 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 }
 .story-media img, .story-media video { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; border-radius: 12px; }
 .story-media figcaption { margin-top: 0.5em; font-size: 0.82em; color: color-mix(in srgb, var(--ink) 75%, #fff); max-width: 720px; }
-@container (min-width: 760px) {
-  .story.has-media { display: grid; grid-template-columns: minmax(0, 720px) minmax(220px, 1fr); column-gap: 1.8em; align-items: start; }
+@container (min-width: 560px) {
+  .story.has-media { display: grid; grid-template-columns: minmax(0, 1fr) 200px; column-gap: 1.6em; align-items: start; }
   .story.has-media > * { grid-column: 1; }
   .story.has-media > .story-media { grid-column: 2; grid-row: 1 / span 6; margin: 0; }
 }
