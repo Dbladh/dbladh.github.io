@@ -192,7 +192,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     sceneUpdate(s) {
       if (!ctx || !on || !scn) return;
       const k = s.quiet ? 0.25 : 1;
-      at(scn.day.g.gain, 0.62 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.55 * s.night * k, 1.4);
+      at(scn.day.g.gain, 0.26 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.24 * s.night * k, 1.4);
       if (scn.wind) { at(scn.wind.g.gain, s.quiet ? 0 : 0.045, 0.9); if (scn.wind.p) at(scn.wind.p.pan, clamp(s.windPan || 0, -1, 1) * 0.7, 0.4); }
       if (scn.bike) {
         const g = !s.quiet && s.bike ? s.bike.gain : 0; at(scn.bike.g.gain, g, 0.3);
