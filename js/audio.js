@@ -395,7 +395,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     // ---- events ----
     jump(charge) { if (charge > 0.45) play('rev_blip', { gain: 0.14 + 0.3 * charge, rate: 0.9 + Math.random() * 0.25, offset: Math.random() * 0.3, dur: 0.9 + Math.random() * 0.5 }); thud(0.2 + 0.15 * charge, 90); },
     land(kind, air = 0.5) {
-      if (kind === 'perfect') { thud(0.5, 110); tone(1318, 0.5, { type: 'triangle', gain: 0.12, delay: 0.04 }); tone(1976, 0.6, { type: 'triangle', gain: 0.1, delay: 0.1 }); }
+      if (kind === 'perfect') { thud(0.5, 110); tone(1318, 0.5, { type: 'triangle', gain: 0.12, delay: 0.04 }); tone(1976, 0.6, { type: 'triangle', gain: 0.1, delay: 0.1 }); tone(2637, 0.5, { type: 'sine', gain: 0.06, delay: 0.17, dest: soft }); swoosh(0.45, 500, 3200, { gain: 0.16, type: 'bandpass' }); tone(110, 0.5, { type: 'sawtooth', gain: 0.05, slide: 260, delay: 0.02, dest: dull }); }   // (thud, a bright two-note chime with a sparkle on top, and a rising whoosh: the boost)
       else if (kind === 'clean') thud(0.4, 100);
       else if (kind === 'rough') { thud(0.8, 80); play('bounce', { gain: 0.55, rate: 0.75, lpf: 1800 }); tone(300, 0.2, { type: 'triangle', gain: 0.07, slide: 170, delay: 0.05, dest: dull }); }
       else if (air > 0.2) thud(0.22, 100);
@@ -440,6 +440,8 @@ export function createAudio({ base = 'audio/' } = {}) {
     stumble() { if (!ctx) return; thud(0.35, 90); tone(170, 0.2, { type: 'square', gain: 0.04, slide: 80, dest: dull }); tone(120, 0.12, { type: 'square', gain: 0.03, delay: 0.12, slide: 70, dest: dull }); },
     /** Fuel under a quarter (and the repeating warning under 15%): two quiet falling beeps. */
     lowFuel() { if (!ctx || !gate('lowfuel', 1)) return; tone(660, 0.09, { type: 'square', gain: 0.035, dest: dull }); tone(520, 0.1, { type: 'square', gain: 0.035, delay: 0.16, dest: dull }); },
+    /** The low-fuel beep (urgency 0..1: it rises in pitch as the tank empties). */
+    fuelBeep(u = 0) { if (!ctx) return; tone(820 + 420 * u, 0.07, { type: 'square', gain: 0.04 + 0.02 * u, dest: soft }); },
     /** The tank is empty: the engine whine falls away, then coughs and dies. */
     outOfFuel() {
       if (!ctx) return;
@@ -482,6 +484,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songTime']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'fuelBeep', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songTime']) out[n] = f;
   return out;
 }

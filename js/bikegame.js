@@ -2,17 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261018004921';
-import { createTrack } from './track.js?v=20261018004921';
-import { createRagdoll } from './ragdoll.js?v=20261018004921';
-import { createFx } from './fx.js?v=20261018004921';
-import { createAudio } from './audio.js?v=20261018004921';
-import { createPuffs } from './puffs.js?v=20261018004921';
-import { createTracks } from './tracks.js?v=20261018004921';
-import { createDirt } from './dirt.js?v=20261018004921';
-import { createMudCoat } from './mudcoat.js?v=20261018004921';
-import { createCoins } from './coins.js?v=20261018004921';
-import { createFuel } from './fuel.js?v=20261018004921';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261018005233';
+import { createTrack } from './track.js?v=20261018005233';
+import { createRagdoll } from './ragdoll.js?v=20261018005233';
+import { createFx } from './fx.js?v=20261018005233';
+import { createAudio } from './audio.js?v=20261018005233';
+import { createPuffs } from './puffs.js?v=20261018005233';
+import { createTracks } from './tracks.js?v=20261018005233';
+import { createDirt } from './dirt.js?v=20261018005233';
+import { createMudCoat } from './mudcoat.js?v=20261018005233';
+import { createCoins } from './coins.js?v=20261018005233';
+import { createFuel } from './fuel.js?v=20261018005233';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -515,7 +515,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       audio.land('perfect', air); dirt.burst(st.x, gy, laneZ, 10, 0.8);
       juice.ring(st.x, gy + 0.15, laneZ, '#8fd081', 0.7, 6.5 * kk, 0.65);
       juice.ring(st.x, gy + 0.15, laneZ, '#e8f7c8', 0.4, 4 * kk, 0.45, true, 0.7);
-      juice.burst('perfect', st.x, gy + 0.6, laneZ, 22, '#d9f7a0'); juice.halo('#9ff09a', 6.5, 0.55, 0.7);
+      juice.burst('perfect', st.x, gy + 0.6, laneZ, 40, '#d9f7a0'); juice.burst('perfect', st.x, gy + 1.0, laneZ, 18, '#fff2b0'); juice.halo('#9ff09a', 7.5, 0.7, 0.8);
+      juice.ring(st.x, gy + 0.15, laneZ, '#c8ffb0', 0.3, 9 * kk, 0.8, true, 0.55); juice.flick(2);
       dust(10, 6, '#b79b78', 0.55); st.squash = 1; juice.bump(-0.5); juice.hitStop(55); juice.flash('#a8e89a', 0.22, 170); juice.flick(1);
     } else if (air > 0.45 && !rough) {
       audio.land('clean', air); dirt.burst(st.x, gy, laneZ, 6, 0.6);
@@ -543,7 +544,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     if (rough && air > 0.3) { if (st.mult > 1) audio.comboLost(); st.vx *= 0.45; st.boost *= 0.3; st.daze = DAZE_TIME; juice.shake(0.35, 260); st.mult = Math.max(1, st.mult - 1); st.comboT = st.mult > 1 ? COMBO_TIME : 0; toast('Rough landing'); }   // (small hops over bumps are never punished)
     else {
       if (air > 0.45) {
-        st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 1.2 : 0.5));
+        st.boost = Math.min(BOOST_CAP, st.boost + (perfect ? 2.6 : 0.5)); if (perfect) st.vx += 2.5;       // a perfect landing: a real kick of speed
         combo(perfect);
         award((perfect ? 150 : 60) + Math.max(0, air - 0.5) * 90, perfect ? 'Stuck it!' : 'Clean landing');
       }
@@ -797,7 +798,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
             audio.fuelUp(); toast('+FUEL'); for (const hh of fuelHits) { juice.burst('coin', hh.x, hh.y, laneZ, 12, '#ff9a4a'); juice.ring(hh.x, hh.y, laneZ, '#ffb066', 0.5, 2.4, 0.35, false, 0.8); }
           }
           if (st.fuel < 0.25 && !st.lowWarn && !st.engineOut) { st.lowWarn = true; toast('Low fuel!'); audio.lowFuel(); }
-          if (st.fuel < 0.15 && !st.engineOut) { st.sputT -= dt; if (st.sputT <= 0) { st.sputT = 2.4; audio.lowFuel(); } }
+          if (st.fuel < 0.25 && !st.engineOut) { const u = 1 - st.fuel / 0.25; st.sputT -= dt; if (st.sputT <= 0) { st.sputT = 1.05 - 0.93 * Math.pow(u, 0.8); audio.fuelBeep(u); } }       // a dashboard beep that comes faster and higher the closer the tank is to empty
           if (st.fuel <= 0 && !st.engineOut) { st.engineOut = true; st.charging = false; st.charge = 0; toast('Out of fuel!'); audio.outOfFuel(); }
           if (st.engineOut && st.grounded && st.vx < 1.2) { st.outOfFuel = true; st.mult = 1; st.comboT = 0; for (const e of jumpEls) e.hidden = true; st.crashT = 0; showOver(); }
         }
