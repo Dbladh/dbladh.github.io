@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261018165353">
+  <link rel="stylesheet" href="css/styles.css?v=20261018165811">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018165353 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018165811 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -220,11 +220,15 @@
           <h4>I’m learning</h4>
           <ul class="chips chips-learning">
             <li><button type="button" class="chip" aria-expanded="false" aria-controls="tip-aftereffects">After Effects</button></li>
+            <li><button type="button" class="chip" aria-expanded="false" aria-controls="tip-characteranimator">Character Animator</button></li>
+            <li><button type="button" class="chip" aria-expanded="false" aria-controls="tip-premiere">Premiere</button></li>
             <li><button type="button" class="chip" aria-expanded="false" aria-controls="tip-rive">Rive</button></li>
             <li><button type="button" class="chip" aria-expanded="false" aria-controls="tip-github">GitHub</button></li>
             <li><button type="button" class="chip" aria-expanded="false" aria-controls="tip-jira">Jira</button></li>
           </ul>
           <p class="chip-tip" id="tip-aftereffects" hidden>On the <a href="https://www.awardco.com/" target="_blank" rel="noopener noreferrer">Awardco</a> marketing team, I set a goal to learn After Effects. I used it to make a loading icon for the platform and animations for hackathon projects.</p>
+          <p class="chip-tip" id="tip-characteranimator" hidden>I used Character Animator to create an 8-episode cartoon series for culture building at our product quarterly check-ins. I learned to build character rigs and do simple animations.</p>
+          <p class="chip-tip" id="tip-premiere" hidden>I learned Premiere to edit that 8-episode cartoon series, and to edit demo videos for hackathon projects.</p>
           <p class="chip-tip" id="tip-rive" hidden>I learned Rive while building <a href="https://apps.apple.com/us/app/skwigl-daily-drawing-game/id6757251065" target="_blank" rel="noopener noreferrer">Skwigl</a>. I used it to animate the character, and used data binding to build a customization screen where players buy cosmetics for their Skwigl buddy. It’s a powerful tool, and I’m still learning and want to explore more of it.</p>
           <p class="chip-tip" id="tip-github" hidden>I’m learning GitHub, mostly for personal projects. At work, we use git commands to commit and push prototypes for dev hand-off.</p>
           <p class="chip-tip" id="tip-jira" hidden>I’ve used Jira for years, and lately I’m in it more and more. It’s a hard tool to learn, since good use depends so much on the organization or even the department.</p>
@@ -281,6 +285,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261018165353"></script>
+  <script type="module" src="js/main.js?v=20261018165811"></script>
 </body>
 </html>
