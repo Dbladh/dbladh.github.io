@@ -1,13 +1,13 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017203642';
-import { buildWorld } from './world.js?v=20261017203642';
-import { createSky } from './sky.js?v=20261017203642';
-import { createDOF } from './dof.js?v=20261017203642';
-import { createRide } from './ride.js?v=20261017203642';
-import { createGame } from './bikegame.js?v=20261017203642';
-import { createAudio, pickFlicker } from './audio.js?v=20261017203642';
+import { PAL } from './palette.js?v=20261017204156';
+import { buildWorld } from './world.js?v=20261017204156';
+import { createSky } from './sky.js?v=20261017204156';
+import { createDOF } from './dof.js?v=20261017204156';
+import { createRide } from './ride.js?v=20261017204156';
+import { createGame } from './bikegame.js?v=20261017204156';
+import { createAudio, pickFlicker } from './audio.js?v=20261017204156';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -245,7 +245,7 @@ function start() {
 
   function flyTo(target, quick) {
     tween?.done();
-    if (!quick) audio.zoom(target === stops.home ? 'out' : cur.pos.distanceTo(stops.home.pos) < 2 ? 'in' : 'across');
+    if (!quick) audio.zoom(target === stops.home ? 'out' : cur.pos.distanceTo(stops.home.pos) < 2 ? 'in' : 'across', 1.6);
     if (quick) { cur.pos.copy(target.pos); cur.look.copy(target.look); tween = null; return Promise.resolve(); }
     return new Promise((resolve) => {
       tween = { fromP: cur.pos.clone(), fromL: cur.look.clone(), to: target, t: 0, dur: 1.6, done: resolve };

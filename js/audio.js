@@ -206,12 +206,30 @@ export function createAudio({ base = 'audio/' } = {}) {
         if (g > 0.002) { if (scn.bike.p) at(scn.bike.p.pan, clamp(s.bike.pan, -1, 1) * 0.8, 0.2); pump(scn.bike.layer); }
       }
     },
-    /** The camera flies into a billboard ('in'), back out to the view ('out') or between billboards ('across'): a soft whoosh. */
-    zoom(kind = 'in') {
+    /** The camera flies into a billboard ('in'), back out to the view ('out') or between billboards ('across'): a big whoosh that swells and fades over the
+     *  whole flight (`dur` seconds, the length of the animation). */
+    zoom(kind = 'in', dur = 1.6) {
       if (!ctx || !gate('zoom', 0.3)) return;
-      if (kind === 'in') { swoosh(0.95, 450, 2800, { gain: 0.13, q: 0.8 }); tone(196, 0.8, { type: 'sine', gain: 0.035, slide: 392, dest: soft }); }
-      else if (kind === 'out') { swoosh(1.0, 2800, 380, { gain: 0.12, q: 0.8 }); tone(392, 0.9, { type: 'sine', gain: 0.03, slide: 196, dest: soft }); }
-      else swoosh(0.6, 700, 2000, { gain: 0.09, q: 1.0 });
+      const t0 = ctx.currentTime, nb = noise(), up = kind !== 'out';
+      const env = (peak, skew = 0.55) => { const c = new Float32Array(96); for (let i = 0; i < c.length; i++) { const u = i / (c.length - 1), v = u < skew ? u / skew : (1 - u) / (1 - skew); c[i] = peak * Math.pow(Math.sin(Math.min(1, v) * Math.PI / 2), 1.6); } return c; };
+      const layer = (type, f0, f1, q, peak, skew) => {
+        const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        src.buffer = nb; src.loop = true; f.type = type; f.Q.value = q;
+        f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
+        g.gain.setValueAtTime(0, t0); g.gain.setValueCurveAtTime(env(peak, skew), t0, dur);
+        src.connect(f); f.connect(g); g.connect(bus); src.start(t0, Math.random() * 1.5); src.stop(t0 + dur + 0.1);
+        src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) { /* done */ } };
+      };
+      const sk = kind === 'out' ? 0.4 : kind === 'across' ? 0.5 : 0.62;
+      if (kind === 'in') { layer('bandpass', 350, 3600, 0.7, 0.34, sk); layer('lowpass', 500, 2200, 0.8, 0.26, sk); }
+      else if (kind === 'out') { layer('bandpass', 3400, 300, 0.7, 0.32, sk); layer('lowpass', 2400, 350, 0.8, 0.26, sk); }
+      else { layer('bandpass', 600, 2600, 0.8, 0.3, sk); layer('lowpass', 900, 700, 0.9, 0.22, sk); }
+      // a low rush under it, and a soft rising or falling tone so it feels like travel
+      const o = ctx.createOscillator(), og = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(up ? 70 : 150, t0); o.frequency.exponentialRampToValueAtTime(up ? 190 : 55, t0 + dur);
+      og.gain.setValueAtTime(0, t0); og.gain.setValueCurveAtTime(env(0.16, sk), t0, dur); o.connect(og); og.connect(bus); o.start(t0); o.stop(t0 + dur + 0.1);
+      o.onended = () => { try { o.disconnect(); og.disconnect(); } catch (e) { /* done */ } };
+      if (kind !== 'across') tone(up ? 196 : 392, dur * 0.9, { type: 'sine', gain: 0.045, slide: up ? 440 : 175, dest: soft, attack: dur * 0.3 });
     },
     /** A billboard's lamps start to flicker (`pat` from pickFlicker): the recorded flicker, then a faint electrical hum while they stay lit. */
     flicker(pat) {
