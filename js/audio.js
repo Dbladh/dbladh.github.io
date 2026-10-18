@@ -30,7 +30,7 @@ export const pickFlicker = (id) => {
 export function createAudio({ base = 'audio/' } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return stub();
-  let synthOK = false, ctx = null, master = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null, song = null, songTok = 0, songLoading = null, an = null, anData = null;
+  let synthOK = false, ctx = null, master = null, other = null, bus = null, lp = null, soft = null, dull = null, fx = null, ready = false, loading = null, on = false, chose = false, running = false, scn = null, scnLoading = null, song = null, songTok = 0, songLoading = null, an = null, anData = null;
   const buf = {};
   let engine = null, ambience = null;
   const st = { rpm: 0, eng: 0, last: 0, coinAt: -9, coinN: 0, bounceAt: -9, wind: 0, dirt: 0, mud: 0, chargeW: 0 };
@@ -41,7 +41,8 @@ export function createAudio({ base = 'audio/' } = {}) {
     ctx = new Ctx({ latencyHint: 'interactive' });
     master = ctx.createGain(); master.gain.value = on ? 0.8 : 0; master.connect(ctx.destination);
     lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 14000; lp.connect(master);       // the camera's distance softens the engine
-    bus = ctx.createGain(); bus.connect(master);
+    other = ctx.createGain(); other.connect(master);                                                  // everything but the music runs through here, so music mode can fade it all away together
+    bus = ctx.createGain(); bus.connect(other);
     soft = ctx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 4200; soft.Q.value = 0.5; soft.connect(bus);   // rewards: rounded, never harsh
     dull = ctx.createBiquadFilter(); dull.type = 'lowpass'; dull.frequency.value = 1500; dull.Q.value = 0.7; dull.connect(bus);   // setbacks: muffled and low
     return ctx;
@@ -159,7 +160,7 @@ export function createAudio({ base = 'audio/' } = {}) {
   }
   function buildScene() {
     if (scn || !ctx || !buf.amb_day || !buf.amb_night) return;
-    const out = ctx.createGain(); out.gain.value = 1; out.connect(master);
+    const out = ctx.createGain(); out.gain.value = 1; out.connect(other);
     const loop = (name, { lpf = 0, pan = false } = {}) => {
       const src = loopSrc(buf[name]), g = ctx.createGain(); g.gain.value = 0; let node = src;
       if (lpf) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lpf; node.connect(f); node = f; }
@@ -225,7 +226,11 @@ export function createAudio({ base = 'audio/' } = {}) {
     /** Every frame in the landscape. s: { night 0..1, quiet (the game is on), windPan -1..1, bike: { gain, pan } | null } */
     sceneUpdate(s) {
       if (!ctx || !on || !scn) return;
-      const k = (s.quiet ? 0.25 : 1) * (song ? 1 - 0.7 * clamp((ctx.currentTime - song.t0) / 60) : 1);               // (the landscape's own sounds give way as the song comes forward)
+      const k = s.quiet ? 0.25 : 1;
+      // Music mode: every sound but the music fades away until it is almost silent by 1:10, and comes back from the last note (1:55) to the end.
+      const ts = song ? ctx.currentTime - song.t0 : -1, sm = (a, b, x) => { const u = clamp((x - a) / (b - a)); return u * u * (3 - 2 * u); };
+      const duck = song ? 1 - 0.97 * sm(0, 70, ts) * (1 - sm(115, 123, ts)) : 1;
+      at(other.gain, duck, song ? 0.3 : 1.2);
       at(scn.day.g.gain, 0.13 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.11 * s.night * k, 1.4);
       if (scn.wind) { at(scn.wind.g.gain, s.quiet ? 0 : 0.045, 0.9); if (scn.wind.p) at(scn.wind.p.pan, clamp(s.windPan || 0, -1, 1) * 0.7, 0.4); }
       if (scn.bike) {

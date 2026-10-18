@@ -102,3 +102,5 @@ The game's ground continues the real terrain: the same terrain material and colo
 **Landings and fuel (dirt-bike game):** a rough landing makes the tank drain 2.2 times faster for 2 s; a clean landing makes it drain at 0.65 times the normal rate for 1.8 s and a perfect landing at 0.45 times for 2.5 s (`fuelK` and `fuelT` in `js/bikegame.js`; the effect eases off over its last half second, and a new landing replaces the old effect).
 
 **Bike and music mode:** while music mode is on (and while it fades out) no new dirt bike is sent across the hills (`hold` in `js/ride.js`); one that is already riding is left alone and finishes its pass. Bikes start again a few seconds after the mode is over.
+
+**Sound in music mode:** every sound except the music (the landscape's ambience, the windmill, the far-off bike, chimes and whooshes) runs through one `other` gain in `js/audio.js` and is faded down smoothly from the start of the song to almost silent (3%) by 1:10, held there, and brought back gradually from the last note at 1:55 to the end of the song (about 2:03). If the song is stopped early they come back within a second or two.
