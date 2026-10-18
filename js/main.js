@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017232824';
-import { buildWorld } from './world.js?v=20261017232824';
-import { createSky } from './sky.js?v=20261017232824';
-import { createDOF } from './dof.js?v=20261017232824';
-import { createRide } from './ride.js?v=20261017232824';
-import { createGame } from './bikegame.js?v=20261017232824';
-import { createAurora, setWarm } from './aurora.js?v=20261017232824';
-import { createAudio, pickFlicker } from './audio.js?v=20261017232824';
+import { PAL } from './palette.js?v=20261017233108';
+import { buildWorld } from './world.js?v=20261017233108';
+import { createSky } from './sky.js?v=20261017233108';
+import { createDOF } from './dof.js?v=20261017233108';
+import { createRide } from './ride.js?v=20261017233108';
+import { createGame } from './bikegame.js?v=20261017233108';
+import { createAurora, setWarm } from './aurora.js?v=20261017233108';
+import { createAudio, pickFlicker } from './audio.js?v=20261017233108';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -589,7 +589,7 @@ function start() {
   // While a house song plays the whole scene turns to night (so the aurora is the star): the sky is shown at a later hour, eased in and out with the aurora.
   // Between 1:10 and 1:26 of the song the colours turn warm (yellows, oranges and reds instead of greens, blues and magentas) and the camera slowly moves in on the scene (keeping all
   // three billboards in view); from there it slowly eases back out until the song ends. `songWarm` is eased in and out over a few seconds.
-  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0;                               // how far the scene is into the night, into the warm passage, and into the camera's move
+  let songDark = 0, songWarm = 0, songZoom = 0, songZoomWant = 0, songRoom = 0, songRoomWant = 0, songRoomT = 0; const songDrift = { x: 0, y: 0, swell: 0, roll: 0, env: 0, bars: 0 };                               // how far the scene is into the night, into the warm passage, and into the camera's move
   const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
     if (songDark < 0.002) return h;
@@ -767,20 +767,22 @@ function start() {
       }
       const room = songRoomWant;
       songRoom += (room - songRoom) * (1 - Math.exp(-dt * 1));
-      songZoom += (songZoomWant * songRoom - songZoom) * (1 - Math.exp(-dt * 6));                   // (progress runs evenly across the whole passage, so it keeps moving in the full 16 s)
+      songZoom += (songZoomWant * songRoom - songZoom) * (1 - Math.exp(-dt * 2.5));                 // (progress runs evenly across the whole passage, so it keeps moving in the full 16 s)
       camera.position.lerp(look, songZoom);
     }
     let songRoll = 0;
-    if (songDark > 0.01 && active === 'home' && !openId && !tween && !game?.active) {                      // the film-style drift: a slow sway and a soft breath on each bar's downbeat, all counted in beats, so it slows with the song's final ritardando
-      const bp = audio.songBeatPos();
-      if (bp >= 0) {
-        const bars = bp / 3, env = songDark * Math.max(0, 1 - songZoom * 2.5);                              // (it gives way to the push-in, so the billboards stay in view)
-        const sway = Math.sin(bars * 0.31) * 0.8 + Math.sin(bars * 0.13 + 1.3) * 0.5, lift = Math.sin(bars * 0.21 + 0.6) * 0.22;
-        const down = Math.exp(-(bp % 3) * 2.2) * (0.35 + spec.bass), breath = down * 0.004 * env;
-        camera.position.x += sway * env; camera.position.y += lift * env; look.x += sway * 0.3 * env;
-        camera.position.lerp(look, breath);
-        songRoll = (Math.sin(bars * 0.17 + 2) * 0.0035 + down * 0.0012) * env;
-      }
+    if ((songDark > 0.01 || songDrift.env > 0.002) && active === 'home' && !openId && !tween && !game?.active) {   // the film-style drift: a slow, heavily smoothed sway and a very gentle swell once a bar, all counted in beats (so it slows with the final ritardando)
+      const bp = audio.songBeatPos(), D = songDrift;
+      const on = bp >= 0 ? songDark * Math.max(0, 1 - songZoom * 2.5) : 0;                                 // (it gives way to the push-in, so the billboards stay in view)
+      const bars = bp >= 0 ? bp / 3 : D.bars;
+      const sway = Math.sin(bars * 0.31) * 0.8 + Math.sin(bars * 0.13 + 1.3) * 0.5, lift = Math.sin(bars * 0.21 + 0.6) * 0.22;
+      const swell = 0.5 - 0.5 * Math.cos((bars % 1) * Math.PI * 2), roll = Math.sin(bars * 0.17 + 2) * 0.003;   // (a smooth cosine, no sharp attack)
+      const k = 1 - Math.exp(-dt * 1.4);                                                                   // (every channel is low-passed again, so nothing can jerk)
+      D.bars = bars; D.env += (on - D.env) * (1 - Math.exp(-dt * 0.8));
+      D.x += (sway - D.x) * k; D.y += (lift - D.y) * k; D.swell += (swell - D.swell) * k; D.roll += (roll - D.roll) * k;
+      camera.position.x += D.x * D.env; camera.position.y += D.y * D.env; look.x += D.x * 0.3 * D.env;
+      camera.position.lerp(look, D.swell * 0.0025 * D.env);
+      songRoll = D.roll * D.env;
     }
     camera.lookAt(look); camera.rotation.z += songRoll;
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
@@ -788,7 +790,8 @@ function start() {
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
       const warmT = st < 0 ? 0 : smooth01(70, 72, st) * (1 - smooth01(84, 86, st)); songWarm += (warmT - songWarm) * (1 - Math.exp(-dt * 5));
-      songZoomWant = st < 0 ? 0 : Math.min(1, Math.max(0, (st - 70) / 16)) * (1 - Math.min(1, Math.max(0, (st - 86) / 37)));                    // in over the 16 seconds, then slowly back out until the end
+      songZoomWant = st < 0 ? 0 : (() => { const e = (x) => x * 0.55 + x * x * (3 - 2 * x) * 0.45, up = Math.min(1, Math.max(0, (st - 70) / 16)), down = Math.min(1, Math.max(0, (st - 86) / 37)); return e(up) * (1 - e(down)); })();   // (eased at both ends, so no sudden start or stop of the move)
+                         // in over the 16 seconds, then slowly back out until the end
       setWarm(songWarm); world.setWarm(songWarm);
       const darkTarget = playing ? 1 : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 0.55 : 0.5)));
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
