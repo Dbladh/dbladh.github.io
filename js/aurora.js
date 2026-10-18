@@ -79,6 +79,26 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(250, 40, 24), mat);
   mesh.renderOrder = -11; mesh.frustumCulled = false; mesh.visible = false;      // (drawn first: the sun, moon and stars sit over it)
   skyScene.add(mesh);
+  // A rare shooting star: a thin streak that crosses the upper sky now and then while the song plays (one small quad, drawn in the sky canvas).
+  const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    uniforms: { uA: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float uA; varying vec2 vUv; void main() { float v = abs(vUv.y * 2.0 - 1.0); float a = pow(vUv.x, 3.0) * (1.0 - v * v) * smoothstep(1.0, 0.55, v + 0.0) * uA; if (a < 0.004) discard; gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * 1.6, a); }',
+  }));
+  star.renderOrder = -9; star.frustumCulled = false; star.visible = false; skyScene.add(star);
+  let starT = -1, starNext = 9, sx = 0, sy = 0; const sq = new THREE.Quaternion(), sz = new THREE.Quaternion(), sv = new THREE.Vector3();
+  const starTick = (dt) => {
+    starNext -= dt;
+    if (starT < 0) { if (starNext > 0 || level < 0.8) { star.visible = false; return; } starT = 0; sx = 0.1 + Math.random() * 0.7; sy = 0.4 + Math.random() * 0.4; }
+    starT += dt / 1.4; if (starT >= 1) { starT = -1; starNext = 14 + Math.random() * 16; star.visible = false; return; }
+    const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect, ang = Math.PI + 0.38;
+    const e = 1 - (1 - starT) * (1 - starT), dx = Math.cos(ang), dy = Math.sin(ang), len = 0.2 * hw, run = 0.65 * hw * e;
+    const hx = sx * hw + dx * run, hy = sy * hh + dy * run;
+    sv.set(hx - dx * len / 2, hy - dy * len / 2, -d).applyQuaternion(camera.quaternion).add(camera.position); star.position.copy(sv);
+    sq.copy(camera.quaternion); sz.setFromAxisAngle(new THREE.Vector3(0, 0, 1), ang); star.quaternion.copy(sq.multiply(sz));
+    star.scale.set(len, Math.max(0.6, hh * 0.012), 1);
+    star.material.uniforms.uA.value = Math.pow(Math.sin(Math.PI * starT), 0.8) * level; star.visible = true;
+  };
   let level = 0, hue = 0;
   const sm = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };                // (the song's levels, eased again here: the aurora should glide, not jitter)
   const TAU = { bass: 0.5, mid: 0.8, treble: 1.0, energy: 1.6, centroid: 3.0, beat: 0.45 };
@@ -92,8 +112,8 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
      */
     update(dt, spec, night, on) {
       level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
-      if (!on && level < 0.004) { level = 0; mesh.visible = false; api.strength = 0; return; }
-      mesh.visible = true; mesh.position.copy(camera.position);
+      if (!on && level < 0.004) { level = 0; mesh.visible = false; star.visible = false; starT = -1; api.strength = 0; return; }
+      mesh.visible = true; mesh.position.copy(camera.position); starTick(dt);
       hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM; sweep += dt * 0.09;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
       for (const k in sm) sm[k] += (spec[k] - sm[k]) * (1 - Math.exp(-dt / TAU[k]));

@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017233510';
-import { auroraColour } from './aurora.js?v=20261017233510';
+import { PAL } from './palette.js?v=20261017233800';
+import { auroraColour } from './aurora.js?v=20261017233800';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017233510';
+} from './houses.js?v=20261017233800';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1939,6 +1939,35 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   fireflies.frustumCulled = false;
   scene.add(fireflies);
 
+  // Dust motes (music mode only): a slow, soft haze of tiny lit specks drifting through the air in front of the camera, for depth. Their positions are worked out
+  // entirely in the shader from the time and the camera (no per-frame work on the CPU), and they are drawn only while a song's dance is on.
+  const DUST = 90, dustGeo = new THREE.BufferGeometry(), dSeed = new Float32Array(DUST * 3);
+  for (let i = 0; i < DUST * 3; i++) dSeed[i] = rand();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(DUST * 3), 3));
+  dustGeo.setAttribute('aSeed', new THREE.BufferAttribute(dSeed, 3));
+  const dustU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uLevel: { value: 0 }, uWarm: { value: 0 }, uScale: { value: 700 } };
+  const dust = new THREE.Points(dustGeo, new THREE.ShaderMaterial({
+    uniforms: dustU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */ `
+      uniform float uTime, uLevel, uWarm, uScale; uniform vec3 uCam; attribute vec3 aSeed; varying float vA; varying vec3 vC;
+      void main() {
+        vec3 s = aSeed;
+        float rise = fract(s.y + uTime * (0.012 + 0.012 * s.z));                          // (each speck climbs slowly and wraps)
+        vec3 p = uCam + vec3((s.x - 0.5) * 34.0 + sin(uTime * 0.13 + s.z * 30.0) * 1.6, -4.0 + rise * 13.0, -3.0 - s.z * 26.0 + cos(uTime * 0.11 + s.x * 20.0) * 1.4);
+        vec4 mv = viewMatrix * vec4(p, 1.0);
+        float dist = max(-mv.z, 0.5);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(0.09 * projectionMatrix[1][1] * uScale * 0.5 / dist * (0.6 + s.x), 2.5, 22.0);
+        vA = uLevel * smoothstep(0.0, 0.18, rise) * smoothstep(1.0, 0.8, rise) * (0.35 + 0.65 * smoothstep(2.0, 12.0, dist));
+        vC = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.72, 0.4), uWarm);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying float vA; varying vec3 vC;
+      void main() { float r = length(gl_PointCoord * 2.0 - 1.0); float a = exp(-r * r * 3.5) * vA * 0.7; if (a < 0.004) discard; gl_FragColor = vec4(vC, a); }`,
+  }));
+  dust.frustumCulled = false; dust.visible = false; dust.renderOrder = 2;
+  scene.add(dust);
+
   // Some fireflies carry real lights (spread near/middle/far) plus a glow pool on the ground.
   const FF_LIGHTS = Math.max(0, Math.min(8, maxLights - houseLights.length));
   const byGroup = FF_GROUPS.map(() => []);
@@ -2537,8 +2566,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     },
     /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
     /** The music's levels for the fireflies' dance (smoothed values from the aurora); `w` 0..1 is how far the dance has begun. */
-    setDance(w, sm, beatPos = -1) { dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
-    setWarm(v) { ffUniforms.uWarm.value = v; },
+    setDance(w, sm, beatPos = -1) { dustU.uLevel.value = w; dust.visible = w > 0.01; dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
+    setWarm(v) { ffUniforms.uWarm.value = v; dustU.uWarm.value = v; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
@@ -2552,7 +2581,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       time += dt;
       updateMusic(dt);
       if (camera) camPos = camera.position;
-      ffUniforms.uTime.value = time;
+      ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
       terrainWind.uWindTime.value = time;
       pondU.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
@@ -2694,7 +2723,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     },
     /** Lets the fireflies share the depth-of-field settings, so near ones bloom into bokeh. */
     setView({ height, focus, aperture, maxBlur }) {
-      ffUniforms.uScale.value = height;
+      ffUniforms.uScale.value = dustU.uScale.value = height;
       ffUniforms.uFocus.value = focus;
       ffUniforms.uAperture.value = aperture;
       ffUniforms.uMaxBlur.value = maxBlur;
