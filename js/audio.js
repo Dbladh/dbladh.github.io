@@ -131,8 +131,8 @@ export function createAudio({ base = 'audio/' } = {}) {
       return;
     }
     const src = loopSrc(buf.ride), g = ctx.createGain(); g.gain.value = 0;
-    const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 130; shelf.gain.value = 7;      // the bass line: a fat low end...
-    const punch = ctx.createBiquadFilter(); punch.type = 'peaking'; punch.frequency.value = 70; punch.Q.value = 1.1; punch.gain.value = 3.5;   // ...with a punchy bump where the notes sit
+    const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 130; shelf.gain.value = 2.5;      // the new recording already has a big low end: just a little more...
+    const punch = ctx.createBiquadFilter(); punch.type = 'peaking'; punch.frequency.value = 70; punch.Q.value = 1.1; punch.gain.value = 1.5;   // ...with a punchy bump where the notes sit
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.012; comp.release.value = 0.14;   // (it also keeps the boosted bass from overloading)
     src.connect(shelf); shelf.connect(punch); punch.connect(comp); comp.connect(g); g.connect(master); src.start();
     g.gain.setTargetAtTime(RIDE_GAIN, ctx.currentTime, 1.2); ride = { src, g };
