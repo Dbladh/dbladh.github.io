@@ -2,17 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261018010232';
-import { createTrack } from './track.js?v=20261018010232';
-import { createRagdoll } from './ragdoll.js?v=20261018010232';
-import { createFx } from './fx.js?v=20261018010232';
-import { createAudio } from './audio.js?v=20261018010232';
-import { createPuffs } from './puffs.js?v=20261018010232';
-import { createTracks } from './tracks.js?v=20261018010232';
-import { createDirt } from './dirt.js?v=20261018010232';
-import { createMudCoat } from './mudcoat.js?v=20261018010232';
-import { createCoins } from './coins.js?v=20261018010232';
-import { createFuel } from './fuel.js?v=20261018010232';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261018010611';
+import { createTrack } from './track.js?v=20261018010611';
+import { createRagdoll } from './ragdoll.js?v=20261018010611';
+import { createFx } from './fx.js?v=20261018010611';
+import { createAudio } from './audio.js?v=20261018010611';
+import { createPuffs } from './puffs.js?v=20261018010611';
+import { createTracks } from './tracks.js?v=20261018010611';
+import { createDirt } from './dirt.js?v=20261018010611';
+import { createMudCoat } from './mudcoat.js?v=20261018010611';
+import { createCoins } from './coins.js?v=20261018010611';
+import { createFuel } from './fuel.js?v=20261018010611';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -795,7 +795,8 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
           if (!st.engineOut) st.fuel = Math.max(0, st.fuel - (dt / FUEL_SECONDS) * creep * (st.charging ? 1.9 : 1));
           if (fuelGot) {
             st.fuel = Math.min(1, st.fuel + fuelGot * CAN_FUEL); st.lowWarn = false; st.bonus += 50 * fuelGot * st.mult;
-            audio.fuelUp(); toast('+FUEL'); for (const hh of fuelHits) { juice.burst('coin', hh.x, hh.y, laneZ, 12, '#ff9a4a'); juice.ring(hh.x, hh.y, laneZ, '#ffb066', 0.5, 2.4, 0.35, false, 0.8); }
+            audio.fuelUp(); toast(st.engineOut ? 'Engine restarted!' : '+FUEL');
+            if (st.engineOut) { st.engineOut = false; st.sputT = 0; audio.sputter(); juice.flash('#ffd08a', 0.16, 150); }       // a can grabbed while coasting to a stop: the engine catches again and the ride goes on for (const hh of fuelHits) { juice.burst('coin', hh.x, hh.y, laneZ, 12, '#ff9a4a'); juice.ring(hh.x, hh.y, laneZ, '#ffb066', 0.5, 2.4, 0.35, false, 0.8); }
           }
           if (st.fuel < 0.25 && !st.lowWarn && !st.engineOut) { st.lowWarn = true; toast('Low fuel!'); audio.lowFuel(); }
           if (st.fuel < 0.25 && !st.engineOut) { const u = 1 - st.fuel / 0.25; st.sputT -= dt; if (st.sputT <= 0) { st.sputT = 1.05 - 0.93 * Math.pow(u, 0.8); audio.fuelBeep(u); } }       // a dashboard beep that comes faster and higher the closer the tank is to empty

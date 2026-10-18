@@ -441,7 +441,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     /** Fuel under a quarter (and the repeating warning under 15%): two quiet falling beeps. */
     lowFuel() { if (!ctx || !gate('lowfuel', 1)) return; tone(660, 0.09, { type: 'square', gain: 0.035, dest: dull }); tone(520, 0.1, { type: 'square', gain: 0.035, delay: 0.16, dest: dull }); },
     /** The low-fuel beep (urgency 0..1: it rises in pitch as the tank empties). */
-    fuelBeep(u = 0) { if (!ctx) return; tone(820 + 420 * u, 0.07, { type: 'square', gain: 0.04 + 0.02 * u, dest: soft }); },
+    fuelBeep(u = 0) { if (!ctx) return; const f = 1000 + 500 * u; tone(f, 0.1, { type: 'square', gain: 0.2 + 0.07 * u, attack: 0.003 }); tone(f * 2, 0.08, { type: 'sine', gain: 0.07 + 0.03 * u, attack: 0.003 }); },       // (a clear dashboard beep, well above the engine and the music)
     /** The tank is empty: the engine whine falls away, then coughs and dies. */
     outOfFuel() {
       if (!ctx) return;
