@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261018115007">
+  <link rel="stylesheet" href="css/styles.css?v=20261018125918">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018115007 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018125918 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -107,61 +107,55 @@
 
     <section class="stop" id="ai" data-stop="ai"
              data-title="AI: turning ideas into real things"
-             data-teaser="How I use AI to design, prototype and ship.">
+             data-teaser="How I use AI, and what it lets me build.">
       <a class="back" href="#home"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Back to the landscape</span></a>
       <h2 tabindex="-1">AI: turning ideas into real things</h2>
-      <p class="lede">First off, to answer the question on your mind: yes, I used AI to help build this portfolio.</p>
-      <p>For a long time, I’ve had ideas that usually would have stayed stuck in my head or trapped in a mockup file because I didn't have a traditional engineering background to code them from scratch. AI tools haven't replaced my creative vision—they’ve simply given me the vehicle to bring my ideas to life from start to finish.</p>
-      <p>I don’t believe AI should ever replace the human element. An individual’s true value today isn't just knowing how to code—it’s their curiosity, taste, and ability to think up and articulate creative solutions to real problems.</p>
+      <p class="lede">First off, to answer the question on your mind: yes, I used AI to build this portfolio.</p>
+      <p>Claude, with a little Gemini, did most of the building. The ideas didn’t come from it. The look, the animations, the interactions and even the hidden easter eggs are mine. I didn’t one-shot anything. I went back and forth on almost every detail until it matched what was in my head. The screenshots and some of the music are my own, with no AI.</p>
 
-      <h3>How I use AI: at work</h3>
-      <p>In my day-to-day UX work, I use AI to compress discovery time and test complex ideas fast.</p>
+      <h3>Why I use it</h3>
+      <p>For a long time, my ideas stayed stuck in my head or in a mockup file. I’m a designer, not an engineer. I used to build HTML emails and landing pages on the marketing team at Awardco, and I’ve tinkered with game making in GameMaker, Unity and Godot. That got me a proof of concept or a single level. Then I’d hit the limit of what I knew, or of my time, and I’d have to drop the project or wait for someone else to build it.</p>
+      <p>Now I can take an idea to a working prototype on my own. With a little help from friends, I can take it all the way to a live app. AI doesn’t replace curiosity or taste. Those are still on me.</p>
+
+      <h3>At work</h3>
       <div class="story-wrap">
       <article class="story has-media">
-        <h4>Rapid prototyping &amp; stress testing</h4>
-        <p class="hook">While working on a complex rules engine with nearly endless logic scenarios, I led a two-and-a-half-day discovery sprint with domain experts.</p>
+        <h4>Prototyping a rules engine</h4>
+        <p class="hook">I led a two-and-a-half-day discovery sprint on a rules engine with complex rules, prototyping with Copilot in VS Code.</p>
         <figure class="story-media">
-          <div class="media-slot" role="img" aria-label="Placeholder: screenshot of the AI-built rules engine prototype"><span>Image slot</span></div>
-          <figcaption>Placeholder caption: say what this image shows.</figcaption>
+          <div class="media-slot" role="img" aria-label="Placeholder: recreated example of a rules engine prototype"><span>Image slot</span></div>
+          <figcaption>Placeholder caption: a recreated example, not the original.</figcaption>
         </figure>
-        <p>As we talked through the problem, I used AI to prompt and build a working prototype in real time. We immediately stress-tested it against complex scenarios to catch missing functionality in days rather than waiting weeks or months.</p>
-        <p>From there, I took those insights and refined them into fully documented Figma designs and design system specs.</p>
-      </article>
-      </div>
-      <div class="story-wrap">
-      <article class="story has-media">
-        <h4>Team culture &amp; physical products</h4>
-        <p class="hook">I’ve also used AI to create memorable team-building experiences—from designing a custom, playable card game featuring members of our department to producing an animated series.</p>
-        <figure class="story-media">
-          <div class="media-slot" role="img" aria-label="Placeholder: photo of the playable department card game"><span>Image slot</span></div>
-          <figcaption>Placeholder caption: say what this image shows.</figcaption>
-        </figure>
-        <p>AI handled the heavy lifting, allowing me to focus on the strategy, storytelling, and bringing people together.</p>
+        <p>We described the problem, and AI helped capture how complex the data and rules were. It also came up with functionality we hadn’t thought of.</p>
+        <p>I took what we learned and turned it into documented Figma designs and specs, then worked with engineering to take it from there.</p>
       </article>
       </div>
 
-      <h3>How I use AI: personal projects</h3>
+      <h3>On my own</h3>
       <div class="app-wrap">
         <figure class="app-card app-left">
           <figcaption>
             <img class="app-icon" src="images/ai/tilt-drifter-icon.png" width="512" height="512" alt="Tilt Drifter app icon" loading="lazy" decoding="async">
-            <span><strong>Tilt Drifter</strong><small>An iOS game</small></span>
+            <span><strong><a href="https://apps.apple.com/us/app/tilt-drifter/id6756467025" target="_blank" rel="noopener noreferrer">Tilt Drifter</a></strong><small>Free on the App Store</small></span>
           </figcaption>
           <video class="app-video" src="images/ai/tilt-drifter-demo.mp4" poster="images/ai/tilt-drifter-poster.jpg" width="442" height="960" muted loop playsinline preload="none" controls aria-label="Screen recording of the Tilt Drifter app"></video>
         </figure>
-        <p>AI acts as a multiplier for my curiosity. It’s helped me bridge the gap between initial concept and real-world execution, including publishing two apps to the App Store. The ideas, visual design, and user experience were mine—AI just helped me overcome technical hurdles that used to stop projects in their tracks.</p>
+        <p>Tilt Drifter is a free iOS game. You tilt your phone to steer a ball, grab collectibles and power-ups, dodge obstacles and chase a high score. The whole app pulses and lights up to the music, and I gave it a retro CRT look. I challenged myself to finish it and get it in the App Store in under a month, and I did.</p>
         <figure class="app-card app-right">
           <figcaption>
             <img class="app-icon" src="images/ai/skwigl-icon.png" width="512" height="512" alt="Skwigl app icon" loading="lazy" decoding="async">
-            <span><strong>Skwigl</strong><small>Rive animations at its core</small></span>
+            <span><strong><a href="https://apps.apple.com/us/app/skwigl-daily-drawing-game/id6757251065" target="_blank" rel="noopener noreferrer">Skwigl</a></strong><small>Daily drawing game</small></span>
           </figcaption>
           <video class="app-video" src="images/ai/skwigl-demo.mp4" poster="images/ai/skwigl-poster.jpg" width="442" height="960" muted loop playsinline preload="none" controls aria-label="Screen recording of the Skwigl app"></video>
         </figure>
-        <p>Along the way, it’s accelerated my hands-on learning. While building my app Skwigl <img class="inline-icon" src="images/ai/skwigl-icon.png" width="512" height="512" alt="" loading="lazy" decoding="async">, for instance, I learned how to integrate and trigger interactive Rive animations—turning a tool I had only ever played around with into a core feature of a live product.</p>
+        <p>Skwigl is a daily drawing game. I came up with the idea and made the music. I designed and animated the characters in Illustrator and Rive, with help from a designer. AI helped with the UI, the drawing and the daily seed.</p>
+        <p>The seed is my favorite part. I figured I’d have to store every skwigl somewhere like Firebase. Instead I told AI the problem, not the solution. It suggested using the date, so everyone in the world gets the same skwigl each day.</p>
+        <p>I didn’t do it completely alone. An engineer helped me set up publishing and gave me technical advice. A designer gave me feedback and shared the illustration and Rive work on Skwigl. They also helped me with App Store Connect, and I can now submit and publish apps on my own. But every change to the code, and every prompt, was mine.</p>
       </div>
 
-      <h3>The bottom line</h3>
-      <p>At the end of the day, AI hasn't changed why I design—it's expanded what I'm capable of building. It allows me to move faster from problem to prototype, test ideas in the wild, and collaborate more effectively with engineering and product teams. It turns “what if” into something we can actually touch, test, and ship.</p>
+      <h3>Where it falls short</h3>
+      <p>AI doesn’t fully understand design systems yet. It’s great early on for discovery and ideas, but it still takes a person who knows the brand and the system to get to a prototype that’s ready for a front-end engineer. I expect that to improve. For something brand new, it’s not a limit at all.</p>
+      <p>AI didn’t change why I design. It changed what I can build.</p>
     </section>
 
     <section class="stop" id="about" data-stop="about"
@@ -228,6 +222,6 @@
   </div>
   <button id="bike-play" class="bike-play" type="button" hidden>Play the dirt bike game</button>
 
-  <script type="module" src="js/main.js?v=20261018115007"></script>
+  <script type="module" src="js/main.js?v=20261018125918"></script>
 </body>
 </html>
