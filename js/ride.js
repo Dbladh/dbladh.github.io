@@ -1,11 +1,11 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017194410';
-import { heightAt } from './world.js?v=20261017194410';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261017194410';
-import { createDirt } from './dirt.js?v=20261017194410';
-import { createPuffs } from './puffs.js?v=20261017194410';
+import { PAL } from './palette.js?v=20261017194619';
+import { heightAt } from './world.js?v=20261017194619';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261017194619';
+import { createDirt } from './dirt.js?v=20261017194619';
+import { createPuffs } from './puffs.js?v=20261017194619';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
@@ -25,23 +25,6 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
   hit.userData.bike = true;
   scene.add(hit);
 
-  // Sparkles around the bike on the first pass, so there is a hint that it can be clicked.
-  const sparkN = 7;
-  const sparkTex = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 32;
-    const x = c.getContext('2d'); const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
-    g.addColorStop(0, '#fff'); g.addColorStop(0.3, 'rgba(255,240,190,.9)'); g.addColorStop(1, 'rgba(255,220,120,0)');
-    x.fillStyle = g; x.fillRect(0, 0, 32, 32);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-  })();
-  const sparkGeo = new THREE.BufferGeometry();
-  sparkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sparkN * 3), 3));
-  const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
-    map: sparkTex, size: 0.7, sizeAttenuation: true, transparent: true, depthWrite: false, color: new THREE.Color(PAL.gold),
-    blending: THREE.AdditiveBlending,
-  }));
-  sparks.frustumCulled = false; sparks.visible = false;
-  scene.add(sparks);
 
   const st = {
     state: 'wait', timer: force ? 1 : 8, first: true,
@@ -62,7 +45,6 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     st.grounded = true; st.vy = 0; st.pitch = 0; st.hop = rnd(1.5, 3); st.flip = 0; st.lean = 0.7;
     st.state = 'ride';
     root.visible = true; hit.visible = true;
-    sparks.visible = st.first;
     placeOnGround(true);
   }
   function placeOnGround(snap) {
@@ -89,7 +71,7 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
   }
   function update(dt, active) {
     particles(dt);
-    if (!active) { if (st.state === 'ride') { st.state = 'wait'; root.visible = false; hit.visible = false; sparks.visible = false; } return; }
+    if (!active) { if (st.state === 'ride') { st.state = 'wait'; root.visible = false; hit.visible = false; } return; }
     if (st.state === 'wait') {
       st.timer -= dt;
       if (st.timer > 0) return;
@@ -141,16 +123,7 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     const k = Math.max(1, (dist * 0.1) / 3.4);                                        // never smaller than ~10% of the distance: easy to tap far away
     hit.scale.set(4 * k, 3.4 * k, 3);
     hit.position.set(st.x, st.y + 1.0 * k, laneZ);
-    if (sparks.visible) {
-      const p = sparkGeo.attributes.position, t = performance.now() / 1000;
-      for (let i = 0; i < sparkN; i++) {
-        const a = t * 1.4 + (i / sparkN) * Math.PI * 2, r = 1.5 + Math.sin(t * 2.3 + i * 1.7) * 0.3;
-        p.setXYZ(i, st.x + Math.cos(a) * r * 1.5, st.y + 1.0 + Math.sin(a * 1.3) * r * 0.6, laneZ + 0.5);
-      }
-      p.needsUpdate = true;
-      sparks.material.opacity = 0.65 + 0.35 * Math.sin(t * 5);
-    }
-    if (st.x > st.endX) { st.state = 'wait'; st.timer = force ? 10 : rnd(40, 60); st.first = false; root.visible = false; hit.visible = false; sparks.visible = false; }
+    if (st.x > st.endX) { st.state = 'wait'; st.timer = force ? 10 : rnd(40, 60); st.first = false; root.visible = false; hit.visible = false; }
   }
   let hoverNow = false;
 
@@ -166,7 +139,7 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     /** Forget the wait and send it now (the ?bike=1 test switch). */
     sendNow() { if (st.state === 'wait') st.timer = 0; },
     /** Back to waiting (after the game, or when the view changes): hides the bike and queues the next pass. */
-    reset() { st.state = 'wait'; st.timer = force ? 4 : rnd(15, 30); root.visible = false; hit.visible = false; sparks.visible = false; },
+    reset() { st.state = 'wait'; st.timer = force ? 4 : rnd(15, 30); root.visible = false; hit.visible = false; },
     /** Clicked: the bike pops a wheelie hop and the game can start. */
     poke() { if (st.state === 'ride' && st.grounded) launch(9, 0); },
   };
