@@ -119,6 +119,25 @@ export function createAudio({ base = 'audio/' } = {}) {
     const osc = (type) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = 300; g.gain.value = 0; o.connect(g); g.connect(soft); o.start(); return { o, g }; };
     fx = { air: osc('sine'), charge: osc('triangle') };                              // a tone that climbs the longer you stay up, and a whine that builds as you charge
   }
+  // The ride's background music (audio/ride.mp3, made by audio/tools/make_ride_music.py): a seamless loop, kept low under the engine, faded in when a ride begins
+  // (it carries on across restarts) and out when the game is left.
+  const RIDE_GAIN = 0.2;
+  let ride = null, rideLoading = null;
+  function rideStart() {
+    if (!ctx || ride) { if (ride) { ride.g.gain.cancelScheduledValues(ctx.currentTime); ride.g.gain.setTargetAtTime(RIDE_GAIN, ctx.currentTime, 0.8); } return; }
+    if (!buf.ride) {
+      if (!rideLoading) rideLoading = fetch(`${base}ride.mp3`).then((r) => r.arrayBuffer()).then(decode).then((b) => { buf.ride = b; }).catch(() => { /* stays silent */ });
+      rideLoading.then(() => { if (running && !ride && buf.ride) rideStart(); });
+      return;
+    }
+    const src = loopSrc(buf.ride), g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(master); src.start();
+    g.gain.setTargetAtTime(RIDE_GAIN, ctx.currentTime, 1.2); ride = { src, g };
+  }
+  function rideStop() {
+    if (!ride) return; const r = ride; ride = null;
+    try { r.g.gain.cancelScheduledValues(ctx.currentTime); r.g.gain.setTargetAtTime(0, ctx.currentTime, 0.35); } catch (e) { /* gone */ }
+    setTimeout(() => { try { r.src.stop(); r.src.disconnect(); r.g.disconnect(); } catch (e) { /* already stopped */ } }, 2000);
+  }
   function killEngine() {
     for (const L of [engine?.idle, engine?.synth]) { try { L?.bus.disconnect(); L?.node?.disconnect(); } catch (e) { /* gone */ } }
     for (const n of [ambience?.wind, ambience?.dirt, ambience?.mud]) { try { n?.s.stop(); n?.s.disconnect(); n?.g.disconnect(); } catch (e) { /* already stopped */ } }
@@ -330,9 +349,9 @@ export function createAudio({ base = 'audio/' } = {}) {
       if (on) loadScene();
     },
     /** A ride begins: the engine starts. */
-    start() { running = true; st.rpm = 0.2; st.eng = 0; if (ready) buildEngine(); },
+    start() { running = true; st.rpm = 0.2; st.eng = 0; if (ready) buildEngine(); rideStart(); },
     /** Leave the game: everything stops. */
-    stop() { running = false; killEngine(); },
+    stop() { running = false; killEngine(); rideStop(); },
     pause() { try { ctx?.suspend(); } catch (e) { /* none */ } },
     resume() { try { if (running || ctx) ctx?.resume(); } catch (e) { /* none */ } },
 
@@ -443,8 +462,8 @@ export function createAudio({ base = 'audio/' } = {}) {
       else tone(660, 0.06, { type: 'sine', gain: 0.055, dest: soft });
     },
     crash(pit) {
-      play('crash', { gain: pit ? 0.5 : 0.95 });
-      if (pit) { tone(900, 1.1, { type: 'sine', gain: 0.12, slide: 140 }); swoosh(1.0, 1400, 150, { gain: 0.2, type: 'lowpass' }); }
+      play('crash', { gain: pit ? 0.25 : 0.48 });                                   // (half as loud as it was)
+      if (pit) { tone(900, 1.1, { type: 'sine', gain: 0.06, slide: 140 }); swoosh(1.0, 1400, 150, { gain: 0.1, type: 'lowpass' }); }
     },
     bounce(v = 5) {
       if (!ctx || ctx.currentTime - st.bounceAt < 0.14 || v < 2) return; st.bounceAt = ctx.currentTime;
