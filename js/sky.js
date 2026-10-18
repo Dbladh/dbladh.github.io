@@ -221,8 +221,9 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   const themeMeta = document.querySelector('meta[name="theme-color"]');
 
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
-  function set(hour) {
+  function set(hour, dim = 0) {
     const s = sample(((hour % 24) + 24) % 24);
+    if (dim > 0) { s.top.multiplyScalar(1 - 0.82 * dim); s.bot.multiplyScalar(1 - 0.82 * dim); }          // (the aurora's night: the sky itself nearly black)
 
     // Sun arcs from east (hour 6) up and over to west (hour 18).
     const a = ((hour - 6) / 12) * Math.PI;
@@ -239,8 +240,8 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     const night = THREE.MathUtils.clamp(1 - (sy + 8) / 18, 0, 1);
     sunLight.color.copy(s.sun);
     sunLight.intensity = s.sunI * 1.75;
-    moonLight.intensity = (classic ? 0.35 : 0.6) * night;
-    hemi.intensity = s.hemi * 1.45; // soft fill, kept low enough that shadows still read
+    moonLight.intensity = (classic ? 0.35 : 0.6) * night * (1 - 0.92 * dim);
+    hemi.intensity = s.hemi * 1.45 * (1 - 0.88 * dim); // soft fill, kept low enough that shadows still read
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
     skyHemi.intensity = hemi.intensity;
     rimLight.position.set(-sx * 0.7, 38, -150);
@@ -252,9 +253,14 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     skySun.position.set(sx * 1.25, Math.max(sy, 26), 20);
     fog.color.copy(s.bot);
     if (!classic) fog.color.lerp(s.sun, 0.12);
-    starMat.uniforms.uNight.value = night * night;
-    sunMesh.visible = sy > -6;
-    moonMesh.visible = -sy > -6;
+    starMat.uniforms.uNight.value = night * night * (1 - dim);
+    // the sun, moon and their glows (and the stars above) fade away while a house song plays, leaving the sky to the aurora
+    for (const [m, glow] of [[sunMesh, 0.5], [moonMesh, 0.35]]) {
+      m.material.transparent = dim > 0; m.material.opacity = 1 - dim;
+      if (m.children[0]) m.children[0].material.opacity = glow * (1 - dim);
+    }
+    sunMesh.visible = sy > -6 && dim < 0.995;
+    moonMesh.visible = -sy > -6 && dim < 0.995;
 
     updateEnv(hour, s, sunMesh.position, night);
 

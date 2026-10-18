@@ -3,11 +3,11 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017222225';
+import { PAL } from './palette.js?v=20261017223018';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261017222225';
+} from './houses.js?v=20261017223018';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -701,7 +701,7 @@ float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); 
 float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
 float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * csN(p); p = p * 2.03 + vec2(4.1, 7.3); a *= 0.5; } return s; }`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uAurora * 0.38;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uAurora * 0.2;')
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
   vec2 cp = vCWPos.xz * 0.02 - vec2(uShadowT * 0.07, 0.0);   // patches ~50 units across, drifting +x (the sky clouds' direction) at ~3.5 units/s   // drifts about 5 units a second
@@ -1866,7 +1866,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     skyScene.add(g);
     clouds.push(g);
   }
-  const cloudLook = { night: 0, tint: new THREE.Color(1, 1, 1) };
+  const cloudLook = { night: 0, vis: 1, tint: new THREE.Color(1, 1, 1) };
 
   // ---- Fireflies: spread through the whole depth of the scene ----
   // Near ones sit right in front of the camera (big, soft bokeh), far ones twinkle on the hills.
@@ -2090,10 +2090,11 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     const accentCol = new THREE.Color(s.accent), warmWash = new THREE.Color(0xffd49a), warmBeam = new THREE.Color(0xffc476), warmHalo = new THREE.Color(0xffd9a0);
     const lampLit = new THREE.Color().copy(accentCol).lerp(new THREE.Color(0xffffff), 0.25), lampBase = new THREE.Color(0.5, 0.47, 0.4);
     const sty = { night: 0, open: false, hover: 0 };
+    let songDim = 0; const songDimSet = (v) => { if (Math.abs(v - songDim) > 0.003) { songDim = v; applyLight(); } };
     const applyLight = () => {
       const k = sty.open ? 0 : sty.night;                              // an open sign is lit evenly for reading
       const h = sty.open ? 0 : sty.hover;                              // under the pointer: the lamps brighten and take the colour of the bar
-      const dim = 1 - 0.4 * k;                                        // the face is dim after dark...
+      const dim = (1 - 0.4 * k) * (1 - 0.75 * songDim);                // the face is dim after dark (and almost black while a house song plays)...
       faceMat.color.setRGB(dim, dim * 0.98, dim * 0.94);
       washMat.opacity = k * 0.32 + h * 0.3;                           // ...and the lamps' pools light it up (a little dimmer than before until hovered)
       beamMat.opacity = k * 0.045 + h * 0.06;
@@ -2188,6 +2189,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         lampBase.setRGB(0.5 + 0.34 * n, 0.47 + 0.3 * n, 0.4 + 0.08 * n);     // (the bulbs are a bit dimmer by default)
         sty.night = n; applyLight();
       },
+      songDim: (v) => songDimSet(v),
       /** 0 or 1: the pointer is over this sign (eased in `tickHover`). */
       hovT: 0, flick: null, ft: 0,
       tickHover(dt) {
@@ -2487,6 +2489,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       if (i != null && houses[i] && houses[i].group) music = { h: houses[i], top: musicTop(houses[i]), t: 0, glow: 0, spawn: 0.1 };
     },
     /** The aurora's light on the ground and the pond: `colour` (a THREE.Color or null) at `strength` 0..1. */
+    setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
     setHover(id, flick = null) {
@@ -2537,7 +2540,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         sp.scale.set(u.w * (1 + 0.07 * Math.sin(t * 0.8 + 2)), u.h * (1 + 0.14 * Math.cos(t * 0.6)), 1);
         if (camera) { sp.quaternion.copy(camera.quaternion); sp.rotateZ(0.04 * Math.sin(t * 0.5 + u.ph)); }   // billboard
         sp.material.uniforms.uTime.value = time;
-        sp.material.uniforms.uOpacity.value = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12);
+        sp.material.uniforms.uOpacity.value = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12) * cloudLook.vis;
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       butterflies.forEach((bf, bi) => {

@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017222225';
-import { buildWorld } from './world.js?v=20261017222225';
-import { createSky } from './sky.js?v=20261017222225';
-import { createDOF } from './dof.js?v=20261017222225';
-import { createRide } from './ride.js?v=20261017222225';
-import { createGame } from './bikegame.js?v=20261017222225';
-import { createAurora } from './aurora.js?v=20261017222225';
-import { createAudio, pickFlicker } from './audio.js?v=20261017222225';
+import { PAL } from './palette.js?v=20261017223018';
+import { buildWorld } from './world.js?v=20261017223018';
+import { createSky } from './sky.js?v=20261017223018';
+import { createDOF } from './dof.js?v=20261017223018';
+import { createRide } from './ride.js?v=20261017223018';
+import { createGame } from './bikegame.js?v=20261017223018';
+import { createAurora } from './aurora.js?v=20261017223018';
+import { createAudio, pickFlicker } from './audio.js?v=20261017223018';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -581,10 +581,16 @@ function start() {
     const e = k * k * (3 - 2 * k), target = h < 7 ? 0 : 23.5;                    // (from before dawn it goes back to the small hours; otherwise on through sunset to night)
     return h + (target - h) * e;
   };
+  let songDimmed = false;
+  const songDim = () => {
+    const k = aurora.level;
+    if (k < 0.002) { if (songDimmed) { songDimmed = false; world.setSongDim(0); } return 0; }          // (the song is over: the clouds, signs and lights are back to normal)
+    const e = k * k * (3 - 2 * k); songDimmed = true; world.setSongDim(e); return e;
+  };
   let nightK = 0; const sndV = new THREE.Vector3(), sndB = new THREE.Vector3();
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
-    const { night, horizon } = sky.set(songHour(hour)); nightK = night;
+    const { night, horizon } = sky.set(songHour(hour), songDim()); nightK = night;
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
     world.setClouds(night, horizon);

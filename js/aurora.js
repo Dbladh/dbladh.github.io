@@ -101,12 +101,11 @@ export function createAurora(skyScene, camera, { low = false } = {}) {
     /** Tint the scene's lights, fog and (via `world.setAurora`) the ground and pond; call after sky.set each frame. */
     light(lights, world, lowEnd) {
       const s = api.strength;
-      lights.hemi.intensity *= 1 - 0.3 * level;                                   // a little darker overall, so the aurora's own light is what you see
       if (s > 0.002) {
         lights.hemi.color.lerp(colour, Math.min(0.75, s * 1.4)); lights.hemi.intensity *= 1 + s * 1.1;
         lights.moon.color.lerp(colour, Math.min(0.7, s * 1.3)); lights.moon.intensity += s * 1.1;
         lights.fog.color.lerp(colour, Math.min(0.3, s * 0.5));
-        lights.rim.color.copy(tmp.copy(colour).lerp(lights.rim.color, 0.25)); lights.rim.intensity = Math.max(lights.rim.intensity, level * s * 1.1);
+        lights.rim.color.copy(colour); lights.rim.intensity = level * (0.9 + 2.2 * s);        // from behind the village: the crests and edges of the hills, trees and roofs catch it
       }
       world.setAurora(s > 0.002 && !lowEnd ? colour : null, s);
     },
