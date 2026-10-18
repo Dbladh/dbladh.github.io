@@ -366,7 +366,7 @@ body.scene-mode::before {
 
 /* ---------- AI page: app cards sit beside the sentences they illustrate ---------- */
 .stop h4 { margin: 0 0 0.35em; font-size: 1.02em; }
-.app-wrap { container-type: inline-size; margin: 0.4em 0 0.6em; }
+.app-wrap { container-type: inline-size; margin: 0.4em 0 0.6em; max-width: 720px; }
 .app-wrap::after { content: ""; display: block; clear: both; }
 .app-card { margin: 0.4em auto 1em; padding: 10px; width: min(168px, 100%); border-radius: 14px; background: #f6f4ee; border: 2px solid var(--ink); }
 .app-card figcaption { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 9px; }
@@ -381,10 +381,12 @@ body.scene-mode::before {
 .inline-icon { width: 1.25em; height: 1.25em; vertical-align: -0.28em; border-radius: 0.3em; margin: 0 0.1em; }
 /* Wide enough: text on the left, the app card in the right column beside it (stacked above the text when narrow). */
 .app-pair { margin-bottom: 1em; }
-@container (min-width: 760px) {
-  .app-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.2em; align-items: start; }
-  .app-grid > p { grid-column: 1 / -1; }
-  .app-pair > .app-card { width: min(260px, 100%); margin: 0 0 1em; }
+@container (min-width: 560px) {
+  .app-pair { display: contents; }                 /* the cards float inside the 720px text area and the copy wraps beside them */
+  .app-pair > .app-card { width: 172px; margin: 0.3em 0 0.8em; }
+  .app-pair:nth-child(odd) > .app-card  { float: left;  margin-right: 1.6em; }
+  .app-pair:nth-child(even) > .app-card { float: right; margin-left: 1.6em; }
+  .app-grid > p { clear: both; }
 }
 
 
