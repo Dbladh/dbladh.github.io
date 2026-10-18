@@ -38,7 +38,7 @@ def clip(name, t0, t1, fin=0.01, fout=0.04, peak=0.85):
     a, b = int(fin * SR), int(fout * SR); s[:a] *= np.linspace(0, 1, a); s[-b:] *= np.linspace(1, 0, b)
     write(name, s); print('  events', events(t0, t1))
 
-clip('fl_start', 0.70, 3.00, fin=0.03, fout=0.25, peak=0.8)       # the first part of the recording: the hum, then a cluster of flickers at about 1.4 to 2 s
+clip('fl_start', 1.15, 3.00, fin=0.008, fout=0.25, peak=0.8)       # the first part of the recording, trimmed to start just before its first flicker (at about 1.2 s)
 # the hum: a steady stretch, made to loop, normalised (it is a quiet background under the crackles)
 hum = x[int(3 * SR):int(13 * SR)].copy(); n = int(1.0 * SR); L = len(hum) - n; t = np.linspace(0, np.pi / 2, n)
 loop = hum[:L].copy(); loop[:n] = hum[:n] * np.sin(t) + hum[L:L + n] * np.cos(t)

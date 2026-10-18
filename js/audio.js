@@ -17,7 +17,7 @@ const VARIANT = (/[?&]engine=(\w+)/.exec(location.search) || [])[1] || 'grain';
 
 /** The lamp flicker: the first part of audio/raw/light_flicker.mp3 (cut by audio/tools/make_flicker.py: mains hum, then a cluster of flickers). `events` are when
  *  the flickers are heard in it, as [start s, length s, strength 0..1]: the lamps flash in step (see world.setHover). Each billboard plays it a little higher or lower. */
-const FLICKER_EVENTS = [[0.505, 0.04, 0.28], [0.625, 0.04, 0.55], [0.755, 0.07, 1], [0.88, 0.075, 0.72], [1.005, 0.05, 0.54]];
+const FLICKER_EVENTS = [[0.055, 0.04, 0.28], [0.175, 0.04, 0.55], [0.305, 0.07, 1], [0.43, 0.075, 0.72], [0.555, 0.05, 0.54]];
 const BOARD_PITCH = { creativity: 0.95, ai: 1.0, about: 1.06 };
 export const pickFlicker = (id) => {
   const rate = (BOARD_PITCH[id] || 1) * (0.99 + Math.random() * 0.02);
@@ -228,7 +228,7 @@ export function createAudio({ base = 'audio/' } = {}) {
     flickerOff() {
       if (!ctx || !on) return;
       if (hum) { hum.g.gain.cancelScheduledValues(ctx.currentTime); hum.g.gain.setTargetAtTime(0, ctx.currentTime, 0.08); }
-      play('fl_start', { gain: 0.3, rate: 1.25, offset: 0.7, dur: 0.14 });
+      play('fl_start', { gain: 0.3, rate: 1.25, offset: 0.25, dur: 0.14 });
     },
     /** The bike was clicked: a bright rising sparkle to say an easter egg was found. */
     easter() {
