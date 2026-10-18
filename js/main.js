@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017231434';
-import { buildWorld } from './world.js?v=20261017231434';
-import { createSky } from './sky.js?v=20261017231434';
-import { createDOF } from './dof.js?v=20261017231434';
-import { createRide } from './ride.js?v=20261017231434';
-import { createGame } from './bikegame.js?v=20261017231434';
-import { createAurora, setWarm } from './aurora.js?v=20261017231434';
-import { createAudio, pickFlicker } from './audio.js?v=20261017231434';
+import { PAL } from './palette.js?v=20261017232824';
+import { buildWorld } from './world.js?v=20261017232824';
+import { createSky } from './sky.js?v=20261017232824';
+import { createDOF } from './dof.js?v=20261017232824';
+import { createRide } from './ride.js?v=20261017232824';
+import { createGame } from './bikegame.js?v=20261017232824';
+import { createAurora, setWarm } from './aurora.js?v=20261017232824';
+import { createAudio, pickFlicker } from './audio.js?v=20261017232824';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -770,7 +770,19 @@ function start() {
       songZoom += (songZoomWant * songRoom - songZoom) * (1 - Math.exp(-dt * 6));                   // (progress runs evenly across the whole passage, so it keeps moving in the full 16 s)
       camera.position.lerp(look, songZoom);
     }
-    camera.lookAt(look);
+    let songRoll = 0;
+    if (songDark > 0.01 && active === 'home' && !openId && !tween && !game?.active) {                      // the film-style drift: a slow sway and a soft breath on each bar's downbeat, all counted in beats, so it slows with the song's final ritardando
+      const bp = audio.songBeatPos();
+      if (bp >= 0) {
+        const bars = bp / 3, env = songDark * Math.max(0, 1 - songZoom * 2.5);                              // (it gives way to the push-in, so the billboards stay in view)
+        const sway = Math.sin(bars * 0.31) * 0.8 + Math.sin(bars * 0.13 + 1.3) * 0.5, lift = Math.sin(bars * 0.21 + 0.6) * 0.22;
+        const down = Math.exp(-(bp % 3) * 2.2) * (0.35 + spec.bass), breath = down * 0.004 * env;
+        camera.position.x += sway * env; camera.position.y += lift * env; look.x += sway * 0.3 * env;
+        camera.position.lerp(look, breath);
+        songRoll = (Math.sin(bars * 0.17 + 2) * 0.0035 + down * 0.0012) * env;
+      }
+    }
+    camera.lookAt(look); camera.rotation.z += songRoll;
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
