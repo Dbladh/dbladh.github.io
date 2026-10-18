@@ -283,6 +283,8 @@ export function createAudio({ base = 'audio/' } = {}) {
     },
     songPan(pan) { if (song && song.p) song.p.pan.setTargetAtTime(clamp(pan, -1, 1) * (0.6 - 0.35 * clamp((ctx.currentTime - song.t0) / 60)), ctx.currentTime, 0.2); },           // (less to one side as it comes forward)
     get songPlaying() { return !!song; },
+    /** Seconds into the house song, or -1 when none plays. */
+    songTime() { return song && ctx ? ctx.currentTime - song.t0 : -1; },
     /** Where the song is in its beats: a number whose whole part is the beat count (0, 1, 2...; the bar position is that modulo 3) and whose fraction is how far into the beat it is; -1 if no song. */
     songBeatPos() {
       if (!song || !ctx) return -1;
@@ -457,6 +459,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songTime']) out[n] = f;
   return out;
 }

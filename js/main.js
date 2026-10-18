@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261017224626';
-import { buildWorld } from './world.js?v=20261017224626';
-import { createSky } from './sky.js?v=20261017224626';
-import { createDOF } from './dof.js?v=20261017224626';
-import { createRide } from './ride.js?v=20261017224626';
-import { createGame } from './bikegame.js?v=20261017224626';
-import { createAurora } from './aurora.js?v=20261017224626';
-import { createAudio, pickFlicker } from './audio.js?v=20261017224626';
+import { PAL } from './palette.js?v=20261017225200';
+import { buildWorld } from './world.js?v=20261017225200';
+import { createSky } from './sky.js?v=20261017225200';
+import { createDOF } from './dof.js?v=20261017225200';
+import { createRide } from './ride.js?v=20261017225200';
+import { createGame } from './bikegame.js?v=20261017225200';
+import { createAurora } from './aurora.js?v=20261017225200';
+import { createAudio, pickFlicker } from './audio.js?v=20261017225200';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -576,14 +576,18 @@ function start() {
   const DAY_SECONDS = 300;
   let hour = 12, shownMinute = -1, dragging = false, lightsWarm = false, idleReady = false;
   // While a house song plays the whole scene turns to night (so the aurora is the star): the sky is shown at a later hour, eased in and out with the aurora.
+  // Between 1:10 and 1:26 of the song the mood lifts: the whole scene lights up, bright and sunny, and then goes back to the night (`songSun`, eased in and out over a few seconds).
+  let songDark = 0, songSun = 0;                                              // how far the scene is into the night, and into the sunny passage
+  const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   const songHour = (h) => {
-    const k = aurora.level; if (k < 0.002) return h;
-    const e = k * k * (3 - 2 * k), target = h < 7 ? 0 : 23.5;                    // (from before dawn it goes back to the small hours; otherwise on through sunset to night)
-    return h + (target - h) * e;
+    let r = h;
+    if (songDark >= 0.002) { const e = songDark * songDark * (3 - 2 * songDark), target = h < 7 ? 0 : 23.5; r = h + (target - h) * e; }      // (from before dawn it goes back to the small hours; otherwise on through sunset to night)
+    if (songSun >= 0.002) r += (12.3 - r) * songSun;                              // the sunny passage: a bright midday
+    return r;
   };
   let songDimmed = false;
   const songDim = () => {
-    const k = aurora.level;
+    const k = songDark;
     if (k < 0.002) { if (songDimmed) { songDimmed = false; world.setSongDim(0); } return 0; }          // (the song is over: the clouds, signs and lights are back to normal)
     const e = k * k * (3 - 2 * k); songDimmed = true; world.setSongDim(e); return e;
   };
@@ -746,8 +750,11 @@ function start() {
     const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
+      const st = playing ? audio.songTime() : -1;
+      songSun = st < 0 ? 0 : smooth01(67.5, 70.5, st) * (1 - smooth01(86, 89, st));
+      const darkTarget = playing ? 1 - songSun : 0; songDark += (darkTarget - songDark) * (1 - Math.exp(-dt * (darkTarget > songDark ? 1.2 : 1.0)));
       if (playing) audio.songSpectrum(spec, dt); else { spec.bass = spec.mid = spec.treble = spec.energy = spec.centroid = spec.beat = 0; }
-      aurora.update(dt, spec, nightK, playing);
+      aurora.update(dt, spec, nightK, playing && songSun < 0.5);
       world.setDance(aurora.level < 0.002 ? 0 : aurora.level * aurora.level * (3 - 2 * aurora.level), spec, audio.songBeatPos());
       if (aurora.level > 0) aurora.light(sky.lights, world, lowEnd);
       else if (aurora.strength !== 0) { aurora.strength = 0; world.setAurora(null, 0); setTime(hour); }       // (the lights are put back as the sky sets them)
