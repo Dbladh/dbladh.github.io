@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261018230715';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261018231142';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -31,6 +31,7 @@ const beatAt = (t) => {
   let lo = 0, hi = B.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
   return lo + (t - B[lo]) / (B[lo + 1] - B[lo]);
 };
+const LH_STEP = []; { let step = -1, last = -9; SONG_LH.forEach((n, i) => { if (n[0] - last > 0.05) { step++; last = n[0]; } LH_STEP[i] = step; }); }       // (which beat-of-the-round each left-hand note is: notes struck together count once)
 const NOTE_LEAD = 0.12;                  // seconds: how far ahead of the sound the note lights run (raise it if they still look late, lower it if early)
 export const pickFlicker = (id) => {
   const rate = (BOARD_PITCH[id] || 1) * (0.99 + Math.random() * 0.02);
@@ -334,20 +335,21 @@ export function createAudio({ base = 'audio/' } = {}) {
      *  `pe[pitch]` is how brightly that MIDI pitch is sounding (0..1, either hand: what the sky's stars glow with), `recent` lists the notes struck in the last 2.4 s, newest first ({ hand: 0 right / 1 left, pitch, start, age, vel }), `chord` / `root` / `minor` are the harmony now (root 0-11, minor 0/1; chord -1 before the first),
      *  and lhN counts the left-hand notes started so far (a change means a new one: lhZone is its zone, lhVel its strength 0..1). All zeros when no song plays. */
     songNotes(out) {
-      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0; o.clN = 0; o.clDur = 0; o.clPitch = 0; o.clVel = 0; o.st = 0; (o.pe = o.pe || new Float32Array(128)).fill(0); o.chord = -1; o.root = 0; o.minor = 0; (o.recent = o.recent || []).length = 0;
+      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0; o.clN = 0; o.clDur = 0; o.clPitch = 0; o.clVel = 0; o.st = 0; o.sweep = 0; (o.pe = o.pe || new Float32Array(128)).fill(0); o.chord = -1; o.root = 0; o.minor = 0; (o.recent = o.recent || []).length = 0;
       o.rh[0] = o.rh[1] = o.rh[2] = o.lh[0] = o.lh[1] = o.lh[2] = 0;
       if (!song || !ctx) return o;
       const t = ctx.currentTime - song.t0 + NOTE_LEAD;                          // (a touch ahead of the sound: a frame is drawn and shown a little after the note is heard, so the lights are brought forward to land on it)
-      for (const [list, dst, zone] of [[SONG_RH, o.rh, (p) => (p <= 72 ? 0 : p <= 75 ? 1 : 2)], [SONG_LH, o.lh, (p) => (p <= 50 ? 0 : p <= 57 ? 1 : 2)]]) {
+      o.sweep = smooth(69, 70.5, t) * (1 - smooth(85, 86.5, t));                  // 1:10 to 1:26: the left hand's lights step left, middle, right, left... in a fixed round, whatever the notes (a calmer, less bright passage than all lighting together)
+      for (const [list, dst, zone] of [[SONG_RH, o.rh, (p) => (p <= 72 ? 0 : p <= 75 ? 1 : 2)], [SONG_LH, o.lh, (p, k) => (o.sweep > 0.5 ? LH_STEP[k] % 3 : p <= 50 ? 0 : p <= 57 ? 1 : 2)]]) {
         let n = 0; while (n < list.length && list[n][0] <= t) n++;           // (a few hundred notes: a plain scan is fine)
         for (let k = n - 1; k >= 0 && t - list[k][0] < 4; k--) {
-          const [s, p, len, v] = list[k], age = t - s, z = zone(p), a = 0.45 + 0.55 * clamp(v / 70);
+          const [s, p, len, v] = list[k], age = t - s, z = zone(p, k), a = 0.45 + 0.55 * clamp(v / 70);
           const e = a * (0.55 * Math.exp(-age * 5) + 0.45 * Math.exp(-age / (0.3 + 0.5 * Math.min(len, 3))) * (age < len + 0.4 ? 1 : Math.exp(-(age - len - 0.4) * 4)));   // (a bright strike, then a glow that lasts as long as the note)
           if (e > dst[z]) dst[z] = e;
           if (e > o.pe[p]) o.pe[p] = e;
           if (age < 2.4) o.recent.push({ hand: list === SONG_RH ? 0 : 1, pitch: p, start: s, age, vel: a });
         }
-        if (list === SONG_LH) { o.lhN = n; if (n > 0) { o.lhZone = zone(list[n - 1][1]); o.lhVel = 0.45 + 0.55 * clamp(list[n - 1][3] / 70); } }
+        if (list === SONG_LH) { o.lhN = n; if (n > 0) { o.lhZone = zone(list[n - 1][1], n - 1); o.lhVel = 0.45 + 0.55 * clamp(list[n - 1][3] / 70); } }
       }
       { let n = 0; while (n < SONG_CL.length && SONG_CL[n][0] <= t) n++;                // the clarinet: how many of its notes have started, and the latest one's pitch, length (s) and strength
         o.clN = n; if (n > 0) { const c = SONG_CL[n - 1]; o.clPitch = c[1]; o.clDur = c[2]; o.clVel = 0.45 + 0.55 * clamp(c[3] / 70); if (t - c[0] > c[2] + 0.5) o.clDur = 0; } }

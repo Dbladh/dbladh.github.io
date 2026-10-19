@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018230715';
-import { auroraColour } from './aurora.js?v=20261018230715';
+import { PAL } from './palette.js?v=20261018231142';
+import { auroraColour } from './aurora.js?v=20261018231142';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018230715';
+} from './houses.js?v=20261018231142';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1675,13 +1675,13 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const MAT = { flatWhite: white({ flatShading: true }), grass: flat({ side: THREE.DoubleSide }), plain: white() };
   // Flower heads that can light up (music mode): the screen is split into three zones, left / middle / right, and the left hand's notes light the flowers of their zone.
   // Done in the shader from where each flower is on screen, so it costs no per-flower data.
-  const flowerGlow = { value: new THREE.Vector3() };
+  const flowerGlow = { value: new THREE.Vector3() }, flowerMix = { value: new THREE.Vector2() };
   const flowerMat = white();
   flowerMat.onBeforeCompile = (sh) => {
-    sh.uniforms.uGlow = flowerGlow;
+    sh.uniforms.uGlow = flowerGlow; sh.uniforms.uMix = flowerMix;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vZx;').replace('#include <project_vertex>', '#include <project_vertex>\nvZx = gl_Position.x / max(gl_Position.w, 0.001);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZx; uniform vec3 uGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 zw = max(vec3(0.0), 1.0 - abs(vZx - vec3(-0.66, 0.0, 0.66)) / 0.66); totalEmissiveRadiance += diffuseColor.rgb * (0.15 + 0.85 * diffuseColor.rgb) * 5.2 * uGlow.x; }');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZx; uniform vec3 uGlow; uniform vec2 uMix;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 zw = max(vec3(0.0), 1.0 - abs(vZx - vec3(-0.66, 0.0, 0.66)) / 0.66); totalEmissiveRadiance += diffuseColor.rgb * (0.15 + 0.85 * diffuseColor.rgb) * 5.2 * mix(uMix.x, dot(zw, uGlow), uMix.y); }');
   };
   /** Build the instanced meshes for a set of plant/prop lists (`src`, shaped like `items`) into `target`. */
   function buildAll(src, target, opt = {}) {
@@ -1930,7 +1930,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // The fireflies' dance (while a house song plays): each depth group forms a slow ring that turns, rises and falls in a travelling wave, breathes with the bass and
   // pulses in brightness along the ring with the beat. Everything is added up frame by frame, so it glides and never jumps.
   const RINGS = [{ cx: 0, cz: 12, R: 8.5, y: 1.6, amp: 2.6, dir: 1 }, { cx: 0, cz: -8, R: 20, y: 2.0, amp: 3.4, dir: -1 }, { cx: 0, cz: -40, R: 42, y: 2.6, amp: 4.2, dir: 1 }];
-  const dance = { rh: [0, 0, 0], lh: [0, 0, 0], pace: 1, beatPos: -1, w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
+  const dance = { sweep: 0, rh: [0, 0, 0], lh: [0, 0, 0], pace: 1, beatPos: -1, w: 0, ang: 0, wave: 0, chase: 0, hue: 0, morph: 0, centroid: 0, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0 };
   const ffGeo = new THREE.BufferGeometry();
   const ffPos = new Float32Array(FF * 3), ffCol = new Float32Array(FF * 3), ffSeed = new Float32Array(FF);
   const ffVis = new Float32Array(FF).fill(1);   // fades to 0 while a firefly would drift in front of a sign
@@ -2399,7 +2399,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const showPulse = (i) => { const sn = 0.5 + 0.5 * Math.sin(dance.chase - i * 1.25); return Math.min(1.5, 0.16 + 0.8 * sn * sn * (0.45 + 0.85 * dance.bass) + 0.85 * dance.beat * (i & 1 ? 1 : 0.5)); };
   const rippleCol = new THREE.Color();
   const showTone = (i, out) => auroraColour((dance.hue + dance.centroid * 0.3 + i * 0.17) % 1, out);
-  let showWas = false;
+  let showWas = false, camObj = null; const hv = new THREE.Vector3();
   function lightShow() {
     const w = dance.w;
     if (w <= 0.002) {                                                      // (over: put the village's window colours back; the rest is reset every frame by setNight)
@@ -2412,7 +2412,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       if (!h.group || (music && music.h === h)) return;                    // (the singing house keeps its own glow)
       h.baseEm ??= h.glass.emissive.clone();
       const c = showTone(i, showColour);
-      const lit = Math.max(dance.lh[0], dance.lh[1], dance.lh[2]);          // the left hand's notes light every house together (the old tempo chase stays as a gentle undercurrent)
+      let lit = Math.max(dance.lh[0], dance.lh[1], dance.lh[2]);
+      if (dance.sweep > 0.002 && camObj) {                                  // 1:10 to 1:26: back to thirds of the screen, round and round
+        hv.set(h.x, 2, h.z).project(camObj);
+        const zl = Math.max(0, 1 - Math.abs(hv.x + 0.66) / 0.66) * dance.lh[0] + Math.max(0, 1 - Math.abs(hv.x) / 0.66) * dance.lh[1] + Math.max(0, 1 - Math.abs(hv.x - 0.66) / 0.66) * dance.lh[2];
+        lit = lit * (1 - dance.sweep) + zl * dance.sweep;
+      }          // the left hand's notes light every house together (the old tempo chase stays as a gentle undercurrent)
       const p = Math.min(1.5, 0.35 * showPulse(i) + 0.12 + 1.5 * lit);
       h.glass.emissive.copy(h.baseEm).lerp(c, 0.85 * w); h.glass.emissiveIntensity += w * (0.3 + 1.6 * p);
       if (h.light) { h.light.color.copy(h.baseLightCol ??= h.light.color.clone()).lerp(c, 0.9 * w); h.light.intensity += w * HOUSE_I * (0.15 + 1.1 * p); }
@@ -2422,7 +2427,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       showTone(9 + j * 2, showCol2);
       let p;
       if (dance.beatPos >= 0) {
-        p = 0.07 + 1.7 * Math.max(dance.lh[0], dance.lh[1], dance.lh[2]);       // all three signs flash together with the left hand's notes (the piano's lower part, from the song's MIDI)
+        p = 0.07 + 1.7 * (Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * (1 - dance.sweep) + dance.lh[j] * dance.sweep);       // all three signs flash together with the left hand's notes (the piano's lower part, from the song's MIDI)
       } else p = showPulse(9 + j * 2);
       b.show?.(w, p, showCol2);
     });
@@ -2615,7 +2620,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     setDance(w, sm, beatPos = -1, pace = 1) { dance.pace = pace; pondU.uBeatPos.value = w > 0.01 ? beatPos : -1; showTone(0, rippleCol); pondU.uRipple.value.copy(rippleCol).multiplyScalar(w * 0.5); dustU.uLevel.value = w; dust.visible = w > 0.01; dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
     /** The notes sounding now (from audio.songNotes): the melody lights the signs, the left hand the fireflies and the flowers. */
     setNotes(n) {
-      dustU.uStr.value = n.st;                                                    // (the strings make the drifting dust shimmer)
+      dance.sweep = n.sweep; dustU.uStr.value = n.st;                                                    // (the strings make the drifting dust shimmer)
       for (let k = 0; k < 3; k++) { dance.rh[k] = n.rh[k]; dance.lh[k] = n.lh[k]; }
       const slots = pondU.uRip.value, r = n.recent;
       for (let i = 0; i < 8; i++) {                                               // the newest eight notes, each a ring on the pond (x from its pitch, z scattered by its start time so a run of notes doesn't pile up)
@@ -2640,8 +2645,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     update(dt, camera) {
       time += dt;
       updateMusic(dt);
-      if (camera) camPos = camera.position;
-      { const g = dance.w > 0.002 ? dance.w : 0; const l = Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * g; flowerGlow.value.set(l, l, l); }
+      if (camera) { camPos = camera.position; camObj = camera; }
+      { const g = dance.w > 0.002 ? dance.w : 0; flowerGlow.value.set(dance.lh[0] * g, dance.lh[1] * g, dance.lh[2] * g); flowerMix.value.set(Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * g, dance.sweep); }
       ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
       terrainWind.uWindTime.value = time;
       pondU.uTime.value = time;
