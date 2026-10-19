@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018225950';
-import { auroraColour } from './aurora.js?v=20261018225950';
+import { PAL } from './palette.js?v=20261018230402';
+import { auroraColour } from './aurora.js?v=20261018230402';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018225950';
+} from './houses.js?v=20261018230402';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2423,7 +2423,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       showTone(9 + j * 2, showCol2);
       let p;
       if (dance.beatPos >= 0) {
-        p = 0.07 + 1.7 * dance.rh[j];                                       // the melody (the right hand's notes, from the song's MIDI): low notes light the left sign, middle the middle, high the right
+        p = 0.07 + 1.7 * dance.lh[j];                                       // the left hand's notes (the piano's lower part, from the song's MIDI): the lowest notes light the left sign, middle ones the middle, higher ones the right
       } else p = showPulse(9 + j * 2);
       b.show?.(w, p, showCol2);
     });
