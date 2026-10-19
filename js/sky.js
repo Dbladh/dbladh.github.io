@@ -104,13 +104,13 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   };
   const sunMesh = new THREE.Mesh(
     new THREE.SphereGeometry(10, 28, 18),
-    new THREE.MeshBasicMaterial({ color: 0xfff1b8, fog: false, depthTest: false, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xfff1b8, fog: false, transparent: true, depthTest: false, depthWrite: false }),
   );
   sunMesh.renderOrder = -10;   // behind everything else in this layer, whatever its distance
   sunMesh.add(halo(0xffd890, 64, 0.5));
   const moonMesh = new THREE.Mesh(
     new THREE.SphereGeometry(7, 28, 18),
-    new THREE.MeshBasicMaterial({ color: 0xe8eeff, fog: false, depthTest: false, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xe8eeff, fog: false, transparent: true, depthTest: false, depthWrite: false }),
   );
   moonMesh.renderOrder = -10;
   moonMesh.add(halo(0xaec4ff, 42, 0.35));
@@ -265,7 +265,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     starMat.uniforms.uNight.value = night * night * (1 - dim);
     // the sun, moon and their glows (and the stars above) fade away while a house song plays, leaving the sky to the aurora
     for (const [m, glow] of [[sunMesh, 0.5], [moonMesh, 0.35]]) {
-      m.material.transparent = dim > 0; m.material.opacity = 1 - dim;
+      m.material.opacity = 1 - dim;
       if (m.children[0]) m.children[0].material.opacity = glow * (1 - dim);
     }
     sunMesh.visible = sy > -6 && dim < 0.995;
