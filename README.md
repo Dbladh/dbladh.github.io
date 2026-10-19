@@ -18,6 +18,7 @@ python3 -m http.server 8765
 | `css/styles.css` | Look and feel: color blocks, big type, simple view and landscape layouts. |
 | `js/world.js` | The landscape: hills, trees, flowers, cottages, clouds, billboards. `STOPS` at the top sets where each billboard sits. |
 | `js/sky.js` | Time of day: sky colors, sun/moon, lights, stars. Edit `KEYS` to change the palette per hour. |
+| `multimedia/` | Images, videos and other media the site uses (web-sized only). Raw originals (PSD, WAV, PDF, long videos, big GIFs) go in `multimedia/_source/`, which is not published. |
 | `js/main.js` | Camera moves, navigation, keyboard, simple view, time slider. |
 
 ## Accessibility

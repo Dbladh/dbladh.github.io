@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018170307';
-import { auroraColour } from './aurora.js?v=20261018170307';
+import { PAL } from './palette.js?v=20261018202323';
+import { auroraColour } from './aurora.js?v=20261018202323';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018170307';
+} from './houses.js?v=20261018202323';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2036,7 +2036,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
   const aboutPhoto = new Image();      // painted onto the About sign's face once it has loaded
-  aboutPhoto.src = 'images/about_me_image.jpg';
+  aboutPhoto.src = 'multimedia/about_me_image.jpg';
 
   /** Unit box / cylinder with a vertical vertex-colour ramp: darker underneath, lighter on top. */
   const rampBox = (() => {
