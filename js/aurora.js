@@ -6,7 +6,7 @@
 //   colour -> follows how bright the sound is and how loud: green, teal, blue, violet, magenta, with a red fringe on the loudest
 // It also lights the world a little: `colour` and `strength` (see `light`) are what the scene's lights, ground and pond take on.
 import * as THREE from 'three';
-import { SONG_RH, SONG_LH } from './notes.js?v=20261018225743';
+import { SONG_RH, SONG_LH } from './notes.js?v=20261018225950';
 
 const PAL = [[0.25, 1.0, 0.45], [0.12, 0.92, 0.78], [0.35, 0.55, 1.0], [0.72, 0.38, 1.0], [1.0, 0.3, 0.78], [1.0, 0.32, 0.42]];       // green, teal, blue, violet, magenta, red
 const WARM_PAL = [[1.0, 0.88, 0.34], [1.0, 0.68, 0.22], [1.0, 0.46, 0.15], [1.0, 0.3, 0.12], [0.95, 0.2, 0.18], [1.0, 0.62, 0.3]];       // yellow, amber, orange, red-orange, red, soft orange
@@ -101,8 +101,8 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     star.scale.set(len, Math.max(0.6, hh * 0.012), 1);
     star.material.uniforms.uA.value = Math.pow(Math.sin(Math.PI * starT), 0.8) * level; star.visible = true;
   };
-  // The meteor shower (the warm passage, 1:10-1:26): a streak is launched on every beat of the song (two on each bar's downbeat, one big), all running the same way across the sky
-  // like a real shower; they are warm-coloured, last about a second each, and come from a small pool of the same one-quad streaks.
+  // The meteors follow the clarinet solo (0:36 to 1:26): each of its notes sends one streak across the sky, running for as long as the note is held (a short note is a quick streak, a long one a slow
+  // stream), higher in the sky for a higher note, all running the same way like a real shower. They are warm-coloured and come from a small pool of one-quad streaks.
   const METEORS = 7, ms = [];
   for (let i = 0; i < METEORS; i++) {
     const mat = new THREE.ShaderMaterial({
@@ -113,30 +113,29 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); mesh.renderOrder = 5; mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh);
     ms.push({ mesh, t: -1, sx: 0, sy: 0, ang: 0, len: 0, run: 0, amp: 1, dur: 1 });
   }
-  let lastBeat = -1, lastNote = -1;
+  let lastNote = -1;
   const MCOL = [new THREE.Color(1, 0.62, 0.3), new THREE.Color(1, 0.78, 0.42), new THREE.Color(1, 0.5, 0.28), new THREE.Color(1, 0.9, 0.62)];
-  const launch = (amp, delay, zone = -1) => {
+  const launch = (dur, pitch, vel) => {
     const m = ms.find((q) => q.t < 0); if (!m) return;
-    m.t = -delay; m.amp = amp; m.sx = zone < 0 ? -0.3 + Math.random() * 1.3 : -0.35 + zone * 0.5 + Math.random() * 0.3; m.sy = 0.7 + Math.random() * 0.45; m.ang = Math.PI + 0.55 + (Math.random() - 0.5) * 0.12;
-    m.len = (0.16 + 0.14 * amp) * 1; m.run = 0.3 + 0.25 * amp; m.dur = 0.95 + 0.5 * amp * Math.random();
+    m.t = 0; m.amp = vel; m.dur = Math.max(0.5, dur); m.ang = Math.PI + 0.5 + (Math.random() - 0.5) * 0.08;
+    m.run = Math.min(1.15, 0.4 + 0.3 * dur); m.len = 0.2 + 0.1 * vel;
+    const lo = Math.max(-0.2, -1 + 0.87 * m.run); m.sx = lo + Math.random() * (1.0 - lo);              // (starts at the right, runs down to the left, and stays on screen)
+    m.sy = Math.min(1.1, Math.max(0.45, 0.5 + (pitch - 51) / 20 * 0.55 + (Math.random() - 0.5) * 0.1));  // (a higher note, a higher streak)
     m.mesh.material.uniforms.uC.value.copy(MCOL[(Math.random() * MCOL.length) | 0]);
   };
   const meteorTick = (dt, bp, notes) => {
-    const shower = WARM > 0.35 && level > 0.5 && bp >= 0;
-    const bi = bp >= 0 ? Math.floor(bp) : -1;
-    if (notes && notes.lhN !== lastNote) { if (shower && lastNote >= 0 && notes.lhN - lastNote < 3) launch(0.45 + 0.55 * notes.lhVel, 0, notes.lhZone); lastNote = notes.lhN; }   // a streak for each left-hand note, from the part of the sky its pitch points to
-    else if (!notes && bi !== lastBeat) { if (shower && lastBeat >= 0 && bi - lastBeat < 3) { const down = bi % 3 === 0; launch(down ? 1 : 0.7, 0); if (down) launch(0.55, 0.12); } lastBeat = bi; }
+    if (notes && notes.clN !== lastNote) { if (lastNote >= 0 && notes.clN - lastNote === 1 && notes.clDur > 0 && level > 0.5) launch(notes.clDur, notes.clPitch, notes.clVel); lastNote = notes.clN; }
     const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect;
     for (const m of ms) {
       if (m.t === -1) { m.mesh.visible = false; continue; }
       m.t += dt / m.dur;
       if (m.t >= 1) { m.t = -1; m.mesh.visible = false; continue; }
       if (m.t < 0) { m.mesh.visible = false; continue; }                                        // (waiting out its small delay)
-      const e = 1 - (1 - m.t) * (1 - m.t), dx = Math.cos(m.ang), dy = Math.sin(m.ang), len = m.len * hw, run = m.run * hw * e;
+      const e = 0.4 * (1 - (1 - m.t) * (1 - m.t)) + 0.6 * m.t, dx = Math.cos(m.ang), dy = Math.sin(m.ang), len = m.len * hw, run = m.run * hw * e;
       sv.set(m.sx * hw + dx * run - dx * len / 2, m.sy * hh + dy * run - dy * len / 2, -d).applyQuaternion(camera.quaternion).add(camera.position); m.mesh.position.copy(sv);
       sq.copy(camera.quaternion); sz.setFromAxisAngle(zAxis, m.ang); m.mesh.quaternion.copy(sq.multiply(sz));
       m.mesh.scale.set(len, Math.max(0.9, hh * 0.02 * (0.6 + 0.5 * m.amp)), 1);
-      m.mesh.material.uniforms.uA.value = Math.pow(Math.sin(Math.PI * m.t), 0.7) * (0.55 + 0.45 * m.amp) * level;
+      m.mesh.material.uniforms.uA.value = Math.min(1, m.t * 7) * Math.min(1, (1 - m.t) * 4) * (0.6 + 0.5 * m.amp) * level;     // (it lights quickly, holds while the note is held, then fades)
       m.mesh.visible = true;
     }
   };
