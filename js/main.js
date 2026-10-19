@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018222946';
-import { buildWorld } from './world.js?v=20261018222946';
-import { createSky } from './sky.js?v=20261018222946';
-import { createDOF } from './dof.js?v=20261018222946';
-import { createRide } from './ride.js?v=20261018222946';
-import { createGame } from './bikegame.js?v=20261018222946';
-import { createAurora, setWarm } from './aurora.js?v=20261018222946';
-import { createAudio, pickFlicker } from './audio.js?v=20261018222946';
+import { PAL } from './palette.js?v=20261018223109';
+import { buildWorld } from './world.js?v=20261018223109';
+import { createSky } from './sky.js?v=20261018223109';
+import { createDOF } from './dof.js?v=20261018223109';
+import { createRide } from './ride.js?v=20261018223109';
+import { createGame } from './bikegame.js?v=20261018223109';
+import { createAurora, setWarm } from './aurora.js?v=20261018223109';
+import { createAudio, pickFlicker } from './audio.js?v=20261018223109';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -196,7 +196,7 @@ function start() {
     }
     return true;
   }
-  const songNotes = { rh: [0, 0, 0], lh: [0, 0, 0], lhN: 0, lhZone: 0, lhVel: 0 };       // (the notes sounding in the song now, from its MIDI)
+  const songNotes = { rh: [0, 0, 0], lh: [0, 0, 0], lhN: 0, lhZone: 0, lhVel: 0, recent: [], chord: -1, root: 0, minor: 0 };       // (the notes sounding in the song now, from its MIDI)
   const spec = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };
   const world = buildWorld(scene, sections, { maxLights: lowEnd ? 4 : 9, skyScene, low: lowEnd, seed, classic });
   console.info(`Village seed ${seed} (${world.themeName}); add ?seed=${seed} to the URL to keep it.`);

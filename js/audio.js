@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH } from './notes.js?v=20261018222946';
+import { SONG_RH, SONG_LH, SONG_CHORDS } from './notes.js?v=20261018223109';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -325,9 +325,10 @@ export function createAudio({ base = 'audio/' } = {}) {
     },
     /** The notes sounding in the house song right now (from its MIDI, see js/notes.js), for the lights. Fills and returns `out`:
      *  rh[0..2] and lh[0..2] are how strongly the melody / left hand is lit in each of three zones (rh by pitch: low, middle, high; lh by pitch the same way, left to right),
+     *  `recent` lists the notes struck in the last 2.4 s, newest first ({ hand: 0 right / 1 left, pitch, start, age, vel }), `chord` / `root` / `minor` are the harmony now (root 0-11, minor 0/1; chord -1 before the first),
      *  and lhN counts the left-hand notes started so far (a change means a new one: lhZone is its zone, lhVel its strength 0..1). All zeros when no song plays. */
     songNotes(out) {
-      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0;
+      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0; o.chord = -1; o.root = 0; o.minor = 0; (o.recent = o.recent || []).length = 0;
       o.rh[0] = o.rh[1] = o.rh[2] = o.lh[0] = o.lh[1] = o.lh[2] = 0;
       if (!song || !ctx) return o;
       const t = ctx.currentTime - song.t0;
@@ -337,9 +338,13 @@ export function createAudio({ base = 'audio/' } = {}) {
           const [s, p, len, v] = list[k], age = t - s, z = zone(p), a = 0.45 + 0.55 * clamp(v / 70);
           const e = a * (0.55 * Math.exp(-age * 5) + 0.45 * Math.exp(-age / (0.3 + 0.5 * Math.min(len, 3))) * (age < len + 0.4 ? 1 : Math.exp(-(age - len - 0.4) * 4)));   // (a bright strike, then a glow that lasts as long as the note)
           if (e > dst[z]) dst[z] = e;
+          if (age < 2.4) o.recent.push({ hand: list === SONG_RH ? 0 : 1, pitch: p, start: s, age, vel: a });
         }
         if (list === SONG_LH) { o.lhN = n; if (n > 0) { o.lhZone = zone(list[n - 1][1]); o.lhVel = 0.45 + 0.55 * clamp(list[n - 1][3] / 70); } }
       }
+      o.recent.sort((a, b) => a.age - b.age);
+      let c = -1; while (c + 1 < SONG_CHORDS.length && SONG_CHORDS[c + 1][0] <= t) c++;       // (the chord now: root pitch class 0-11 and major / minor, from the song's MIDI)
+      if (c >= 0) { o.chord = c; o.root = SONG_CHORDS[c][1]; o.minor = SONG_CHORDS[c][2]; }
       return o;
     },
     /** The song's sound this instant, for the aurora: bass, mid, treble and energy (0..1, each scaled to the song's own loudest), centroid (how bright it is, 0..1)

@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018222946';
-import { auroraColour } from './aurora.js?v=20261018222946';
+import { PAL } from './palette.js?v=20261018223109';
+import { auroraColour } from './aurora.js?v=20261018223109';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018222946';
+} from './houses.js?v=20261018223109';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -812,7 +812,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   pondHeight.generateMipmaps = false;
   pondHeight.needsUpdate = true;
   const pondU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight }, uAurora: auroraU, uBeatPos: { value: -1 }, uRipple: { value: new THREE.Color(0, 0, 0) },
+    uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight }, uAurora: auroraU, uBeatPos: { value: -1 }, uRip: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uRipOn: { value: 0 }, uRipple: { value: new THREE.Color(0, 0, 0) },
     uHT: { value: new THREE.Vector4(POND.x - PB.r, POND.z - PB.r, 1 / (PB.r * 2), 1 / (PB.r * 2)) },
     uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
     uCenter: { value: new THREE.Vector2(POND.x, POND.z) }, uR: { value: POND.r },
@@ -833,7 +833,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           #include <fog_vertex>
         }`,
       fragmentShader: `
-        uniform float uTime, uDay, uR, uBeatPos; uniform vec3 uHorizon, uSkyTop, uAurora, uRipple; uniform vec2 uCenter;
+        uniform float uTime, uDay, uR, uBeatPos, uRipOn; uniform vec4 uRip[8]; uniform vec3 uHorizon, uSkyTop, uAurora, uRipple; uniform vec2 uCenter;
         uniform sampler2D uHeightTex; uniform vec4 uHT;
         varying vec3 vW;
         #include <fog_pars_fragment>
@@ -849,6 +849,17 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           vec2 c = uCenter + (idx < 0.5 ? vec2(-1.2, 0.9) : idx < 1.5 ? vec2(1.6, -0.6) : vec2(0.3, -1.8));
           float amp = idx < 0.5 ? 1.0 : 0.62, life = clamp(1.0 - f / 1.7, 0.0, 1.0), r = (0.15 + f * 1.7) * (idx < 0.5 ? 1.25 : 1.0);
           return smoothstep(0.2, 0.0, abs(length(p - c) - r)) * life * life * amp;
+        }
+        // Music mode: every note the song strikes drops its own ring, where its pitch puts it (low on the left of the pond, high on the right): a melody note is a clear ring, a left-hand note a wider, softer one.
+        float noteRings(vec2 p) {
+          float sum = 0.0;
+          for (int i = 0; i < 8; i++) {
+            vec4 n = uRip[i]; float amp = abs(n.w);
+            if (amp < 0.001) continue;
+            float wide = n.w < 0.0 ? 1.5 : 1.0, r = (0.15 + n.z * 1.5) * wide, life = clamp(1.0 - n.z / 2.3, 0.0, 1.0);
+            sum += smoothstep(0.2 * wide, 0.0, abs(length(p - (uCenter + n.xy)) - r)) * life * life * amp;
+          }
+          return sum;
         }
         void main() {
           float gh = texture2D(uHeightTex, (vW.xz - uHT.xy) * uHT.zw).r;
@@ -877,7 +888,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           col = mix(col, lin(vec3(0.95, 0.99, 1.0)), clamp(rings, 0.0, 1.0) * 0.55 * (0.4 + 0.6 * uDay));
           if (uBeatPos >= 0.0 && max(uRipple.r, max(uRipple.g, uRipple.b)) > 0.002) {
             float b0 = floor(uBeatPos), fr = uBeatPos - b0;
-            float br = beatRing(p, b0, fr) + beatRing(p, b0 - 1.0, fr + 1.0) + beatRing(p, b0 - 2.0, fr + 2.0);
+            float br = uRipOn > 0.5 ? noteRings(p) : beatRing(p, b0, fr) + beatRing(p, b0 - 1.0, fr + 1.0) + beatRing(p, b0 - 2.0, fr + 2.0);
             col += uRipple * clamp(br, 0.0, 1.0) * 1.5;
           }
           float sw = 0.14 + 0.006 * length(cameraPosition - vW);          // keep the foam line visible at distance / on small screens
@@ -2601,7 +2612,18 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     /** The music's levels for the fireflies' dance (smoothed values from the aurora); `w` 0..1 is how far the dance has begun. */
     setDance(w, sm, beatPos = -1, pace = 1) { dance.pace = pace; pondU.uBeatPos.value = w > 0.01 ? beatPos : -1; showTone(0, rippleCol); pondU.uRipple.value.copy(rippleCol).multiplyScalar(w * 0.5); dustU.uLevel.value = w; dust.visible = w > 0.01; dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
     /** The notes sounding now (from audio.songNotes): the melody lights the signs, the left hand the fireflies and the flowers. */
-    setNotes(n) { for (let k = 0; k < 3; k++) { dance.rh[k] = n.rh[k]; dance.lh[k] = n.lh[k]; } },
+    setNotes(n) {
+      for (let k = 0; k < 3; k++) { dance.rh[k] = n.rh[k]; dance.lh[k] = n.lh[k]; }
+      const slots = pondU.uRip.value, r = n.recent;
+      for (let i = 0; i < 8; i++) {                                               // the newest eight notes, each a ring on the pond (x from its pitch, z scattered by its start time so a run of notes doesn't pile up)
+        const nt = r[i];
+        if (!nt) { slots[i].set(0, 0, 0, 0); continue; }
+        const h = Math.sin(nt.start * 12.9898) * 43758.5453, z = (h - Math.floor(h) - 0.5) * 4.4;
+        const x = nt.hand ? (nt.pitch - 54) / 16 * 4.2 : (nt.pitch - 74) / 10 * 4.2;
+        slots[i].set(Math.max(-3.4, Math.min(3.4, x)), z, nt.age, (nt.hand ? -0.55 : 1) * nt.vel);
+      }
+      pondU.uRipOn.value = n.chord >= 0 ? 1 : 0;
+    },
     setWarm(v) { ffUniforms.uWarm.value = v; dustU.uWarm.value = v; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },

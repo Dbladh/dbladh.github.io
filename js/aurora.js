@@ -140,7 +140,7 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     }
   };
   const zAxis = new THREE.Vector3(0, 0, 1);
-  let level = 0, hue = 0;
+  let level = 0, hue = 0, harm = 0;                                  // (harm: the colour the current chord pulls the aurora towards, eased)
   const sm = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };                // (the song's levels, eased again here: the aurora should glide, not jitter)
   const TAU = { bass: 0.5, mid: 0.8, treble: 1.0, energy: 1.6, centroid: 3.0, beat: 0.45 };
   const colour = new THREE.Color(), tmp = new THREE.Color();
@@ -163,7 +163,11 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
       U.uTime.value += dt * (0.4 + sm.energy * 0.3);
       U.uPS.value += dt * (0.16 + 0.3 * sm.mid); U.uPR.value += dt * (0.08 + 0.05 * sm.mid); U.uPF.value += dt * (0.35 + 0.9 * sm.treble);       // (the motions are added up frame by frame, so a change in the music changes their speed smoothly and never makes them jump)
       U.uBass.value = sm.bass; U.uMid.value = sm.mid; U.uTreble.value = sm.treble; U.uEnergy.value = sm.energy; U.uCentroid.value = sm.centroid; U.uBeat.value = sm.beat;
-      U.uLevel.value = level; U.uDay.value = 1 - night; U.uHue.value = 0.06 * wob;
+      if (notes && notes.chord >= 0) {                                              // the chord sets the mood: major leans to the greens and teals, minor to the blues and violets, and the root moves it a little round that range (a circle of fifths, so close chords look alike)
+        const fifths = ((notes.root * 7) % 12) / 12, target = notes.minor ? 0.16 + 0.12 * fifths : -0.1 + 0.12 * fifths;
+        harm += (target - harm) * (1 - Math.exp(-dt / 1.4));
+      } else harm += (0 - harm) * (1 - Math.exp(-dt / 1.4));
+      U.uLevel.value = level; U.uDay.value = 1 - night; U.uHue.value = 0.06 * wob + harm;
       // the colour it throws on the world: the middle of its palette at the moment, brightness following the loudness
       auroraColour(U.uHue.value + 0.33 * sm.centroid + 0.3 * sm.energy + 0.12, colour);
       api.strength = Math.min(0.62, level * (0.18 + 0.5 * sm.energy + 0.06 * sm.beat)) * (1 - 0.6 * (1 - night));
