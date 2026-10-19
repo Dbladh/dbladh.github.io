@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CHORDS } from './notes.js?v=20261018223635';
+import { SONG_RH, SONG_LH, SONG_CHORDS } from './notes.js?v=20261018224211';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -23,6 +23,17 @@ const BOARD_PITCH = { creativity: 0.95, ai: 1.0, about: 1.06 };
 /** When the beats of the house song fall (seconds from its start), found by analysing the recording (audio/tools/find_beats.py): about 85 to 94 beats a minute (the tempo changes through the song, and these follow it) in 3/4 time,
  *  so every third beat is a downbeat (beat 0, 3, 6...). The billboards light up one on each beat, in turn. */
 const SONG_BEATS = [0.01,0.72,1.43,2.14,2.86,3.56,4.27,4.99,5.70,6.41,7.12,7.83,8.54,9.25,9.96,10.66,11.37,12.07,12.77,13.47,14.19,14.87,15.57,16.28,16.99,17.68,18.38,19.08,19.78,20.48,21.18,21.86,22.56,23.24,23.94,24.64,25.33,26.01,26.71,27.39,28.10,28.78,29.45,30.15,30.84,31.52,32.21,32.88,33.56,34.25,34.93,35.61,36.29,36.98,37.66,38.34,39.02,39.69,40.38,41.06,41.75,42.43,43.12,43.78,44.48,45.16,45.84,46.51,47.21,47.88,48.56,49.25,49.93,50.62,51.29,51.98,52.66,53.34,54.03,54.69,55.39,56.06,56.75,57.43,58.12,58.79,59.48,60.16,60.85,61.52,62.19,62.89,63.58,64.25,64.93,65.62,66.29,66.97,67.64,68.29,68.93,69.57,70.21,70.84,71.48,72.12,72.75,73.40,74.04,74.69,75.33,75.95,76.59,77.23,77.87,78.51,79.15,79.78,80.42,81.06,81.70,82.34,82.96,83.62,84.27,84.94,85.64,86.33,87.03,87.72,88.42,89.11,89.78,90.46,91.15,91.83,92.52,93.20,93.88,94.56,95.25,95.92,96.60,97.29,97.96,98.65,99.33,100.02,100.70,101.38,102.06,102.75,103.43,104.12,104.78,105.48,106.15,106.84,107.52,108.20,108.87,109.56,110.24,110.94,111.65,112.38,113.15,113.96,114.78,115.54,116.29,116.94,117.54,118.13,118.71,119.41,120.19,120.96,121.74,122.52,123.30];
+/** The song's beat position (see songBeatPos) at `t` seconds in. */
+const beatAt = (t) => {
+  const B = SONG_BEATS;
+  if (t <= B[0]) return t / 0.7;
+  if (t >= B[B.length - 1]) return B.length - 1 + (t - B[B.length - 1]) / 0.685;
+  let lo = 0, hi = B.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
+  return lo + (t - B[lo]) / (B[lo + 1] - B[lo]);
+};
+/** Every note's start and length in beats, worked out once: for the star staff, which scrolls with the tempo. */
+const STAFF = [SONG_RH, SONG_LH].map((list, hand) => list.map(([t, p, len, v]) => { const b0 = beatAt(t); return { hand, pitch: p, b0, dur: beatAt(t + len) - b0, vel: 0.45 + 0.55 * Math.min(1, v / 70) }; }));
+export const STAFF_MAX = 56;
 export const pickFlicker = (id) => {
   const rate = (BOARD_PITCH[id] || 1) * (0.99 + Math.random() * 0.02);
   return { snd: 'fl_start', rate, events: FLICKER_EVENTS.map(([t, d, a]) => [t / rate, d / rate, a]) };       // (a slower sound is a longer one: the flashes stretch with it)
@@ -318,20 +329,26 @@ export function createAudio({ base = 'audio/' } = {}) {
     songBeatPos() {
       if (!song || !ctx) return -1;
       const t = ctx.currentTime - song.t0, B = SONG_BEATS;
-      if (t <= B[0]) return t / 0.7 - 0;
-      if (t >= B[B.length - 1]) return B.length - 1 + (t - B[B.length - 1]) / 0.685;
-      let lo = 0, hi = B.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
-      return lo + (t - B[lo]) / (B[lo + 1] - B[lo]);
+      return beatAt(t);
     },
     /** The notes sounding in the house song right now (from its MIDI, see js/notes.js), for the lights. Fills and returns `out`:
      *  rh[0..2] and lh[0..2] are how strongly the melody / left hand is lit in each of three zones (rh by pitch: low, middle, high; lh by pitch the same way, left to right),
      *  `recent` lists the notes struck in the last 2.4 s, newest first ({ hand: 0 right / 1 left, pitch, start, age, vel }), `chord` / `root` / `minor` are the harmony now (root 0-11, minor 0/1; chord -1 before the first),
      *  and lhN counts the left-hand notes started so far (a change means a new one: lhZone is its zone, lhVel its strength 0..1). All zeros when no song plays. */
     songNotes(out) {
-      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0; o.chord = -1; o.root = 0; o.minor = 0; (o.recent = o.recent || []).length = 0;
+      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0; o.staffN = 0; o.bp = -1; o.chord = -1; o.root = 0; o.minor = 0; (o.recent = o.recent || []).length = 0;
       o.rh[0] = o.rh[1] = o.rh[2] = o.lh[0] = o.lh[1] = o.lh[2] = 0;
       if (!song || !ctx) return o;
       const t = ctx.currentTime - song.t0;
+      {                                                                          // the notes within a few bars either side of now, for the star staff: [beats from now, pitch, length in beats, strength (negative = left hand)]
+        const bp = beatAt(t), d = o.staffData = o.staffData || new Float32Array(STAFF_MAX * 4); let k = 0; o.bp = bp;
+        for (const list of STAFF) for (const n of list) {
+          if (n.b0 > bp + 13) break;
+          if (n.b0 + n.dur < bp - 3 || k >= STAFF_MAX) continue;
+          d[k * 4] = n.b0 - bp; d[k * 4 + 1] = n.pitch; d[k * 4 + 2] = Math.max(0.15, n.dur); d[k * 4 + 3] = n.hand ? -n.vel : n.vel; k++;
+        }
+        o.staffN = k;
+      }
       for (const [list, dst, zone] of [[SONG_RH, o.rh, (p) => (p <= 72 ? 0 : p <= 75 ? 1 : 2)], [SONG_LH, o.lh, (p) => (p <= 50 ? 0 : p <= 57 ? 1 : 2)]]) {
         let n = 0; while (n < list.length && list[n][0] <= t) n++;           // (a few hundred notes: a plain scan is fine)
         for (let k = n - 1; k >= 0 && t - list[k][0] < 4; k--) {
