@@ -112,18 +112,19 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); mesh.renderOrder = 5; mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh);
     ms.push({ mesh, t: -1, sx: 0, sy: 0, ang: 0, len: 0, run: 0, amp: 1, dur: 1 });
   }
-  let lastBeat = -1;
+  let lastBeat = -1, lastNote = -1;
   const MCOL = [new THREE.Color(1, 0.62, 0.3), new THREE.Color(1, 0.78, 0.42), new THREE.Color(1, 0.5, 0.28), new THREE.Color(1, 0.9, 0.62)];
-  const launch = (amp, delay) => {
+  const launch = (amp, delay, zone = -1) => {
     const m = ms.find((q) => q.t < 0); if (!m) return;
-    m.t = -delay; m.amp = amp; m.sx = -0.3 + Math.random() * 1.3; m.sy = 0.7 + Math.random() * 0.45; m.ang = Math.PI + 0.55 + (Math.random() - 0.5) * 0.12;
+    m.t = -delay; m.amp = amp; m.sx = zone < 0 ? -0.3 + Math.random() * 1.3 : -0.35 + zone * 0.5 + Math.random() * 0.3; m.sy = 0.7 + Math.random() * 0.45; m.ang = Math.PI + 0.55 + (Math.random() - 0.5) * 0.12;
     m.len = (0.16 + 0.14 * amp) * 1; m.run = 0.3 + 0.25 * amp; m.dur = 0.95 + 0.5 * amp * Math.random();
     m.mesh.material.uniforms.uC.value.copy(MCOL[(Math.random() * MCOL.length) | 0]);
   };
-  const meteorTick = (dt, bp) => {
+  const meteorTick = (dt, bp, notes) => {
     const shower = WARM > 0.35 && level > 0.5 && bp >= 0;
     const bi = bp >= 0 ? Math.floor(bp) : -1;
-    if (bi !== lastBeat) { if (shower && lastBeat >= 0 && bi - lastBeat < 3) { const down = bi % 3 === 0; launch(down ? 1 : 0.7, 0); if (down) launch(0.55, 0.12); } lastBeat = bi; }
+    if (notes && notes.lhN !== lastNote) { if (shower && lastNote >= 0 && notes.lhN - lastNote < 3) launch(0.45 + 0.55 * notes.lhVel, 0, notes.lhZone); lastNote = notes.lhN; }   // a streak for each left-hand note, from the part of the sky its pitch points to
+    else if (!notes && bi !== lastBeat) { if (shower && lastBeat >= 0 && bi - lastBeat < 3) { const down = bi % 3 === 0; launch(down ? 1 : 0.7, 0); if (down) launch(0.55, 0.12); } lastBeat = bi; }
     const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect;
     for (const m of ms) {
       if (m.t === -1) { m.mesh.visible = false; continue; }
@@ -152,10 +153,10 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     /**
      * Every frame. `spec`: audio.songSpectrum's result; `night` 0..1; `on`: is a song playing (the aurora fades in over about 2.5 s and out over 3 s).
      */
-    update(dt, spec, night, on, beatPos = -1) {
+    update(dt, spec, night, on, beatPos = -1, notes = null) {
       level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
       if (!on && level < 0.004) { level = 0; mesh.visible = false; star.visible = false; starT = -1; for (const m of ms) { m.t = -1; m.mesh.visible = false; } api.strength = 0; return; }
-      mesh.visible = true; mesh.position.copy(camera.position); starTick(dt); meteorTick(dt, beatPos);
+      mesh.visible = true; mesh.position.copy(camera.position); starTick(dt); meteorTick(dt, beatPos, notes);
       hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM; sweep += dt * 0.09;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
       for (const k in sm) sm[k] += (spec[k] - sm[k]) * (1 - Math.exp(-dt / TAU[k]));

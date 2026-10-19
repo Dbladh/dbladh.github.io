@@ -7,6 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
+import { SONG_RH, SONG_LH } from './notes.js?v=20261018222946';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -322,6 +323,25 @@ export function createAudio({ base = 'audio/' } = {}) {
       let lo = 0, hi = B.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
       return lo + (t - B[lo]) / (B[lo + 1] - B[lo]);
     },
+    /** The notes sounding in the house song right now (from its MIDI, see js/notes.js), for the lights. Fills and returns `out`:
+     *  rh[0..2] and lh[0..2] are how strongly the melody / left hand is lit in each of three zones (rh by pitch: low, middle, high; lh by pitch the same way, left to right),
+     *  and lhN counts the left-hand notes started so far (a change means a new one: lhZone is its zone, lhVel its strength 0..1). All zeros when no song plays. */
+    songNotes(out) {
+      const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0;
+      o.rh[0] = o.rh[1] = o.rh[2] = o.lh[0] = o.lh[1] = o.lh[2] = 0;
+      if (!song || !ctx) return o;
+      const t = ctx.currentTime - song.t0;
+      for (const [list, dst, zone] of [[SONG_RH, o.rh, (p) => (p <= 72 ? 0 : p <= 75 ? 1 : 2)], [SONG_LH, o.lh, (p) => (p <= 50 ? 0 : p <= 57 ? 1 : 2)]]) {
+        let n = 0; while (n < list.length && list[n][0] <= t) n++;           // (a few hundred notes: a plain scan is fine)
+        for (let k = n - 1; k >= 0 && t - list[k][0] < 4; k--) {
+          const [s, p, len, v] = list[k], age = t - s, z = zone(p), a = 0.45 + 0.55 * clamp(v / 70);
+          const e = a * (0.55 * Math.exp(-age * 5) + 0.45 * Math.exp(-age / (0.3 + 0.5 * Math.min(len, 3))) * (age < len + 0.4 ? 1 : Math.exp(-(age - len - 0.4) * 4)));   // (a bright strike, then a glow that lasts as long as the note)
+          if (e > dst[z]) dst[z] = e;
+        }
+        if (list === SONG_LH) { o.lhN = n; if (n > 0) { o.lhZone = zone(list[n - 1][1]); o.lhVel = 0.45 + 0.55 * clamp(list[n - 1][3] / 70); } }
+      }
+      return o;
+    },
     /** The song's sound this instant, for the aurora: bass, mid, treble and energy (0..1, each scaled to the song's own loudest), centroid (how bright it is, 0..1)
      *  and beat (a spike on a sudden bass hit). Fills and returns `out`; all zeros when no song plays. */
     songSpectrum(out, dt = 0.016) {
@@ -489,6 +509,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'fuelBeep', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songTime']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'fuelBeep', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songNotes', 'songTime']) out[n] = f;
   return out;
 }
