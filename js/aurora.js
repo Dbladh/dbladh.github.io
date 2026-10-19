@@ -152,7 +152,7 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: /* glsl */ `
       uniform vec4 uN[${NMAX}]; uniform int uNN; uniform float uA, uAsp, uSpan, uBP, uT; uniform vec3 uC1, uC2; varying vec2 vUv;
-      const float T0 = 0.56, T1 = 0.94, B0 = 0.08, B1 = 0.44;                    // (the staves nearly fill the sky: the melody's high up, the left hand's below it)
+      const float T0 = 0.64, T1 = 0.94, B0 = 0.06, B1 = 0.36;                    // (the staves nearly fill the sky: the melody's high up, the left hand's below it)
       float pitchY(float p, bool lh) { return lh ? mix(B0 + 0.02, B1 - 0.02, clamp((p - 35.0) / 31.0, 0.0, 1.0)) : mix(T0 + 0.02, T1 - 0.02, clamp((p - 64.0) / 20.0, 0.0, 1.0)); }
       void main() {
         float x = (vUv.x - 0.5) * 2.0 * uAsp, y = 0.55 + (vUv.y - 0.5) * 1.1, t = uT;
@@ -162,10 +162,11 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
         float edge = smoothstep(left, left + 0.1 * width, x) * smoothstep(left + width, left + 0.86 * width, x) * (0.88 + 0.12 * sin(t * 0.5 + x * 2.0));
         vec3 acc = vec3(0.0);
         float lines = 0.0;                                                         // the staves: five thin lines each (a fine core and a soft glow), and a bar line on every downbeat
-        for (int i = 0; i < 5; i++) { float f = float(i) / 4.0; float a1 = abs(yy - mix(T0, T1, f)), a2 = abs(yy - mix(B0, B1, f)); lines += smoothstep(0.005, 0.0, a1) + smoothstep(0.005, 0.0, a2) + 0.25 * (smoothstep(0.03, 0.0, a1) + smoothstep(0.03, 0.0, a2)); }
+        for (int i = 0; i < 5; i++) { float f = float(i) / 4.0; float a1 = abs(yy - mix(T0, T1, f)), a2 = abs(yy - mix(B0, B1, f)); lines += smoothstep(0.005, 0.0, a1) + smoothstep(0.005, 0.0, a2) + 0.1 * (smoothstep(0.02, 0.0, a1) + smoothstep(0.02, 0.0, a2)); }
         float u = (xx - playX) / beatW + uBP, bd = abs(fract(u / 3.0 + 0.5) - 0.5) * 3.0 * beatW;
         float inStaff = step(T0 - 0.02, yy) * step(yy, T1 + 0.02) + step(B0 - 0.02, yy) * step(yy, B1 + 0.02);
         lines = lines * 0.16 + (smoothstep(0.005, 0.0, bd) + 0.3 * smoothstep(0.025, 0.0, bd)) * inStaff * 0.16 + smoothstep(0.03, 0.0, abs(xx - playX)) * inStaff * 0.05;
+        lines += smoothstep(0.005, 0.0, abs(xx - (left + 0.05 * width))) * step(B0, yy) * step(yy, T1) * 0.12;     // (a line down the left joins the two staves, as on a piano score)
         acc += mix(uC1, uC2, 0.5 + 0.5 * sin(x * 1.5 + t * 0.3)) * lines * 1.3;
         for (int i = 0; i < ${NMAX}; i++) {
           if (i >= uNN) break;
