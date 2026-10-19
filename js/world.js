@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018230402';
-import { auroraColour } from './aurora.js?v=20261018230402';
+import { PAL } from './palette.js?v=20261018230627';
+import { auroraColour } from './aurora.js?v=20261018230627';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018230402';
+} from './houses.js?v=20261018230627';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1986,11 +1986,11 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   for (let i = 0; i < DUST * 3; i++) dSeed[i] = rand();
   dustGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(DUST * 3), 3));
   dustGeo.setAttribute('aSeed', new THREE.BufferAttribute(dSeed, 3));
-  const dustU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uLevel: { value: 0 }, uWarm: { value: 0 }, uScale: { value: 700 } };
+  const dustU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uLevel: { value: 0 }, uWarm: { value: 0 }, uStr: { value: 0 }, uScale: { value: 700 } };
   const dust = new THREE.Points(dustGeo, new THREE.ShaderMaterial({
     uniforms: dustU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */ `
-      uniform float uTime, uLevel, uWarm, uScale; uniform vec3 uCam; attribute vec3 aSeed; varying float vA; varying vec3 vC;
+      uniform float uTime, uLevel, uWarm, uScale, uStr; uniform vec3 uCam; attribute vec3 aSeed; varying float vA; varying vec3 vC;
       void main() {
         vec3 s = aSeed;
         float rise = fract(s.y + uTime * (0.012 + 0.012 * s.z));                          // (each speck climbs slowly and wraps)
@@ -1999,7 +1999,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
         float dist = max(-mv.z, 0.5);
         gl_Position = projectionMatrix * mv;
         gl_PointSize = clamp(0.09 * projectionMatrix[1][1] * uScale * 0.5 / dist * (0.6 + s.x), 2.5, 22.0);
-        vA = uLevel * smoothstep(0.0, 0.18, rise) * smoothstep(1.0, 0.8, rise) * (0.35 + 0.65 * smoothstep(2.0, 12.0, dist));
+        vA = uLevel * (1.0 + 1.5 * uStr) * smoothstep(0.0, 0.18, rise) * smoothstep(1.0, 0.8, rise) * (0.35 + 0.65 * smoothstep(2.0, 12.0, dist));
         vC = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.72, 0.4), uWarm);
       }`,
     fragmentShader: /* glsl */ `
@@ -2616,6 +2616,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     setDance(w, sm, beatPos = -1, pace = 1) { dance.pace = pace; pondU.uBeatPos.value = w > 0.01 ? beatPos : -1; showTone(0, rippleCol); pondU.uRipple.value.copy(rippleCol).multiplyScalar(w * 0.5); dustU.uLevel.value = w; dust.visible = w > 0.01; dance.beatPos = beatPos; dance.w = w; dance.centroid = sm.centroid; dance.bass = sm.bass; dance.mid = sm.mid; dance.treble = sm.treble; dance.energy = sm.energy; dance.beat = sm.beat; },
     /** The notes sounding now (from audio.songNotes): the melody lights the signs, the left hand the fireflies and the flowers. */
     setNotes(n) {
+      dustU.uStr.value = n.st;                                                    // (the strings make the drifting dust shimmer)
       for (let k = 0; k < 3; k++) { dance.rh[k] = n.rh[k]; dance.lh[k] = n.lh[k]; }
       const slots = pondU.uRip.value, r = n.recent;
       for (let i = 0; i < 8; i++) {                                               // the newest eight notes, each a ring on the pond (x from its pitch, z scattered by its start time so a run of notes doesn't pile up)

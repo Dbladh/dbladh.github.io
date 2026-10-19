@@ -6,7 +6,7 @@
 //   colour -> follows how bright the sound is and how loud: green, teal, blue, violet, magenta, with a red fringe on the loudest
 // It also lights the world a little: `colour` and `strength` (see `light`) are what the scene's lights, ground and pond take on.
 import * as THREE from 'three';
-import { SONG_RH, SONG_LH } from './notes.js?v=20261018230402';
+import { SONG_RH, SONG_LH } from './notes.js?v=20261018230627';
 
 const PAL = [[0.25, 1.0, 0.45], [0.12, 0.92, 0.78], [0.35, 0.55, 1.0], [0.72, 0.38, 1.0], [1.0, 0.3, 0.78], [1.0, 0.32, 0.42]];       // green, teal, blue, violet, magenta, red
 const WARM_PAL = [[1.0, 0.88, 0.34], [1.0, 0.68, 0.22], [1.0, 0.46, 0.15], [1.0, 0.3, 0.12], [0.95, 0.2, 0.18], [1.0, 0.62, 0.3]];       // yellow, amber, orange, red-orange, red, soft orange
@@ -25,7 +25,7 @@ const VERT = /* glsl */ `
 const FRAG = /* glsl */ `
   precision highp float;
   varying vec3 vDir;
-  uniform float uWarm; uniform float uTime, uPS, uPR, uPF, uBass, uMid, uTreble, uEnergy, uCentroid, uBeat, uLevel, uDay, uHue, uLayers;
+  uniform float uWarm; uniform float uTime, uPS, uPR, uPF, uBass, uMid, uTreble, uEnergy, uCentroid, uBeat, uLevel, uDay, uHue, uLayers, uStr;
   float hsh(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hsh(i), hsh(i + vec2(1.0, 0.0)), f.x), mix(hsh(i + vec2(0.0, 1.0)), hsh(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -51,7 +51,7 @@ const FRAG = /* glsl */ `
       float sway = (vn(vec2(az * 1.6 + fi * 9.0, uTime * (0.05 + 0.03 * fi) + fi * 4.0)) - 0.5) * (0.2 + 0.28 * uMid)
                  + sin(az * 3.2 + uPS + fi * 2.1) * (0.03 + 0.07 * uMid);
       float base = 0.2 + 0.1 * fi + sway;
-      float reach = (0.34 + 0.62 * uBass + 0.3 * uEnergy + 0.05 * uBeat) * (1.0 - 0.18 * fi);      // how far up it goes: bigger with the music
+      float reach = (0.34 + 0.62 * uBass + 0.3 * uEnergy + 0.05 * uBeat + 0.3 * uStr) * (1.0 - 0.18 * fi);      // how far up it goes: bigger with the music
       float h = (el - base) / reach;
       float body = smoothstep(0.0, 0.05, h) * (1.0 - smoothstep(0.0, 1.0, h));
       float glow = pow(clamp(1.0 - h, 0.0, 1.0), 2.0) * body;                                          // brightest along the lower edge
@@ -61,7 +61,7 @@ const FRAG = /* glsl */ `
       // fine streaks and shimmer from the highs
       float fine = vn(vec2(az * 40.0 + fi * 11.0, el * 5.0 - uPF));
       float spark = smoothstep(0.72, 0.95, fine) * uTreble * smoothstep(0.1, 0.9, h);
-      float inten = (glow * rays * (0.5 + 0.75 * uBass + 0.22 * uBeat) + spark * 0.9 * body) * (1.1 - 0.25 * fi) * lw;
+      float inten = (glow * rays * (0.5 + 0.75 * uBass + 0.22 * uBeat) + spark * 0.9 * body) * (1.1 - 0.25 * fi) * lw * (1.0 + 0.7 * uStr);
       float t = uHue + 0.33 * uCentroid + 0.3 * uEnergy + 0.32 * h * (0.4 + uEnergy) + fi * 0.11;
       acc += pal(t) * inten; a += inten;
     }
@@ -76,7 +76,7 @@ const FRAG = /* glsl */ `
 
 export function createAurora(skyScene, camera, { low = false, scene = skyScene } = {}) {
   const U = { uWarm: { value: 0 }, uTime: { value: 0 }, uPS: { value: 0 }, uPR: { value: 0 }, uPF: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uTreble: { value: 0 }, uEnergy: { value: 0 }, uCentroid: { value: 0 }, uBeat: { value: 0 },
-    uLevel: { value: 0 }, uDay: { value: 0 }, uHue: { value: 0 }, uLayers: { value: low ? 2 : 3 } };
+    uLevel: { value: 0 }, uDay: { value: 0 }, uHue: { value: 0 }, uLayers: { value: low ? 2 : 3 }, uStr: { value: 0 } };
   const mat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthTest: false, side: THREE.BackSide, fog: false });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(250, 40, 24), mat);
   mesh.renderOrder = -11; mesh.frustumCulled = false; mesh.visible = false;      // (drawn first: the sun, moon and stars sit over it)
@@ -140,7 +140,7 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     }
   };
   const zAxis = new THREE.Vector3(0, 0, 1);
-  let level = 0, hue = 0, harm = 0;                                  // (harm: the colour the current chord pulls the aurora towards, eased)
+  let level = 0, hue = 0, harm = 0, strs = 0;                                  // (harm: the colour the current chord pulls the aurora towards, eased)
   const colour = new THREE.Color();
 
   // The song's stars: every pitch the song plays (29 of them) owns 3 or 4 stars scattered over the sky (4 for the most-played notes, about a hundred in all); each star shines dimly until its
@@ -232,11 +232,12 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
         const fifths = ((notes.root * 7) % 12) / 12, target = notes.minor ? 0.16 + 0.12 * fifths : -0.1 + 0.12 * fifths;
         harm += (target - harm) * (1 - Math.exp(-dt / 1.4));
       } else harm += (0 - harm) * (1 - Math.exp(-dt / 1.4));
+      strs += ((notes ? notes.st : 0) - strs) * (1 - Math.exp(-dt / 0.5)); U.uStr.value = strs;                   // (the strings: the curtains rise higher and glow stronger as the pad swells)
       U.uLevel.value = level; U.uDay.value = 1 - night; U.uHue.value = 0.06 * wob + harm;
       // the colour it throws on the world: the middle of its palette at the moment, brightness following the loudness
       auroraColour(U.uHue.value + 0.33 * sm.centroid + 0.3 * sm.energy + 0.12, colour);
       starsTick(dt, notes, on);
-      api.strength = Math.min(0.62, level * (0.18 + 0.5 * sm.energy + 0.06 * sm.beat)) * (1 - 0.6 * (1 - night));
+      api.strength = Math.min(0.62, level * (0.18 + 0.5 * sm.energy + 0.06 * sm.beat + 0.12 * strs)) * (1 - 0.6 * (1 - night));
     },
     /** Tint the scene's lights, fog and (via `world.setAurora`) the ground and pond; call after sky.set each frame. */
     light(lights, world, lowEnd) {
