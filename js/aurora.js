@@ -6,6 +6,7 @@
 //   colour -> follows how bright the sound is and how loud: green, teal, blue, violet, magenta, with a red fringe on the loudest
 // It also lights the world a little: `colour` and `strength` (see `light`) are what the scene's lights, ground and pond take on.
 import * as THREE from 'three';
+import { SONG_RH, SONG_LH } from './notes.js?v=20261018225743';
 
 const PAL = [[0.25, 1.0, 0.45], [0.12, 0.92, 0.78], [0.35, 0.55, 1.0], [0.72, 0.38, 1.0], [1.0, 0.3, 0.78], [1.0, 0.32, 0.42]];       // green, teal, blue, violet, magenta, red
 const WARM_PAL = [[1.0, 0.88, 0.34], [1.0, 0.68, 0.22], [1.0, 0.46, 0.15], [1.0, 0.3, 0.12], [0.95, 0.2, 0.18], [1.0, 0.62, 0.3]];       // yellow, amber, orange, red-orange, red, soft orange
@@ -65,7 +66,7 @@ const FRAG = /* glsl */ `
       acc += pal(t) * inten; a += inten;
     }
     vec3 col = acc / max(a, 0.001);
-    a = clamp(a, 0.0, 1.0) * 0.6 * uLevel;                                              // (see-through: the star staff behind it shows)
+    a = clamp(a, 0.0, 1.0) * 0.6 * uLevel;                                              // (see-through: the song's stars behind it shine through)
     col = mix(col, vec3(dot(col, vec3(0.33))), 0.4 * uDay) + 0.08 * uDay;               // by day: a softer, paler glow
     a *= 1.0 - 0.5 * uDay;
     a *= smoothstep(-0.02, 0.06, el);
@@ -143,68 +144,68 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
   let level = 0, hue = 0, harm = 0;                                  // (harm: the colour the current chord pulls the aurora towards, eased)
   const colour = new THREE.Color();
 
-  // The star staff: two five-line staves high in the sky (the melody above, the left hand below) with bar lines, and the song's notes as stars on them, scrolling slowly past a playhead
-  // at the song's own tempo (a few bars at a time). A star is dim while it is coming, flares when it is struck, glows for as long as the note lasts and fades after. All drawn in one quad's shader.
-  const NMAX = low ? 40 : 56;
-  const SU = { uN: { value: Array.from({ length: NMAX }, () => new THREE.Vector4()) }, uNN: { value: 0 }, uA: { value: 0 }, uAsp: { value: 1.6 }, uSpan: { value: 12 }, uBP: { value: 0 }, uT: { value: 0 }, uC1: { value: new THREE.Color() }, uC2: { value: new THREE.Color() } };
-  const staffMat = new THREE.ShaderMaterial({
+  // The song's stars: every pitch the song plays (29 of them) owns 3 or 4 stars scattered over the sky (4 for the most-played notes, about a hundred in all); each star shines dimly until its
+  // note sounds, then flares with a sparkle and fades back as the note dies away. Higher notes sit higher in the sky and further right. They are drawn in the sky layer before the aurora, so its glow
+  // passes over them and they shine through. Everything is added up frame by frame in one Points draw.
+  const counts = new Map(); for (const n of [...SONG_RH, ...SONG_LH]) counts.set(n[1], (counts.get(n[1]) || 0) + 1);
+  const pitches = [...counts.keys()].sort((p, q) => p - q), starP = [], starPos = [], starSeed = [], starRank = [];
+  const hash = (k) => { const h = Math.sin(k * 127.1 + 311.7) * 43758.5453; return h - Math.floor(h); };
+  pitches.forEach((p, pi) => {
+    const u = pi / (pitches.length - 1), k = counts.get(p) >= 12 ? 4 : 3;
+    for (let j = 0; j < k; j++) {
+      const r1 = hash(p * 7.3 + j * 1.9), r2 = hash(p * 3.1 + j * 5.7), r3 = hash(p * 9.7 + j * 2.3);
+      starP.push(p); starRank.push(u); starSeed.push(r3);
+      starPos.push(Math.max(-0.95, Math.min(0.95, (u * 2 - 1) * 0.45 + (r1 - 0.5) * 1.6)), 0.08 + u * 0.6 + r2 * 0.3, 0);
+    }
+  });
+  const NS = starP.length, starEnv = new Float32Array(NS);
+  const sGeo = new THREE.BufferGeometry();
+  sGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
+  sGeo.setAttribute('aSeed', new THREE.BufferAttribute(new Float32Array(starSeed), 1));
+  sGeo.setAttribute('aRank', new THREE.BufferAttribute(new Float32Array(starRank), 1));
+  sGeo.setAttribute('aEnv', new THREE.BufferAttribute(starEnv, 1));
+  const SU = { uA: { value: 0 }, uT: { value: 0 }, uHH: { value: 1 }, uAsp: { value: 1.6 }, uK: { value: 1 }, uC1: { value: new THREE.Color() }, uC2: { value: new THREE.Color() } };
+  const starsMat = new THREE.ShaderMaterial({
     uniforms: SU, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
-    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: /* glsl */ `
-      uniform vec4 uN[${NMAX}]; uniform int uNN; uniform float uA, uAsp, uSpan, uBP, uT; uniform vec3 uC1, uC2; varying vec2 vUv;
-      const float T0 = 0.64, T1 = 0.94, B0 = 0.06, B1 = 0.36;                    // (the staves nearly fill the sky: the melody's high up, the left hand's below it)
-      float pitchY(float p, bool lh) { return lh ? mix(B0 + 0.02, B1 - 0.02, clamp((p - 35.0) / 31.0, 0.0, 1.0)) : mix(T0 + 0.02, T1 - 0.02, clamp((p - 64.0) / 20.0, 0.0, 1.0)); }
+    vertexShader: /* glsl */ `
+      uniform float uA, uT, uHH, uAsp, uK; attribute float aSeed, aRank, aEnv; varying float vE, vSeed, vRank;
       void main() {
-        float x = (vUv.x - 0.5) * 2.0 * uAsp, y = 0.55 + (vUv.y - 0.5) * 1.1, t = uT;
-        // everything is seen through a slow, dreamy ripple: the lines undulate like silk and the stars drift on it
-        float yy = y + 0.018 * sin(x * 2.1 + t * 0.45) + 0.010 * sin(x * 4.7 - t * 0.7 + y * 3.0) + 0.005 * sin(x * 11.0 + t * 1.3), xx = x + 0.014 * sin(y * 5.0 + t * 0.5) + 0.006 * sin(y * 13.0 - t * 0.8);
-        float left = -0.92 * uAsp, width = 1.84 * uAsp, beatW = width / uSpan, playX = left + 0.26 * width;
-        float edge = smoothstep(left, left + 0.1 * width, x) * smoothstep(left + width, left + 0.86 * width, x) * (0.88 + 0.12 * sin(t * 0.5 + x * 2.0));
-        vec3 acc = vec3(0.0);
-        float lines = 0.0;                                                         // the staves: five thin lines each (a fine core and a soft glow), and a bar line on every downbeat
-        for (int i = 0; i < 5; i++) { float f = float(i) / 4.0; float a1 = abs(yy - mix(T0, T1, f)), a2 = abs(yy - mix(B0, B1, f)); lines += smoothstep(0.005, 0.0, a1) + smoothstep(0.005, 0.0, a2) + 0.1 * (smoothstep(0.02, 0.0, a1) + smoothstep(0.02, 0.0, a2)); }
-        float u = (xx - playX) / beatW + uBP, bd = abs(fract(u / 3.0 + 0.5) - 0.5) * 3.0 * beatW;
-        float inStaff = step(T0 - 0.02, yy) * step(yy, T1 + 0.02) + step(B0 - 0.02, yy) * step(yy, B1 + 0.02);
-        lines = lines * 0.16 + (smoothstep(0.005, 0.0, bd) + 0.3 * smoothstep(0.025, 0.0, bd)) * inStaff * 0.16 + smoothstep(0.03, 0.0, abs(xx - playX)) * inStaff * 0.05;
-        lines += smoothstep(0.005, 0.0, abs(xx - (left + 0.05 * width))) * step(B0, yy) * step(yy, T1) * 0.12;     // (a line down the left joins the two staves, as on a piano score)
-        acc += mix(uC1, uC2, 0.5 + 0.5 * sin(x * 1.5 + t * 0.3)) * lines * 1.3;
-        for (int i = 0; i < ${NMAX}; i++) {
-          if (i >= uNN) break;
-          vec4 n = uN[i]; bool lh = n.w < 0.0; float vel = abs(n.w), rel = n.x, dur = n.z;
-          float nx = playX + rel * beatW, ny = pitchY(n.y, lh) + 0.012 * sin(t * 0.8 + n.x * 1.7 + n.y);
-          if (xx < nx - 0.3 || xx > nx + dur * beatW + 0.55 || abs(yy - ny) > 0.3) continue;
-          float after = -(rel + dur), on = rel > 0.0 ? 0.32 : (after < 0.0 ? 1.0 : 0.65 * exp(-after * 1.6));
-          float flash = rel <= 0.0 ? 1.0 + 1.6 * exp(rel * 5.0) : 1.0;              // (a pop at the moment it is struck)
-          float sz = (0.016 + 0.018 * vel) * (0.8 + 0.5 * flash), dx = xx - nx, dy = yy - ny, d2 = dx * dx + dy * dy;
-          float core = exp(-d2 / (sz * sz));
-          float spike = exp(-abs(dy) / (sz * 0.25)) * exp(-abs(dx) / (sz * 5.0)) + exp(-abs(dx) / (sz * 0.25)) * exp(-abs(dy) / (sz * 5.0));
-          float halo = exp(-sqrt(d2) / (sz * 2.4)) * smoothstep(0.28, 0.1, sqrt(d2));
-          float tail = dur > 0.9 ? smoothstep(0.006, 0.0, abs(dy)) * step(nx, xx) * step(xx, nx + dur * beatW) * 0.35 * (1.0 - 0.5 * (xx - nx) / max(dur * beatW, 0.01)) : 0.0;
-          float wisp = dx > 0.0 ? exp(-pow((dy - 0.02 * sin(dx * 22.0 - t * 1.4 + n.y) * min(dx * 6.0, 1.0)) / (0.005 + 0.018 * dx), 2.0)) * exp(-dx * 6.0) * 0.55 : 0.0;   // (a wisp of light trailing behind each star, swaying as it goes)
-          vec3 base = mix(lh ? uC2 : uC1, vec3(0.8, 0.9, 1.0), 0.15 * sin(t * 0.4 + n.y));
-          acc += (mix(base, vec3(1.0), 0.55 * core) * (core * 1.3 + halo * 0.4 + spike * 0.3 * flash + wisp) + base * tail) * on * (0.55 + 0.6 * vel);
-        }
-        acc *= edge * uA;
-        float m = clamp(max(acc.r, max(acc.g, acc.b)), 0.0, 1.0);
-        if (m < 0.004) discard;
-        gl_FragColor = vec4(acc / max(m, 0.001), m);                             // (light only: nothing is added where there is no star, so no backdrop)
+        float t = uT, drift = 0.012 * sin(t * 0.3 + aSeed * 40.0);                                  // (each star floats a little, as if in a dream)
+        vec3 p = vec3((position.x + drift + 0.008 * sin(t * 0.5 + aSeed * 17.0)) * uHH * uAsp, (position.y + 0.014 * sin(t * 0.4 + aSeed * 23.0)) * uHH, -200.0);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+        vE = aEnv; vSeed = aSeed; vRank = aRank;
+        gl_PointSize = (14.0 + 70.0 * aEnv * (0.8 + 0.4 * aSeed)) * uK;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uA, uT; uniform vec3 uC1, uC2; varying float vE, vSeed, vRank;
+      void main() {
+        vec2 q = gl_PointCoord * 2.0 - 1.0; float r2 = dot(q, q);
+        float core = exp(-r2 * 26.0), halo = exp(-r2 * 5.0);
+        float spike = exp(-abs(q.x) * 26.0) * exp(-abs(q.y) * 3.0) + exp(-abs(q.y) * 26.0) * exp(-abs(q.x) * 3.0);
+        float idle = 0.34 + 0.1 * sin(uT * 0.7 + vSeed * 50.0);                                    // (a faint twinkle while its note is silent)
+        float lit = vE * vE * (3.0 - 2.0 * vE);
+        vec3 base = mix(uC1, uC2, vRank);
+        vec3 col = mix(base, vec3(1.0), 0.15 + 0.6 * lit);
+        float a = (core * (idle + 1.8 * lit) + halo * (0.1 + 0.7 * lit) + spike * (0.1 + 0.9 * lit)) * uA;
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(col, min(a, 1.0));
       }`,
   });
-  const staffMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), staffMat);
-  staffMesh.renderOrder = -12; staffMesh.frustumCulled = false; staffMesh.visible = false; skyScene.add(staffMesh);       // (in the sky, drawn before the aurora: the aurora's glow passes over the stars, which shine through it)
-  let staffA = 0, staffT = 0;
-  const staffTick = (dt, notes, on) => {
-    const want = on && notes && notes.bp >= 0 && notes.staffN > 0 && level > 0.3 ? 1 : 0;
-    staffA += (want - staffA) * (1 - Math.exp(-dt * (want ? 0.7 : 1.2)));
-    if (staffA < 0.004) { staffMesh.visible = false; return; }
-    const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect;
-    sv.set(0, 0.55 * hh, -d).applyQuaternion(camera.quaternion).add(camera.position); staffMesh.position.copy(sv); staffMesh.quaternion.copy(camera.quaternion);
-    staffMesh.scale.set(2 * hw, 1.1 * hh, 1); staffT += dt; SU.uT.value = staffT;
-    const n = Math.min(NMAX, notes.staffN);
-    for (let i = 0; i < n; i++) SU.uN.value[i].set(notes.staffData[i * 4], notes.staffData[i * 4 + 1], notes.staffData[i * 4 + 2], notes.staffData[i * 4 + 3]);
-    SU.uNN.value = n; SU.uBP.value = notes.bp; SU.uAsp.value = camera.aspect; SU.uSpan.value = Math.min(12, Math.max(8, camera.aspect * 7.5)); SU.uA.value = staffA * (0.55 + 0.45 * level);
-    SU.uC1.value.copy(colour); auroraColour((U.uHue.value + 0.5) % 1, SU.uC2.value); SU.uC2.value.lerp(colour, 0.25);
-    staffMesh.visible = true;
+  const starsMesh = new THREE.Points(sGeo, starsMat);
+  starsMesh.renderOrder = -12; starsMesh.frustumCulled = false; starsMesh.visible = false; skyScene.add(starsMesh);
+  let starsA = 0, starsT = 0;
+  const starsTick = (dt, notes, on) => {
+    const want = on && notes && notes.pe && level > 0.3 ? 1 : 0;
+    starsA += (want - starsA) * (1 - Math.exp(-dt * (want ? 0.7 : 1.2)));
+    if (starsA < 0.004) { starsMesh.visible = false; return; }
+    starsMesh.position.copy(camera.position); starsMesh.quaternion.copy(camera.quaternion);
+    for (let i = 0; i < NS; i++) starEnv[i] = Math.min(1, notes.pe[starP[i]]);
+    sGeo.attributes.aEnv.needsUpdate = true;
+    starsT += dt; SU.uT.value = starsT; SU.uHH.value = 200 * Math.tan(camera.fov * Math.PI / 360); SU.uAsp.value = camera.aspect;
+    SU.uK.value = Math.max(0.5, Math.min(1.6, (typeof innerHeight === 'number' ? innerHeight : 800) * Math.min(1, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) / 800));
+    SU.uA.value = starsA * (0.6 + 0.4 * level);
+    SU.uC1.value.copy(colour); auroraColour((U.uHue.value + 0.5) % 1, SU.uC2.value); SU.uC2.value.lerp(colour, 0.2);
+    starsMesh.visible = true;
   };
   const sm = { bass: 0, mid: 0, treble: 0, energy: 0, centroid: 0, beat: 0 };                // (the song's levels, eased again here: the aurora should glide, not jitter)
   const TAU = { bass: 0.5, mid: 0.8, treble: 1.0, energy: 1.6, centroid: 3.0, beat: 0.45 };
@@ -220,7 +221,7 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
      */
     update(dt, spec, night, on, beatPos = -1, notes = null) {
       level += ((on ? 1 : 0) - level) * (1 - Math.exp(-dt * (on ? 0.6 : 0.5)));
-      if (!on && level < 0.004) { level = 0; staffMesh.visible = false; staffA = 0; mesh.visible = false; star.visible = false; starT = -1; for (const m of ms) { m.t = -1; m.mesh.visible = false; } api.strength = 0; return; }
+      if (!on && level < 0.004) { level = 0; starsMesh.visible = false; starsA = 0; mesh.visible = false; star.visible = false; starT = -1; for (const m of ms) { m.t = -1; m.mesh.visible = false; } api.strength = 0; return; }
       mesh.visible = true; mesh.position.copy(camera.position); starTick(dt); meteorTick(dt, beatPos, notes);
       hue = (hue + dt * 0.012) % 1; U.uWarm.value = WARM; sweep += dt * 0.09;
       const wob = 0.5 + 0.5 * Math.sin(hue * Math.PI * 2);                            // a slow drift so it never sits on one colour
@@ -235,7 +236,7 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
       U.uLevel.value = level; U.uDay.value = 1 - night; U.uHue.value = 0.06 * wob + harm;
       // the colour it throws on the world: the middle of its palette at the moment, brightness following the loudness
       auroraColour(U.uHue.value + 0.33 * sm.centroid + 0.3 * sm.energy + 0.12, colour);
-      staffTick(dt, notes, on);
+      starsTick(dt, notes, on);
       api.strength = Math.min(0.62, level * (0.18 + 0.5 * sm.energy + 0.06 * sm.beat)) * (1 - 0.6 * (1 - night));
     },
     /** Tint the scene's lights, fog and (via `world.setAurora`) the ground and pond; call after sky.set each frame. */
