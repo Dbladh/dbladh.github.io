@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018202544';
-import { auroraColour } from './aurora.js?v=20261018202544';
+import { PAL } from './palette.js?v=20261018202931';
+import { auroraColour } from './aurora.js?v=20261018202931';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018202544';
+} from './houses.js?v=20261018202931';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -170,12 +170,12 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
   g.fillStyle = accent; g.fillRect(0, 0, W, 40);
   const padX = 50, areaY = 40 + 22, areaH = H - areaY - 26;
   // With a photo, the picture takes the left-hand side (a rounded square) and the title sits to its right,
-  // held to two lines (a long title would otherwise wrap onto a third).
+  // held to three lines so the letters can be as large as the sign allows.
   const ready = photo && (photo instanceof HTMLCanvasElement || (photo.complete && photo.naturalWidth));   // an Image that has loaded, or a ready-made canvas
-  const pic = ready ? Math.min(areaH, W * 0.33) : 0;
+  const pic = ready ? Math.min(areaH, W * 0.28) : 0;
   const textX = padX + (pic ? pic + 30 : 0);
   const maxW = W - padX - textX;
-  const maxLines = pic ? 2 : 99;
+  const maxLines = pic ? 3 : 99;
   const wrap = (size) => {                                  // greedy word wrap at this font size
     g.font = `800 ${size}px ${FACE_FONT}`;
     const lines = []; let line = '';
@@ -2040,7 +2040,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
   const loadPic = (src) => { const im = new Image(); im.onload = () => layoutFaces(); im.src = src; return im; };
   const aboutPhoto = loadPic('multimedia/about_me_image.jpg');
-  const creativityPic = loadPic('multimedia/dcity/dcity-library.jpg');
+  const creativityPic = loadPic('multimedia/dcity/dcity-toniq.jpg');
   const aiPic = loadPic('multimedia/ai/app-icons.jpg');
   const signPics = { about: aboutPhoto, creativity: creativityPic, ai: aiPic };
 
@@ -2334,7 +2334,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const layoutFaces = () => {
     if (!faces.length) return;
     const fits = faces.map((f) => paintBoard(f.canvas, f.title, f.accent, null, f.photo));
-    // Titles share the smallest of their fitted sizes (a picture sign holds its title to two lines).
+    // Titles share the smallest of their fitted sizes (a picture sign holds its title to three lines).
     const plain = fits.filter((_, i) => !faces[i].photo);
     const common = Math.min(...(plain.length ? plain : fits));
     faces.forEach((f) => { paintBoard(f.canvas, f.title, f.accent, common, f.photo); f.tex.needsUpdate = true; });
