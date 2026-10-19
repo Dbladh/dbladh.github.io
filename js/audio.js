@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CHORDS } from './notes.js?v=20261018224519';
+import { SONG_RH, SONG_LH, SONG_CHORDS } from './notes.js?v=20261018224528';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -34,6 +34,7 @@ const beatAt = (t) => {
 /** Every note's start and length in beats, worked out once: for the star staff, which scrolls with the tempo. */
 const STAFF = [SONG_RH, SONG_LH].map((list, hand) => list.map(([t, p, len, v]) => { const b0 = beatAt(t); return { hand, pitch: p, b0, dur: beatAt(t + len) - b0, vel: 0.45 + 0.55 * Math.min(1, v / 70) }; }));
 export const STAFF_MAX = 56;
+const NOTE_LEAD = 0.12;                  // seconds: how far ahead of the sound the note lights run (raise it if they still look late, lower it if early)
 export const pickFlicker = (id) => {
   const rate = (BOARD_PITCH[id] || 1) * (0.99 + Math.random() * 0.02);
   return { snd: 'fl_start', rate, events: FLICKER_EVENTS.map(([t, d, a]) => [t / rate, d / rate, a]) };       // (a slower sound is a longer one: the flashes stretch with it)
@@ -339,7 +340,7 @@ export function createAudio({ base = 'audio/' } = {}) {
       const o = out || {}; o.rh = o.rh || [0, 0, 0]; o.lh = o.lh || [0, 0, 0]; o.lhN = 0; o.lhZone = 0; o.lhVel = 0; o.staffN = 0; o.bp = -1; o.chord = -1; o.root = 0; o.minor = 0; (o.recent = o.recent || []).length = 0;
       o.rh[0] = o.rh[1] = o.rh[2] = o.lh[0] = o.lh[1] = o.lh[2] = 0;
       if (!song || !ctx) return o;
-      const t = ctx.currentTime - song.t0;
+      const t = ctx.currentTime - song.t0 + NOTE_LEAD;                          // (a touch ahead of the sound: a frame is drawn and shown a little after the note is heard, so the lights are brought forward to land on it)
       {                                                                          // the notes within a few bars either side of now, for the star staff: [beats from now, pitch, length in beats, strength (negative = left hand)]
         const bp = beatAt(t), d = o.staffData = o.staffData || new Float32Array(STAFF_MAX * 4); let k = 0; o.bp = bp;
         for (const list of STAFF) for (const n of list) {
