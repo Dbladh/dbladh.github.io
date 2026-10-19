@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018223109';
-import { auroraColour } from './aurora.js?v=20261018223109';
+import { PAL } from './palette.js?v=20261018223359';
+import { auroraColour } from './aurora.js?v=20261018223359';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018223109';
+} from './houses.js?v=20261018223359';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2399,7 +2399,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const showPulse = (i) => { const sn = 0.5 + 0.5 * Math.sin(dance.chase - i * 1.25); return Math.min(1.5, 0.16 + 0.8 * sn * sn * (0.45 + 0.85 * dance.bass) + 0.85 * dance.beat * (i & 1 ? 1 : 0.5)); };
   const rippleCol = new THREE.Color();
   const showTone = (i, out) => auroraColour((dance.hue + dance.centroid * 0.3 + i * 0.17) % 1, out);
-  let showWas = false;
+  let showWas = false, camObj = null; const hv = new THREE.Vector3();
   function lightShow() {
     const w = dance.w;
     if (w <= 0.002) {                                                      // (over: put the village's window colours back; the rest is reset every frame by setNight)
@@ -2411,11 +2411,14 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     houses.forEach((h, i) => {
       if (!h.group || (music && music.h === h)) return;                    // (the singing house keeps its own glow)
       h.baseEm ??= h.glass.emissive.clone();
-      const p = showPulse(i), c = showTone(i, showColour);
+      const c = showTone(i, showColour);
+      let lit = 0;                                                       // the left hand's notes light the houses of their third of the screen (the old tempo chase stays as a gentle undercurrent)
+      if (camObj) { hv.set(h.x, 2, h.z).project(camObj); lit = Math.max(0, 1 - Math.abs(hv.x + 0.66) / 0.66) * dance.lh[0] + Math.max(0, 1 - Math.abs(hv.x) / 0.66) * dance.lh[1] + Math.max(0, 1 - Math.abs(hv.x - 0.66) / 0.66) * dance.lh[2]; }
+      const p = Math.min(1.5, 0.35 * showPulse(i) + 0.12 + 1.5 * lit);
       h.glass.emissive.copy(h.baseEm).lerp(c, 0.85 * w); h.glass.emissiveIntensity += w * (0.3 + 1.6 * p);
       if (h.light) { h.light.color.copy(h.baseLightCol ??= h.light.color.clone()).lerp(c, 0.9 * w); h.light.intensity += w * HOUSE_I * (0.15 + 1.1 * p); }
     });
-    showTone(5, showCol2); lanternMat.color.lerp(showCol2, w * (0.45 + 0.5 * showPulse(5)));
+    showTone(5, showCol2); lanternMat.color.lerp(showCol2, w * (0.4 + 0.25 * showPulse(5) + 0.6 * Math.max(dance.lh[0], dance.lh[1], dance.lh[2])));
     boards.forEach((b, j) => {                                              // the three billboards light up one at a time, on the beats of a 3/4 bar (left, middle, right)
       showTone(9 + j * 2, showCol2);
       let p;
@@ -2637,7 +2640,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     update(dt, camera) {
       time += dt;
       updateMusic(dt);
-      if (camera) camPos = camera.position;
+      if (camera) { camPos = camera.position; camObj = camera; }
       { const g = dance.w > 0.002 ? dance.w : 0; flowerGlow.value.set(dance.lh[0] * g, dance.lh[1] * g, dance.lh[2] * g); }
       ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
       terrainWind.uWindTime.value = time;
