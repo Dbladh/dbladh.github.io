@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018223359';
-import { auroraColour } from './aurora.js?v=20261018223359';
+import { PAL } from './palette.js?v=20261018223635';
+import { auroraColour } from './aurora.js?v=20261018223635';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018223359';
+} from './houses.js?v=20261018223635';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1681,7 +1681,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     sh.uniforms.uGlow = flowerGlow;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vZx;').replace('#include <project_vertex>', '#include <project_vertex>\nvZx = gl_Position.x / max(gl_Position.w, 0.001);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZx; uniform vec3 uGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 zw = max(vec3(0.0), 1.0 - abs(vZx - vec3(-0.66, 0.0, 0.66)) / 0.66); totalEmissiveRadiance += diffuseColor.rgb * (0.15 + 0.85 * diffuseColor.rgb) * 2.6 * dot(zw, uGlow); }');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 zw = max(vec3(0.0), 1.0 - abs(vZx - vec3(-0.66, 0.0, 0.66)) / 0.66); totalEmissiveRadiance += diffuseColor.rgb * (0.15 + 0.85 * diffuseColor.rgb) * 5.2 * dot(zw, uGlow); }');
   };
   /** Build the instanced meshes for a set of plant/prop lists (`src`, shaped like `items`) into `target`. */
   function buildAll(src, target, opt = {}) {
