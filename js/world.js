@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018202323';
-import { auroraColour } from './aurora.js?v=20261018202323';
+import { PAL } from './palette.js?v=20261018202544';
+import { auroraColour } from './aurora.js?v=20261018202544';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018202323';
+} from './houses.js?v=20261018202544';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -171,7 +171,8 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
   const padX = 50, areaY = 40 + 22, areaH = H - areaY - 26;
   // With a photo, the picture takes the left-hand side (a rounded square) and the title sits to its right,
   // held to two lines (a long title would otherwise wrap onto a third).
-  const pic = photo && photo.complete && photo.naturalWidth ? Math.min(areaH, W * 0.33) : 0;
+  const ready = photo && (photo instanceof HTMLCanvasElement || (photo.complete && photo.naturalWidth));   // an Image that has loaded, or a ready-made canvas
+  const pic = ready ? Math.min(areaH, W * 0.33) : 0;
   const textX = padX + (pic ? pic + 30 : 0);
   const maxW = W - padX - textX;
   const maxLines = pic ? 2 : 99;
@@ -199,7 +200,7 @@ function paintBoard(canvas, title, accent, forceSize = null, photo = null) {
     g.save();
     g.beginPath(); g.roundRect(x, y, pic, pic, r); g.clip();
     // "cover" crop, leaning toward the top so the face stays in frame
-    const iw = photo.naturalWidth, ih = photo.naturalHeight, side = Math.min(iw, ih);
+    const iw = photo.naturalWidth || photo.width, ih = photo.naturalHeight || photo.height, side = Math.min(iw, ih);
     const sx = (iw - side) / 2, sy = (ih - side) * 0.28;
     g.drawImage(photo, sx, sy, side, side, x, y, pic, pic);
     g.restore();
@@ -2035,8 +2036,13 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
-  const aboutPhoto = new Image();      // painted onto the About sign's face once it has loaded
-  aboutPhoto.src = 'multimedia/about_me_image.jpg';
+  // Each closed sign carries a picture of real work beside its title (painted by paintBoard once it has loaded):
+  // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
+  const loadPic = (src) => { const im = new Image(); im.onload = () => layoutFaces(); im.src = src; return im; };
+  const aboutPhoto = loadPic('multimedia/about_me_image.jpg');
+  const creativityPic = loadPic('multimedia/dcity/dcity-library.jpg');
+  const aiPic = loadPic('multimedia/ai/app-icons.jpg');
+  const signPics = { about: aboutPhoto, creativity: creativityPic, ai: aiPic };
 
   /** Unit box / cylinder with a vertical vertex-colour ramp: darker underneath, lighter on top. */
   const rampBox = (() => {
@@ -2109,7 +2115,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     const teaserTex = new THREE.CanvasTexture(faceCanvas);
     teaserTex.colorSpace = THREE.SRGBColorSpace;
     teaserTex.anisotropy = 4;
-    faces.push({ canvas: faceCanvas, tex: teaserTex, title: sec.title, accent: s.accent, scale: s.scale, photo: id === 'about' ? aboutPhoto : null });
+    faces.push({ canvas: faceCanvas, tex: teaserTex, title: sec.title, accent: s.accent, scale: s.scale, photo: signPics[id] || null });
     const openTex = drawOpenBoard(s.paper, s.accent);
     faceMat.map = teaserTex;
     const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceMat);
@@ -2328,14 +2334,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const layoutFaces = () => {
     if (!faces.length) return;
     const fits = faces.map((f) => paintBoard(f.canvas, f.title, f.accent, null, f.photo));
-    // The plain titles share the smallest of their fitted sizes. The photo sign uses that size too unless it
-    // would need a third line, in which case it takes the largest size that keeps its title on two lines.
+    // Titles share the smallest of their fitted sizes (a picture sign holds its title to two lines).
     const plain = fits.filter((_, i) => !faces[i].photo);
     const common = Math.min(...(plain.length ? plain : fits));
     faces.forEach((f) => { paintBoard(f.canvas, f.title, f.accent, common, f.photo); f.tex.needsUpdate = true; });
   };
-  layoutFaces();
-  aboutPhoto.onload = layoutFaces;     // repaint with the photo as soon as it arrives
+  layoutFaces();                       // each picture repaints its sign as soon as it arrives (see loadPic)
   document.fonts?.load(`800 100px ${FACE_FONT}`).then(layoutFaces).catch(() => {});   // redo once the web font is ready
 
   // ---- per-frame + day/night ----
