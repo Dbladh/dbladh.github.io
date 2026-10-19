@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018230627';
-import { auroraColour } from './aurora.js?v=20261018230627';
+import { PAL } from './palette.js?v=20261018230715';
+import { auroraColour } from './aurora.js?v=20261018230715';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018230627';
+} from './houses.js?v=20261018230715';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1681,7 +1681,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     sh.uniforms.uGlow = flowerGlow;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vZx;').replace('#include <project_vertex>', '#include <project_vertex>\nvZx = gl_Position.x / max(gl_Position.w, 0.001);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZx; uniform vec3 uGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 zw = max(vec3(0.0), 1.0 - abs(vZx - vec3(-0.66, 0.0, 0.66)) / 0.66); totalEmissiveRadiance += diffuseColor.rgb * (0.15 + 0.85 * diffuseColor.rgb) * 5.2 * dot(zw, uGlow); }');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 zw = max(vec3(0.0), 1.0 - abs(vZx - vec3(-0.66, 0.0, 0.66)) / 0.66); totalEmissiveRadiance += diffuseColor.rgb * (0.15 + 0.85 * diffuseColor.rgb) * 5.2 * uGlow.x; }');
   };
   /** Build the instanced meshes for a set of plant/prop lists (`src`, shaped like `items`) into `target`. */
   function buildAll(src, target, opt = {}) {
@@ -2399,7 +2399,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const showPulse = (i) => { const sn = 0.5 + 0.5 * Math.sin(dance.chase - i * 1.25); return Math.min(1.5, 0.16 + 0.8 * sn * sn * (0.45 + 0.85 * dance.bass) + 0.85 * dance.beat * (i & 1 ? 1 : 0.5)); };
   const rippleCol = new THREE.Color();
   const showTone = (i, out) => auroraColour((dance.hue + dance.centroid * 0.3 + i * 0.17) % 1, out);
-  let showWas = false, camObj = null; const hv = new THREE.Vector3();
+  let showWas = false;
   function lightShow() {
     const w = dance.w;
     if (w <= 0.002) {                                                      // (over: put the village's window colours back; the rest is reset every frame by setNight)
@@ -2412,8 +2412,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       if (!h.group || (music && music.h === h)) return;                    // (the singing house keeps its own glow)
       h.baseEm ??= h.glass.emissive.clone();
       const c = showTone(i, showColour);
-      let lit = 0;                                                       // the left hand's notes light the houses of their third of the screen (the old tempo chase stays as a gentle undercurrent)
-      if (camObj) { hv.set(h.x, 2, h.z).project(camObj); lit = Math.max(0, 1 - Math.abs(hv.x + 0.66) / 0.66) * dance.lh[0] + Math.max(0, 1 - Math.abs(hv.x) / 0.66) * dance.lh[1] + Math.max(0, 1 - Math.abs(hv.x - 0.66) / 0.66) * dance.lh[2]; }
+      const lit = Math.max(dance.lh[0], dance.lh[1], dance.lh[2]);          // the left hand's notes light every house together (the old tempo chase stays as a gentle undercurrent)
       const p = Math.min(1.5, 0.35 * showPulse(i) + 0.12 + 1.5 * lit);
       h.glass.emissive.copy(h.baseEm).lerp(c, 0.85 * w); h.glass.emissiveIntensity += w * (0.3 + 1.6 * p);
       if (h.light) { h.light.color.copy(h.baseLightCol ??= h.light.color.clone()).lerp(c, 0.9 * w); h.light.intensity += w * HOUSE_I * (0.15 + 1.1 * p); }
@@ -2423,7 +2422,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       showTone(9 + j * 2, showCol2);
       let p;
       if (dance.beatPos >= 0) {
-        p = 0.07 + 1.7 * dance.lh[j];                                       // the left hand's notes (the piano's lower part, from the song's MIDI): the lowest notes light the left sign, middle ones the middle, higher ones the right
+        p = 0.07 + 1.7 * Math.max(dance.lh[0], dance.lh[1], dance.lh[2]);       // all three signs flash together with the left hand's notes (the piano's lower part, from the song's MIDI)
       } else p = showPulse(9 + j * 2);
       b.show?.(w, p, showCol2);
     });
@@ -2641,8 +2640,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     update(dt, camera) {
       time += dt;
       updateMusic(dt);
-      if (camera) { camPos = camera.position; camObj = camera; }
-      { const g = dance.w > 0.002 ? dance.w : 0; flowerGlow.value.set(dance.lh[0] * g, dance.lh[1] * g, dance.lh[2] * g); }
+      if (camera) camPos = camera.position;
+      { const g = dance.w > 0.002 ? dance.w : 0; const l = Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * g; flowerGlow.value.set(l, l, l); }
       ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
       terrainWind.uWindTime.value = time;
       pondU.uTime.value = time;
