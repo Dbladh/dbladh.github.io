@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261018231142';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261018231637';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -342,9 +342,9 @@ export function createAudio({ base = 'audio/' } = {}) {
       o.sweep = smooth(69, 70.5, t) * (1 - smooth(85, 86.5, t));                  // 1:10 to 1:26: the left hand's lights step left, middle, right, left... in a fixed round, whatever the notes (a calmer, less bright passage than all lighting together)
       for (const [list, dst, zone] of [[SONG_RH, o.rh, (p) => (p <= 72 ? 0 : p <= 75 ? 1 : 2)], [SONG_LH, o.lh, (p, k) => (o.sweep > 0.5 ? LH_STEP[k] % 3 : p <= 50 ? 0 : p <= 57 ? 1 : 2)]]) {
         let n = 0; while (n < list.length && list[n][0] <= t) n++;           // (a few hundred notes: a plain scan is fine)
-        for (let k = n - 1; k >= 0 && t - list[k][0] < 4; k--) {
+        for (let k = n - 1; k >= 0 && t - list[k][0] < 9; k--) {
           const [s, p, len, v] = list[k], age = t - s, z = zone(p, k), a = 0.45 + 0.55 * clamp(v / 70);
-          const e = a * (0.55 * Math.exp(-age * 5) + 0.45 * Math.exp(-age / (0.3 + 0.5 * Math.min(len, 3))) * (age < len + 0.4 ? 1 : Math.exp(-(age - len - 0.4) * 4)));   // (a bright strike, then a glow that lasts as long as the note)
+          const hold = 0.3 + 0.7 * Math.exp(-Math.min(age, len) * 0.8), e = a * Math.min(1, 0.85 * (age <= len ? hold : hold * Math.exp(-(age - len) * 7)) + 0.5 * Math.exp(-age * 8));   // (struck bright, then it stays lit for as long as the note is held, slowly dimming the longer it goes, and drops away quickly once the note ends)
           if (e > dst[z]) dst[z] = e;
           if (e > o.pe[p]) o.pe[p] = e;
           if (age < 2.4) o.recent.push({ hand: list === SONG_RH ? 0 : 1, pitch: p, start: s, age, vel: a });
