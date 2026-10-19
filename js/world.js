@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018202931';
-import { auroraColour } from './aurora.js?v=20261018202931';
+import { PAL } from './palette.js?v=20261018212407';
+import { auroraColour } from './aurora.js?v=20261018212407';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261018202931';
+} from './houses.js?v=20261018212407';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2040,7 +2040,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
   const loadPic = (src) => { const im = new Image(); im.onload = () => layoutFaces(); im.src = src; return im; };
   const aboutPhoto = loadPic('multimedia/about_me_image.jpg');
-  const creativityPic = loadPic('multimedia/dcity/dcity-toniq.jpg');
+  const creativityPic = loadPic('multimedia/elevate_tcg/king-of-sports.jpg');
   const aiPic = loadPic('multimedia/ai/app-icons.jpg');
   const signPics = { about: aboutPhoto, creativity: creativityPic, ai: aiPic };
 

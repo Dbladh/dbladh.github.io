@@ -358,6 +358,7 @@ body.scene-mode::before {
 .stop-top-wrap { container-type: inline-size; }
 .stop-top { display: grid; gap: 1em; align-items: center; margin: 0.9em 0 0.4em; max-width: 720px; }   /* photo + text share the 720px */
 .stop-top .stop-photo { width: min(220px, 100%); }
+.stop-photo figcaption { margin-top: 0.6em; font-size: 0.72em; line-height: 1.35; opacity: 0.8; }
 .stop-top h3 { margin-top: 0; }
 .stop-top ul { margin: 0; padding-left: 1.1em; }
 @container (min-width: 480px) {
