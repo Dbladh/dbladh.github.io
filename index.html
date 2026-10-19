@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261018212407">
+  <link rel="stylesheet" href="css/styles.css?v=20261018220303">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018212407 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261018220303 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -162,6 +162,10 @@
           <video class="app-video" src="multimedia/ai/tilt-drifter-demo.mp4" poster="multimedia/ai/tilt-drifter-poster.jpg" width="442" height="960" muted loop playsinline preload="none" aria-label="Screen recording of the Tilt Drifter app"></video>
         </figure>
         <p>Tilt Drifter is a free iOS game. You tilt your phone to steer a ball, grab collectibles and power-ups, dodge obstacles and chase a high score. The whole app pulses and lights up to the music, and I gave it a retro CRT look. I challenged myself to finish it and get it in the App Store in under a month, and I did.</p>
+          <div class="app-shots">
+            <img src="multimedia/tilt_drifter/menu.jpg" width="540" height="1169" alt="Tilt Drifter main menu with Mayhem Mode, Casual Mode and High Scores" loading="lazy" decoding="async">
+            <img src="multimedia/tilt_drifter/gameplay.jpg" width="540" height="1169" alt="Tilt Drifter gameplay: a glowing ball on a pulsing grid, with a score of 27,059" loading="lazy" decoding="async">
+          </div>
         </div>
         <div class="app-pair">
         <figure class="app-card">
@@ -173,6 +177,10 @@
         </figure>
         <p>Skwigl is a daily drawing game. I came up with the idea and made the music. I designed and animated the characters in Illustrator and Rive, with help from a designer. AI helped with the UI, the drawing and the daily seed.</p>
         <p>The seed is my favorite part. I figured I’d have to store every skwigl somewhere like Firebase. Instead I told AI the problem, not the solution. It suggested using the date, so everyone in the world gets the same skwigl each day.</p>
+          <div class="app-shots">
+            <img src="multimedia/skwigl/home.jpg" width="405" height="848" alt="Skwigl home screen with the Daily Skwigl, Gallery and Practice buttons" loading="lazy" decoding="async">
+            <img src="multimedia/skwigl/shop.jpg" width="480" height="1044" alt="The Skwigl character shop, with cosmetics to buy for your Skwigl buddy" loading="lazy" decoding="async">
+          </div>
         </div>
         <p>I didn’t do it completely alone. An engineer helped me set up publishing and gave me technical advice. A designer gave me feedback and shared the illustration and Rive work on Skwigl. They also helped me with App Store Connect, and I can now submit and publish apps on my own. But every change to the code, and every prompt, was mine.</p>
        </div>
@@ -309,6 +317,6 @@
     <figure><img alt=""><figcaption></figcaption></figure>
   </dialog>
 
-  <script type="module" src="js/main.js?v=20261018212407"></script>
+  <script type="module" src="js/main.js?v=20261018220303"></script>
 </body>
 </html>

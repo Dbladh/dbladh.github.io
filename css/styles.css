@@ -837,3 +837,10 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
 .lb-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 @keyframes lbIn { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .lightbox[open] { animation: none; } }
+
+/* ---------- App screenshots: small phone shots after each app's text; click one to enlarge ---------- */
+.app-shots { display: flex; gap: 0.7em; margin: 0.9em 0 1.2em; }
+.app-shots img {
+  display: block; width: min(118px, 46%); height: auto; border-radius: 12px; background: var(--cream, #f6f4ee);
+  border: 2px solid var(--ink); box-shadow: 0 6px 14px rgba(70, 64, 60, 0.14);
+}
