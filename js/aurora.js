@@ -65,7 +65,7 @@ const FRAG = /* glsl */ `
       acc += pal(t) * inten; a += inten;
     }
     vec3 col = acc / max(a, 0.001);
-    a = clamp(a, 0.0, 1.0) * uLevel;
+    a = clamp(a, 0.0, 1.0) * 0.6 * uLevel;                                              // (see-through: the star staff behind it shows)
     col = mix(col, vec3(dot(col, vec3(0.33))), 0.4 * uDay) + 0.08 * uDay;               // by day: a softer, paler glow
     a *= 1.0 - 0.5 * uDay;
     a *= smoothstep(-0.02, 0.06, el);
