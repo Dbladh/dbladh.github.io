@@ -148,15 +148,15 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
   const NMAX = low ? 40 : 56;
   const SU = { uN: { value: Array.from({ length: NMAX }, () => new THREE.Vector4()) }, uNN: { value: 0 }, uA: { value: 0 }, uAsp: { value: 1.6 }, uSpan: { value: 12 }, uBP: { value: 0 }, uC1: { value: new THREE.Color() }, uC2: { value: new THREE.Color() } };
   const staffMat = new THREE.ShaderMaterial({
-    uniforms: SU, transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: SU, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: /* glsl */ `
       uniform vec4 uN[${NMAX}]; uniform int uNN; uniform float uA, uAsp, uSpan, uBP; uniform vec3 uC1, uC2; varying vec2 vUv;
       const float T0 = 0.62, T1 = 0.78, B0 = 0.40, B1 = 0.56;
-      float pitchY(float p, bool lh) { return lh ? B0 + (p - 43.0) / 14.0 * (B1 - B0) : T0 + (p - 64.0) / 13.0 * (T1 - T0); }
+      float pitchY(float p, bool lh) { return lh ? B0 + (clamp(p, 33.0, 70.0) - 43.0) / 14.0 * (B1 - B0) : T0 + (clamp(p, 58.0, 88.0) - 64.0) / 13.0 * (T1 - T0); }
       void main() {
-        float x = (vUv.x - 0.5) * 2.0 * uAsp, y = 0.62 + (vUv.y - 0.5) * 0.6;
-        bool inT = y > T0 - 0.09 && y < T1 + 0.09, inB = y > B0 - 0.09 && y < B1 + 0.09;
+        float x = (vUv.x - 0.5) * 2.0 * uAsp, y = 0.62 + (vUv.y - 0.5) * 0.9;
+        bool inT = y > T0 - 0.2 && y < T1 + 0.2, inB = y > B0 - 0.2 && y < B1 + 0.2;       // (room above and below the staves for high and low notes, ledger-line style, and their glow)
         if (!inT && !inB) discard;
         float left = -0.92 * uAsp, width = 1.84 * uAsp, beatW = width / uSpan, playX = left + 0.26 * width;
         float edge = smoothstep(left, left + 0.1 * width, x) * smoothstep(left + width, left + 0.86 * width, x);
@@ -183,11 +183,12 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
         }
         acc *= edge * uA;
         if (max(acc.r, max(acc.g, acc.b)) < 0.004) discard;
-        gl_FragColor = vec4(acc, 1.0);
+        float m = clamp(max(acc.r, max(acc.g, acc.b)), 0.0, 1.0);
+        gl_FragColor = vec4(acc / max(m, 0.001), m);                             // (light only: nothing is added where there is no star, so no backdrop)
       }`,
   });
   const staffMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), staffMat);
-  staffMesh.renderOrder = 5; staffMesh.frustumCulled = false; staffMesh.visible = false; scene.add(staffMesh);
+  staffMesh.renderOrder = -12; staffMesh.frustumCulled = false; staffMesh.visible = false; skyScene.add(staffMesh);       // (in the sky, drawn before the aurora: the aurora's glow passes over the stars, which shine through it)
   let staffA = 0;
   const staffTick = (dt, notes, on) => {
     const want = on && notes && notes.bp >= 0 && notes.staffN > 0 && level > 0.3 ? 1 : 0;
@@ -195,7 +196,7 @@ export function createAurora(skyScene, camera, { low = false, scene = skyScene }
     if (staffA < 0.004) { staffMesh.visible = false; return; }
     const d = 200, hh = d * Math.tan(camera.fov * Math.PI / 360), hw = hh * camera.aspect;
     sv.set(0, 0.62 * hh, -d).applyQuaternion(camera.quaternion).add(camera.position); staffMesh.position.copy(sv); staffMesh.quaternion.copy(camera.quaternion);
-    staffMesh.scale.set(2 * hw, 0.6 * hh, 1);
+    staffMesh.scale.set(2 * hw, 0.9 * hh, 1);
     const n = Math.min(NMAX, notes.staffN);
     for (let i = 0; i < n; i++) SU.uN.value[i].set(notes.staffData[i * 4], notes.staffData[i * 4 + 1], notes.staffData[i * 4 + 2], notes.staffData[i * 4 + 3]);
     SU.uNN.value = n; SU.uBP.value = notes.bp; SU.uAsp.value = camera.aspect; SU.uSpan.value = Math.min(12, Math.max(8, camera.aspect * 7.5)); SU.uA.value = staffA * (0.55 + 0.45 * level);
