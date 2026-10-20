@@ -230,10 +230,23 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   // The oval the sun and moon travel (they sit at opposite ends of it). Its half-width is fitted to the screen's width, so on a tall, narrow phone screen the whole oval still fits.
   const SKY_LIFT = 30, SKY_AMP = 45, ORBIT_Z = -95, orbit = { halfW: 70 };
   /** Fit the orbit to the view: `aspect` is width / height, `fov` the camera's vertical field of view in degrees. */
+  // The dotted line shown while the time is being dragged is drawn here, in the sky layer, just before the sun and moon, so the real sun and moon pass in front of it (the sky canvas sits behind the
+  // landscape, so the part of the line behind the hills is hidden, as the sun and moon are).
+  const ORBIT_N = 120, orbitGeo = new THREE.BufferGeometry(), orbitArr = new Float32Array(ORBIT_N * 3), orbitU = { uA: { value: 0 } }, _ov = new THREE.Vector3();
+  orbitGeo.setAttribute('position', new THREE.BufferAttribute(orbitArr, 3));
+  const orbitDots = new THREE.Points(orbitGeo, new THREE.ShaderMaterial({
+    uniforms: orbitU, transparent: true, depthTest: false, depthWrite: false,
+    vertexShader: 'void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = 10.0; }',
+    fragmentShader: 'uniform float uA; void main() { float r = length(gl_PointCoord * 2.0 - 1.0); float core = smoothstep(0.6, 0.38, r), halo = smoothstep(1.0, 0.45, r) * 0.6; float a = max(core, halo) * uA; if (a < 0.01) discard; gl_FragColor = vec4(mix(vec3(0.08, 0.08, 0.2), vec3(1.0), core), a); }',
+  }));
+  orbitDots.renderOrder = -11; orbitDots.frustumCulled = false; orbitDots.visible = false; skyScene.add(orbitDots);
+  function fillOrbit() { for (let i = 0; i < ORBIT_N; i++) { orbitPoint((i / ORBIT_N) * 24 + 6, _ov); orbitArr.set([_ov.x, _ov.y, _ov.z], i * 3); } orbitGeo.attributes.position.needsUpdate = true; }
+  /** 0..1: how strongly the dotted orbit of the sun and moon is shown (while the time is dragged). */
+  function setOrbitAlpha(a) { orbitU.uA.value = a; orbitDots.visible = a > 0.01; }
   let hintV = 0;
   /** 0..1: how strongly the sun's and moon's glow is swelling (a hint that they can be dragged). */
   function setHint(v) { hintV = v; }
-  function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); }
+  function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); fillOrbit(); }
   /** Where the sun is on the oval at `hour` (the moon is on the opposite side), written into `out`. */
   function orbitPoint(hour, out) { const a = ((hour - 6) / 12) * Math.PI; return out.set(Math.cos(a) * orbit.halfW, SKY_LIFT + SKY_AMP * Math.sin(a), ORBIT_Z); }
   function set(hour, dim = 0, warm = 0) {
@@ -297,5 +310,5 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     return { night, horizon: s.bot.clone() };
   }
 
-  return { set, setHint, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, setHint, setOrbitAlpha, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }
