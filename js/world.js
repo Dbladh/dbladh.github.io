@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019215324';
-import { auroraColour } from './aurora.js?v=20261019215324';
+import { PAL } from './palette.js?v=20261019215909';
+import { auroraColour } from './aurora.js?v=20261019215909';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019215324';
+} from './houses.js?v=20261019215909';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -126,6 +126,18 @@ function rawHeight(x, z) {
   return h;
 }
 
+// A natural jump for the bike that rides across the hills: along its lane a ground swell rises to a lip and falls away, so the bike leaves the ground there on its own (and flips if there is
+// enough air). It is part of the terrain (the ground mesh, the plants and the game's first stretch all read it through heightAt), blended in sideways so it reads as a knoll.
+export const RAMP = { z: -50, lipX: -26, L: 8.5, D: 3.5, H: 2.0, zHalf: 8 };
+function rampH(x, z) {
+  const u = x - RAMP.lipX; if (u < -RAMP.L || u > RAMP.D) return 0;
+  const dz = Math.abs(z - RAMP.z); if (dz > RAMP.zHalf) return 0;
+  const w = 1 - smooth(RAMP.zHalf * 0.55, RAMP.zHalf, dz);
+  if (u < 0) return w * RAMP.H * ((u + RAMP.L) / RAMP.L) ** 2;
+  const q = Math.sqrt(u / RAMP.D);                                                       // (a steep drop right at the lip that eases out onto the ground below)
+  return w * RAMP.H * (1 - q * q * (3 - 2 * q));
+}
+
 // Flat building plots: the terrain eases to each house's ground level, so nothing floats.
 const PADS = []; // { x, z, r, y } filled in by buildWorld before the terrain is made
 
@@ -135,7 +147,7 @@ const PADS = []; // { x, z, r, y } filled in by buildWorld before the terrain is
  * every plot is exactly level instead of being dragged toward its neighbour's height.
  */
 export function heightAt(x, z) {
-  let h = rawHeight(x, z);
+  let h = rawHeight(x, z) + rampH(x, z);
   let wSum = 0, ySum = 0, wMax = 0;
   for (const pad of PADS) {
     const w = 1 - smooth(pad.r, pad.r + 4.5, Math.hypot(x - pad.x, z - pad.z));
@@ -624,6 +636,17 @@ export function buildWorld(scene, sections, opts = {}) {
 
   // ---- Terrain: height + colour with fields, mud, rocky slopes, shore sand and the path ----
   const SEG = low ? [210, 138] : [304, 200];   // phones: finer than before so the pond's bowl and shore stay smooth
+  // The dirt-bike trail: a lane across the scene, at the depth where the fewest house plots reach, kept clear of trees and bushes.
+  let LANE_Z = -24;
+  {
+    let best = 1e9;
+    for (let z = -44; z >= -56; z -= 0.5) {
+      let cost = Math.abs(z + 50) * 0.06;
+      for (const pd of PADS) cost += Math.max(0, pd.r + 2.5 - Math.abs(z - pd.z));
+      if (cost < best) { best = cost; LANE_Z = z; }
+    }
+  }
+  RAMP.z = LANE_Z;
   const geo = new THREE.PlaneGeometry(380, 250, SEG[0], SEG[1]);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, -75);
@@ -1043,16 +1066,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   };
   const SAGE_C = new THREE.Color(PAL.sage);
   const GREENS = (classic ? ['#5cb85c', '#6cc96a', '#4aa857', '#7fd070', '#8fcf5a'] : ['#4fcf5a', '#6ed84f', '#3ec46a', '#8ee05a', '#a4e04a']).map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.14));
-  // The dirt-bike trail: a lane across the scene, at the depth where the fewest house plots reach, kept clear of trees and bushes.
-  let LANE_Z = -24;
-  {
-    let best = 1e9;
-    for (let z = -44; z >= -56; z -= 0.5) {
-      let cost = Math.abs(z + 50) * 0.06;
-      for (const pd of PADS) cost += Math.max(0, pd.r + 2.5 - Math.abs(z - pd.z));
-      if (cost < best) { best = cost; LANE_Z = z; }
-    }
-  }
+  // (the dirt-bike trail's lane: its depth is chosen above, before the terrain is made, because the jump is part of the terrain)
   const FALL = ['#ff9a4a', '#ffc94a', '#f2703c', '#ffd966'].map((h) => new THREE.Color(h));
   const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.1));
   const BLOSSOM = new THREE.Color('#ffb3c8');
