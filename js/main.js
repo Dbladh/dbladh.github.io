@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019223344';
-import { buildWorld } from './world.js?v=20261019223344';
-import { createSky } from './sky.js?v=20261019223344';
-import { createDOF } from './dof.js?v=20261019223344';
-import { createRide } from './ride.js?v=20261019223344';
-import { createGame } from './bikegame.js?v=20261019223344';
-import { createAurora, setWarm } from './aurora.js?v=20261019223344';
-import { createAudio, pickFlicker } from './audio.js?v=20261019223344';
+import { PAL } from './palette.js?v=20261019223730';
+import { buildWorld } from './world.js?v=20261019223730';
+import { createSky } from './sky.js?v=20261019223730';
+import { createDOF } from './dof.js?v=20261019223730';
+import { createRide } from './ride.js?v=20261019223730';
+import { createGame } from './bikegame.js?v=20261019223730';
+import { createAurora, setWarm } from './aurora.js?v=20261019223730';
+import { createAudio, pickFlicker } from './audio.js?v=20261019223730';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -530,9 +530,10 @@ function start() {
   }
   let starting = false;
   // ---- Hints that something here can be played with (without saying what): a label on the riding bike, a note drifting up from a house now and then, and a swell in the sun's and moon's glow.
-  // Each stops for good once that thing has been used (remembered in the browser), and all of them wait while a section is open, the game runs or music mode is on.
-  const seen = { bike: store.get('hint.bike') === '1', house: store.get('hint.house') === '1', dial: store.get('hint.dial') === '1' };
-  const markSeen = (k) => { if (!seen[k]) { seen[k] = true; store.set('hint.' + k, '1'); } };
+  // Each stops once that thing has been used during this visit, and all of them wait while a section is open, the game runs or music mode is on.
+  // (Remembered for this visit only, not in the browser: after a reload or a new visit the hints are back.)
+  const seen = { bike: false, house: false, dial: false };
+  const markSeen = (k) => { seen[k] = true; };
   const hintsOn = () => active === 'home' && !openId && !tween && !game?.active && songDark < 0.05 && !document.hidden;
   let hintBikeT = 0, hintBikeOn = false, hintBikeD = 0, hintHouseT = 9 + Math.random() * 4, hintClock = 0, hintSun = 0;
   const hintV = new THREE.Vector3();
