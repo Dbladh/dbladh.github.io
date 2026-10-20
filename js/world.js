@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019221611';
-import { auroraColour } from './aurora.js?v=20261019221611';
+import { PAL } from './palette.js?v=20261019221824';
+import { auroraColour } from './aurora.js?v=20261019221824';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019221611';
+} from './houses.js?v=20261019221824';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -664,7 +664,7 @@ export function buildWorld(scene, sections, opts = {}) {
   const cWarm = new THREE.Color(classic ? '#e2ea8a' : '#f0ee80'), cPath = new THREE.Color('#f1e5c6'), cDeep = new THREE.Color('#3f9a58');
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
-  const cRampEarth = new THREE.Color('#a9794a'), cRampDark = new THREE.Color('#6f4e2e');
+  const cRampEarth = cPath.clone(), cRampDark = new THREE.Color('#cdb98e');       // (the same pale dirt as the footpaths, with slightly darker mottling and ruts)
   const c = new THREE.Color();
   /** The ground colour at (x, z) for height h and steepness `slope`, written into `c`: shared with the dirt-bike game so its ground matches. */
   const terrainColor = (x, z, h, slope, c) => {
@@ -706,7 +706,7 @@ export function buildWorld(scene, sections, opts = {}) {
     c.lerp(cPath, Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
     const rd = rampDirt(x, z);                                               // the jump: packed brown earth, mottled, with two darker wheel ruts along it
     if (rd > 0) {
-      c.lerp(cRampEarth, rd * 0.94).lerp(cRampDark, rd * (0.15 + 0.4 * vnoise(x * 1.7 + 5, z * 1.7)));
+      c.lerp(cRampEarth, rd * 0.96).lerp(cRampDark, rd * (0.1 + 0.35 * vnoise(x * 1.7 + 5, z * 1.7)));
       const rut = Math.max(0, 1 - Math.abs(Math.abs(z - RAMP.z) - 0.55) / 0.3);
       c.lerp(cRampDark, rd * rut * 0.45);
     }
