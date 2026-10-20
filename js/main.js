@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261018233518';
-import { buildWorld } from './world.js?v=20261018233518';
-import { createSky } from './sky.js?v=20261018233518';
-import { createDOF } from './dof.js?v=20261018233518';
-import { createRide } from './ride.js?v=20261018233518';
-import { createGame } from './bikegame.js?v=20261018233518';
-import { createAurora, setWarm } from './aurora.js?v=20261018233518';
-import { createAudio, pickFlicker } from './audio.js?v=20261018233518';
+import { PAL } from './palette.js?v=20261019205213';
+import { buildWorld } from './world.js?v=20261019205213';
+import { createSky } from './sky.js?v=20261019205213';
+import { createDOF } from './dof.js?v=20261019205213';
+import { createRide } from './ride.js?v=20261019205213';
+import { createGame } from './bikegame.js?v=20261019205213';
+import { createAurora, setWarm } from './aurora.js?v=20261019205213';
+import { createAudio, pickFlicker } from './audio.js?v=20261019205213';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -584,6 +584,7 @@ function start() {
     stopSong(); audio.songStart(songV.x); audio.ui('tap'); world.setMusicHouse(i); songHouse = i; songSeen = false; songAt = performance.now();
   }
   canvas.addEventListener('click', (e) => {
+    if (suppressClick) return;
     if (active !== 'home' || game?.active) return;
     if (pickBike(e)) { playBike(); return; }
     const id = pick(e);
@@ -602,7 +603,7 @@ function start() {
       else { world.setHover(null); audio.flickerOff(); }
       lastHover = hoverId;
     }
-    canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : 'default';
+    if (!dialOn) canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : bodyAt(e) ? 'grab' : 'default';
   });
   canvas.addEventListener('pointerleave', () => { world.setHover(null); if (lastHover) audio.flickerOff(); lastHover = null; });
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
@@ -684,7 +685,49 @@ function start() {
       timeLabel.textContent = 'Time: ' + label;
       timeInput.setAttribute('aria-valuetext', label);
     }
+    updateDial();
   }
+  // ---- The sun and moon dial: press the sun or moon in the sky and drag round the ring to change the time ----
+  const dialEl = document.getElementById('sundial'), dialSun = document.getElementById('dial-sun'), dialMoon = document.getElementById('dial-moon'), dialTime = document.getElementById('dial-time');
+  const DIAL_R = 86, bodyV = new THREE.Vector3();
+  let dialOn = false, dialLast = 0, suppressClick = false;
+  function updateDial() {                                                        // (noon: the sun at the top and the moon at the bottom; the sun runs clockwise, as it crosses the sky from left to right)
+    if (!dialOn) return;
+    const a = ((hour - 12) / 24) * Math.PI * 2;
+    dialSun.setAttribute('transform', `translate(${(Math.sin(a) * DIAL_R).toFixed(1)} ${(-Math.cos(a) * DIAL_R).toFixed(1)})`);
+    dialMoon.setAttribute('transform', `translate(${(-Math.sin(a) * DIAL_R).toFixed(1)} ${(Math.cos(a) * DIAL_R).toFixed(1)})`);
+    dialTime.textContent = fmt(hour);
+  }
+  /** Which of the sun / moon is under the pointer (null for none): only a body that is up and not faded away (music mode hides them). */
+  function bodyAt(e) {
+    if (active !== 'home' || openId || tween || game?.active || songDark > 0.05) return null;
+    let best = null, bestD = 1e9;
+    for (const [name, mesh, r] of [['sun', sky.bodies.sun, 10], ['moon', sky.bodies.moon, 7]]) {
+      if (!mesh.visible || mesh.material.opacity < 0.3) continue;
+      bodyV.copy(mesh.position).project(camera);
+      if (bodyV.z > 1) continue;
+      const px = (bodyV.x * 0.5 + 0.5) * VW(), py = (-bodyV.y * 0.5 + 0.5) * VH();
+      const rad = Math.max(34, 1.6 * (r / mesh.position.distanceTo(camera.position)) * (VH() / 2) / Math.tan((camera.fov * Math.PI) / 360));
+      const d = Math.hypot(e.clientX - px, e.clientY - py);
+      if (d < rad && d < bestD) { best = name; bestD = d; }
+    }
+    return best;
+  }
+  const dialAngle = (e) => Math.atan2(e.clientY - VH() / 2, e.clientX - VW() / 2);
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button > 0 || pickBike(e) || pick(e) || world.houseAt(ray) >= 0 || !bodyAt(e)) return;
+    dragging = true; dialOn = true; suppressClick = true; dialLast = dialAngle(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is gone */ }
+    dialEl.classList.add('on'); canvas.style.cursor = 'grabbing'; updateDial(); e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dialOn) return;
+    if (Math.hypot(e.clientX - VW() / 2, e.clientY - VH() / 2) < Math.min(VW(), VH()) * 0.06) return;       // (right at the centre the angle is meaningless)
+    const a = dialAngle(e); let d = a - dialLast; d = Math.atan2(Math.sin(d), Math.cos(d)); dialLast = a;
+    setTime(hour + (d * 12) / Math.PI); timeInput.value = hour;                                             // (the change is the angle moved, so the body does not jump when it is grabbed)
+  });
+  const endDial = () => { if (!dialOn) return; dialOn = false; dragging = false; dialEl.classList.remove('on'); canvas.style.cursor = 'default'; setTimeout(() => { suppressClick = false; }, 60); };
+  canvas.addEventListener('pointerup', endDial); canvas.addEventListener('pointercancel', endDial); canvas.addEventListener('lostpointercapture', endDial);
   timeInput.step = 'any';                               // smooth slider while the clock runs
   timeInput.addEventListener('input', () => setTime(parseFloat(timeInput.value)));
   timeInput.addEventListener('pointerdown', () => { dragging = true; });

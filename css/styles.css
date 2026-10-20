@@ -844,3 +844,16 @@ html.boot body > :not(#boot):not(script):not(style) { visibility: hidden; }
   display: block; width: min(118px, 46%); height: auto; border-radius: 12px; background: var(--cream, #f6f4ee);
   border: 2px solid var(--ink); box-shadow: 0 6px 14px rgba(70, 64, 60, 0.14);
 }
+
+/* The sun and moon dial: while the sun or moon is dragged in the scene, a ring with both on it fades in and the time is shown in its middle. */
+.sundial { position: fixed; inset: 0; display: none; place-items: center; pointer-events: none; z-index: 30; opacity: 0; transition: opacity 0.35s ease; }
+body.scene-mode .sundial { display: grid; }
+.sundial.on { opacity: 1; }
+.sundial svg { width: min(68vmin, 640px); height: min(68vmin, 640px); overflow: visible; filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.35)); }
+.dial-ring { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 3; stroke-dasharray: 2 7; stroke-linecap: round; }
+.dial-sun-disc { fill: #ffd84a; stroke: #f2a900; stroke-width: 2; }
+.dial-rays path { fill: none; stroke: #ffd84a; stroke-width: 3; stroke-linecap: round; }
+.dial-moon-shape { fill: #e8eeff; stroke: #aab6e8; stroke-width: 1.5; }
+.dial-time { fill: #fff; font: 600 14px var(--name-font, system-ui); letter-spacing: 0.04em; paint-order: stroke; stroke: rgba(0, 0, 0, 0.35); stroke-width: 3px; }
+body.scene-mode #scene { touch-action: none; }
+@media (prefers-reduced-motion: reduce) { .sundial { transition: none; } }

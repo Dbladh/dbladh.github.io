@@ -283,5 +283,5 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     return { night, horizon: s.bot.clone() };
   }
 
-  return { set, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }
