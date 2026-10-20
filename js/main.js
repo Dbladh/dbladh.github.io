@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019205213';
-import { buildWorld } from './world.js?v=20261019205213';
-import { createSky } from './sky.js?v=20261019205213';
-import { createDOF } from './dof.js?v=20261019205213';
-import { createRide } from './ride.js?v=20261019205213';
-import { createGame } from './bikegame.js?v=20261019205213';
-import { createAurora, setWarm } from './aurora.js?v=20261019205213';
-import { createAudio, pickFlicker } from './audio.js?v=20261019205213';
+import { PAL } from './palette.js?v=20261019205812';
+import { buildWorld } from './world.js?v=20261019205812';
+import { createSky } from './sky.js?v=20261019205812';
+import { createDOF } from './dof.js?v=20261019205812';
+import { createRide } from './ride.js?v=20261019205812';
+import { createGame } from './bikegame.js?v=20261019205812';
+import { createAurora, setWarm } from './aurora.js?v=20261019205812';
+import { createAudio, pickFlicker } from './audio.js?v=20261019205812';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -691,11 +691,11 @@ function start() {
   const dialEl = document.getElementById('sundial'), dialSun = document.getElementById('dial-sun'), dialMoon = document.getElementById('dial-moon'), dialTime = document.getElementById('dial-time');
   const DIAL_R = 86, bodyV = new THREE.Vector3();
   let dialOn = false, dialLast = 0, suppressClick = false;
-  function updateDial() {                                                        // (noon: the sun at the top and the moon at the bottom; the sun runs clockwise, as it crosses the sky from left to right)
+  function updateDial() {                                                        // (noon: the sun at the top and the moon at the bottom; in this sky the sun rises on the right and sets on the left, so time runs anticlockwise)
     if (!dialOn) return;
     const a = ((hour - 12) / 24) * Math.PI * 2;
-    dialSun.setAttribute('transform', `translate(${(Math.sin(a) * DIAL_R).toFixed(1)} ${(-Math.cos(a) * DIAL_R).toFixed(1)})`);
-    dialMoon.setAttribute('transform', `translate(${(-Math.sin(a) * DIAL_R).toFixed(1)} ${(Math.cos(a) * DIAL_R).toFixed(1)})`);
+    dialSun.setAttribute('transform', `translate(${(-Math.sin(a) * DIAL_R).toFixed(1)} ${(-Math.cos(a) * DIAL_R).toFixed(1)})`);
+    dialMoon.setAttribute('transform', `translate(${(Math.sin(a) * DIAL_R).toFixed(1)} ${(Math.cos(a) * DIAL_R).toFixed(1)})`);
     dialTime.textContent = fmt(hour);
   }
   /** Which of the sun / moon is under the pointer (null for none): only a body that is up and not faded away (music mode hides them). */
@@ -724,7 +724,7 @@ function start() {
     if (!dialOn) return;
     if (Math.hypot(e.clientX - VW() / 2, e.clientY - VH() / 2) < Math.min(VW(), VH()) * 0.06) return;       // (right at the centre the angle is meaningless)
     const a = dialAngle(e); let d = a - dialLast; d = Math.atan2(Math.sin(d), Math.cos(d)); dialLast = a;
-    setTime(hour + (d * 12) / Math.PI); timeInput.value = hour;                                             // (the change is the angle moved, so the body does not jump when it is grabbed)
+    setTime(hour - (d * 12) / Math.PI); timeInput.value = hour;                                             // (the change is the angle moved, so the body does not jump when it is grabbed)
   });
   const endDial = () => { if (!dialOn) return; dialOn = false; dragging = false; dialEl.classList.remove('on'); canvas.style.cursor = 'default'; setTimeout(() => { suppressClick = false; }, 60); };
   canvas.addEventListener('pointerup', endDial); canvas.addEventListener('pointercancel', endDial); canvas.addEventListener('lostpointercapture', endDial);
