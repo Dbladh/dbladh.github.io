@@ -229,7 +229,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
   const warmDark = [new THREE.Color('#33100a'), new THREE.Color('#5a1e0c')];
   // The oval the sun and moon travel (they sit at opposite ends of it). Its half-width is fitted to the screen's width, so on a tall, narrow phone screen the whole oval still fits.
-  const SKY_LIFT = 40, SKY_AMP = 42, ORBIT_Z = -95, orbit = { halfW: 70 };
+  const SKY_LIFT = 30, SKY_AMP = 45, ORBIT_Z = -95, orbit = { halfW: 70 };
   /** Fit the orbit to the view: `aspect` is width / height, `fov` the camera's vertical field of view in degrees. */
   function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); }
   /** Where the sun is on the oval at `hour` (the moon is on the opposite side), written into `out`. */
@@ -274,12 +274,14 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     if (!classic) fog.color.lerp(s.sun, 0.12);
     starMat.uniforms.uNight.value = night * night * (1 - dim);
     // the sun, moon and their glows (and the stars above) fade away while a house song plays, leaving the sky to the aurora
-    for (const [m, glow] of [[sunMesh, 0.5], [moonMesh, 0.35]]) {
-      m.material.opacity = 1 - dim;
-      if (m.children[0]) m.children[0].material.opacity = glow * (1 - dim);
+    // Only one of the two is in the sky at a time: the sun is up from 6 am to 6 pm and the moon from 6 pm to 6 am, each rising at the hills as the other sets on the far side, and
+    // handing over with a quick cross-fade (the two are never both fully up).
+    const hand = THREE.MathUtils.clamp((arc + 0.06) / 0.12, 0, 1);                       // 1 while the sun's turn, 0 while the moon's
+    for (const [m, glow, f] of [[sunMesh, 0.5, hand], [moonMesh, 0.35, 1 - hand]]) {
+      m.material.opacity = (1 - dim) * f;
+      if (m.children[0]) m.children[0].material.opacity = glow * (1 - dim) * f;
+      m.visible = f > 0.01 && dim < 0.995;
     }
-    sunMesh.visible = sunMesh.position.y > 14 && dim < 0.995;
-    moonMesh.visible = moonMesh.position.y > 14 && dim < 0.995;
 
     updateEnv(hour, s, _sunTrue.set(sx, sy, sz), night, dim);
 
