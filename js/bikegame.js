@@ -2,17 +2,17 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261019212954';
-import { createTrack } from './track.js?v=20261019212954';
-import { createRagdoll } from './ragdoll.js?v=20261019212954';
-import { createFx } from './fx.js?v=20261019212954';
-import { createAudio } from './audio.js?v=20261019212954';
-import { createPuffs } from './puffs.js?v=20261019212954';
-import { createTracks } from './tracks.js?v=20261019212954';
-import { createDirt } from './dirt.js?v=20261019212954';
-import { createMudCoat } from './mudcoat.js?v=20261019212954';
-import { createCoins } from './coins.js?v=20261019212954';
-import { createFuel } from './fuel.js?v=20261019212954';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261019213907';
+import { createTrack, XT } from './track.js?v=20261019213907';
+import { createRagdoll } from './ragdoll.js?v=20261019213907';
+import { createFx } from './fx.js?v=20261019213907';
+import { createAudio } from './audio.js?v=20261019213907';
+import { createPuffs } from './puffs.js?v=20261019213907';
+import { createTracks } from './tracks.js?v=20261019213907';
+import { createDirt } from './dirt.js?v=20261019213907';
+import { createMudCoat } from './mudcoat.js?v=20261019213907';
+import { createCoins } from './coins.js?v=20261019213907';
+import { createFuel } from './fuel.js?v=20261019213907';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -157,6 +157,18 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     }
   }
 
+  // The two overlays for the ride home: speed streaks (they scroll fast and fade with the camera's speed) and a flash of light that hides the hop (see update(), the 'out' mode).
+  let warpLines = null, warpFlash = null, wl = -1, wf = -1;
+  function warpFx(speed, flash) {
+    if (!warpLines) {
+      if (speed <= 0 && flash <= 0) return;
+      warpLines = document.createElement('div'); warpLines.className = 'warp-lines'; warpFlash = document.createElement('div'); warpFlash.className = 'warp-flash';
+      document.body.append(warpLines, warpFlash);
+    }
+    const a = Math.round(Math.min(1, speed) * 100) / 100, b = Math.round(Math.min(1, flash) * 100) / 100;       // (the page is touched only when a value changes)
+    if (a !== wl) { wl = a; warpLines.style.opacity = a; }
+    if (b !== wf) { wf = b; warpFlash.style.opacity = b * 0.85; }
+  }
   const CUT = track.cutZ + 0.4;
   const slideBoards = (k) => { for (const b of boards) b.o.position.z = b.z0 - b.back * k; };     // a billboard standing in the lane slides back out of the rider's way
   const st = {
@@ -741,11 +753,24 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
       rectCache = null;                                                        // (measured again each frame: the canvas can change size without a window resize, and a stale box put the markers in the wrong place)
       if (st.mode === 'out') {
         st.t += dt;
-        const k = reduceMotion ? 1 : ease(Math.min(1, st.t / (ENTER_SECONDS * 0.8)));
-        cam.position.lerpVectors(st.leaveFrom.pos, st.home.pos, k);
-        lookV.lerpVectors(st.leaveFrom.look, st.home.look, k); cam.lookAt(lookV);
+        // The ride home. The ground is only built around the rider (and not at all once the exit begins), so a straight flight back over a long ride crosses ground that was never built:
+        // the scene looks empty for a moment. Instead the camera pulls back fast over the ground that is built, a flash of light covers a hop to the end of the real terrain (which is always
+        // whole), and it then sweeps home over that terrain, decelerating, with the view widening and speed streaks to give the feel of rushing back past the landscape.
+        const l0 = st.leaveFrom.pos, f = st.home.pos, hop = !reduceMotion && l0.x - XT > 90, T = reduceMotion ? 0.01 : hop ? 1.7 : 1.1;
+        const u = Math.min(1, st.t / T), ke = ease(u), PA = 0.3, PB = 0.38, XTH = XT - 40, pull = Math.min(90, l0.x - XT - 20);
+        let x, speed;
+        if (hop && u < PB) { const w = Math.min(1, u / PA); x = l0.x - pull * w * w * w; speed = w; }                           // (accelerating back over the built ground)
+        else if (hop) { const w = (u - PB) / (1 - PB); x = XTH + (f.x - XTH) * (1 - Math.pow(1 - w, 3)); speed = Math.pow(1 - w, 1.5); }   // (the sweep home over the real terrain, easing to a stop)
+        else { x = l0.x + (f.x - l0.x) * ke; speed = Math.sin(Math.PI * u); }
+        const k = hop ? THREE.MathUtils.smoothstep(u, 0.5, 1) : ke;                                                        // (the village and billboards come back as the camera nears home)
+        const ky = hop ? ease(THREE.MathUtils.smoothstep(u, 0.2, 1)) : ke;
+        cam.position.set(x, THREE.MathUtils.lerp(l0.y, f.y, ky), THREE.MathUtils.lerp(l0.z, f.z, ky));
+        lookV.set(x + THREE.MathUtils.lerp(st.leaveFrom.look.x - l0.x, st.home.look.x - f.x, ky), THREE.MathUtils.lerp(st.leaveFrom.look.y, st.home.look.y, ky), THREE.MathUtils.lerp(st.leaveFrom.look.z, st.home.look.z, ky)); cam.lookAt(lookV);
         clip.constant = THREE.MathUtils.lerp(CUT, 60, k); track.setTrailFade(1 - k); slideBoards(1 - k);
-        if (k >= 1) {
+        warpFx(reduceMotion ? 0 : speed, hop ? Math.max(0, 1 - Math.abs(u - (PB - 0.02)) / 0.07) : 0);
+        if (!reduceMotion) { cam.fov = baseFov() * (1 + 0.28 * speed); cam.updateProjectionMatrix(); }
+        if (u >= 1) {
+          warpFx(0, 0);
           st.mode = 'off'; world.setFollow(false); applyClip(false); juice.reset(); juice.visible = false; audio.stop(); camera.fov = baseFov(); camera.updateProjectionMatrix(); track.visible = false; coins.visible = false; fuel.visible = false; puffs.visible = false; dirt.visible = false; bike.root.visible = false; landMark.visible = false;
           startRun(0); st.mode = 'off';
           api.onQuit?.();
