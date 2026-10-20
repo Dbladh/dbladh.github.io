@@ -1,12 +1,12 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019214330';
-import { heightAt } from './world.js?v=20261019214330';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261019214330';
-import { createTracks } from './tracks.js?v=20261019214330';
-import { createDirt } from './dirt.js?v=20261019214330';
-import { createPuffs } from './puffs.js?v=20261019214330';
+import { PAL } from './palette.js?v=20261019215324';
+import { heightAt } from './world.js?v=20261019215324';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261019215324';
+import { createTracks } from './tracks.js?v=20261019215324';
+import { createDirt } from './dirt.js?v=20261019215324';
+import { createPuffs } from './puffs.js?v=20261019215324';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
@@ -29,7 +29,7 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
 
   const st = {
     state: 'wait', timer: force ? 1 : 8, first: true,
-    x: 0, y: 0, vy: 0, grounded: true, pitch: 0, endX: 0,
+    x: 0, y: 0, vy: 0, grounded: true, pitch: 0, endX: 0, v: SPEED, sus: 0, susV: 0, cool: 0,
     hop: 2, flip: 0, airT: 0, airDur: 1, launchPitch: 0, landPitch: 0, lean: 0.7, hover: 0, wheelSpin: 0,
   };
   let S = SCALE;                                              // drawn larger on narrow phone screens, where everything is small
@@ -43,23 +43,32 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     S = SCALE * (1 + 0.9 * tall); rear = BIKE.rearX * S; frontX = BIKE.frontX * S; axle = BIKE.wheelR * S;
     const halfW = (camera.position.z - laneZ) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
     st.x = -halfW - 6; st.endX = halfW + 7;
-    st.grounded = true; st.vy = 0; st.pitch = 0; st.hop = rnd(1.5, 3); st.flip = 0; st.lean = 0.7;
+    st.grounded = true; st.vy = 0; st.pitch = 0; st.hop = rnd(1.5, 3); st.flip = 0; st.lean = 0.7; st.v = SPEED; st.sus = st.susV = 0; st.cool = 0.5;
     st.state = 'ride';
     root.visible = true; hit.visible = true;
     placeOnGround(true);
   }
-  function placeOnGround(snap) {
+  function placeOnGround(snap, dt = 1 / 60) {
     const yr = groundAt(st.x + rear), yf = groundAt(st.x + frontX);
     st.y = (yr + yf) / 2 + axle;
     const target = Math.atan2(yf - yr, frontX - rear);
-    st.pitch = snap ? target : st.pitch + (target - st.pitch) * 0.35;
+    st.pitch = snap ? target : st.pitch + (target - st.pitch) * (1 - Math.exp(-dt * 16));        // (the nose follows the slope a little behind it, at any frame rate)
   }
-  function launch(vy, flip) {
-    st.grounded = false; st.vy = vy;
-    st.airDur = (2 * vy) / GRAV; st.airT = 0; st.flip = flip;
-    st.launchPitch = st.pitch;
-    const lx = st.x + SPEED * st.airDur;
-    st.landPitch = Math.atan2(groundAt(lx + frontX) - groundAt(lx + rear), frontX - rear);
+  /** Fly the jump ahead of time with the real ground under it: how long it lasts and where it lands (a drop-off lasts longer than a hop of the same height). */
+  function plan(vy) {
+    let x = st.x, y = st.y, v = vy, t = 0;
+    while (t < 3) {
+      t += 1 / 60; v -= GRAV / 60; x += st.v / 60; y += v / 60;
+      if (v < 0 && y <= (groundAt(x + rear) + groundAt(x + frontX)) / 2 + axle) break;
+    }
+    return { dur: Math.max(0.15, t), lx: x };
+  }
+  /** Leave the ground with climb speed `vy`. A flip is only thrown off a real jump: long enough in the air and landing on ground gentle enough to land on. */
+  function launch(vy, tryFlip) {
+    const p = plan(vy);
+    st.grounded = false; st.vy = vy; st.airDur = p.dur; st.airT = 0; st.launchPitch = st.pitch;
+    st.landPitch = Math.atan2(groundAt(p.lx + frontX) - groundAt(p.lx + rear), frontX - rear);
+    st.flip = tryFlip && p.dur >= 0.85 && Math.abs(Math.tan(st.landPitch)) < 0.45 && Math.random() < 0.6 ? 1 : 0;
   }
 
   // Dirt kicked up and dust, as in the game (the same particle systems), so the bike looks alive as it rides through.
@@ -82,43 +91,41 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
       start();                                              // (carry straight on into the riding code, so the bike is placed before the frame is drawn: no flash at the origin)
     }
     // ---- riding ----
-    st.x += SPEED * dt;
+    st.x += st.v * dt;
+    st.cool -= dt;
     if (st.grounded) {
-      placeOnGround(false);
-      st.hop -= dt;
-      const drop = slopeAt(st.x - 1.2) - slopeAt(st.x + 1.8);
-      if (drop > 0.3) launch(Math.max(2, SPEED * slopeAt(st.x - 0.8)) + 2, 0);          // off a crest
-      else if (st.hop <= 0 && st.x < st.endX - 12) {                                      // a deliberate hop, sometimes with a backflip
-        const big = Math.random() < 0.3;
-        launch(big ? 12.5 : rnd(8, 10.5), big ? 1 : 0);
-        if (big) {                                                                        // only flip where the landing is level enough
-          const lx = st.x + SPEED * st.airDur;
-          if (Math.abs(groundAt(lx) - groundAt(st.x)) > 2.2 || Math.abs(slopeAt(lx)) > 0.35) st.flip = 0;
-        }
-        st.hop = rnd(2.5, 5);
-      }
+      placeOnGround(false, dt);
+      const mid = st.x + (rear + frontX) / 2, s = slopeAt(mid), curve = (slopeAt(mid + 1) - slopeAt(mid - 1)) / 2;
+      st.v += (SPEED * THREE.MathUtils.clamp(1 - 0.7 * s, 0.6, 1.4) - st.v) * Math.min(1, dt * 1.4);     // slower up a hill, faster down it
+      // the suspension: it sinks into a dip and rises over a crest, in proportion to how fast the ground curves under the wheels
+      st.susV += (-81 * st.sus - 8 * st.susV - THREE.MathUtils.clamp(curve * st.v * st.v, -30, 30)) * dt; st.sus = THREE.MathUtils.clamp(st.sus + st.susV * dt, -0.45, 0.3);
+      // Off a crest: the bike leaves the ground where the ground falls away faster than gravity pulls it down (the real physics of a jump), not before
+      const t = 0.2, climb = st.v * s, ahead = (groundAt(st.x + st.v * t + rear) + groundAt(st.x + st.v * t + frontX)) / 2 + axle;
+      if (st.cool <= 0 && st.x < st.endX - 6 && st.y + climb * t - 0.5 * GRAV * t * t > ahead + 0.05) launch(climb, true);
     } else {
+      st.sus += (0 - st.sus) * Math.min(1, dt * 6); st.susV = 0;
       st.vy -= GRAV * dt; st.y += st.vy * dt; st.airT += dt;
       const u = Math.min(1, st.airT / st.airDur);
       st.pitch = THREE.MathUtils.lerp(st.launchPitch, st.landPitch, u) + st.flip * Math.PI * 2 * (u * u * (3 - 2 * u));
       const ground = (groundAt(st.x + rear) + groundAt(st.x + frontX)) / 2 + axle;
       if (st.vy < 0 && st.y <= ground) {
         st.grounded = true; st.y = ground; st.pitch = Math.atan2(groundAt(st.x + frontX) - groundAt(st.x + rear), frontX - rear);
+        st.susV -= Math.min(10, -st.vy) * 0.9; st.cool = 0.35;                                                      // (the landing squashes the suspension)
       }
     }
     // looks
     st.hover += ((hoverNow ? 1 : 0) - st.hover) * Math.min(1, dt * 10);
-    const leanT = st.grounded ? 0.7 : (st.flip ? 1.25 : 0.45);
+    const leanT = st.grounded ? 0.7 + 0.4 * THREE.MathUtils.clamp(slopeAt(st.x + (rear + frontX) / 2), -0.6, 0.6) : (st.flip ? 1.25 : 0.45);     // (leaning into a climb, back on a descent)
     st.lean += (leanT - st.lean) * Math.min(1, dt * 8);
     poseRider(bike.rider, st.lean);
-    st.wheelSpin += (SPEED * dt) / axle;
+    st.wheelSpin += (st.v * dt) / axle;
     bike.wheels.rear.rotation.z = bike.wheels.front.rotation.z = -st.wheelSpin;
-    root.position.set(st.x, st.y, laneZ);
+    root.position.set(st.x, st.y + st.sus, laneZ);
     root.rotation.z = st.pitch;
     if (st.grounded) {                                                                // the rear wheel throws dirt and a little dust
       const wx = st.x + rear, wy = groundAt(wx) + 0.1;
       tracks.add(wx, true);
-      dirt.spray(dt, wx, wy, laneZ + 0.2, SPEED * 1.7, 0.55, 0);
+      dirt.spray(dt, wx, wy, laneZ + 0.2, st.v * 1.7, 0.55, 0);
       dustT -= dt; if (dustT <= 0) { dustT = 0.07; puffs.emit(wx, wy + 0.2, laneZ + 0.2, -2.5 - Math.random() * 2, 1 + Math.random() * 1.5, 0.5, 1.4, 0.8, '#a98a63', 0.5); }
     }
     if (st.wasAir && st.grounded) { dirt.burst(st.x, groundAt(st.x) + 0.1, laneZ, 9, 0.8, 0); for (let i = 0; i < 5; i++) puffs.emit(st.x + (Math.random() - 0.5), groundAt(st.x) + 0.3, laneZ + 0.2, (Math.random() - 0.5) * 6, 1 + Math.random() * 2, 0.6, 1.8, 0.8, '#a98a63', 0.55); }
@@ -149,6 +156,6 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     /** Back to waiting (after the game, or when the view changes): hides the bike and queues the next pass. */
     reset() { tracks.clear(); st.state = 'wait'; st.timer = force ? 4 : rnd(15, 30); root.visible = false; hit.visible = false; },
     /** Clicked: the bike pops a wheelie hop and the game can start. */
-    poke() { if (st.state === 'ride' && st.grounded) launch(9, 0); },
+    poke() { if (st.state === 'ride' && st.grounded) launch(9, false); },
   };
 }
