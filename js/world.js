@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019221948';
-import { auroraColour } from './aurora.js?v=20261019221948';
+import { PAL } from './palette.js?v=20261019222215';
+import { auroraColour } from './aurora.js?v=20261019222215';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019221948';
+} from './houses.js?v=20261019222215';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -126,30 +126,6 @@ function rawHeight(x, z) {
   return h;
 }
 
-// A natural jump for the bike that rides across the hills: along its lane a ground swell rises to a lip and falls away, so the bike leaves the ground there on its own (and flips if there is
-// enough air). It is part of the terrain (the ground mesh, the plants and the game's first stretch all read it through heightAt), blended in sideways so it reads as a knoll.
-export const RAMP = { z: -50, lipX: -14, L: 7, D: 3.5, H: 6.5, zHalf: 6.5 };      // (lipX: where no sign can be hidden behind it from the home view or any sign's close-up)
-/** The ramp's profile along the lane at `u` metres past the lip: a rise that steepens to the lip, then a steep drop that eases out onto the ground below. */
-function rampProfile(u) {
-  if (u < -RAMP.L || u > RAMP.D) return 0;
-  if (u < 0) return RAMP.H * ((u + RAMP.L) / RAMP.L) ** 2;
-  const q = Math.sqrt(u / RAMP.D);
-  return RAMP.H * (1 - q * q * (3 - 2 * q));
-}
-function rampH(x, z) {
-  const u = x - RAMP.lipX; if (u < -RAMP.L - 1.5 || u > RAMP.D + 1.5) return 0;
-  const dz = Math.abs(z - RAMP.z); if (dz > RAMP.zHalf) return 0;
-  const w = 1 - smooth(RAMP.zHalf * 0.25, RAMP.zHalf, dz);                                     // (a domed crest across the ramp, not a flat-topped ridge)
-  return w * (rampProfile(u - 1.2) + rampProfile(u - 0.6) + rampProfile(u) + rampProfile(u + 0.6) + rampProfile(u + 1.2)) / 5;   // (the lip is rounded off a little by averaging the profile over a short stretch)
-}
-
-/** How much of the ground at (x, z) is the jump's bare-earth surface (0..1): the ramp, its lip and the drop, with soft edges. The ground is coloured as dirt there and nothing grows on it. */
-export function rampDirt(x, z) {
-  const u = x - RAMP.lipX; if (u < -RAMP.L - 1.5 || u > RAMP.D + 2) return 0;
-  const dz = Math.abs(z - RAMP.z); if (dz > RAMP.zHalf) return 0;
-  return (1 - smooth(RAMP.zHalf * 0.45, RAMP.zHalf * 0.95, dz)) * smooth(-RAMP.L - 1.5, -RAMP.L + 1.5, u) * (1 - smooth(RAMP.D + 0.2, RAMP.D + 2, u));
-}
-
 // Flat building plots: the terrain eases to each house's ground level, so nothing floats.
 const PADS = []; // { x, z, r, y } filled in by buildWorld before the terrain is made
 
@@ -159,7 +135,7 @@ const PADS = []; // { x, z, r, y } filled in by buildWorld before the terrain is
  * every plot is exactly level instead of being dragged toward its neighbour's height.
  */
 export function heightAt(x, z) {
-  let h = rawHeight(x, z) + rampH(x, z);
+  let h = rawHeight(x, z);
   let wSum = 0, ySum = 0, wMax = 0;
   for (const pad of PADS) {
     const w = 1 - smooth(pad.r, pad.r + 4.5, Math.hypot(x - pad.x, z - pad.z));
@@ -658,7 +634,6 @@ export function buildWorld(scene, sections, opts = {}) {
       if (cost < best) { best = cost; LANE_Z = z; }
     }
   }
-  RAMP.z = LANE_Z;
   const geo = new THREE.PlaneGeometry(380, 250, SEG[0], SEG[1]);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, 0, -75);
@@ -669,7 +644,6 @@ export function buildWorld(scene, sections, opts = {}) {
   const cWarm = new THREE.Color(classic ? '#e2ea8a' : '#f0ee80'), cPath = new THREE.Color('#f1e5c6'), cDeep = new THREE.Color('#3f9a58');
   const cGold = new THREE.Color('#e3dc72'), cCrop = new THREE.Color('#8fcd5d'), cDirt = new THREE.Color('#a68a5b');
   const cRock = new THREE.Color('#a39b86'), cSand = new THREE.Color('#ead9a4'), cBed = new THREE.Color('#3d8f86');
-  const cRampEarth = cPath.clone(), cRampDark = new THREE.Color('#cdb98e');       // (the same pale dirt as the footpaths, with slightly darker mottling and ruts)
   const c = new THREE.Color();
   /** The ground colour at (x, z) for height h and steepness `slope`, written into `c`: shared with the dirt-bike game so its ground matches. */
   const terrainColor = (x, z, h, slope, c) => {
@@ -709,12 +683,6 @@ export function buildWorld(scene, sections, opts = {}) {
       branch = Math.max(branch, 1 - smooth(0.8, 1.9, distToPolyline(x, z, b)));
     });
     c.lerp(cPath, Math.max(onPath, walk, branch) * (1 - smooth(-60, -80, z)) * 0.95); // path dissolves on the AI hill
-    const rd = rampDirt(x, z);                                               // the jump: packed brown earth, mottled, with two darker wheel ruts along it
-    if (rd > 0) {
-      c.lerp(cRampEarth, rd * 0.96).lerp(cRampDark, rd * (0.1 + 0.35 * vnoise(x * 1.7 + 5, z * 1.7)));
-      const rut = Math.max(0, 1 - Math.abs(Math.abs(z - RAMP.z) - 0.55) / 0.3);
-      c.lerp(cRampDark, rd * rut * 0.45);
-    }
     return c;
   };
   for (let i = 0; i < p.count; i++) {
@@ -1090,7 +1058,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const DARK = ['#3f9a5a', '#4aa862', '#36895a'].map((h) => new THREE.Color(h).lerp(SAGE_C, classic ? 0 : 0.1));
   const BLOSSOM = new THREE.Color('#ffb3c8');
   const BARK = new THREE.Color('#8a5a3c'), BIRCH = new THREE.Color('#e8e2d2');
-  const free = (x, z, pad = 0) => rampDirt(x, z) < 0.05 && !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5) && Math.abs(z - LANE_Z) > 2.2 + pad * 0.5;
+  const free = (x, z, pad = 0) => !nearSign(x, z) && !nearHouse(x, z, 1.2 + pad) && !nearPond(x, z, pad - 1.5) && Math.abs(z - LANE_Z) > 2.2 + pad * 0.5;
   const D = low ? 0.55 : 1; // detail multiplier: weaker machines get fewer plants
   const anchors = []; // things grass gathers around: { x, z, r (footprint radius), n (tuft count) }
   ignoreHouses = true;
@@ -1267,7 +1235,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     const count = Math.round((18 + rand() * 16));
     for (let i = 0; i < count; i++) {
       const x = cx + (rand() - 0.5) * 9, z = cz + (rand() - 0.5) * 9;
-      if (Math.abs(x - pathX(z)) < 2.4 || nearHouse(x, z, 0.5) || nearSign(x, z, -3) || nearPond(x, z, -1.5) || rampDirt(x, z) > 0.05) continue;
+      if (Math.abs(x - pathX(z)) < 2.4 || nearHouse(x, z, 0.5) || nearSign(x, z, -3) || nearPond(x, z, -1.5)) continue;
       const f = rand() < 0.8 ? base : pick(PALETTE);
       const y = heightAt(x, z), col = new THREE.Color(f.c);
       const ht = f.kind === 'sun' ? 1.0 + rand() * 0.35 : f.kind === 'spike' ? 0.55 : 0.32 + rand() * 0.28;
@@ -1315,7 +1283,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // Grass: small, simple tufts (3 flat blades each). A light scatter over the meadow, and
   // thick rings gathered at the base of houses, trees, bushes and rocks, like the reference.
   function tuft(x, z, s = 1) {
-    if (Math.abs(x - pathX(z)) < 1.7 || nearPond(x, z, -1.5) || rampDirt(x, z) > 0.05) return;
+    if (Math.abs(x - pathX(z)) < 1.7 || nearPond(x, z, -1.5)) return;
     items.grass.push({
       p: [x, heightAt(x, z) - 0.02, z], s: [s, s * (0.75 + rand() * 0.5), s], ry: rand() * 6.28,
       c: pick(GREENS).clone().offsetHSL(0, 0, -0.06 + rand() * 0.1),
@@ -1498,7 +1466,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   {
     const street = new THREE.Group();
     const dark = mat(PAL.ink), wood = mat(PAL.timber), woodDark = mat(PAL.timberDeep);
-    const clear = (x, z, pad = 1.2) => rampDirt(x, z) < 0.05 && !nearHouse(x, z, pad) && !nearSign(x, z) && !nearPond(x, z, 1.5)
+    const clear = (x, z, pad = 1.2) => !nearHouse(x, z, pad) && !nearSign(x, z) && !nearPond(x, z, 1.5)
       && !branches.some((b) => distToPolyline(x, z, b) < 1.6);
     const lamp = (x, z) => {
       const y = heightAt(x, z);
