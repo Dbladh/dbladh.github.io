@@ -228,6 +228,12 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
 
   /** Apply an hour (0-24). Returns { night } in 0..1 so other objects can react. */
   const warmDark = [new THREE.Color('#33100a'), new THREE.Color('#5a1e0c')];
+  // The oval the sun and moon travel (they sit at opposite ends of it). Its half-width is fitted to the screen's width, so on a tall, narrow phone screen the whole oval still fits.
+  const SKY_LIFT = 40, SKY_AMP = 42, ORBIT_Z = -95, orbit = { halfW: 70 };
+  /** Fit the orbit to the view: `aspect` is width / height, `fov` the camera's vertical field of view in degrees. */
+  function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); }
+  /** Where the sun is on the oval at `hour` (the moon is on the opposite side), written into `out`. */
+  function orbitPoint(hour, out) { const a = ((hour - 6) / 12) * Math.PI; return out.set(Math.cos(a) * orbit.halfW, SKY_LIFT + SKY_AMP * Math.sin(a), ORBIT_Z); }
   function set(hour, dim = 0, warm = 0) {
     const s = sample(((hour % 24) + 24) % 24);
     if (dim > 0) {
@@ -240,9 +246,9 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     const sx = Math.cos(a) * 70, sy = Math.sin(a) * 60, sz = -95;
     // The sun and moon are drawn on a higher, flatter arc than the one the light follows: each stays above the hills for about 14 hours, so as one sets behind them the other
     // is already rising on the far side, and the sky is never empty (the light itself, and the environment map, still use the real position).
-    const arc = sy / 60, SKY_LIFT = 40, SKY_AMP = 42;
-    sunMesh.position.set(sx, SKY_LIFT + SKY_AMP * arc, sz);
-    moonMesh.position.set(-sx, SKY_LIFT - SKY_AMP * arc, sz);
+    const arc = sy / 60, mx = Math.cos(a) * orbit.halfW;
+    sunMesh.position.set(mx, SKY_LIFT + SKY_AMP * arc, sz);
+    moonMesh.position.set(-mx, SKY_LIFT - SKY_AMP * arc, sz);
     // Light comes from the sun's direction, but never lower than ~12 degrees (keeps shadows sane).
     // The light comes from the side and a little toward the camera (not from behind the village),
     // so facades you look at are modelled by it and roof/eave shadows fall where you can see them.
@@ -287,5 +293,5 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     return { night, horizon: s.bot.clone() };
   }
 
-  return { set, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }

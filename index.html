@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261019211554">
+  <link rel="stylesheet" href="css/styles.css?v=20261019212116">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261019211554 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261019212116 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -61,11 +61,7 @@
   </nav>
 
   <div id="sundial" class="sundial" aria-hidden="true">
-    <svg viewBox="-100 -100 200 200">
-      <circle class="dial-ring" r="86" />
-      <g id="dial-sun"><circle r="11" class="dial-sun-disc" /><g class="dial-rays"><path d="M0-17V-22M0 17V22M-17 0H-22M17 0H22M12-12l3.5-3.5M-12 12l-3.5 3.5M12 12l3.5 3.5M-12-12l-3.5-3.5" /></g></g>
-      <g id="dial-moon"><path class="dial-moon-shape" d="M5-11A12 12 0 1 0 10 8 9.5 9.5 0 0 1 5-11Z" /></g>
-    </svg>
+    <svg id="dial-svg"><path id="dial-orbit" class="dial-orbit" /></svg>
     <div id="dial-time" class="dial-time"></div>
   </div>
   <div class="controls" id="controls" hidden>
@@ -325,6 +321,6 @@
     <figure><img alt=""><figcaption></figcaption></figure>
   </dialog>
 
-  <script type="module" src="js/main.js?v=20261019211554"></script>
+  <script type="module" src="js/main.js?v=20261019212116"></script>
 </body>
 </html>
