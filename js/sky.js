@@ -296,8 +296,8 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     const hand = THREE.MathUtils.clamp((arc + 0.06) / 0.12, 0, 1);                       // 1 while the sun's turn, 0 while the moon's
     for (const [m, glow, f, halo0, hov] of [[sunMesh, 0.5, hand, 64, hoverSun], [moonMesh, 0.35, 1 - hand, 42, hoverMoon]]) {
       m.material.opacity = (1 - dim) * f;
-      if (m.children[0]) { m.children[0].material.opacity = glow * (1 - dim) * f * (1 + 0.6 * hintV + 1.1 * hov); m.children[0].scale.setScalar(halo0 * (1 + 0.3 * hintV + 0.5 * hov)); }      // (hintV: the glow breathes to hint that the sun and moon can be moved; hov: it swells while the pointer is over one)
-      m.scale.setScalar(1 + 0.07 * hov);
+      if (m.children[0]) { m.children[0].material.opacity = glow * (1 - dim) * f * (1 + 0.6 * hintV + 0.45 * hov); m.children[0].scale.setScalar(halo0 * (1 + 0.3 * hintV + 0.2 * hov)); }      // (hintV: the glow breathes to hint that the sun and moon can be moved; hov: it swells while the pointer is over one)
+      m.scale.setScalar(1 + 0.025 * hov);
       m.visible = f > 0.01 && dim < 0.995;
     }
 
