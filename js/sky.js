@@ -88,11 +88,10 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     c.width = c.height = 128;
     const g = c.getContext('2d');
     const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    for (let i = 0; i <= 16; i++) {                       // smooth gaussian-like falloff, no visible rim
-      const r = i / 16;
-      gr.addColorStop(r, `rgba(255,255,255,${(0.95 * Math.exp(-r * r * 5.5)).toFixed(3)})`);
+    for (let i = 0; i <= 40; i++) {                       // a smooth gaussian-like falloff that is eased all the way to nothing at the edge, so the glow has no visible rim
+      const r = i / 40, e = Math.min(1, Math.max(0, (r - 0.3) / 0.7)), fade = 1 - e * e * (3 - 2 * e);
+      gr.addColorStop(r, `rgba(255,255,255,${(0.95 * Math.exp(-r * r * 4.5) * fade * fade).toFixed(4)})`);
     }
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   })();
