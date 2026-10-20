@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019215909';
-import { auroraColour } from './aurora.js?v=20261019215909';
+import { PAL } from './palette.js?v=20261019220320';
+import { auroraColour } from './aurora.js?v=20261019220320';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019215909';
+} from './houses.js?v=20261019220320';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -128,7 +128,7 @@ function rawHeight(x, z) {
 
 // A natural jump for the bike that rides across the hills: along its lane a ground swell rises to a lip and falls away, so the bike leaves the ground there on its own (and flips if there is
 // enough air). It is part of the terrain (the ground mesh, the plants and the game's first stretch all read it through heightAt), blended in sideways so it reads as a knoll.
-export const RAMP = { z: -50, lipX: -26, L: 8.5, D: 3.5, H: 2.0, zHalf: 8 };
+export const RAMP = { z: -50, lipX: -26, L: 7, D: 3.5, H: 6, zHalf: 8 };
 function rampH(x, z) {
   const u = x - RAMP.lipX; if (u < -RAMP.L || u > RAMP.D) return 0;
   const dz = Math.abs(z - RAMP.z); if (dz > RAMP.zHalf) return 0;

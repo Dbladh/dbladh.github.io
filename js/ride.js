@@ -1,12 +1,12 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019215909';
-import { heightAt, RAMP } from './world.js?v=20261019215909';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261019215909';
-import { createTracks } from './tracks.js?v=20261019215909';
-import { createDirt } from './dirt.js?v=20261019215909';
-import { createPuffs } from './puffs.js?v=20261019215909';
+import { PAL } from './palette.js?v=20261019220320';
+import { heightAt, RAMP } from './world.js?v=20261019220320';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261019220320';
+import { createTracks } from './tracks.js?v=20261019220320';
+import { createDirt } from './dirt.js?v=20261019220320';
+import { createPuffs } from './puffs.js?v=20261019220320';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
@@ -29,7 +29,7 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
 
   const st = {
     state: 'wait', timer: force ? 1 : 8, first: true,
-    x: 0, y: 0, vy: 0, grounded: true, pitch: 0, endX: 0, v: SPEED, vyG: 0, sus: 0, susV: 0, cool: 0,
+    x: 0, y: 0, vy: 0, grounded: true, pitch: 0, endX: 0, v: SPEED, vyG: 0, vyPeak: 0, yPrev: 0, sus: 0, susV: 0, cool: 0,
     hop: 2, flip: 0, airT: 0, airDur: 1, launchPitch: 0, landPitch: 0, lean: 0.7, hover: 0, wheelSpin: 0,
   };
   let S = SCALE;                                              // drawn larger on narrow phone screens, where everything is small
@@ -43,10 +43,11 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     S = SCALE * (1 + 0.9 * tall); rear = BIKE.rearX * S; frontX = BIKE.frontX * S; axle = BIKE.wheelR * S;
     const halfW = (camera.position.z - laneZ) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
     st.x = -halfW - 6; st.endX = halfW + 7;
-    st.grounded = true; st.vy = 0; st.pitch = 0; st.hop = rnd(1.5, 3); st.flip = 0; st.lean = 0.7; st.v = SPEED; st.vyG = 0; st.sus = st.susV = 0; st.cool = 0.5;
+    st.grounded = true; st.vy = 0; st.pitch = 0; st.hop = rnd(1.5, 3); st.flip = 0; st.lean = 0.7; st.v = SPEED; st.vyG = st.vyPeak = 0; st.yPrev = st.y; st.sus = st.susV = 0; st.cool = 0.5;
     st.state = 'ride';
     root.visible = true; hit.visible = true;
     placeOnGround(true);
+    st.yPrev = st.y; st.vyG = st.vyPeak = 0;
   }
   function placeOnGround(snap, dt = 1 / 60) {
     const yr = groundAt(st.x + rear), yf = groundAt(st.x + frontX);
@@ -68,7 +69,7 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
     const p = plan(vy);
     st.grounded = false; st.vy = vy; st.airDur = p.dur; st.airT = 0; st.launchPitch = st.pitch;
     st.landPitch = Math.atan2(groundAt(p.lx + frontX) - groundAt(p.lx + rear), frontX - rear);
-    st.flip = tryFlip && p.dur >= 0.75 && Math.abs(Math.tan(st.landPitch)) < 0.45 && Math.random() < 0.5 ? 1 : 0;
+    st.flip = tryFlip && p.dur >= 0.75 && Math.abs(Math.tan(st.landPitch)) < 0.45 && Math.random() < 0.35 ? 1 : 0;
   }
 
   // Dirt kicked up and dust, as in the game (the same particle systems), so the bike looks alive as it rides through.
@@ -101,8 +102,9 @@ export function createRide(scene, world, camera, { force = false, renderer = nul
       // the suspension: it sinks into a dip and rises over a crest, in proportion to how fast the ground curves under the wheels
       st.susV += (-81 * st.sus - 8 * st.susV - THREE.MathUtils.clamp(curve * st.v * st.v, -30, 30)) * dt; st.sus = THREE.MathUtils.clamp(st.sus + st.susV * dt, -0.45, 0.3);
       // Off a crest: the bike leaves the ground where the ground falls away faster than gravity pulls it down (the real physics of a jump), not before
-      st.vyG += (st.v * s - st.vyG) * Math.min(1, dt * 14);                                  // (the climb the bike has: it does not change instantly at a crest, so it carries its upward speed over the lip)
-      const t = 0.2, climb = st.vyG, ahead = (groundAt(st.x + st.v * t + rear) + groundAt(st.x + st.v * t + frontX)) / 2 + axle;
+      st.vyG += ((st.y - st.yPrev) / dt - st.vyG) * Math.min(1, dt * 30); st.yPrev = st.y;      // (the climb the bike actually has: it does not change instantly at a crest, so the best of the last moments is carried over the lip)
+      st.vyPeak = Math.max(st.vyG, st.vyPeak * Math.exp(-dt * 8));
+      const t = 0.2, climb = st.vyPeak, ahead = (groundAt(st.x + st.v * t + rear) + groundAt(st.x + st.v * t + frontX)) / 2 + axle;
       if (st.cool <= 0 && st.x < st.endX - 6 && st.y + climb * t - 0.5 * GRAV * t * t > ahead + 0.05) launch(climb, true);
     } else {
       st.sus += (0 - st.sus) * Math.min(1, dt * 6); st.susV = 0;
