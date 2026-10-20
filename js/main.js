@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019222812';
-import { buildWorld } from './world.js?v=20261019222812';
-import { createSky } from './sky.js?v=20261019222812';
-import { createDOF } from './dof.js?v=20261019222812';
-import { createRide } from './ride.js?v=20261019222812';
-import { createGame } from './bikegame.js?v=20261019222812';
-import { createAurora, setWarm } from './aurora.js?v=20261019222812';
-import { createAudio, pickFlicker } from './audio.js?v=20261019222812';
+import { PAL } from './palette.js?v=20261019223206';
+import { buildWorld } from './world.js?v=20261019223206';
+import { createSky } from './sky.js?v=20261019223206';
+import { createDOF } from './dof.js?v=20261019223206';
+import { createRide } from './ride.js?v=20261019223206';
+import { createGame } from './bikegame.js?v=20261019223206';
+import { createAurora, setWarm } from './aurora.js?v=20261019223206';
+import { createAudio, pickFlicker } from './audio.js?v=20261019223206';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -646,9 +646,10 @@ function start() {
       else { world.setHover(null); audio.flickerOff(); }
       lastHover = hoverId;
     }
-    if (!dialOn) canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : bodyAt(e) ? 'grab' : 'default';
+    hoverBody = dialOn ? hoverBody : bodyAt(e);
+    if (!dialOn) canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : hoverBody ? 'grab' : 'default';
   });
-  canvas.addEventListener('pointerleave', () => { world.setHover(null); if (lastHover) audio.flickerOff(); lastHover = null; });
+  canvas.addEventListener('pointerleave', () => { hoverBody = null; world.setHover(null); if (lastHover) audio.flickerOff(); lastHover = null; });
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
   canvas.addEventListener('dblclick', () => { if (!game?.active) goTo('home'); });
 
@@ -733,7 +734,7 @@ function start() {
   // ---- The sun and moon dial: press the sun or moon in the sky and drag round the ring to change the time ----
   const dialEl = document.getElementById('sundial'), dialTime = document.getElementById('dial-time');
   const bodyV = new THREE.Vector3(), ORBIT_N = 144, orbitPx = new Float32Array(ORBIT_N * 2);
-  let dialOn = false, dialLastH = 0, suppressClick = false, orbitA = 0;
+  let dialOn = false, dialLastH = 0, suppressClick = false, orbitA = 0, hoverBody = null, hoverSunV = 0, hoverMoonV = 0;
   function updateDial() { if (dialOn) dialTime.textContent = fmt(hour); }
   /** The oval the sun and moon travel, as it looks from the camera right now: used to turn a pointer position into a time (the dotted line itself is drawn in the sky layer). */
   function computeOrbit() {
@@ -768,7 +769,7 @@ function start() {
   }
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || pickBike(e) || pick(e) || world.houseAt(ray) >= 0 || !bodyAt(e)) return;
-    markSeen('dial'); dragging = true; dialOn = true; suppressClick = true; computeOrbit(); dialLastH = orbitHourAt(e); updateDial();
+    hoverBody = bodyAt(e); markSeen('dial'); dragging = true; dialOn = true; suppressClick = true; computeOrbit(); dialLastH = orbitHourAt(e); updateDial();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is gone */ }
     dialEl.classList.add('on'); canvas.style.cursor = 'grabbing'; e.preventDefault();
   });
@@ -1011,7 +1012,8 @@ function start() {
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }
     hintTick(dt);
-    orbitA += ((dialOn ? 1 : 0) - orbitA) * (1 - Math.exp(-dt * 9)); sky.setOrbitAlpha(orbitA);                  // (the dotted orbit fades in and out with the dial)
+    orbitA += ((dialOn ? 1 : 0) - orbitA) * (1 - Math.exp(-dt * 9)); sky.setOrbitAlpha(orbitA);
+    hoverSunV += ((hoverBody === 'sun' ? 1 : 0) - hoverSunV) * (1 - Math.exp(-dt * 10)); hoverMoonV += ((hoverBody === 'moon' ? 1 : 0) - hoverMoonV) * (1 - Math.exp(-dt * 10)); sky.setHover(hoverSunV, hoverMoonV);       // (the sun or moon under the pointer, or being dragged, glows brighter)                  // (the dotted orbit fades in and out with the dial)
     if (shadowTick++ % (game?.active ? 2 : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 

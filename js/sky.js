@@ -243,7 +243,9 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   function fillOrbit() { for (let i = 0; i < ORBIT_N; i++) { orbitPoint((i / ORBIT_N) * 24 + 6, _ov); orbitArr.set([_ov.x, _ov.y, _ov.z], i * 3); } orbitGeo.attributes.position.needsUpdate = true; }
   /** 0..1: how strongly the dotted orbit of the sun and moon is shown (while the time is dragged). */
   function setOrbitAlpha(a) { orbitU.uA.value = a; orbitDots.visible = a > 0.01; }
-  let hintV = 0;
+  let hintV = 0, hoverSun = 0, hoverMoon = 0;
+  /** 0..1 for each: how much the pointer is over the sun / moon (its glow swells and the disc grows a little). */
+  function setHover(sun, moon) { hoverSun = sun; hoverMoon = moon; }
   /** 0..1: how strongly the sun's and moon's glow is swelling (a hint that they can be dragged). */
   function setHint(v) { hintV = v; }
   function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); fillOrbit(); }
@@ -292,9 +294,10 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     // Only one of the two is in the sky at a time: the sun is up from 6 am to 6 pm and the moon from 6 pm to 6 am, each rising at the hills as the other sets on the far side, and
     // handing over with a quick cross-fade (the two are never both fully up).
     const hand = THREE.MathUtils.clamp((arc + 0.06) / 0.12, 0, 1);                       // 1 while the sun's turn, 0 while the moon's
-    for (const [m, glow, f, halo0] of [[sunMesh, 0.5, hand, 64], [moonMesh, 0.35, 1 - hand, 42]]) {
+    for (const [m, glow, f, halo0, hov] of [[sunMesh, 0.5, hand, 64, hoverSun], [moonMesh, 0.35, 1 - hand, 42, hoverMoon]]) {
       m.material.opacity = (1 - dim) * f;
-      if (m.children[0]) { m.children[0].material.opacity = glow * (1 - dim) * f * (1 + 0.6 * hintV); m.children[0].scale.setScalar(halo0 * (1 + 0.3 * hintV)); }      // (hintV: the glow breathes to hint that the sun and moon can be moved)
+      if (m.children[0]) { m.children[0].material.opacity = glow * (1 - dim) * f * (1 + 0.6 * hintV + 1.1 * hov); m.children[0].scale.setScalar(halo0 * (1 + 0.3 * hintV + 0.5 * hov)); }      // (hintV: the glow breathes to hint that the sun and moon can be moved; hov: it swells while the pointer is over one)
+      m.scale.setScalar(1 + 0.07 * hov);
       m.visible = f > 0.01 && dim < 0.995;
     }
 
@@ -310,5 +313,5 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     return { night, horizon: s.bot.clone() };
   }
 
-  return { set, setHint, setOrbitAlpha, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, setHint, setHover, setOrbitAlpha, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }
