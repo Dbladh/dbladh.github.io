@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019210613';
-import { buildWorld } from './world.js?v=20261019210613';
-import { createSky } from './sky.js?v=20261019210613';
-import { createDOF } from './dof.js?v=20261019210613';
-import { createRide } from './ride.js?v=20261019210613';
-import { createGame } from './bikegame.js?v=20261019210613';
-import { createAurora, setWarm } from './aurora.js?v=20261019210613';
-import { createAudio, pickFlicker } from './audio.js?v=20261019210613';
+import { PAL } from './palette.js?v=20261019211332';
+import { buildWorld, heightAt } from './world.js?v=20261019211332';
+import { createSky } from './sky.js?v=20261019211332';
+import { createDOF } from './dof.js?v=20261019211332';
+import { createRide } from './ride.js?v=20261019211332';
+import { createGame } from './bikegame.js?v=20261019211332';
+import { createAurora, setWarm } from './aurora.js?v=20261019211332';
+import { createAudio, pickFlicker } from './audio.js?v=20261019211332';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -713,10 +713,47 @@ function start() {
     }
     return best;
   }
+  /** Put the time readout where it covers nothing: open sky, clear of the billboards, the title, the buttons and the skyline of the hills (the nearest such spot to the middle of the screen). */
+  function placeDialLabel() {
+    const W = VW(), H = VH(), lw = (dialTime.offsetWidth || 120) + 8, lh = (dialTime.offsetHeight || 40) + 8, m = 14, rects = [];
+    camera.updateMatrixWorld();
+    const box = new THREE.Box3(), cn = new THREE.Vector3();
+    for (const b of world.boards) {                                                    // (each billboard, with its lamps above it)
+      box.setFromObject(b.face); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (let i = 0; i < 8; i++) { cn.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); const px = (cn.x * 0.5 + 0.5) * W, py = (-cn.y * 0.5 + 0.5) * H; x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py); }
+      rects.push([x0 - m, y0 - m - 50, x1 + m, y1 + m]);
+    }
+    for (const el of document.querySelectorAll('.hero h1, .hero .tagline, #stopnav, #controls, #controls *, button, a[href], [role="button"], input, select')) {       // (every visible piece of page UI)
+      if (el.closest('.sundial')) continue;
+      const rc = el.getBoundingClientRect(); if (rc.width < 4 || rc.height < 4 || rc.right < 0 || rc.bottom < 0 || rc.left > W || rc.top > H || rc.width * rc.height > W * H * 0.4) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) < 0.05) continue;
+      rects.push([rc.left - m, rc.top - m, rc.right + m, rc.bottom + m]);
+    }
+    const COL = 24, sky = [], dir = new THREE.Vector3(), p = new THREE.Vector3();
+    const groundAt = (px, py) => {                                                     // does the view ray through this pixel hit the hills?
+      dir.set((px / W) * 2 - 1, -(py / H) * 2 + 1, 0.5).unproject(camera).sub(camera.position).normalize();
+      for (let t = 3; t < 320; t += 2.5) { p.copy(camera.position).addScaledVector(dir, t); if (p.y < heightAt(p.x, p.z) + 1.5) return true; }
+      return false;
+    };
+    for (let c = 0; c * COL <= W; c++) { let lo = 0, hi = H; for (let k = 0; k < 8; k++) { const mid = (lo + hi) / 2; if (groundAt(c * COL, mid)) hi = mid; else lo = mid; } sky[c] = hi - 28; }   // (the lowest open row of the sky in this column, a little above the skyline for the trees)
+    const free = (cx, cy) => {
+      const x0 = cx - lw / 2, x1 = cx + lw / 2, y0 = cy - lh / 2, y1 = cy + lh / 2;
+      if (x0 < 8 || x1 > W - 8 || y0 < 8) return false;
+      for (const r of rects) if (x0 < r[2] && x1 > r[0] && y0 < r[3] && y1 > r[1]) return false;
+      for (let c = Math.floor(x0 / COL); c <= Math.ceil(x1 / COL); c++) if (y1 > (sky[c] ?? 0)) return false;
+      return true;
+    };
+    let best = null, bestD = 1e9;
+    for (let cy = 24; cy < H; cy += 20) for (let cx = lw / 2 + 8; cx < W - lw / 2; cx += 20) {
+      const d = Math.hypot(cx - W / 2, (cy - H / 2) * 1.4); if (d < bestD && free(cx, cy)) { best = [cx, cy]; bestD = d; }
+    }
+    best = best || [W / 2, 40];                                                        // (nowhere clear: the top of the screen)
+    dialTime.style.left = best[0] + 'px'; dialTime.style.top = best[1] + 'px';
+  }
   const dialAngle = (e) => Math.atan2(e.clientY - VH() / 2, e.clientX - VW() / 2);
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || pickBike(e) || pick(e) || world.houseAt(ray) >= 0 || !bodyAt(e)) return;
-    dragging = true; dialOn = true; suppressClick = true; dialLast = dialAngle(e);
+    dragging = true; dialOn = true; suppressClick = true; dialLast = dialAngle(e); updateDial(); placeDialLabel();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is gone */ }
     dialEl.classList.add('on'); canvas.style.cursor = 'grabbing'; updateDial(); e.preventDefault();
   });
