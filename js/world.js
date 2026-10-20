@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019220320';
-import { auroraColour } from './aurora.js?v=20261019220320';
+import { PAL } from './palette.js?v=20261019221000';
+import { auroraColour } from './aurora.js?v=20261019221000';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019220320';
+} from './houses.js?v=20261019221000';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2387,6 +2387,12 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     x.fillText('\u266A', 32, 34); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   })();
   const musicTop = (h) => { const b = new THREE.Box3().setFromObject(h.group); return b.max.y; };
+  /** Send one glowing note rising from a point (taking one from the pool). */
+  function spawnNote(x, y, z, scale) {
+    let n = notes.find((q) => !q.live);
+    if (!n) { n = { sp: new THREE.Sprite(new THREE.SpriteMaterial({ map: noteTex, transparent: true, depthWrite: false, opacity: 0 })), live: false }; scene.add(n.sp); notes.push(n); }
+    n.live = true; n.t = 0; n.x = x; n.z = z; n.y = y; n.ph = Math.random() * 6; n.sp.scale.setScalar(scale); n.sp.visible = true;
+  }
   function updateMusic(dt) {
     if (music) {
       music.t += dt; music.glow = Math.min(1, music.glow + dt * 0.8);
@@ -2394,9 +2400,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       music.spawn -= dt;
       if (music.spawn <= 0 && notes.filter((n) => n.live).length < 5) {
         music.spawn = 0.75 + Math.random() * 0.5;
-        let n = notes.find((q) => !q.live);
-        if (!n) { n = { sp: new THREE.Sprite(new THREE.SpriteMaterial({ map: noteTex, transparent: true, depthWrite: false, opacity: 0 })), live: false }; scene.add(n.sp); notes.push(n); }
-        n.live = true; n.t = 0; n.x = music.h.x + (Math.random() - 0.5) * music.h.r * 0.7; n.z = music.h.z + 0.5; n.y = music.top; n.ph = Math.random() * 6; n.sp.scale.setScalar(2.3 + Math.random() * 0.9); n.sp.visible = true;
+        spawnNote(music.h.x + (Math.random() - 0.5) * music.h.r * 0.7, music.top, music.h.z + 0.5, 2.3 + Math.random() * 0.9);
       }
     }
     for (const n of notes) {
@@ -2623,6 +2627,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       houses.forEach((h, i) => { if (!h.group) return; const hit = ray.intersectObject(h.group, true)[0]; if (hit && hit.distance < bd) { bd = hit.distance; best = i; } });
       return best;
     },
+    /** How many houses there are (for picking one at random). */
+    get houseCount() { return houses.length; },
+    /** A hint that the houses can be played: one glowing note drifts up from house `i`. */
+    houseHint(i) { const h = houses[i]; if (h && h.group) spawnNote(h.x + (Math.random() - 0.5) * h.r * 0.5, musicTop(h), h.z + 0.5, 3); },
     houseInfo(i) { const h = houses[i]; return h && h.group ? { x: h.x, z: h.z, y: musicTop(h) } : null; },
     /** The house (an index from houseAt) that is playing its song: windows glow and notes drift up; null to stop. */
     setMusicHouse(i) {

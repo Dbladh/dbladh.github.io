@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019220320';
-import { buildWorld } from './world.js?v=20261019220320';
-import { createSky } from './sky.js?v=20261019220320';
-import { createDOF } from './dof.js?v=20261019220320';
-import { createRide } from './ride.js?v=20261019220320';
-import { createGame } from './bikegame.js?v=20261019220320';
-import { createAurora, setWarm } from './aurora.js?v=20261019220320';
-import { createAudio, pickFlicker } from './audio.js?v=20261019220320';
+import { PAL } from './palette.js?v=20261019221000';
+import { buildWorld } from './world.js?v=20261019221000';
+import { createSky } from './sky.js?v=20261019221000';
+import { createDOF } from './dof.js?v=20261019221000';
+import { createRide } from './ride.js?v=20261019221000';
+import { createGame } from './bikegame.js?v=20261019221000';
+import { createAurora, setWarm } from './aurora.js?v=20261019221000';
+import { createAudio, pickFlicker } from './audio.js?v=20261019221000';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -205,7 +205,7 @@ function start() {
   // Easter egg: a dirt bike now and then rides across the hills (?bike=1 sends one straight away and keeps them coming).
   const bikeForce = /[?&]bike=1\b/.test(location.search);
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce, renderer });
-  const bikeBtn = document.getElementById('bike-play');
+  const bikeBtn = document.getElementById('bike-play'), bikeHint = document.getElementById('bike-hint');
   const audio = createAudio();                       // one sound system for the landscape and the game (silent until the player turns it on)
   const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world, { audio });
   if (game) game.compileHook = (sc, cam) => dof.compileAsync(sc, cam);        // (programs for the offscreen target the scene is drawn into)
@@ -529,8 +529,50 @@ function start() {
     return ray.intersectObject(ride.hitTarget, false).length > 0;
   }
   let starting = false;
+  // ---- Hints that something here can be played with (without saying what): a label on the riding bike, a note drifting up from a house now and then, and a swell in the sun's and moon's glow.
+  // Each stops for good once that thing has been used (remembered in the browser), and all of them wait while a section is open, the game runs or music mode is on.
+  const seen = { bike: store.get('hint.bike') === '1', house: store.get('hint.house') === '1', dial: store.get('hint.dial') === '1' };
+  const markSeen = (k) => { if (!seen[k]) { seen[k] = true; store.set('hint.' + k, '1'); } };
+  const hintsOn = () => active === 'home' && !openId && !tween && !game?.active && songDark < 0.05 && !document.hidden;
+  let hintBikeT = 0, hintBikeOn = false, hintBikeD = 0, hintHouseT = 9 + Math.random() * 4, hintClock = 0, hintSun = 0;
+  const hintV = new THREE.Vector3();
+  function hintTick(dt) {
+    const on = hintsOn();
+    // the bike: a ring and a label that follow it while it is on screen
+    if (bikeHint) {
+      let show = false;
+      if (ride && ride.riding && on && !seen.bike) {
+        hintV.copy(ride.position); hintV.y += 0.9; const dist = camera.position.distanceTo(hintV); hintV.project(camera);
+        const px = (hintV.x * 0.5 + 0.5) * VW(), py = (-hintV.y * 0.5 + 0.5) * VH();
+        if (hintV.z < 1 && px > 40 && px < VW() - 40 && py > 90 && py < VH() - 40) {
+          hintBikeT += dt; show = hintBikeT > 1;
+          if (show) {
+            const d = Math.max(44, Math.min(150, (4.4 * (VH() / 2)) / (Math.tan((camera.fov * Math.PI) / 360) * dist)));
+            if (Math.abs(d - hintBikeD) > 2) { hintBikeD = d; bikeHint.style.setProperty('--d', d.toFixed(0) + 'px'); }
+            bikeHint.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0)`;
+          }
+        } else hintBikeT = 0;
+      } else hintBikeT = 0;
+      if (show !== hintBikeOn) { hintBikeOn = show; bikeHint.classList.toggle('on', show); }
+    }
+    // a house: a glowing note drifts up from one that is on screen every 10 to 15 seconds
+    hintHouseT -= dt;
+    if (hintHouseT <= 0) {
+      hintHouseT = 10 + Math.random() * 5;
+      if (on && !seen.house && !ride?.riding && songHouse < 0) {
+        const ok = [];
+        for (let i = 0; i < world.houseCount; i++) { const hi = world.houseInfo(i); if (!hi) continue; hintV.set(hi.x, hi.y, hi.z).project(camera); if (hintV.z < 1 && Math.abs(hintV.x) < 0.85 && hintV.y > -0.6 && hintV.y < 0.9) ok.push(i); }
+        if (ok.length) { world.houseHint(ok[(Math.random() * ok.length) | 0]); audio.chime(); }
+      }
+    }
+    // the sun and moon: their glow swells for a few seconds every so often (after the first few seconds on the page)
+    hintClock += dt;
+    const want = on && !seen.dial && !dialOn && !reduceMotion && hintClock > 8 ? Math.max(0, Math.sin(Math.PI * Math.min(1, (hintClock % 20) / 6))) : 0;
+    hintSun += (want - hintSun) * (1 - Math.exp(-dt * 3)); sky.setHint(hintSun);
+  }
   async function playBike() {
     if (!game || game.active || starting || active !== 'home' || openId) return;
+    markSeen('bike');
     const bx = ride?.riding ? ride.position.x : 0, homeCam = { pos: camera.position.clone(), look: look.clone() };
     if (!game.ready) {                                   // clicked before the background preparation finished: a short loading card instead of a stall
       starting = true; const card = document.getElementById('gh-loading'); if (card) card.hidden = false;
@@ -578,7 +620,7 @@ function start() {
   function stopSong() { if (songHouse < 0) return; audio.songStop(); world.setMusicHouse(null); songHouse = -1; }
   audio.onChange((on) => { if (!on) stopSong(); });
   function toggleHouseSong(i) {
-    audio.unlock(); audio.autoOn();
+    markSeen('house'); audio.unlock(); audio.autoOn();
     if (songHouse === i) { stopSong(); return; }
     if (!audio.enabled) return;                                              // (sound is off on purpose: nothing to hear, so nothing to show)
     const hi = world.houseInfo(i); songV.set(hi.x, hi.y, hi.z).project(camera);
@@ -728,7 +770,7 @@ function start() {
   }
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || pickBike(e) || pick(e) || world.houseAt(ray) >= 0 || !bodyAt(e)) return;
-    dragging = true; dialOn = true; suppressClick = true; computeOrbit(); dialLastH = orbitHourAt(e); updateDial();
+    markSeen('dial'); dragging = true; dialOn = true; suppressClick = true; computeOrbit(); dialLastH = orbitHourAt(e); updateDial();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is gone */ }
     dialEl.classList.add('on'); canvas.style.cursor = 'grabbing'; e.preventDefault();
   });
@@ -970,6 +1012,7 @@ function start() {
       ride.update(dt, active === 'home' && !openId && !tween && !game?.active);
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }
+    hintTick(dt);
     if (shadowTick++ % (game?.active ? 2 : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 

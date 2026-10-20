@@ -866,3 +866,12 @@ body.scene-mode #scene { touch-action: none; }
 @keyframes warp-scroll { from { transform: translateX(-18%); } to { transform: translateX(0); } }
 .warp-flash { z-index: 26; background: radial-gradient(circle at 50% 55%, rgba(255, 255, 255, 0.95), rgba(255, 238, 214, 0.7) 55%, rgba(255, 255, 255, 0.2) 100%); }
 @media (prefers-reduced-motion: reduce) { .warp-lines::before { animation: none; } }
+
+/* A hint that follows the riding bike: a ring that pulses softly and a short, mysterious label. */
+.bike-hint { position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; opacity: 0; transition: opacity 0.7s ease; will-change: transform; display: none; }
+body.scene-mode .bike-hint { display: block; }
+.bike-hint.on { opacity: 1; }
+.bike-hint-ring { position: absolute; left: calc(var(--d, 64px) / -2); top: calc(var(--d, 64px) / -2); width: var(--d, 64px); height: var(--d, 64px); border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 14px rgba(255, 244, 214, 0.7), inset 0 0 12px rgba(255, 244, 214, 0.4); animation: bike-ping 1.8s ease-out infinite; }
+.bike-hint-pill { position: absolute; left: 0; top: calc(var(--d, 64px) / -2 - 40px); transform: translateX(-50%); padding: 7px 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: #3a3340; font: 700 0.95rem var(--name-font, system-ui); letter-spacing: 0.03em; white-space: nowrap; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25); }
+@keyframes bike-ping { 0% { transform: scale(0.75); opacity: 0.95; } 70% { transform: scale(1.35); opacity: 0; } 100% { transform: scale(1.35); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bike-hint-ring { animation: none; } }

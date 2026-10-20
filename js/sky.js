@@ -230,6 +230,9 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   // The oval the sun and moon travel (they sit at opposite ends of it). Its half-width is fitted to the screen's width, so on a tall, narrow phone screen the whole oval still fits.
   const SKY_LIFT = 30, SKY_AMP = 45, ORBIT_Z = -95, orbit = { halfW: 70 };
   /** Fit the orbit to the view: `aspect` is width / height, `fov` the camera's vertical field of view in degrees. */
+  let hintV = 0;
+  /** 0..1: how strongly the sun's and moon's glow is swelling (a hint that they can be dragged). */
+  function setHint(v) { hintV = v; }
   function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); }
   /** Where the sun is on the oval at `hour` (the moon is on the opposite side), written into `out`. */
   function orbitPoint(hour, out) { const a = ((hour - 6) / 12) * Math.PI; return out.set(Math.cos(a) * orbit.halfW, SKY_LIFT + SKY_AMP * Math.sin(a), ORBIT_Z); }
@@ -276,9 +279,9 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     // Only one of the two is in the sky at a time: the sun is up from 6 am to 6 pm and the moon from 6 pm to 6 am, each rising at the hills as the other sets on the far side, and
     // handing over with a quick cross-fade (the two are never both fully up).
     const hand = THREE.MathUtils.clamp((arc + 0.06) / 0.12, 0, 1);                       // 1 while the sun's turn, 0 while the moon's
-    for (const [m, glow, f] of [[sunMesh, 0.5, hand], [moonMesh, 0.35, 1 - hand]]) {
+    for (const [m, glow, f, halo0] of [[sunMesh, 0.5, hand, 64], [moonMesh, 0.35, 1 - hand, 42]]) {
       m.material.opacity = (1 - dim) * f;
-      if (m.children[0]) m.children[0].material.opacity = glow * (1 - dim) * f;
+      if (m.children[0]) { m.children[0].material.opacity = glow * (1 - dim) * f * (1 + 0.6 * hintV); m.children[0].scale.setScalar(halo0 * (1 + 0.3 * hintV)); }      // (hintV: the glow breathes to hint that the sun and moon can be moved)
       m.visible = f > 0.01 && dim < 0.995;
     }
 
@@ -294,5 +297,5 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     return { night, horizon: s.bot.clone() };
   }
 
-  return { set, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, setHint, setView, orbitPoint, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }
