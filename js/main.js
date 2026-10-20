@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019222215';
-import { buildWorld } from './world.js?v=20261019222215';
-import { createSky } from './sky.js?v=20261019222215';
-import { createDOF } from './dof.js?v=20261019222215';
-import { createRide } from './ride.js?v=20261019222215';
-import { createGame } from './bikegame.js?v=20261019222215';
-import { createAurora, setWarm } from './aurora.js?v=20261019222215';
-import { createAudio, pickFlicker } from './audio.js?v=20261019222215';
+import { PAL } from './palette.js?v=20261019222332';
+import { buildWorld } from './world.js?v=20261019222332';
+import { createSky } from './sky.js?v=20261019222332';
+import { createDOF } from './dof.js?v=20261019222332';
+import { createRide } from './ride.js?v=20261019222332';
+import { createGame } from './bikegame.js?v=20261019222332';
+import { createAurora, setWarm } from './aurora.js?v=20261019222332';
+import { createAudio, pickFlicker } from './audio.js?v=20261019222332';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -734,7 +734,20 @@ function start() {
   const dialEl = document.getElementById('sundial'), dialTime = document.getElementById('dial-time'), dialSvg = document.getElementById('dial-svg'), dialPath = document.getElementById('dial-orbit');
   const bodyV = new THREE.Vector3(), ORBIT_N = 144, orbitPx = new Float32Array(ORBIT_N * 2);
   let dialOn = false, dialLastH = 0, suppressClick = false;
-  function updateDial() { if (dialOn) dialTime.textContent = fmt(hour); }
+  const dialBodies = [[document.getElementById('dial-sun'), sky.bodies.sun, 10], [document.getElementById('dial-moon'), sky.bodies.moon, 7]];
+  function updateDial() {
+    if (!dialOn) return;
+    dialTime.textContent = fmt(hour);
+    for (const [el, mesh, r] of dialBodies) {                                   // the sun and moon, drawn again over the dashed line where they are in the sky
+      if (!el) continue;
+      if (!mesh.visible || mesh.material.opacity < 0.03) { el.style.display = 'none'; continue; }
+      bodyV.copy(mesh.position); const dist = camera.position.distanceTo(bodyV); bodyV.project(camera);
+      if (bodyV.z > 1) { el.style.display = 'none'; continue; }
+      el.style.display = 'block'; el.style.opacity = mesh.material.opacity.toFixed(2);
+      el.style.setProperty('--d', (2 * r * (VH() / 2) / (Math.tan((camera.fov * Math.PI) / 360) * dist)).toFixed(1) + 'px');
+      el.style.transform = `translate3d(${((bodyV.x * 0.5 + 0.5) * VW()).toFixed(1)}px, ${((-bodyV.y * 0.5 + 0.5) * VH()).toFixed(1)}px, 0)`;
+    }
+  }
   /** The oval the sun and moon travel, as it looks from the camera right now: drawn as the dashed line, and used to turn a pointer position into a time. */
   function computeOrbit() {
     const W = VW(), H = VH(); camera.updateMatrixWorld(); let d = '', cx = 0, cy = 0;
