@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019221824';
-import { auroraColour } from './aurora.js?v=20261019221824';
+import { PAL } from './palette.js?v=20261019221948';
+import { auroraColour } from './aurora.js?v=20261019221948';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019221824';
+} from './houses.js?v=20261019221948';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -128,14 +128,19 @@ function rawHeight(x, z) {
 
 // A natural jump for the bike that rides across the hills: along its lane a ground swell rises to a lip and falls away, so the bike leaves the ground there on its own (and flips if there is
 // enough air). It is part of the terrain (the ground mesh, the plants and the game's first stretch all read it through heightAt), blended in sideways so it reads as a knoll.
-export const RAMP = { z: -50, lipX: -14, L: 7, D: 3.5, H: 6, zHalf: 6.5 };      // (lipX: where no sign can be hidden behind it from the home view or any sign's close-up)
+export const RAMP = { z: -50, lipX: -14, L: 7, D: 3.5, H: 6.5, zHalf: 6.5 };      // (lipX: where no sign can be hidden behind it from the home view or any sign's close-up)
+/** The ramp's profile along the lane at `u` metres past the lip: a rise that steepens to the lip, then a steep drop that eases out onto the ground below. */
+function rampProfile(u) {
+  if (u < -RAMP.L || u > RAMP.D) return 0;
+  if (u < 0) return RAMP.H * ((u + RAMP.L) / RAMP.L) ** 2;
+  const q = Math.sqrt(u / RAMP.D);
+  return RAMP.H * (1 - q * q * (3 - 2 * q));
+}
 function rampH(x, z) {
-  const u = x - RAMP.lipX; if (u < -RAMP.L || u > RAMP.D) return 0;
+  const u = x - RAMP.lipX; if (u < -RAMP.L - 1.5 || u > RAMP.D + 1.5) return 0;
   const dz = Math.abs(z - RAMP.z); if (dz > RAMP.zHalf) return 0;
-  const w = 1 - smooth(RAMP.zHalf * 0.6, RAMP.zHalf, dz);
-  if (u < 0) return w * RAMP.H * ((u + RAMP.L) / RAMP.L) ** 2;
-  const q = Math.sqrt(u / RAMP.D);                                                       // (a steep drop right at the lip that eases out onto the ground below)
-  return w * RAMP.H * (1 - q * q * (3 - 2 * q));
+  const w = 1 - smooth(RAMP.zHalf * 0.25, RAMP.zHalf, dz);                                     // (a domed crest across the ramp, not a flat-topped ridge)
+  return w * (rampProfile(u - 1.2) + rampProfile(u - 0.6) + rampProfile(u) + rampProfile(u + 0.6) + rampProfile(u + 1.2)) / 5;   // (the lip is rounded off a little by averaging the profile over a short stretch)
 }
 
 /** How much of the ground at (x, z) is the jump's bare-earth surface (0..1): the ramp, its lip and the drop, with soft edges. The ground is coloured as dirt there and nothing grows on it. */
