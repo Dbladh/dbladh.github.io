@@ -198,6 +198,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   const _c = new THREE.Color();
 
   let envAt = 0;
+  const _sunTrue = new THREE.Vector3();
   function updateEnv(hour, s, sunPos, night, dim = 0) {
     const dh = ((hour - envHour + 36) % 24) - 12;                          // signed hour difference, midnight-safe
     if (Math.abs(dh) < 0.8 && envTarget) return;                           // close enough: reuse the reflection map
@@ -237,8 +238,11 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     // Sun arcs from east (hour 6) up and over to west (hour 18).
     const a = ((hour - 6) / 12) * Math.PI;
     const sx = Math.cos(a) * 70, sy = Math.sin(a) * 60, sz = -95;
-    sunMesh.position.set(sx, sy, sz);
-    moonMesh.position.set(-sx, -sy, sz);
+    // The sun and moon are drawn on a higher, flatter arc than the one the light follows: each stays above the hills for about 14 hours, so as one sets behind them the other
+    // is already rising on the far side, and the sky is never empty (the light itself, and the environment map, still use the real position).
+    const arc = sy / 60, SKY_LIFT = 40, SKY_AMP = 42;
+    sunMesh.position.set(sx, SKY_LIFT + SKY_AMP * arc, sz);
+    moonMesh.position.set(-sx, SKY_LIFT - SKY_AMP * arc, sz);
     // Light comes from the sun's direction, but never lower than ~12 degrees (keeps shadows sane).
     // The light comes from the side and a little toward the camera (not from behind the village),
     // so facades you look at are modelled by it and roof/eave shadows fall where you can see them.
@@ -268,10 +272,10 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
       m.material.opacity = 1 - dim;
       if (m.children[0]) m.children[0].material.opacity = glow * (1 - dim);
     }
-    sunMesh.visible = sy > -6 && dim < 0.995;
-    moonMesh.visible = -sy > -6 && dim < 0.995;
+    sunMesh.visible = sunMesh.position.y > 14 && dim < 0.995;
+    moonMesh.visible = moonMesh.position.y > 14 && dim < 0.995;
 
-    updateEnv(hour, s, sunMesh.position, night, dim);
+    updateEnv(hour, s, _sunTrue.set(sx, sy, sz), night, dim);
 
     root.style.setProperty('--sky-top', '#' + s.top.getHexString());
     root.style.setProperty('--sky-bot', '#' + s.bot.getHexString());
