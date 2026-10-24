@@ -127,7 +127,8 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
     return null;
   }
 
-  let halfRes = half;
+  let blurK = 1;
+let halfRes = half;
   let blurTarget = null;
   try {
     blurTarget = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: false });
@@ -240,9 +241,12 @@ export function createDOF(renderer, { half = false, classic = false } = {}) {
       blurTarget?.setSize(Math.max(1, Math.round(size.x / 2)), Math.max(1, Math.round(size.y / 2)));
       material.uniforms.texel.value.set(1 / size.x, 1 / size.y);
       const k = size.y / 900;
-      material.uniforms.aperture.value = 250 * k;
-      material.uniforms.maxBlur.value = 16 * k;
+      material.uniforms.aperture.value = 250 * k * blurK;
+      material.uniforms.maxBlur.value = 16 * k * blurK;
     },
+
+    /** Scale how strong the blur is (1 = normal; the mini-golf uses half). */
+    setBlur(v) { if (v === blurK) return; blurK = v; this.resize(); },
 
     /** Current blur settings in drawing-buffer pixels (used by the firefly shader). */
     get params() {

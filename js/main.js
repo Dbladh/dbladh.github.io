@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024164152';
-import { buildWorld } from './world.js?v=20261024164152';
-import { createSky } from './sky.js?v=20261024164152';
-import { createDOF } from './dof.js?v=20261024164152';
-import { createRide } from './ride.js?v=20261024164152';
-import { createGame } from './bikegame.js?v=20261024164152';
-import { createAurora, setWarm } from './aurora.js?v=20261024164152';
-import { createAudio, pickFlicker } from './audio.js?v=20261024164152';
+import { PAL } from './palette.js?v=20261024164303';
+import { buildWorld } from './world.js?v=20261024164303';
+import { createSky } from './sky.js?v=20261024164303';
+import { createDOF } from './dof.js?v=20261024164303';
+import { createRide } from './ride.js?v=20261024164303';
+import { createGame } from './bikegame.js?v=20261024164303';
+import { createAurora, setWarm } from './aurora.js?v=20261024164303';
+import { createAudio, pickFlicker } from './audio.js?v=20261024164303';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -578,7 +578,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261024164152');
+        const mod = await import('./golf.js?v=20261024164303');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -884,6 +884,7 @@ function start() {
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
       const want = game?.active ? game.focusDistance : golf?.active ? golf.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
+      dof.setBlur(golf?.active ? 0.5 : 1);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
       if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48; scene.fog.near = fn; scene.fog.far = fn + 167; }   // the game's camera sits further back: start the fog beyond the ride itself
