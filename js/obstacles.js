@@ -13,7 +13,7 @@ export const KINDS = {
   boulder: { label: 'Boulder', h: 1.5 * SCALE.boulder, hw: 1.2 * SCALE.boulder, big: true },
 };
 
-const hash = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+const hash = (i, s) => { let h = Math.imul(Math.round(i * 1024) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(s * 1024) | 0, 0x165667b1); h = Math.imul(h ^ (h >>> 15), 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // (lighter and more saturated than the ground, so they stand out against the green and tan)
 const COL = { bark: new THREE.Color('#4a2c16'), bark2: new THREE.Color('#33200f'), ring: new THREE.Color('#fff0c4'), rock: new THREE.Color('#c9d2e0'), rock2: new THREE.Color('#8793a6'), moss: new THREE.Color('#8fb27a') };
 

@@ -4,14 +4,15 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { heightAt } from './world.js?v=20261024101212';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES, TRAY_R } from './golfgen.js?v=20261024101212';
-import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024101212';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024101212';
+import { heightAt } from './world.js?v=20261024150417';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES, TRAY_R } from './golfgen.js?v=20261024150417';
+import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024150417';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024150417';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024150417';
 
 const CX = -40, CZ = -68;                                  // the site: on the hillside in front of the windmill, clear of the signs and of the windmill itself
 const ENTER = 1.9, EXIT = 1.4, RISE = 1.3, GROW = 0.55, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTHS = MONTH_NAMES;
 const HERO_NAMES = { windmill: 'The Windmill', alligator: 'The Alligator', turntable: 'The Turntable', pendulum: 'The Hammers', geyser: 'The Geyser', cannon: 'The Cannon', teleport: 'The Pipes', drawbridge: 'The Drawbridge', loop: 'The Loop-the-Loop' };
 const POWER_TIMES = { homing: 10, ghost: 8, bounce: 10, turbo: 10, freeze: 6, mega: 15, hamster: 6 };
 const BALL_TINTS = ['#ffffff', '#ffd1d1', '#d1ffd9', '#d1e6ff', '#fff2b5'];
@@ -49,7 +50,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const timers = {};
   const say = (el, text, ms, key) => { el.textContent = text; el.classList.add('show'); clearTimeout(timers[key]); timers[key] = setTimeout(() => el.classList.remove('show'), ms); };
   hud.querySelector('.golf-quit').addEventListener('click', () => api.stop());
-  const bestKey = () => `golf.best.${st.year}-${String(st.month).padStart(2, '0')}`;
+  const bestKey = () => `golf.best.${monthKey(st)}`;
   const readBest = () => { try { const v = parseInt(localStorage.getItem(bestKey()), 10); return Number.isFinite(v) ? v : null; } catch (e) { return null; } };
   const writeBest = (v) => { try { localStorage.setItem(bestKey(), String(v)); } catch (e) { /* private mode */ } };
   function updateHud() {
@@ -256,8 +257,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     start(homeCam) {
       if (st.mode !== 'off') return;
       if (!tray) buildTray();
-      const now = new Date(), m = /[?&]golfmonth=(\d{4})-(\d{1,2})/.exec(location.search);
-      st.year = m ? +m[1] : now.getUTCFullYear(); st.month = m ? +m[2] : now.getUTCMonth() + 1;      // (the same course for everyone, all month)
+      Object.assign(st, courseMonth());                    // (the same course for everyone, all month)
       st.seed = courseSeed(st.year, st.month); st.order = heroOrder(st.seed); st.scores = []; st.par = [];
       home.pos.copy(homeCam.pos); home.look.copy(homeCam.look); flyFrom.pos.copy(homeCam.pos); flyFrom.look.copy(homeCam.look);
       setBoards(false); Y.top = world.carve.begin(CX, CZ, TRAY_R, 9); tray.position.y = Y.top; tray.visible = true; framing();
@@ -265,7 +265,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       startHole(0); st.mode = 'enter'; st.t = 0; cam.pos.copy(frame.pos); cam.look.copy(frame.look);
       listen(true); window.addEventListener('touchmove', noScroll, { passive: false }); window.addEventListener('touchstart', noScroll, { passive: false });
       audio?.zoom?.('in', 1.7);
-      say(elBanner, `The ${MONTHS[st.month - 1]} ${st.year} Course`, 2800, 'banner');
+      say(elBanner, `The ${monthLabel(st)} Course`, 2800, 'banner');
     },
     stop() {
       if (st.mode === 'off' || st.mode === 'exit') return;

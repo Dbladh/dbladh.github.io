@@ -6,10 +6,10 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { createTrail } from './trail.js?v=20261024101212';
-import { KINDS, buildObstacle } from './obstacles.js?v=20261024101212';
-import { PAL } from './palette.js?v=20261024101212';
-import { heightAt as terrainAt } from './world.js?v=20261024101212';
+import { createTrail } from './trail.js?v=20261024150417';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261024150417';
+import { PAL } from './palette.js?v=20261024150417';
+import { heightAt as terrainAt } from './world.js?v=20261024150417';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution
@@ -22,7 +22,8 @@ function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 const smooth01 = (t) => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
-const hash = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+// (an integer hash, not a sine: the same on every device, so everyone's course really is the same)
+const hash = (i, s) => { let h = Math.imul(Math.round(i * 1024) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(s * 1024) | 0, 0x165667b1); h = Math.imul(h ^ (h >>> 15), 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const C = (hex) => new THREE.Color(hex);
 
 export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
@@ -40,7 +41,7 @@ export function createTrack(scene, { laneZ, material, world, seed = 1 }) {
   const push = (y) => H.push(y);
   const flat = (len) => { const y = last(); for (let i = 0; i < len / DX; i++) push(y); };
   const ease = (dy, len) => { const y = last(), n = Math.round(len / DX); for (let i = 1; i <= n; i++) push(y + dy * smooth01(i / n)); };
-  const whoops = (n, amp, wl) => { const y = last(), m = Math.round(wl / DX); for (let k = 0; k < n; k++) for (let i = 1; i <= m; i++) push(y + amp * 0.5 * (1 - Math.cos((i / m) * Math.PI * 2))); };
+  const whoops = (n, amp, wl) => { const y = last(), m = Math.round(wl / DX); for (let k = 0; k < n; k++) for (let i = 1; i <= m; i++) push(y + amp * (i / m < 0.5 ? smooth01((i / m) * 2) : smooth01(2 - (i / m) * 2))); };
   const kicker = (rise, slope, landLen, drop) => {
     const y = last(), n = Math.round(rise / slope / DX);
     for (let i = 1; i <= n; i++) push(y + rise * (i / n) * (i < 6 ? 0.55 + 0.45 * smooth01(i / 6) : 1));

@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: a centre line (tee to cup), walls offset from it, gentle hills, one hero obstacle (golfhero.js), water (a river that
 // carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024101212';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024150417';
 export { mulberry32, heroOrder };
 
 export const TRAY_R = 14;

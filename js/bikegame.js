@@ -2,17 +2,18 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261024101212';
-import { createTrack, XT } from './track.js?v=20261024101212';
-import { createRagdoll } from './ragdoll.js?v=20261024101212';
-import { createFx } from './fx.js?v=20261024101212';
-import { createAudio } from './audio.js?v=20261024101212';
-import { createPuffs } from './puffs.js?v=20261024101212';
-import { createTracks } from './tracks.js?v=20261024101212';
-import { createDirt } from './dirt.js?v=20261024101212';
-import { createMudCoat } from './mudcoat.js?v=20261024101212';
-import { createCoins } from './coins.js?v=20261024101212';
-import { createFuel } from './fuel.js?v=20261024101212';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261024150417';
+import { courseMonth, monthLabel, monthKey, monthSeed } from './monthseed.js?v=20261024150417';
+import { createTrack, XT } from './track.js?v=20261024150417';
+import { createRagdoll } from './ragdoll.js?v=20261024150417';
+import { createFx } from './fx.js?v=20261024150417';
+import { createAudio } from './audio.js?v=20261024150417';
+import { createPuffs } from './puffs.js?v=20261024150417';
+import { createTracks } from './tracks.js?v=20261024150417';
+import { createDirt } from './dirt.js?v=20261024150417';
+import { createMudCoat } from './mudcoat.js?v=20261024150417';
+import { createCoins } from './coins.js?v=20261024150417';
+import { createFuel } from './fuel.js?v=20261024150417';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -270,8 +271,11 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     st.bonus += p; st.lastTrick = st.t;
     toast(label ? `${label} +${p}${st.mult > 1 ? ' ×' + st.mult : ''}` : '');
   }
-  const loadBest = () => { try { return parseInt(localStorage.getItem('dirtbike-best') || '0', 10) || 0; } catch (e) { return 0; } };
-  const saveBest = (v) => { try { localStorage.setItem('dirtbike-best', String(v)); } catch (e) { /* private mode */ } };
+  // The course is the month's (the same for everyone, and for every retry, all month long), so the best score is kept per month too. ?course=N plays any other course (for testing).
+  const courseOverride = () => { const m = /[?&]course=(\d+)/.exec(location.search); return m ? parseInt(m[1], 10) : null; };
+  const bestKey = () => (courseOverride() ? `dirtbike-best-course-${courseOverride()}` : `dirtbike-best-${monthKey(courseMonth())}`);
+  const loadBest = () => { try { return parseInt(localStorage.getItem(bestKey()) || '0', 10) || 0; } catch (e) { return 0; } };
+  const saveBest = (v) => { try { localStorage.setItem(bestKey(), String(v)); } catch (e) { /* private mode */ } };
   function toast(text) {
     if (!toastEl) return;
     toastEl.textContent = text; toastEl.classList.remove('show'); void toastEl.offsetWidth; toastEl.classList.add('show');
@@ -308,8 +312,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   function newRun() {
     clearRoundUi(!st.guideOn);
     st.score = 0; st.coins = 0; st.bonus = 0; st.dist = 0; st.mult = 1; st.comboT = 0; st.flipsTotal = 0; st.bestAir = 0; st.bestMult = 1; st.lastTrick = 0; st.runT = 0;
-    const m = /[?&]course=(\d+)/.exec(location.search);
-    const sd = m ? parseInt(m[1], 10) : Math.floor(Math.random() * 1e6) + 1;
+    const sd = courseOverride() ?? monthSeed(courseMonth(), 0x62696b65);                 // (the month's course: the same for everyone)
     track.reset(sd); track.setTrailStart(st.startX + 84); coins.reset(sd, st.startX); fuel.reset(sd, st.startX);
     st.trickStreak = 0; st.trickStreakT = -99; st.nextMile = 500; st.bestSaid = false;
     st.fuel = 1; st.fuelK = 1; st.fuelT = 0; st.engineOut = false; st.outOfFuel = false; st.lowWarn = false; st.sputT = 0;
@@ -317,6 +320,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     if (overEl) overEl.hidden = true;
     document.body.classList.remove('game-over');
     setHud();
+    if (!st.bannerShown && !courseOverride()) { st.bannerShown = true; toast(`The ${monthLabel(courseMonth())} Course`); }       // (once per visit: everyone rides the same course this month)
   }
 
   /** The run is over: tally it up, remember the best, and offer another go. */
@@ -645,7 +649,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
     onQuit: null,
     start(homeCam, startX = 0) {
       if (st.mode !== 'off') return;
-      st.t = 0; st.down = false; st.startX = startX; st.best = loadBest();
+      st.t = 0; st.down = false; st.startX = startX; st.best = loadBest(); st.bannerShown = false;
       st.home = { pos: homeCam.pos.clone(), look: homeCam.look.clone() };
       st.from.pos.copy(homeCam.pos); st.from.look.copy(homeCam.look);
       setBikeScale();

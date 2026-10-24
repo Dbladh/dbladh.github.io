@@ -11,6 +11,7 @@ const GRAV = 24, R_WHEEL = 0.414, HW = 0.78;                      // the game's 
 const RIDE_Y = R_WHEEL, PICK_DY = 0.4;                            // the wheel centre's height on the ground, and how far above it a pickup is measured
 const JUMP_VY = (c) => 5.5 + 9.5 * (1 - (1 - c) * (1 - c));
 const POP = (s, vx) => Math.min(8, s * vx * 0.32);
+const hard = (d) => 0.6 * Math.sqrt(d) + 0.4 * d;                          // how hard it is at distance fraction d (0..1): a sqrt-like rise, with no pow() so it is the same everywhere
 const RAMP = 2600, WINDOW = 80;                                                // distance over which the difficulty ramps from easy to hardest
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -121,7 +122,7 @@ export function createFuel(scene, track, coins, laneZ) {
     for (let x = tx + rng() * 12; x < x1; x += 1.5) if (flatSafe(x)) { list.push({ type: 'ground', x, y: track.laneAt(x) + 1.0, ease: 1 }); break; }
     // 2. floating above the trail: a hop's apex has to pass through it (higher with distance)
     for (let x = tx + 4 + rng() * 20, n = 0; x < x1 && n < 3; x += 18 + rng() * 14) if (flatSafe(x, 4)) {
-      n++; const tg = { x, y: track.laneAt(x) + 2.4 + 3.4 * Math.pow(d, 0.8) + rng() * 0.6 }, near = track.obstaclesIn(x - 30, x + 10);
+      n++; const tg = { x, y: track.laneAt(x) + 2.4 + 3.4 * hard(d) + rng() * 0.6 }, near = track.obstaclesIn(x - 30, x + 10);
       list.push({ type: 'float', x, y: tg.y, ease: easeFrom(tg, x - 16, x - 2, near, rr) });
     }
     // 3. over an obstacle (top of the hop) and just behind it (a jump that is too long sails over)
@@ -151,7 +152,7 @@ export function createFuel(scene, track, coins, laneZ) {
       }
     }
     // the wanted ease falls with distance; a spot that nearly nobody reaches is never used
-    const want = lerp(0.92, 0.1, Math.pow(d, 0.85));
+    const want = lerp(0.92, 0.1, hard(d));
     let best = null, bs = 1e9;
     for (const c of list) {
       if (c.type !== 'ground' && c.ease < 0.08) continue;
