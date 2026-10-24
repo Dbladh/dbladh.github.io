@@ -5,14 +5,14 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024163833';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024163833';
-import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024163833';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024163833';
-import { createFx } from './golffx.js?v=20261024163833';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024163833';
-import { buildDecor } from './golfdecor.js?v=20261024163833';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024163833';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024163939';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024163939';
+import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024163939';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024163939';
+import { createFx } from './golffx.js?v=20261024163939';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024163939';
+import { buildDecor } from './golfdecor.js?v=20261024163939';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024163939';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -98,7 +98,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     decors = holes.map((h, i) => { const d = buildDecor(h, sites[i], world.carve.groundNow, (x, z) => near(x, z, 0.7), lowEnd ? 0.55 : 1); d.group.visible = false; scene.add(d.group); return d; });
     for (let i = 0; i < HOLES - 1; i++) world.carve.paint(pathBetween(i), 0.95, '#dccb9f', (x, z) => near(x, z, 0.5));
     lampSpotsAll = [];                                     // lamp posts along each hole and one beside each path
-    holes.forEach((h, i) => { for (const p of lampSpots(h, sites[i], lowEnd ? 3 : 4, (x, z) => near(x, z, 0.6))) lampSpotsAll.push({ ...p, hole: i }); });
+    holes.forEach((h, i) => { const hp = h.hero ? toWorld(sites[i], h.hero.x, h.hero.z) : null; for (const p of lampSpots(h, sites[i], lowEnd ? 3 : 4, (x, z) => near(x, z, 0.6) || (hp && Math.hypot(x - hp.x, z - hp.z) < 5.2))) lampSpotsAll.push({ ...p, hole: i }); });
     for (let i = 0; i < HOLES - 1; i++) {
       const pts = pathBetween(i), a = pts[18], b = pts[22], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / l, nz = (b[0] - a[0]) / l;
       if (!near(a[0] + nx * 1.4, a[1] + nz * 1.4, 0.6)) lampSpotsAll.push({ x: a[0] + nx * 1.4, z: a[1] + nz * 1.4, ax: -nx, az: -nz, hole: i });

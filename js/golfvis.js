@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024163833';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024163833';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024163833';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024163833';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024163939';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024163939';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024163939';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024163939';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -211,6 +211,7 @@ const paint = (hex) => { let m = paintCache.get(hex); if (!m) { m = new THREE.Me
 const metal = (hex) => { const k = 'm' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.metal, hex); paintCache.set(k, m); } return m; };      // painted metal
 const woodTint = (hex) => { const k = 'w' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.wood, hex); paintCache.set(k, m); } return m; };
 const stoneTint = (hex, flat) => { const k = 's' + hex + flat; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.stone, hex, flat ? { flatShading: true } : {}); paintCache.set(k, m); } return m; };
+let roofG = null; const roofGeo = () => roofG || (roofG = new THREE.ConeGeometry(1, 1.7, 4).translate(0, 0.85, 0).rotateY(Math.PI / 4));
 const cone = (m, r, h, seg, x, y, z) => { const o = new THREE.Mesh(coneGeo(r, h, seg), m); o.position.set(x, y, z); return o; };
 const coneCache = new Map(); const coneGeo = (r, h, seg) => { const k = `${r}|${h}|${seg}`; let g = coneCache.get(k); if (!g) { g = new THREE.ConeGeometry(r, h, seg); coneCache.set(k, g); } return g; };
 const torus = (m, R, t, x, y, z, rx = 0, ry = 0, rz = 0) => { const k = `t${R}|${t}`; let g = coneCache.get(k); if (!g) { g = new THREE.TorusGeometry(R, t, 6, 20); coneCache.set(k, g); } const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); return o; };
@@ -227,9 +228,9 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       w.add(rbox(paint('#fff6d6'), 0.07, 0.8, 0.7, -H - 0.03, 2.0, s * mid, 0.03)); w.add(rbox(white, 0.09, 0.9, 0.08, -H - 0.04, 2.0, s * mid, 0.02)); w.add(rbox(white, 0.09, 0.08, 0.8, -H - 0.04, 2.0, s * mid, 0.02));
     }
     w.add(rbox(blue, H * 2, 1.3, lat0 * 2 + 0.2, 0, 1.95, 0, 0.07)); w.add(rbox(white, H * 2 + 0.12, 0.14, lat0 * 2 + 0.3, 0, 1.3, 0, 0.04));
-    const roof = new THREE.Mesh(coneGeo(3.0, 1.7, 4), woodTint('#7d8aa0')); roof.position.y = 3.95; roof.rotation.y = Math.PI / 4; roof.castShadow = true; w.add(roof);
-    w.add(cone(red, 0.16, 0.5, 6, 0, 4.95, 0)); w.add(rbox(white, 0.05, 0.9, 0.05, 0, 5.1, 0, 0.01));
-    const rotor = new THREE.Group(); rotor.position.set(-(H + 0.16), 1.7, 0); w.add(rotor);
+    const roof = new THREE.Mesh(roofGeo(), woodTint('#7d8aa0')); roof.position.y = 3.1; roof.scale.set((H + 0.7) * 1.4142, 1.2, (lat1 + 0.7) * 1.4142); roof.castShadow = true; w.add(roof);
+    w.add(cone(red, 0.16, 0.5, 6, 0, 4.5, 0)); w.add(rbox(white, 0.05, 0.9, 0.05, 0, 4.7, 0, 0.01));
+    const rotor = new THREE.Group(); rotor.position.set(-(H + 0.85), 2.45, 0); w.add(rotor); w.add(rbox(paint('#ffffff'), 0.9, 0.12, 0.12, -(H + 0.4), 2.45, 0, 0.02));
     for (let k = 0; k < 4; k++) {
       const pv = new THREE.Group(); pv.rotation.x = (k * Math.PI) / 2; pv.add(rbox(white, 0.1, 1.8, 0.1, 0, -0.9, 0, 0.02));
       for (let j = 0; j < 4; j++) pv.add(rbox(j % 2 ? white : red, 0.08, 0.2, 0.46, 0.02, -(0.5 + j * 0.33), 0.26, 0.02));
