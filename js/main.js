@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024154218';
-import { buildWorld } from './world.js?v=20261024154218';
-import { createSky } from './sky.js?v=20261024154218';
-import { createDOF } from './dof.js?v=20261024154218';
-import { createRide } from './ride.js?v=20261024154218';
-import { createGame } from './bikegame.js?v=20261024154218';
-import { createAurora, setWarm } from './aurora.js?v=20261024154218';
-import { createAudio, pickFlicker } from './audio.js?v=20261024154218';
+import { PAL } from './palette.js?v=20261024154718';
+import { buildWorld } from './world.js?v=20261024154718';
+import { createSky } from './sky.js?v=20261024154718';
+import { createDOF } from './dof.js?v=20261024154718';
+import { createRide } from './ride.js?v=20261024154718';
+import { createGame } from './bikegame.js?v=20261024154718';
+import { createAurora, setWarm } from './aurora.js?v=20261024154718';
+import { createAudio, pickFlicker } from './audio.js?v=20261024154718';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -578,8 +578,8 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261024154218');
-        golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion });
+        const mod = await import('./golf.js?v=20261024154718');
+        golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
     } catch (err) { console.warn('mini-golf could not load', err); return; } finally { golfLoading = false; }
@@ -1042,7 +1042,7 @@ function start() {
     hintTick(dt);
     orbitA += ((dialOn ? 1 : 0) - orbitA) * (1 - Math.exp(-dt * 9)); sky.setOrbitAlpha(orbitA);
     hoverSunV += ((hoverBody === 'sun' ? 1 : 0) - hoverSunV) * (1 - Math.exp(-dt * 10)); hoverMoonV += ((hoverBody === 'moon' ? 1 : 0) - hoverMoonV) * (1 - Math.exp(-dt * 10)); sky.setHover(hoverSunV, hoverMoonV);       // (the sun or moon under the pointer, or being dragged, glows brighter)                  // (the dotted orbit fades in and out with the dial)
-    if (shadowTick++ % (game?.active ? 2 : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
+    if (shadowTick++ % (game?.active ? 2 : golf?.active ? 1 : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back

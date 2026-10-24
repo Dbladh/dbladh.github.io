@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024154218';
-import { auroraColour } from './aurora.js?v=20261024154218';
+import { PAL } from './palette.js?v=20261024154718';
+import { auroraColour } from './aurora.js?v=20261024154718';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261024154218';
+} from './houses.js?v=20261024154718';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -811,7 +811,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   // ---- Carving (for the mini-golf): the ground under each hole's course is levelled into a lawn (flat within a set distance of the hole's centre line, with the old hillside blending back in
   // around it) and everything standing there is hidden. Several sites can be carved at once, each brought in separately (`set`). Where two blends overlap they are averaged.
   // It is all undone by `carve.end()`. The ground mesh changes but `heightAt` does not; `carve.groundNow` reads the real, current height.
-  const carveS = { on: false, H: [], K: [], verts: [], sites: [], origY: null, origC: null, cells: [], houses: [] };
+  const carveS = { on: false, H: [], K: [], verts: [], sites: [], origY: null, origC: null, cells: [], houses: [], paint: new Map() };
   const lawn = new THREE.Color('#79cf63');
   const gridNx = SEG[0] + 1, gridDx = 380 / SEG[0], gridX0 = p.getX(0), gridZ0 = p.getZ(0), gridDz = p.getZ(gridNx) - gridZ0, gridNy = (p.count / gridNx) | 0;
   function carveNormals(list) {                                                // the ground's slope at each changed point, from its neighbours (the mesh is a regular grid)
@@ -832,6 +832,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     arr[i * 3 + 1] = sw > 1 ? sy / sw : origY[i] * (1 - sw) + sy;
     const g = Math.min(1, sw) * 0.85;
     col[i * 3] = origC[i * 3] + (lawn.r - origC[i * 3]) * g; col[i * 3 + 1] = origC[i * 3 + 1] + (lawn.g - origC[i * 3 + 1]) * g; col[i * 3 + 2] = origC[i * 3 + 2] + (lawn.b - origC[i * 3 + 2]) * g;
+    const pt = carveS.paint.get(i); if (pt) { col[i * 3] += (pt.r - col[i * 3]) * pt.a; col[i * 3 + 1] += (pt.g - col[i * 3 + 1]) * pt.a; col[i * 3 + 2] += (pt.b - col[i * 3 + 2]) * pt.a; }
   }
   const carve = {
     get active() { return carveS.on; },
@@ -887,6 +888,28 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       for (const si of todo) { carveS.K[si] = k; for (const v of carveS.verts[si]) if (!seen.has(v)) { seen.add(v); carveApply(v); changed.push(v); } }
       p.needsUpdate = true; geo.attributes.color.needsUpdate = true; carveNormals(changed);
     },
+    /**
+     * Paint a path of colour on the ground along the polyline `pts` ([x, z] pairs): full colour within `halfW` of it, easing out over 0.7 more. `skip(x, z)` can leave spots unpainted.
+     * It stays until `end()`. The ground's shape is not changed.
+     */
+    paint(pts, halfW, hex, skip) {
+      if (!carveS.origY) return;
+      const c = new THREE.Color(hex), col = geo.attributes.color.array, soft = 0.7, seen = new Set();
+      for (let k = 0; k < pts.length - 1; k++) {
+        const ax = pts[k][0], az = pts[k][1], bx = pts[k + 1][0], bz = pts[k + 1][1], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+        const ix0 = Math.max(0, Math.floor((Math.min(ax, bx) - halfW - soft - gridX0) / gridDx)), ix1 = Math.min(gridNx - 1, Math.ceil((Math.max(ax, bx) + halfW + soft - gridX0) / gridDx));
+        const za = (Math.min(az, bz) - halfW - soft - gridZ0) / gridDz, zb = (Math.max(az, bz) + halfW + soft - gridZ0) / gridDz, iy0 = Math.max(0, Math.floor(Math.min(za, zb))), iy1 = Math.min(gridNy - 1, Math.ceil(Math.max(za, zb)));
+        for (let iy = iy0; iy <= iy1; iy++) for (let ix = ix0; ix <= ix1; ix++) {
+          const i = iy * gridNx + ix, x = p.getX(i), z = p.getZ(i); let t = ((x - ax) * dx + (z - az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t)); if (d >= halfW + soft || (skip && skip(x, z))) continue;
+          const a = d <= halfW ? 0.92 : 0.92 * (1 - smooth(halfW, halfW + soft, d)), old = carveS.paint.get(i);
+          if (old && old.a >= a) continue;
+          carveS.paint.set(i, { r: c.r, g: c.g, b: c.b, a }); seen.add(i);
+        }
+      }
+      for (const i of seen) { const pt = carveS.paint.get(i); col[i * 3] += (pt.r - col[i * 3]) * pt.a; col[i * 3 + 1] += (pt.g - col[i * 3 + 1]) * pt.a; col[i * 3 + 2] += (pt.b - col[i * 3 + 2]) * pt.a; }
+      geo.attributes.color.needsUpdate = true;
+    },
     /** The height of the ground right now (levelled or not), read from the mesh. */
     groundNow(x, z) {
       const fx = (x - gridX0) / gridDx, fz = (z - gridZ0) / gridDz;
@@ -898,6 +921,9 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     /** Put the hillside and everything on it back. */
     end() {
       if (!carveS.on) return;
+      const col = geo.attributes.color.array, { origC } = carveS;
+      for (const i of carveS.paint.keys()) { col[i * 3] = origC[i * 3]; col[i * 3 + 1] = origC[i * 3 + 1]; col[i * 3 + 2] = origC[i * 3 + 2]; }
+      carveS.paint.clear(); geo.attributes.color.needsUpdate = true;
       carve.set(0);
       for (const c of carveS.cells) { c.m.instanceMatrix.array.set(c.orig); c.m.instanceMatrix.needsUpdate = true; }
       for (const g of carveS.houses) g.visible = true;

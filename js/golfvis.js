@@ -1,8 +1,9 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH } from './golfphys.js?v=20261024154218';
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024154218';
+import { BALL_R, CUP_R, hillH } from './golfphys.js?v=20261024154718';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024154718';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024154718';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -41,30 +42,82 @@ function water() {                                         // a soft striped tex
   return waterTex;
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), _c = new THREE.Color();
-const box = (m, sx, sy, sz, x, y, z) => { const o = new THREE.Mesh(G.box, m); o.scale.set(sx, sy, sz); o.position.set(x, y, z); return o; };
+const box = (m, sx, sy, sz, x, y, z) => { const o = new THREE.Mesh(boxGeo(sx, sy, sz), m); o.position.set(x, y, z); return o; };
 const cyl = (m, r, h, x, y, z) => { const o = new THREE.Mesh(G.cyl, m); o.scale.set(r, h, r); o.position.set(x, y, z); return o; };
 const sph = (m, rx, ry, rz, x, y, z) => { const o = new THREE.Mesh(G.sph, m); o.scale.set(rx, ry, rz); o.position.set(x, y, z); return o; };
 
+let skinned = false, GM = null;
+/** Swap the plain materials for the textured ones (once, the first time a hole is built). */
+function skin(lowEnd) {
+  if (skinned) return; skinned = true; GM = golfMaterials(lowEnd);
+  Object.assign(M, { grass: GM.turf, rail: GM.wood, body: GM.plaster, roof: GM.shingle, stone: GM.stone, stone2: GM.stone, wood: GM.wood, metal: GM.metal, red: GM.red, sail: GM.cream });
+}
+let rockGeo = null;
+const BRICKS = ['#d3694a', '#bd5a3e', '#dc7d58', '#ad5039', '#c96348', '#c9a58a'], ROCKS = ['#a39d92', '#b8b1a3', '#8c8780', '#b0a698', '#c4bba8', '#968d7f'];
+const WOODS = ['#ffffff', '#f0dcc0', '#e0c49c', '#ffe9cc'];
+/** The low wall round the edge of the hole: bricks, boulders or planks (by the hole's seed), in instanced meshes. */
+function buildBorder(h, g, disposables) {
+  const style = ['brick', 'stone', 'wood'][(h.seed >>> 4) % 3], r = mulberry32(h.seed ^ 0x5bd1e995), O = h.outline, segs = h.walls.filter((w) => w[4]);
+  let area = 0; for (let i = 0; i < O.length; i++) { const a = O[i], b = O[(i + 1) % O.length]; area += a[0] * b[1] - b[0] * a[1]; }
+  const sgn = area > 0 ? 1 : -1, col = new THREE.Color();
+  const make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; g.add(m); disposables.push(m); return m; };
+  const place = (mesh, i, w, off, y, lenK, hgt, thick, shift, palette, tilt = 0) => {
+    const dx = w[2] - w[0], dz = w[3] - w[1], l = Math.sqrt(dx * dx + dz * dz) || 1, ox = (sgn * dz) / l, oz = (-sgn * dx) / l, ux = dx / l, uz = dz / l;
+    _q.setFromAxisAngle(UP, Math.atan2(-dz, dx)); if (tilt) { _q2.setFromAxisAngle(_vx, tilt); _q.multiply(_q2); }
+    _m.compose(_v.set((w[0] + w[2]) / 2 + ox * (thick / 2 + off) + ux * shift, y, (w[1] + w[3]) / 2 + oz * (thick / 2 + off) + uz * shift), _q, _s.set(l * lenK + 0.07, hgt, thick));
+    mesh.setMatrixAt(i, _m); col.set(palette[(r() * palette.length) | 0]); col.offsetHSL(0, 0, (r() - 0.5) * 0.05); mesh.setColorAt(i, col);
+  };
+  if (style === 'brick') {
+    const c0 = make(G.box, GM.brick, segs.length), c1 = make(G.box, GM.brick, segs.length), cap = make(G.box, GM.stone, segs.length);
+    segs.forEach((w, i) => { place(c0, i, w, 0, 0.15, 1, 0.3, 0.4, 0, BRICKS); place(c1, i, w, 0, 0.45, 1, 0.3, 0.4, 0.3, BRICKS); place(cap, i, w, -0.03, 0.65, 1, 0.1, 0.5, 0, ['#e8dcc6', '#ddd0b8']); });
+    for (const m of [c0, c1, cap]) m.instanceMatrix.needsUpdate = m.instanceColor.needsUpdate = true;
+  } else if (style === 'stone') {
+    if (!rockGeo) { rockGeo = new THREE.IcosahedronGeometry(0.5, 1); const p = rockGeo.attributes.position, rr = mulberry32(99), seen = new Map(); for (let i = 0; i < p.count; i++) { const k = `${p.getX(i).toFixed(3)}|${p.getY(i).toFixed(3)}|${p.getZ(i).toFixed(3)}`; let f = seen.get(k); if (!f) { f = 0.82 + rr() * 0.36; seen.set(k, f); } p.setXYZ(i, p.getX(i) * f, p.getY(i) * f, p.getZ(i) * f); } rockGeo.computeVertexNormals(); }
+    const mat = GM.lam(GM.tex.stone, '#ffffff', { flatShading: true }); disposables.push(mat);
+    const rocks = make(rockGeo, mat, segs.length), top = make(rockGeo, mat, segs.length);
+    segs.forEach((w, i) => { const hgt = 0.55 + r() * 0.3; place(rocks, i, w, 0.05, hgt * 0.4, 1.7, hgt, 0.7 + r() * 0.2, (r() - 0.5) * 0.3, ROCKS, (r() - 0.5) * 0.3); place(top, i, w, 0.15, 0.62 + r() * 0.12, 1.1, 0.4 + r() * 0.2, 0.55, (r() - 0.5) * 0.5, ROCKS, (r() - 0.5) * 0.4); });
+    for (const m of [rocks, top]) m.instanceMatrix.needsUpdate = m.instanceColor.needsUpdate = true;
+  } else {
+    const p0 = make(G.box, GM.wood, segs.length), p1 = make(G.box, GM.wood, segs.length), posts = make(G.box, GM.darkwood, Math.ceil(segs.length / 5));
+    segs.forEach((w, i) => { place(p0, i, w, 0, 0.15, 1, 0.3, 0.32, 0, WOODS); place(p1, i, w, 0, 0.47, 1, 0.3, 0.32, 0, WOODS); });
+    let n = 0; segs.forEach((w, i) => { if (i % 5 === 0 && n < posts.count) { _m.compose(_v.set(w[0] + ((sgn * (w[3] - w[1])) / (Math.hypot(w[2] - w[0], w[3] - w[1]) || 1)) * 0.18, 0.4, w[1] + ((-sgn * (w[2] - w[0])) / (Math.hypot(w[2] - w[0], w[3] - w[1]) || 1)) * 0.18), _q.identity(), _s.set(0.28, 0.85, 0.28)); posts.setMatrixAt(n, _m); posts.setColorAt(n++, col.set('#ffffff')); } });
+    posts.count = n;
+    for (const m of [p0, p1, posts]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+}
+function signTexture(n, par) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 160; const x = c.getContext('2d');
+  x.fillStyle = '#6b4a2c'; x.fillRect(0, 0, 256, 160); x.fillStyle = '#f4e6c3'; x.fillRect(8, 8, 240, 144);
+  x.fillStyle = '#3b2a1a'; x.textAlign = 'center'; x.font = '700 64px "Outfit", system-ui, sans-serif'; x.fillText(`${n}`, 128, 78); x.font = '600 30px "Outfit", system-ui, sans-serif'; x.fillText(`PAR ${par}`, 128, 124);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+const _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
+
 /** The meshes for hole `h`. Returns { group, update(heroT, t, dt, state), pickups, cupMesh, flag, dispose() }. */
-export function buildHoleVisual(h) {
+export function buildHoleVisual(h, { lowEnd = false } = {}) {
+  skin(lowEnd);
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
   // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised by the hills
-  const pos = [], col = [], idx = [], c1 = new THREE.Color('#5fc65f'), c2 = new THREE.Color('#52b955'), COLS = 6, R = h.ribbon;
+  const pos = [], uvs = [], col = [], idx = [], c1 = new THREE.Color('#78e075'), c2 = new THREE.Color('#68d06b'), COLS = 6, R = h.ribbon;
   for (let i = 0; i < R.length; i++) {
     const row = R[i], stripe = (row[4] < 0 ? i < R.length / 2 ? -1 : 1e3 : Math.floor(row[4] / 1.5)) & 1;
     for (let c = 0; c <= COLS; c++) {
       const u = c / COLS, x = row[0] + (row[2] - row[0]) * u, z = row[1] + (row[3] - row[1]) * u;
-      pos.push(x, hillH(h, x, z) + 0.03, z); const k = stripe ? c1 : c2; col.push(k.r, k.g, k.b);
+      pos.push(x, hillH(h, x, z) + 0.03, z); uvs.push(x * 0.4, z * 0.4); const k = stripe ? c1 : c2; col.push(k.r, k.g, k.b);
     }
     if (i > 0) for (let c = 0; c < COLS; c++) { const b0 = (i - 1) * (COLS + 1) + c, a0 = b0 + 1, d0 = b0 + COLS + 1, e0 = d0 + 1; idx.push(b0, d0, a0, a0, d0, e0); }
   }
-  const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); fg.setIndex(idx); fg.computeVertexNormals();
-  g.add(new THREE.Mesh(fg, M.grass));
-  // the rails: one instanced box per visible wall
-  const vis = h.walls.filter((w) => w[4]), rails = new THREE.InstancedMesh(G.box, M.rail, vis.length);
-  vis.forEach((w, i) => { const dx = w[2] - w[0], dz = w[3] - w[1]; _q.setFromAxisAngle(UP, Math.atan2(-dz, dx)); _m.compose(_v.set((w[0] + w[2]) / 2, 0.12, (w[1] + w[3]) / 2), _q, _s.set(Math.hypot(dx, dz) + 0.3, 0.9, 0.3)); rails.setMatrixAt(i, _m); });
-  rails.instanceMatrix.needsUpdate = true; g.add(rails); disposables.push(rails);
+  const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); fg.setIndex(idx); fg.computeVertexNormals();
+  const fair = new THREE.Mesh(fg, M.grass); fair.receiveShadow = true; g.add(fair);
+  // the border: bricks, boulders or planks all the way round
+  buildBorder(h, g, disposables);
+  // the tee sign, on a post beside the round green at the start
+  { const t0 = h.path[0], t1 = h.path[Math.min(4, h.path.length - 1)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1, tx = (t1.x - t0.x) / l, tz = (t1.z - t0.z) / l;
+    const sg = new THREE.Group(); sg.position.set(t0.x - tz * 0 + -tz * 3.9 - tx * 0.4, 0, t0.z + tx * 3.9 - tz * 0.4);
+    const post = box(M.wood, 0.14, 1.5, 0.14, 0, 0.75, 0), tex = signTexture(h.index + 1, h.par); disposables.push(tex);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.8, 0.08), [mat('#6b4a2c'), mat('#6b4a2c'), mat('#6b4a2c'), mat('#6b4a2c'), new THREE.MeshLambertMaterial({ map: tex }), mat('#6b4a2c')]); board.position.y = 1.35;
+    disposables.push(board.geometry); sg.add(post, board); sg.rotation.y = Math.atan2(-tx, -tz) + Math.PI; sg.rotation.y = Math.atan2(-tx, -tz); g.add(sg); }
   // tee, cup and flag
   const tee = new THREE.Mesh(G.disc, M.white); tee.scale.set(0.55, 1, 0.55); tee.position.set(h.ball.x, 0.06, h.ball.z); g.add(tee);
   const cupMesh = new THREE.Mesh(G.disc, M.cup); cupMesh.position.set(h.cup.x, 0.07, h.cup.z); cupMesh.scale.set(CUP_R * 0.92, 1, CUP_R * 0.92); g.add(cupMesh);
@@ -103,6 +156,7 @@ export function buildHoleVisual(h) {
     pickups.push(rec);
     updaters.push((heroT, t) => { if (rec.taken) return; o.position.y = 0.78 + 0.14 * Math.sin(t * 2.4 + rec.ph); ring.rotation.z = t * 1.4; });
   }
+  g.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry !== G.disc && o.material !== M.shadow && o !== fair) o.castShadow = true; if (o.isMesh && o.material !== M.shadow && o.material !== M.bubble) o.receiveShadow = true; });
   return {
     group: g, pickups, cupMesh, flag,
     update(heroT, t, dt, st) { for (const u of updaters) u(heroT, t, dt, st); },
