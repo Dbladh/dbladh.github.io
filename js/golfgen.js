@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024160140';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024160654';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -182,11 +182,11 @@ function build(seed, index, type, force) {
     if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15 }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
-  const nHills = type === 'loop' ? 0 : 2 + (index > 2 ? 1 : 0) + (index > 5 ? 1 : 0);
+  const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);
   const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
   for (let k = 0; k < nHills; k++) {
     for (let tries = 0; tries < 8; tries++) {
-      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() * 2 - 1) * 0.9, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = q(3 + r() * 2), h = 0.6 + r() * 0.55;
+      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() * 2 - 1) * 0.9, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = q(3 + r() * 2), h = 0.9 + r() * 0.8;
       if (!hillOk(p.x, p.z, rad)) continue;
       hills.push({ x: q(p.x), z: q(p.z), r: rad, h: Math.round(h * 10) / 10 }); keep.push({ x: p.x, z: p.z, r: rad * 0.8 }); break;
     }

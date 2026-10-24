@@ -5,13 +5,13 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024160140';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024160140';
-import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024160140';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024160140';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024160140';
-import { buildDecor } from './golfdecor.js?v=20261024160140';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024160140';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024160654';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024160654';
+import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024160654';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024160654';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024160654';
+import { buildDecor } from './golfdecor.js?v=20261024160654';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024160654';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -121,13 +121,15 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     for (const d of decors) { scene.remove(d.group); d.dispose(); }
     if (lamps) { scene.remove(lamps.group); lamps.dispose(); lamps = null; }
     lights().forEach((l, i) => { if (lightHome[i]) l.position.copy(lightHome[i]); });
-    sky?.shadowReset(); decors = []; vises = []; holes = []; holeGroup = null; vis = null; hole = null; ready = false;
+    sky?.shadowReset(); sky?.setLampKey(null); decors = []; vises = []; holes = []; holeGroup = null; vis = null; hole = null; ready = false;
   }
   const setRise = (i, k) => { vises[i].group.scale.y = Math.max(0.001, k); world.carve.set(k, i); if (decors[i]) decors[i].group.visible = k > 0.92; const on = k > 0.92; if (lamps && shown[i] !== on) { shown[i] = on; lamps.showHole(i, on); } };
   const lights = () => world.lampLights?.() ?? [];
   function assignLights(i) {                               // the village's real lights stand in for the lamps near the hole in play
     const L = lights(); if (!L.length) return; if (!lightHome.length) lightHome = L.map((l) => l.position.clone());
     const mine = lampSpotsAll.filter((p) => p.hole === i || p.hole === i - 1);
+    const S = sites[i], c = toWorld(S, holes[i].bounds.cx, holes[i].bounds.cz), near = mine.filter((p) => p.bulb && p.hole === i).sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z))[0];
+    if (near) sky?.setLampKey(new THREE.Vector3(near.bulb.x - c.x, Math.max(2.2, near.bulb.y - Ys[i]), near.bulb.z - c.z));
     L.forEach((l, k) => { const p = mine[k]; if (p && p.bulb) { l.position.set(p.bulb.x, p.bulb.y - 0.2, p.bulb.z); l.color.set('#ffc27a'); } else if (lightHome[k]) l.position.copy(lightHome[k]); });
   }
   const aimShadow = (i) => { const S = sites[i], c = toWorld(S, holes[i].bounds.cx, holes[i].bounds.cz); sky?.shadowBox(c.x, Ys[i], c.z, 21); };      // 0: still hillside, 1: lawn and hole

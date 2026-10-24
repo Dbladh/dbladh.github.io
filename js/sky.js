@@ -276,6 +276,10 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     const night = THREE.MathUtils.clamp(1 - (sy + 8) / 18, 0, 1);
     sunLight.color.copy(s.sun);
     sunLight.intensity = s.sunI * 1.75;
+    if (lampKey.dir) {                                    // the mini-golf at night: the sun's shadow caster becomes a warm light from the nearest lamp, so the course's objects cast shadows from it
+      const n = THREE.MathUtils.clamp(night * 1.6, 0, 1);
+      sunLight.position.copy(sunLight.target.position).addScaledVector(lampKey.dir, 180); sunLight.color.lerp(lampKey.color, n); sunLight.intensity = Math.max(sunLight.intensity, lampKey.i * n);
+    }
     moonLight.intensity = (classic ? 0.35 : 0.6) * night * (1 - 0.99 * dim);
     hemi.intensity = s.hemi * 1.45 * (1 - 0.975 * dim); // soft fill, kept low enough that shadows still read
     hemi.color.copy(s.top).lerp(new THREE.Color(0xffffff), 0.55);
@@ -314,7 +318,9 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   }
 
   /** Aim the sun's shadows at a small box (centre x, y, z; half-size `half`) so that small things get crisp shadows (the mini-golf); `shadowReset()` puts the wide view back. */
+  const lampKey = { dir: null, color: new THREE.Color('#ffc983'), i: 1.2 };
+  const setLampKey = (dir) => { lampKey.dir = dir ? dir.clone().normalize() : null; };
   const shadowBox = (x, y, z, half) => { sunLight.target.position.set(x, y, z); sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.updateProjectionMatrix(); sunLight.shadow.normalBias = 0.025; };
   const shadowReset = () => { sunLight.target.position.set(0, 0, -38); sc.left = -100; sc.right = 100; sc.top = 100; sc.bottom = -100; sc.updateProjectionMatrix(); sunLight.shadow.normalBias = 0.06; };
-  return { set, setHint, setHover, setOrbitAlpha, setView, orbitPoint, shadowBox, shadowReset, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, setHint, setHover, setOrbitAlpha, setView, orbitPoint, shadowBox, shadowReset, setLampKey, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }
