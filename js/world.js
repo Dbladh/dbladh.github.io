@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024154718';
-import { auroraColour } from './aurora.js?v=20261024154718';
+import { PAL } from './palette.js?v=20261024155854';
+import { auroraColour } from './aurora.js?v=20261024155854';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261024154718';
+} from './houses.js?v=20261024155854';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2914,6 +2914,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           .lerp(under, (1 - sp.userData.high) * 0.4 * glowAmt);
       }
     },
+    /** How dark it is now: 0 (day) to 1 (full night). */
+    get night() { return night; },
+    /** The village's real point lights (the mini-golf borrows them for its lamp posts while it is open and puts them back). */
+    lampLights() { return houseLights; },
     /** 0 = daytime, 1 = full night. Switches on window glow, window light and every night light. */
     setNight(n) {
       night = n; syncLights();

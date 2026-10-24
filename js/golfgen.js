@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024154718';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024155854';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -161,7 +161,7 @@ function build(seed, index, type, force) {
   const hero = buildHero(type, { x: d.sx, z: d.sz, ux: d.x, uz: d.z, nx: -d.z, nz: d.x, len: hl, hw: HALF_W }, r);
   for (const wl of hero.walls) walls.push(wl);
   const tee = cl[0], cup = cl[N - 1], ball = { x: tee.x + tx[0] * 1.3, z: tee.z + tz[0] * 1.3 };
-  const keep = [{ x: hero.x, z: hero.z, r: type === 'teleport' ? hl * 0.4 : 3.2 }];       // places the other features keep clear of
+  const keep = [{ x: hero.x, z: hero.z, r: type === 'teleport' ? hl * 0.4 : type === 'loop' ? hl * 0.5 : 3.2 }];       // places the other features keep clear of
   keep.push({ x: ball.x, z: ball.z, r: 1.7 }, { x: cup.x, z: cup.z, r: 1.8 });
   const free = (x, zz, m) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < k.r + m) return false; } return true; };
   const onLeg = (li, t, lat) => { const L = legs[li]; return { x: L.sx + L.x * L.l * t - L.z * lat, z: L.sz + L.z * L.l * t + L.x * lat }; };
@@ -169,7 +169,7 @@ function build(seed, index, type, force) {
 
   // water: a river that carries the ball along (holes 2, 5, 8 and sometimes later ones), or a pond to steer round (holes 3, 6, 9 and sometimes later ones)
   const rivers = [], ponds = [], sands = [], bumpers = [], posts = [], hills = [];
-  const wantRiver = index % 3 === 1 || (index > 5 && r() < 0.3), wantPond = (index % 3 === 2 || (index > 5 && r() < 0.3)) && type !== 'drawbridge';
+  const wantRiver = index % 3 === 1 || (index > 5 && r() < 0.3), wantPond = (index % 3 === 2 || (index > 5 && r() < 0.3)) && type !== 'drawbridge' && type !== 'loop' && type !== 'teleport';
   if (wantRiver && others.length) {
     const li = others[(r() * others.length) | 0], L = legs[li], t0 = 0.18 + r() * 0.18, len = Math.min(L.l * 0.55, 6.5);
     const a = onLeg(li, t0, 0), fwd = r() < 0.78;
@@ -182,9 +182,14 @@ function build(seed, index, type, force) {
     if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15 }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
-  for (let k = 0; k < 2; k++) {
-    const li = (r() * legs.length) | 0, p = onLeg(li, 0.25 + r() * 0.5, (r() * 2 - 1) * 0.8), rad = q(3 + r() * 1.5), h = 0.5 + r() * 0.4;
-    if (free(p.x, p.z, rad + 0.3)) hills.push({ x: q(p.x), z: q(p.z), r: rad, h: Math.round(h * 10) / 10 });
+  const nHills = type === 'loop' ? 0 : 2 + (index > 2 ? 1 : 0) + (index > 5 ? 1 : 0);
+  const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
+  for (let k = 0; k < nHills; k++) {
+    for (let tries = 0; tries < 8; tries++) {
+      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() * 2 - 1) * 0.9, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = q(3 + r() * 2), h = 0.6 + r() * 0.55;
+      if (!hillOk(p.x, p.z, rad)) continue;
+      hills.push({ x: q(p.x), z: q(p.z), r: rad, h: Math.round(h * 10) / 10 }); keep.push({ x: p.x, z: p.z, r: rad * 0.8 }); break;
+    }
   }
   // posts, bumpers and sand
   for (const li of [0, legs.length - 1]) {

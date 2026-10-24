@@ -1,9 +1,9 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH } from './golfphys.js?v=20261024154718';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024154718';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024154718';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024155854';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024155854';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024155854';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -62,9 +62,9 @@ function buildBorder(h, g, disposables) {
   const sgn = area > 0 ? 1 : -1, col = new THREE.Color();
   const make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; g.add(m); disposables.push(m); return m; };
   const place = (mesh, i, w, off, y, lenK, hgt, thick, shift, palette, tilt = 0) => {
-    const dx = w[2] - w[0], dz = w[3] - w[1], l = Math.sqrt(dx * dx + dz * dz) || 1, ox = (sgn * dz) / l, oz = (-sgn * dx) / l, ux = dx / l, uz = dz / l;
+    const dx = w[2] - w[0], dz = w[3] - w[1], l = Math.sqrt(dx * dx + dz * dz) || 1, hy = hillH(h, (w[0] + w[2]) / 2, (w[1] + w[3]) / 2), ox = (sgn * dz) / l, oz = (-sgn * dx) / l, ux = dx / l, uz = dz / l;
     _q.setFromAxisAngle(UP, Math.atan2(-dz, dx)); if (tilt) { _q2.setFromAxisAngle(_vx, tilt); _q.multiply(_q2); }
-    _m.compose(_v.set((w[0] + w[2]) / 2 + ox * (thick / 2 + off) + ux * shift, y, (w[1] + w[3]) / 2 + oz * (thick / 2 + off) + uz * shift), _q, _s.set(l * lenK + 0.07, hgt, thick));
+    _m.compose(_v.set((w[0] + w[2]) / 2 + ox * (thick / 2 + off) + ux * shift, y + hy, (w[1] + w[3]) / 2 + oz * (thick / 2 + off) + uz * shift), _q, _s.set(l * lenK + 0.07, hgt, thick));
     mesh.setMatrixAt(i, _m); col.set(palette[(r() * palette.length) | 0]); col.offsetHSL(0, 0, (r() - 0.5) * 0.05); mesh.setColorAt(i, col);
   };
   if (style === 'brick') {
@@ -99,12 +99,13 @@ export function buildHoleVisual(h, { lowEnd = false } = {}) {
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
   // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised by the hills
-  const pos = [], uvs = [], col = [], idx = [], c1 = new THREE.Color('#78e075'), c2 = new THREE.Color('#68d06b'), COLS = 6, R = h.ribbon;
+  const pos = [], uvs = [], col = [], idx = [], c1 = new THREE.Color('#78e075'), c2 = new THREE.Color('#68d06b'), COLS = 10, R = h.ribbon, crest = new THREE.Color('#b6f58a'), shade = new THREE.Color('#3f9a55'), tmp = new THREE.Color();
   for (let i = 0; i < R.length; i++) {
     const row = R[i], stripe = (row[4] < 0 ? i < R.length / 2 ? -1 : 1e3 : Math.floor(row[4] / 1.5)) & 1;
     for (let c = 0; c <= COLS; c++) {
       const u = c / COLS, x = row[0] + (row[2] - row[0]) * u, z = row[1] + (row[3] - row[1]) * u;
-      pos.push(x, hillH(h, x, z) + 0.03, z); uvs.push(x * 0.4, z * 0.4); const k = stripe ? c1 : c2; col.push(k.r, k.g, k.b);
+      const hh = hillH(h, x, z), gr = hillGrad(h, x, z), sl = Math.min(1, Math.sqrt(gr.x * gr.x + gr.z * gr.z) * 1.7);      // hills read by shading: crests go lighter and warmer, the slopes darker and greener
+      pos.push(x, hh + 0.03, z); uvs.push(x * 0.4, z * 0.4); tmp.copy(stripe ? c1 : c2).lerp(crest, Math.min(1, hh / 1.1) * 0.5).lerp(shade, sl * 0.55); col.push(tmp.r, tmp.g, tmp.b);
     }
     if (i > 0) for (let c = 0; c < COLS; c++) { const b0 = (i - 1) * (COLS + 1) + c, a0 = b0 + 1, d0 = b0 + COLS + 1, e0 = d0 + 1; idx.push(b0, d0, a0, a0, d0, e0); }
   }
