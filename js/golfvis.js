@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024163939';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024163939';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024163939';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024163939';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024164152';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024164152';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024164152';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024164152';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -228,9 +228,9 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       w.add(rbox(paint('#fff6d6'), 0.07, 0.8, 0.7, -H - 0.03, 2.0, s * mid, 0.03)); w.add(rbox(white, 0.09, 0.9, 0.08, -H - 0.04, 2.0, s * mid, 0.02)); w.add(rbox(white, 0.09, 0.08, 0.8, -H - 0.04, 2.0, s * mid, 0.02));
     }
     w.add(rbox(blue, H * 2, 1.3, lat0 * 2 + 0.2, 0, 1.95, 0, 0.07)); w.add(rbox(white, H * 2 + 0.12, 0.14, lat0 * 2 + 0.3, 0, 1.3, 0, 0.04));
-    const roof = new THREE.Mesh(roofGeo(), woodTint('#7d8aa0')); roof.position.y = 3.1; roof.scale.set((H + 0.7) * 1.4142, 1.2, (lat1 + 0.7) * 1.4142); roof.castShadow = true; w.add(roof);
+    const roof = new THREE.Mesh(roofGeo(), woodTint('#7d8aa0')); roof.position.y = 3.1; roof.scale.set((H + 0.5) * 1.4142, 1.2, (lat1 + 0.7) * 1.4142); roof.castShadow = true; w.add(roof);
     w.add(cone(red, 0.16, 0.5, 6, 0, 4.5, 0)); w.add(rbox(white, 0.05, 0.9, 0.05, 0, 4.7, 0, 0.01));
-    const rotor = new THREE.Group(); rotor.position.set(-(H + 0.85), 2.45, 0); w.add(rotor); w.add(rbox(paint('#ffffff'), 0.9, 0.12, 0.12, -(H + 0.4), 2.45, 0, 0.02));
+    const rotor = new THREE.Group(); rotor.position.set(-(H + 1.35), 2.45, 0); w.add(rotor); w.add(rbox(paint('#ffffff'), 1.4, 0.12, 0.12, -(H + 0.65), 2.45, 0, 0.02));
     for (let k = 0; k < 4; k++) {
       const pv = new THREE.Group(); pv.rotation.x = (k * Math.PI) / 2; pv.add(rbox(white, 0.1, 1.8, 0.1, 0, -0.9, 0, 0.02));
       for (let j = 0; j < 4; j++) pv.add(rbox(j % 2 ? white : red, 0.08, 0.2, 0.46, 0.02, -(0.5 + j * 0.33), 0.26, 0.02));
