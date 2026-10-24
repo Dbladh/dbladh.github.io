@@ -77,11 +77,16 @@ function makeMetal() {                                     // brushed paint: fin
   return make(W, W, (i, j) => { const k = j * W + i, g = 214 + (n1[k] - 0.5) * 26 + (n2[k] - 0.5) * 16 + sc[k] * 22; return [g, g, g, n1[k] * 0.4 + sc[k] * 0.3]; }, 1.4);
 }
 
+function makeSand() {                                     // fine grains, a few pebbles and soft ripples
+  const W = 128, n1 = noise(W, W, 10, 3, 1), n2 = noise(W, W, 2), pe = new Float32Array(W * W);
+  for (let p = 0; p < 18; p++) { const cx = rnd() * W, cy = rnd() * W, r = 1 + rnd() * 1.5; for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) if (i * i + j * j < r * r) pe[(((cy + j) | 0) + W) % W * W + (((cx + i) | 0) + W) % W] = 1; }
+  return make(W, W, (i, j) => { const k = j * W + i, rip = 0.5 + 0.5 * Math.sin(j * 0.35 + n1[k] * 5), g = 226 + (n2[k] - 0.5) * 34 + (rip - 0.5) * 14 - pe[k] * 40; return [g, g * 0.9, g * 0.66 - pe[k] * 6, 0.3 * rip + 0.7 * n2[k] + pe[k] * 0.5]; }, 1.8);
+}
 let built = null;
 /** The textures and materials (built the first time they are asked for). Pass `lowEnd` to leave out the normal maps. */
 export function golfMaterials(lowEnd = false) {
   if (built) return built;
-  const T = { turf: makeTurf(), brick: makeBrick(), stone: makeStone(), wood: makeWood(), metal: makeMetal() };
+  const T = { turf: makeTurf(), brick: makeBrick(), stone: makeStone(), wood: makeWood(), metal: makeMetal(), sand: makeSand() };
   const lam = (t, color = '#ffffff', extra = {}) => new THREE.MeshLambertMaterial({ map: t.map, normalMap: lowEnd ? null : t.normal, normalScale: new THREE.Vector2(0.9, 0.9), color, ...extra });
   built = {
     tex: T,

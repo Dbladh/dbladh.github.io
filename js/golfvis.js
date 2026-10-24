@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024164303';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024164303';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024164303';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024164303';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024165513';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024165513';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024165513';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024165513';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -128,9 +128,9 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); fg.setIndex(idx); fg.computeVertexNormals();
   const fair = new THREE.Mesh(fg, M.grass); fair.receiveShadow = true; g.add(fair);
   for (const f of feats) if (f.t === 'gap') {                // the chasm: a dark floor and rock walls down both sides, under the border
-    const yaw = Math.atan2(-f.uz, f.ux), wide = 2 * (h.hw + 0.35), dk = stoneTint('#4a4239'), grp = new THREE.Group(); grp.position.set(f.x, 0, f.z); grp.rotation.y = yaw; g.add(grp);
+    const yaw = Math.atan2(-f.uz, f.ux), cm = (f.c0 + f.c1) / 2, wide = f.c1 - f.c0 + 0.1, dk = stoneTint('#4a4239'), grp = new THREE.Group(); grp.position.set(f.x + f.nx * cm, 0, f.z + f.nz * cm); grp.rotation.y = yaw; g.add(grp);
     grp.add(rbox(paint('#241d18'), f.len + 0.2, 0.1, wide, 0, -f.d - 0.02, 0, 0.02));
-    for (const sd of [-1, 1]) { grp.add(rbox(dk, f.len + 0.3, f.d + 0.1, 0.5, 0, -f.d / 2 + 0.03, sd * (h.hw + 0.3), 0.04)); }
+    for (const sd of [-1, 1]) { grp.add(rbox(dk, f.len + 0.3, f.d + 0.1, 0.3, 0, -f.d / 2 + 0.03, sd * (wide / 2 + 0.05), 0.04)); }
     for (const e of [-1, 1]) grp.add(rbox(dk, 0.3, f.d + 0.1, wide, e * (f.len / 2 + 0.05), -f.d / 2 + 0.03, 0, 0.04));
   }
   // the border: bricks, boulders or planks all the way round
@@ -149,7 +149,10 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   // posts, bumpers, sand
   for (const p of h.posts) g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z));
   for (const p of h.bumpers) { const b = cyl(M.bumper, p.r, 0.8, p.x, 0.4, p.z); g.add(b); g.add(cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z)); }
-  for (const s of h.sands) { const d = new THREE.Mesh(G.disc, M.sand); d.scale.set(s.r, 1, s.r); d.position.set(s.x, 0.075, s.z); g.add(d); }
+  for (const s of h.sands) {                                 // a sand pit: a rough patch of sand with a darker, damp rim and a few pebbles
+    const sg = track(pondGeometry(s.poly, 0.075)), sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, '#ffffff')); sm.receiveShadow = true; g.add(sm);
+    const lip = track(pondGeometry(s.poly.map((v, i) => (i % 2 ? s.z : s.x) + (v - (i % 2 ? s.z : s.x)) * 1.12), 0.06)), lm = new THREE.Mesh(lip, GM.lam(GM.tex.sand, '#c9b27a')); lm.receiveShadow = true; g.add(lm);
+  }
   // water: ponds (irregular, with boulders round the bank and a pebbly bed) and rivers (winding, flowing, with boulder banks), all in the village pond's own water look
   const wr = mulberry32(h.seed ^ 0x9e3779b1), bed = GM.lam(GM.tex.stone, '#c4b48f'); disposables.push(bed);
   const rockMat = GM.lam(GM.tex.stone, '#ffffff', { flatShading: true }); disposables.push(rockMat);
@@ -161,17 +164,17 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const m = new THREE.Mesh(rv.geo, wm); m.renderOrder = 2; g.add(m);
     const bg = track(rv.geo.clone()); const bp = bg.attributes.position; for (let i = 0; i < bp.count; i++) bp.setY(i, 0.07);
     g.add(new THREE.Mesh(bg, bed));
-    for (const side of [rv.left, rv.right]) for (let i = 0; i < side.length; i++) for (let k = 0; k < 2; k++) { const j = Math.min(side.length - 1, i + k * 0.5), p0 = side[i], p1 = side[Math.min(side.length - 1, i + 1)], t = k * 0.5; addBank(p0[0] + (p1[0] - p0[0]) * t + (wr() - 0.5) * 0.12, p0[1] + (p1[1] - p0[1]) * t + (wr() - 0.5) * 0.12, 0.42 + wr() * 0.3); }
+    for (const side of [rv.left, rv.right]) for (let i = 0; i < side.length; i++) for (let k = 0; k < 2; k++) { const j = Math.min(side.length - 1, i + k * 0.5), p0 = side[i], p1 = side[Math.min(side.length - 1, i + 1)], t = k * 0.5; addBank(p0[0] + (p1[0] - p0[0]) * t + (wr() - 0.5) * 0.1, p0[1] + (p1[1] - p0[1]) * t + (wr() - 0.5) * 0.1, 0.26 + wr() * 0.2); }
   }
   for (const p of h.ponds) {
     const pg = track(pondGeometry(p.poly, 0.09)), wm = waterMaterial(look, 0, 0, 0); disposables.push(wm);
     const m = new THREE.Mesh(pg, wm); m.renderOrder = 2; g.add(m);
     const bg = track(pondGeometry(p.poly, 0.07)); g.add(new THREE.Mesh(bg, bed));
-    const n = p.poly.length / 2; for (let i = 0; i < n; i++) { const x = p.poly[i * 2], z = p.poly[i * 2 + 1], dx = x - p.x, dz = z - p.z, l = Math.hypot(dx, dz) || 1; for (let k = 0; k < 2; k++) addBank(x + (dx / l) * (0.14 + k * 0.12) + (wr() - 0.5) * 0.2, z + (dz / l) * (0.14 + k * 0.12) + (wr() - 0.5) * 0.2, 0.5 + wr() * 0.35); }
+    const n = p.poly.length / 2; for (let i = 0; i < n; i++) { const x = p.poly[i * 2], z = p.poly[i * 2 + 1], dx = x - p.x, dz = z - p.z, l = Math.hypot(dx, dz) || 1; for (let k = 0; k < 2; k++) addBank(x + (dx / l) * (0.05 + k * 0.1) + (wr() - 0.5) * 0.14, z + (dz / l) * (0.05 + k * 0.1) + (wr() - 0.5) * 0.14, 0.3 + wr() * 0.22); }
   }
   if (rocks.length) {
     const im = new THREE.InstancedMesh(getRock(), rockMat, rocks.length); im.castShadow = im.receiveShadow = true; const c = new THREE.Color();
-    rocks.forEach((rk, i) => { _q.setFromAxisAngle(UP, rk[3]); _m.compose(_v.set(rk[0], 0.1, rk[1]), _q, _s.set(rk[2] * 1.5, rk[2] * 0.95, rk[2] * 1.3)); im.setMatrixAt(i, _m); c.set(ROCKS[(wr() * ROCKS.length) | 0]); im.setColorAt(i, c); });
+    rocks.forEach((rk, i) => { _q.setFromAxisAngle(UP, rk[3]); _m.compose(_v.set(rk[0], 0.075, rk[1]), _q, _s.set(rk[2] * 1.7, rk[2] * 0.36, rk[2] * 1.4)); im.setMatrixAt(i, _m); c.set(ROCKS[(wr() * ROCKS.length) | 0]); im.setColorAt(i, c); });
     im.instanceMatrix.needsUpdate = im.instanceColor.needsUpdate = true; g.add(im); disposables.push(im);
   }
   // the hero
@@ -280,7 +283,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     const bedG = track(pondGeometry(poly, 0.12)); w.add(new THREE.Mesh(bedG, GM.lam(GM.tex.stone, '#9fa7ad')));
     const rockMat2 = GM.lam(GM.tex.stone, '#ffffff', { flatShading: true }); ctx.disposables?.push(rockMat2);
     const rr = new THREE.InstancedMesh(getRock(), rockMat2, N * 2); rr.castShadow = rr.receiveShadow = true; const rc = new THREE.Color(), rg = mulberry32(7);
-    for (let i = 0; i < N * 2; i++) { const a = (i / (N * 2)) * 6.2832, rad = R + 0.1 + (i % 2) * 0.12, sz = 0.42 + rg() * 0.25; _q.setFromAxisAngle(UP, rg() * 6); _m.compose(_v.set(Math.cos(a) * rad, 0.14, Math.sin(a) * rad), _q, _s.set(sz * 1.5, sz * 0.9, sz * 1.3)); rr.setMatrixAt(i, _m); rc.set(ROCKS[(rg() * ROCKS.length) | 0]); rr.setColorAt(i, rc); }
+    for (let i = 0; i < N * 2; i++) { const a = (i / (N * 2)) * 6.2832, rad = R + 0.1 + (i % 2) * 0.12, sz = 0.42 + rg() * 0.25; _q.setFromAxisAngle(UP, rg() * 6); _m.compose(_v.set(Math.cos(a) * rad, 0.1, Math.sin(a) * rad), _q, _s.set(sz * 1.4, sz * 0.4, sz * 1.2)); rr.setMatrixAt(i, _m); rc.set(ROCKS[(rg() * ROCKS.length) | 0]); rr.setColorAt(i, rc); }
     rr.instanceMatrix.needsUpdate = rr.instanceColor.needsUpdate = true; w.add(rr); ctx.disposables?.push(rr);
     const dome = new THREE.Mesh(G.sph, new THREE.MeshBasicMaterial({ color: '#a8e0ff', transparent: true, opacity: 0.55, depthWrite: false })); dome.scale.set(R * 0.6, 0.01, R * 0.6); dome.position.y = 0.22; w.add(dome);
     const jetGeo = track(new THREE.CylinderGeometry(0.17, 0.5, 1, 14, 10, true).translate(0, 0.5, 0));

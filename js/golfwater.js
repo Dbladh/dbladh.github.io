@@ -1,7 +1,7 @@
 // Water for the mini-golf: the same soft cartoon look as the village pond (sky reflection, shallows that go light, glints, foam at the edge, the same day/night and aurora), drawn on
 // irregular shapes: blob-shaped ponds and winding rivers that visibly flow. The sky colours and the clock are the village pond's own uniforms (world.waterLook), so the two always match.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261024164303';
+import { mulberry32 } from './golfhero.js?v=20261024165513';
 
 /** A water material. `flow` is the direction the water runs (world x, z; zero for still water) and `speed` how fast. */
 export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
@@ -59,12 +59,12 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
 /** The surface of a pond: rings from the bank (depth 0) to the middle (depth 1). */
 export function pondGeometry(poly, y) {
   const n = poly.length / 2; let cx = 0, cz = 0; for (let i = 0; i < n; i++) { cx += poly[i * 2]; cz += poly[i * 2 + 1]; } cx /= n; cz /= n;
-  const pos = [], dep = [], idx = [], rings = [[1, 0], [0.72, 0.55], [0.4, 0.9]];
-  for (const [k, d] of rings) for (let i = 0; i < n; i++) { pos.push(cx + (poly[i * 2] - cx) * k, y, cz + (poly[i * 2 + 1] - cz) * k); dep.push(d); }
-  pos.push(cx, y, cz); dep.push(1);
+  const pos = [], uv = [], dep = [], idx = [], rings = [[1, 0], [0.72, 0.55], [0.4, 0.9]];
+  for (const [k, d] of rings) for (let i = 0; i < n; i++) { pos.push(cx + (poly[i * 2] - cx) * k, y, cz + (poly[i * 2 + 1] - cz) * k); dep.push(d); uv.push((cx + (poly[i * 2] - cx) * k) * 0.6, (cz + (poly[i * 2 + 1] - cz) * k) * 0.6); }
+  pos.push(cx, y, cz); dep.push(1); uv.push(cx * 0.6, cz * 0.6);
   for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) { const a = r * n + i, b = r * n + ((i + 1) % n), c = (r + 1) * n + i, d = (r + 1) * n + ((i + 1) % n); idx.push(a, c, b, b, c, d); }
   for (let i = 0; i < n; i++) idx.push(2 * n + i, 3 * n, 2 * n + ((i + 1) % n));
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); g.setIndex(idx);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
 /** The surface of a river from a to b (half-width hw): the banks wobble a little and the channel bends gently. Returns the geometry and the two bank lines. */

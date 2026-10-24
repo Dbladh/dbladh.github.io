@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024164303';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024165513';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -16,7 +16,7 @@ function featH(f, x, z) {
   if (c > f.wid || c < -f.wid) return 0;
   if (f.t === 'plat') return f.h * sm((s + f.len / 2 + f.ramp) / f.ramp) * (1 - sm((s - f.len / 2) / f.edge));      // a long ramp up, a flat top and a short steep edge down
   if (f.t === 'jump') { if (s < -f.len / 2) return 0; const k = (s + f.len / 2) / f.len; return k <= 1 ? f.h * k : f.h * (1 - sm((s - f.len / 2) / 0.25)); }     // a ramp that ends in a lip
-  if (f.t === 'gap') return -f.d * (1 - sm((Math.abs(s) - f.len / 2 + 0.1) / 0.25));                                 // a chasm across the lane
+  if (f.t === 'gap') return -f.d * (1 - sm((Math.abs(s) - f.len / 2 + 0.1) / 0.25)) * (1 - sm((Math.abs(c - (f.c0 + f.c1) / 2) - (f.c1 - f.c0) / 2 + 0.1) / 0.25));                                 // a chasm across the lane
   return 0;
 }
 /** Height of the ground (the hills and every feature) at a point. */
@@ -80,6 +80,8 @@ export function inPoly(poly, x, z) {
   }
   return inside;
 }
+/** Is the ball in a sand pit? */
+export function inSand(hole, b) { for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r * 1.45 && inPoly(s.poly, b.x, b.z)) return true; return false; }
 const dist2 = (b, x, z) => { const dx = b.x - x, dz = b.z - z; return dx * dx + dz * dz; };
 
 /**
@@ -119,7 +121,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (ctx.drive) { b.vx += b.ax * h; b.vz += b.az * h; }
     let sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (ctx.homing && sp > 0.8) { const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz); if (cd > 0.05 && cd < 6 && (b.vx * cx + b.vz * cz) / (sp * cd) > 0.5) { const k = (9 * (1 - cd / 6) * h) / cd; b.vx += cx * k; b.vz += cz * k; } }
-    let f = b.air ? 0 : fric; if (!b.air) for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r) { f *= 2.8; break; }
+    let f = b.air ? 0 : fric; if (!b.air && inSand(hole, b)) f *= 3.2;
     sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (sp > 0 && f > 0) { const ns = Math.max(0, sp - f * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; }
     if (sp > maxV) { const k = maxV / sp; b.vx *= k; b.vz *= k; }
