@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024162556';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024162556';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024162556';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024162556';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024163030';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024163030';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024163030';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024163030';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -182,38 +182,79 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
 }
 
 // ---------- the nine heroes ----------
+// ---------- model-making helpers (chunky, bevelled shapes in toy paint) ----------
+const rboxCache = new Map(), paintCache = new Map();
+function rboxGeo(sx, sy, sz, b = 0.05) {                   // a box with softly rounded edges
+  const key = `${Math.round(sx * 50)}|${Math.round(sy * 50)}|${Math.round(sz * 50)}|${b}`; let g = rboxCache.get(key); if (g) return g;
+  const bb = Math.min(b, sx / 2 - 0.002, sy / 2 - 0.002, sz / 2 - 0.002), W = sx - 2 * bb, H = sy - 2 * bb, sh = new THREE.Shape();
+  sh.moveTo(-W / 2, -H / 2); sh.lineTo(W / 2, -H / 2); sh.lineTo(W / 2, H / 2); sh.lineTo(-W / 2, H / 2); sh.closePath();
+  g = new THREE.ExtrudeGeometry(sh, { depth: sz - 2 * bb, bevelEnabled: true, bevelThickness: bb, bevelSize: bb, bevelSegments: 2, curveSegments: 2 }); g.translate(0, 0, -(sz - 2 * bb) / 2);
+  rboxCache.set(key, g); return g;
+}
+const rbox = (m, sx, sy, sz, x, y, z, b = 0.05) => { const o = new THREE.Mesh(rboxGeo(sx, sy, sz, b), m); o.position.set(x, y, z); return o; };
+const paint = (hex) => { let m = paintCache.get(hex); if (!m) { m = new THREE.MeshLambertMaterial({ color: hex }); paintCache.set(hex, m); } return m; };           // flat toy paint
+const metal = (hex) => { const k = 'm' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.metal, hex); paintCache.set(k, m); } return m; };      // painted metal
+const woodTint = (hex) => { const k = 'w' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.wood, hex); paintCache.set(k, m); } return m; };
+const stoneTint = (hex, flat) => { const k = 's' + hex + flat; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.stone, hex, flat ? { flatShading: true } : {}); paintCache.set(k, m); } return m; };
+const cone = (m, r, h, seg, x, y, z) => { const o = new THREE.Mesh(coneGeo(r, h, seg), m); o.position.set(x, y, z); return o; };
+const coneCache = new Map(); const coneGeo = (r, h, seg) => { const k = `${r}|${h}|${seg}`; let g = coneCache.get(k); if (!g) { g = new THREE.ConeGeometry(r, h, seg); coneCache.set(k, g); } return g; };
+const torus = (m, R, t, x, y, z, rx = 0, ry = 0, rz = 0) => { const k = `t${R}|${t}`; let g = coneCache.get(k); if (!g) { g = new THREE.TorusGeometry(R, t, 6, 20); coneCache.set(k, g); } const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); return o; };
+
 function heroVisual(hr, track, updaters, ctx = {}) {
   const w = new THREE.Group(); w.position.set(hr.x, 0, hr.z); w.rotation.y = Math.atan2(-hr.uz, hr.ux);       // local x runs along the leg, local z across it
   const hw = hr.hw;
-  if (hr.type === 'windmill') {
-    const lat0 = hr.gap, lat1 = hw + 0.3;
-    for (const s of [-1, 1]) w.add(box(M.body, hr.half * 2, 3.6, lat1 - lat0, 0, 0.7, s * (lat0 + lat1) / 2));
-    w.add(box(M.body, hr.half * 2, 1.2, lat0 * 2, 0, 1.9, 0));
-    const roof = new THREE.Mesh(track(new THREE.ConeGeometry(2.7, 1.5, 4)), M.roof); roof.position.y = 3.65; roof.rotation.y = Math.PI / 4; w.add(roof);
-    const rotor = new THREE.Group(); rotor.position.set(-(hr.half + 0.12), 1.7, 0); w.add(rotor);
-    for (let k = 0; k < 4; k++) { const pv = new THREE.Group(); pv.rotation.x = (k * Math.PI) / 2; pv.add(box(M.sail, 0.1, 1.65, 0.3, 0, -0.82, 0)); pv.add(box(M.roof, 0.12, 0.25, 0.34, 0, -1.6, 0)); rotor.add(pv); }
-    rotor.add(box(M.roof, 0.3, 0.3, 0.3, 0, 0, 0));
+  if (hr.type === 'windmill') {                            // a painted wooden mill: blue boards, shingle roof, red and white striped sails
+    const lat0 = hr.gap, lat1 = hw + 0.3, H = hr.half, mid = (lat0 + lat1) / 2, wd = lat1 - lat0, blue = metal('#6aa9ea'), white = paint('#ffffff'), red = paint('#e5483f');
+    for (const s of [-1, 1]) {
+      w.add(rbox(blue, H * 2, 3.3, wd, 0, 1.5, s * mid, 0.07));
+      w.add(rbox(white, H * 2 + 0.12, 0.16, wd + 0.12, 0, 0.1, s * mid, 0.04)); w.add(rbox(white, H * 2 + 0.12, 0.16, wd + 0.12, 0, 3.1, s * mid, 0.04));
+      for (let k = 0; k < 4; k++) w.add(rbox(white, 0.04, 3.0, 0.04, -H - 0.01, 1.55, s * (lat0 + 0.2 + k * (wd - 0.4) / 3), 0.01));                    // board lines on the front
+      w.add(rbox(paint('#fff6d6'), 0.07, 0.8, 0.7, -H - 0.03, 2.0, s * mid, 0.03)); w.add(rbox(white, 0.09, 0.9, 0.08, -H - 0.04, 2.0, s * mid, 0.02)); w.add(rbox(white, 0.09, 0.08, 0.8, -H - 0.04, 2.0, s * mid, 0.02));
+    }
+    w.add(rbox(blue, H * 2, 1.3, lat0 * 2 + 0.2, 0, 1.95, 0, 0.07)); w.add(rbox(white, H * 2 + 0.12, 0.14, lat0 * 2 + 0.3, 0, 1.3, 0, 0.04));
+    const roof = new THREE.Mesh(coneGeo(3.0, 1.7, 4), woodTint('#7d8aa0')); roof.position.y = 3.95; roof.rotation.y = Math.PI / 4; roof.castShadow = true; w.add(roof);
+    w.add(cone(red, 0.16, 0.5, 6, 0, 4.95, 0)); w.add(rbox(white, 0.05, 0.9, 0.05, 0, 5.1, 0, 0.01));
+    const rotor = new THREE.Group(); rotor.position.set(-(H + 0.16), 1.7, 0); w.add(rotor);
+    for (let k = 0; k < 4; k++) {
+      const pv = new THREE.Group(); pv.rotation.x = (k * Math.PI) / 2; pv.add(rbox(white, 0.1, 1.8, 0.1, 0, -0.9, 0, 0.02));
+      for (let j = 0; j < 4; j++) pv.add(rbox(j % 2 ? white : red, 0.08, 0.2, 0.46, 0.02, -(0.5 + j * 0.33), 0.26, 0.02));
+      pv.add(rbox(red, 0.1, 0.3, 0.5, 0.02, -1.82, 0.26, 0.03)); rotor.add(pv);
+    }
+    rotor.add(new THREE.Mesh(G.sph, red)); rotor.children[rotor.children.length - 1].scale.setScalar(0.3); rotor.add(cone(red, 0.2, 0.4, 8, -0.28, 0, 0)); rotor.children[rotor.children.length - 1].rotation.z = Math.PI / 2;
     updaters.push((heroT) => { rotor.rotation.x = heroT * hr.w + hr.phase; });
-  } else if (hr.type === 'alligator') {
-    const lat0 = hr.gap, lat1 = hw + 0.3;
-    for (const s of [-1, 1]) { w.add(box(M.green, hr.half * 2, 1.9, lat1 - lat0, 0, 0.55, s * (lat0 + lat1) / 2)); w.add(box(M.green2, hr.half * 1.6, 0.35, lat1 - lat0 - 0.3, 0.1, 1.6, s * (lat0 + lat1) / 2)); w.add(sph(M.white, 0.28, 0.28, 0.28, -hr.half + 0.5, 1.95, s * (lat0 + 0.55))); w.add(sph(M.dark, 0.14, 0.14, 0.14, -hr.half + 0.28, 1.97, s * (lat0 + 0.55))); }
-    w.add(box(M.green2, hr.half * 2, 0.7, lat0 * 2, 0, 1.55, 0));                                    // the upper jaw, over the opening
-    for (let k = 0; k < 4; k++) for (const s of [-1, 1]) w.add(box(M.tooth, 0.16, 0.26, 0.14, -hr.half + 0.25, 1.1, s * (0.25 + k * 0.2)));
-    const lower = box(M.green2, 0.7, 0.8, lat0 * 2, -hr.half + 0.35, 0.4, 0); w.add(lower);          // the lower jaw: swings up to shut the mouth
+  } else if (hr.type === 'alligator') {                    // a chunky toy gator: big eyes, a mouth full of teeth, and jaws that shut across the lane
+    const lat0 = hr.gap, lat1 = hw + 0.3, H = hr.half, mid = (lat0 + lat1) / 2, wd = lat1 - lat0, green = paint('#74c653'), green2 = paint('#5db041'), belly = paint('#b5e07e'), toothM = paint('#fffdf0'), redM = paint('#d9394a');
+    for (const s of [-1, 1]) {
+      w.add(rbox(green, H * 2, 1.9, wd, 0, 0.55, s * mid, 0.18)); w.add(rbox(belly, H * 2 - 0.3, 0.7, wd - 0.1, 0.03, -0.05, s * mid, 0.1));
+      for (let k = 0; k < 5; k++) w.add(cone(green2, 0.2, 0.34, 4, -H + 0.9 + k * 0.5, 1.65, s * (mid + 0.35)));
+      const ez = s * (lat0 + 0.55), ex = -H + 0.55;
+      w.add(sph(paint('#ffffff'), 0.46, 0.46, 0.46, ex, 2.0, ez)); w.add(sph(paint('#1b1320'), 0.22, 0.24, 0.22, ex - 0.33, 2.02, ez - s * 0.04)); w.add(sph(paint('#ffffff'), 0.07, 0.07, 0.07, ex - 0.43, 2.12, ez - s * 0.1));
+      w.add(sph(green, 0.48, 0.2, 0.48, ex + 0.04, 2.36, ez)); w.add(sph(green2, 0.09, 0.07, 0.09, -H + 0.12, 1.45, s * (lat0 + 1.0)));
+    }
+    w.add(rbox(green, H * 2, 0.7, lat0 * 2 + 0.1, 0, 1.55, 0, 0.12)); w.add(rbox(redM, H * 2 - 0.2, 0.05, lat0 * 2 - 0.1, 0.02, 1.17, 0, 0.01));
+    for (let k = 0; k < 7; k++) { const t = cone(toothM, 0.085, 0.3, 4, -H + 0.16, 1.03, -0.84 + k * 0.28); t.rotation.x = Math.PI; w.add(t); }
+    const lower = new THREE.Group(); lower.position.set(-H + 0.35, 0.4, 0); lower.add(rbox(green2, 0.7, 0.8, lat0 * 2 + 0.1, 0, 0, 0, 0.1)); lower.add(rbox(redM, 0.5, 0.05, lat0 * 2 - 0.1, 0, 0.42, 0, 0.01));
+    for (let k = 0; k < 7; k++) lower.add(cone(toothM, 0.085, 0.3, 4, -0.28, 0.58, -0.84 + k * 0.28)); w.add(lower);
     let c = 0;
     updaters.push((heroT, t, dt) => { const target = gateBlocked(hr, heroT) ? 1 : 0; c += (target - c) * Math.min(1, dt * 10); lower.position.y = -0.55 + c * 1.1; lower.scale.y = 0.8 + 0.5 * c; });
-  } else if (hr.type === 'turntable') {
-    const disc = new THREE.Group(); disc.add(cyl(M.stone2, hr.r, 0.12, 0, 0.1, 0));
-    for (let k = 0; k < 6; k++) { const s = new THREE.Mesh(track(new THREE.CircleGeometry(hr.r * 0.97, 12, (k * Math.PI) / 3, Math.PI / 6)), k % 2 ? M.red : M.sail); s.rotation.x = -Math.PI / 2; s.position.y = 0.17; disc.add(s); }
-    disc.add(cyl(M.dark, 0.18, 0.22, 0, 0.2, 0)); w.add(disc);
+  } else if (hr.type === 'turntable') {                    // a stone-rimmed painted disc
+    const disc = new THREE.Group(), R = hr.r; disc.add(cyl(stoneTint('#b9b4a8'), R, 0.14, 0, 0.1, 0));
+    for (let k = 0; k < 6; k++) { const sc = new THREE.Mesh(track(new THREE.CircleGeometry(R * 0.97, 12, (k * Math.PI) / 3, Math.PI / 6)), k % 2 ? paint('#e5483f') : paint('#fff8e8')); sc.rotation.x = -Math.PI / 2; sc.position.y = 0.18; disc.add(sc); }
+    for (let k = 0; k < 3; k++) { const ln = rbox(paint('#ffd44a'), R * 2 * 0.96, 0.02, 0.06, 0, 0.2, 0, 0.005); ln.rotation.y = (k * Math.PI) / 3; disc.add(ln); }
+    disc.add(cyl(metal('#9aa3ad'), 0.22, 0.3, 0, 0.3, 0)); disc.add(sph(paint('#ffd44a'), 0.12, 0.12, 0.12, 0, 0.5, 0)); w.add(disc);
+    const rim = torus(stoneTint('#a9a396', true), R + 0.05, 0.13, 0, 0.17, 0, Math.PI / 2); rim.castShadow = true; w.add(rim);
     updaters.push((heroT) => { disc.rotation.y = -hr.omega * heroT; });
-  } else if (hr.type === 'pendulum') {
-    w.add(box(M.metal, 0.3, 0.3, (hw + 0.5) * 2, 0, 3.5, 0)); for (const s of [-1, 1]) w.add(box(M.metal, 0.35, 3.8, 0.35, 0, 1.6, s * (hw + 0.45)));
+  } else if (hr.type === 'pendulum') {                     // a blue painted gantry with hammers on yellow chains
+    const blue = metal('#3c6fd8'), yel = paint('#ffd23f'), padM = paint('#3a62c9');
+    w.add(rbox(blue, 0.3, 0.3, (hw + 0.5) * 2, 0, 3.5, 0, 0.06));
+    for (const s of [-1, 1]) { w.add(rbox(blue, 0.3, 3.6, 0.3, 0, 1.75, s * (hw + 0.45), 0.06)); w.add(rbox(blue, 0.9, 0.16, 0.55, 0, 0.1, s * (hw + 0.45), 0.04)); }
     hr.hammers.forEach((m) => {
-      const head = sph(M.red, hr.rad, hr.rad, hr.rad, m.du, 0.6, 0), rod = new THREE.Mesh(G.cyl, M.dark); rod.scale.set(0.06, 1, 0.06); w.add(head, rod);
+      const head = new THREE.Group(), body = cyl(padM, hr.rad, 0.9, 0, 0, 0); head.add(body); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, 0.18, 0)); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, -0.2, 0)); head.add(torus(blue, 0.12, 0.05, 0, 0.5, 0, Math.PI / 2)); w.add(head);
+      const links = []; for (let i = 0; i < 9; i++) { const lk = torus(yel, 0.11, 0.035, 0, 0, 0); lk.scale.set(1, 1.5, 1); w.add(lk); links.push(lk); }
       updaters.push((heroT) => {
         const off = hr.A * Math.sin(hr.w * heroT + m.ph); head.position.set(m.du, 0.6, off);
-        _v.set(m.du, 3.4, 0); _s.copy(head.position).sub(_v); const l = _s.length(); rod.position.copy(_v).addScaledVector(_s, 0.5); rod.scale.y = l; rod.quaternion.setFromUnitVectors(UP, _s.normalize());
+        const topY = 3.4, hx = m.du, hy = 1.12, hz = off;
+        links.forEach((lk, i) => { const u = (i + 0.5) / links.length; lk.position.set(hx, topY + (hy - topY) * u, hz * u); lk.rotation.set(-Math.atan2(hz, topY - hy), i % 2 ? Math.PI / 2 : 0, 0); });
       });
     });
   } else if (hr.type === 'geyser') {                       // a stone-ringed pool that bubbles, swells and then throws up a column of water
@@ -242,28 +283,48 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       bubbles.forEach((b, i) => { const on = build > 0.05 && erupt <= 0, ph = (t * (0.8 + i * 0.13) + i * 0.4) % 1; b.visible = on; b.position.set(Math.cos(i * 1.7 + t) * R * 0.5 * (0.3 + build), 0.2 + ph * 0.28 * (0.5 + build), Math.sin(i * 1.7 + t) * R * 0.5 * (0.3 + build)); b.scale.setScalar(0.06 + 0.06 * build); });
       if (erupt > 0.02 && ctx.fx) { w.getWorldPosition(wp); ctx.fx.jet(wp.x, wp.y + 0.22, wp.z, erupt, dt, H); }
     });
-  } else if (hr.type === 'cannon') {
-    w.add(cyl(M.dark, 0.85, 0.35, 0, 0.2, 0)); const barrel = new THREE.Group(); barrel.position.y = 0.75;
-    const tube = new THREE.Mesh(G.cyl, M.metal); tube.scale.set(0.38, 1.7, 0.38); tube.rotation.z = Math.PI / 2; tube.position.x = 0.7; barrel.add(tube); barrel.add(sph(M.dark, 0.5, 0.5, 0.5, -0.1, 0, 0)); w.add(barrel);
-    for (const s of [-1, 1]) { const wheel = cyl(M.wood, 0.5, 0.18, -0.1, 0.5, s * 0.6); wheel.rotation.x = Math.PI / 2; w.add(wheel); }
+  } else if (hr.type === 'cannon') {                      // an iron cannon on a wooden carriage with spoked wheels
+    const iron = metal('#4a4f5a'), brass = metal('#c9a24a'), barrel = new THREE.Group(); barrel.position.y = 0.8;
+    w.add(rbox(woodTint('#a87040'), 1.7, 0.3, 1.0, -0.1, 0.35, 0, 0.06)); w.add(rbox(woodTint('#8a5a30'), 1.0, 0.45, 0.2, -0.1, 0.55, 0.42, 0.05)); w.add(rbox(woodTint('#8a5a30'), 1.0, 0.45, 0.2, -0.1, 0.55, -0.42, 0.05));
+    const tube = new THREE.Mesh(G.cyl, iron); tube.scale.set(0.38, 1.9, 0.38); tube.rotation.z = Math.PI / 2; tube.position.x = 0.75; tube.castShadow = true; barrel.add(tube);
+    barrel.add(torus(brass, 0.4, 0.07, 1.65, 0, 0, 0, Math.PI / 2)); barrel.add(torus(brass, 0.42, 0.07, 0.1, 0, 0, 0, Math.PI / 2)); barrel.add(sph(iron, 0.46, 0.46, 0.46, -0.2, 0, 0)); barrel.add(cone(brass, 0.07, 0.25, 6, -0.62, 0.2, 0)); w.add(barrel);
+    for (const s of [-1, 1]) {
+      const wheel = new THREE.Group(); wheel.position.set(-0.1, 0.5, s * 0.66); wheel.add(torus(woodTint('#8a5a30'), 0.46, 0.07, 0, 0, 0)); wheel.add(torus(iron, 0.52, 0.03, 0, 0, 0)); { const hub = cyl(brass, 0.12, 0.14, 0, 0, 0); hub.rotation.x = Math.PI / 2; wheel.add(hub); }
+      for (let k = 0; k < 6; k++) { const sp = rbox(woodTint('#a87040'), 0.07, 0.9, 0.07, 0, 0, 0, 0.015); sp.rotation.z = (k * Math.PI) / 6; wheel.add(sp); } w.add(wheel);
+    }
     updaters.push((heroT) => { barrel.rotation.y = -hr.wobble * Math.sin(heroT * 1.3); });
-  } else if (hr.type === 'teleport') {
-    for (const [p, c] of [[hr.a, '#58b858'], [hr.b, '#4d9be0']]) { const pipe = cyl(mat(c), 0.62, 0.9, p.x - hr.x, 0.45, p.z - hr.z); w.add(pipe); const hole = new THREE.Mesh(G.disc, M.cup); hole.scale.set(0.45, 1, 0.45); hole.position.set(p.x - hr.x, 0.92, p.z - hr.z); w.add(hole); const rim = new THREE.Mesh(track(new THREE.TorusGeometry(0.62, 0.09, 6, 20)), mat(c)); rim.rotation.x = Math.PI / 2; rim.position.set(p.x - hr.x, 0.9, p.z - hr.z); w.add(rim); }
-    w.rotation.y = 0; const rk = hr.rock, yaw = Math.atan2(-hr.uz, hr.ux);
-    const r1 = box(M.stone, rk.half * 2, 1.5, rk.side * 2, rk.x - hr.x, 0.7, rk.z - hr.z), r2 = box(M.stone2, rk.half * 1.2, 0.8, rk.side * 1.2, rk.x - hr.x, 1.7, rk.z - hr.z); r1.rotation.y = r2.rotation.y = yaw; w.add(r1, r2);
-  } else if (hr.type === 'drawbridge') {
-    const moat = new THREE.Mesh(G.box, new THREE.MeshBasicMaterial({ color: '#3f8fd8' })); moat.scale.set(hr.half * 2, 0.06, (hw + 0.3) * 2); moat.position.y = 0.1; w.add(moat);
-    for (const s of [-1, 1]) for (const e of [-1, 1]) w.add(box(M.stone, 0.6, 1.8, 0.6, e * (hr.half + 0.1), 0.9, s * (hw + 0.1)));
-    const pivot = new THREE.Group(); pivot.position.set(hr.half, 0.18, 0); const plank = box(M.wood, hr.half * 2, 0.14, hw * 2 - 0.2, -hr.half, 0, 0); pivot.add(plank); w.add(pivot);
+  } else if (hr.type === 'teleport') {                     // painted pipes through a rockery
+    for (const [p, c] of [[hr.a, '#4bb84b'], [hr.b, '#3f8fe0']]) {
+      const gp = new THREE.Group(), pm = metal(c); gp.position.set(p.x - hr.x, 0, p.z - hr.z);
+      gp.add(cyl(stoneTint('#a9a396'), 0.78, 0.14, 0, 0.07, 0)); gp.add(cyl(pm, 0.58, 0.85, 0, 0.5, 0)); gp.add(torus(pm, 0.62, 0.1, 0, 0.92, 0, Math.PI / 2)); gp.add(torus(paint('#ffffff'), 0.6, 0.04, 0, 0.5, 0, Math.PI / 2));
+      const hole = new THREE.Mesh(G.disc, M.cup); hole.scale.set(0.47, 1, 0.47); hole.position.y = 0.93; gp.add(hole); w.add(gp);
+    }
+    w.rotation.y = 0; const rk = hr.rock, yaw = Math.atan2(-hr.uz, hr.ux), cl = new THREE.Group(); cl.position.set(rk.x - hr.x, 0, rk.z - hr.z); cl.rotation.y = yaw; w.add(cl);
+    const rg = mulberry32(21), spots = [[0, 0, 1.0, 1.0, 1], [0.55, 0.45, 0.65, 0.6, 0.8], [-0.55, -0.4, 0.7, 0.65, 0.9], [0.5, -0.5, 0.55, 0.5, 0.7], [-0.5, 0.5, 0.55, 0.55, 0.7], [0.0, 0.05, 0.6, 0.6, 1.5]];
+    spots.forEach(([x, z, sx, sz, hh], i) => { const rm = new THREE.Mesh(getRock(), stoneTint(ROCKS[i % ROCKS.length], true)); rm.scale.set(rk.half * sx * 1.5, 1.1 * hh, rk.side * sz * 1.5); rm.position.set(x * rk.half, 0.5 * hh, z * rk.side); rm.rotation.y = rg() * 6; rm.castShadow = true; cl.add(rm); });
+    for (let k = 0; k < 3; k++) cl.add(cone(paint('#5fb455'), 0.1, 0.5, 4, (rg() - 0.5) * rk.half, 1.5, (rg() - 0.5) * rk.side));
+  } else if (hr.type === 'drawbridge') {                   // a little castle gate: a moat, round towers and a wooden bridge that lifts
+    const H = hr.half, W = hw + 0.3, wr = new THREE.BufferGeometry(), pos = [], dep = [], idx = [], XS = [[-1, 0], [-0.6, 0.7], [0, 1], [0.6, 0.7], [1, 0]], ZS = [-1, 0, 1];
+    for (const [xx, dd] of XS) for (const zz of ZS) { pos.push(xx * H, 0.1, zz * W); dep.push(zz === 0 ? dd : dd * 0.8); }
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) { const a = i * 3 + j, b = a + 1, c = a + 3, d = c + 1; idx.push(a, c, b, b, c, d); }
+    wr.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); wr.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); wr.setIndex(idx); track(wr);
+    const wm = waterMaterial(ctx.look, 0, 0, 0); ctx.disposables?.push(wm); const moat = new THREE.Mesh(wr, wm); moat.renderOrder = 2; w.add(moat);
+    const stone = stoneTint('#b9b4a8'), roofM = paint('#d24a45');
+    for (const e of [-1, 1]) { w.add(rbox(stone, 0.35, 0.5, W * 2, e * (H + 0.15), 0.25, 0, 0.05)); for (let k = 0; k < 5; k++) w.add(rbox(stone, 0.35, 0.22, 0.32, e * (H + 0.15), 0.6, -W + 0.3 + k * ((2 * W - 0.6) / 4), 0.03)); }
+    for (const s of [-1, 1]) for (const e of [-1, 1]) { const tx = e * (H + 0.2), tz = s * (hw + 0.05); w.add(cyl(stone, 0.55, 2.3, tx, 1.15, tz)); w.add(cone(roofM, 0.75, 0.9, 8, tx, 2.75, tz)); w.add(rbox(paint('#2a2a33'), 0.1, 0.4, 0.2, tx - e * 0.0, 1.5, tz - s * 0.5, 0.02)); w.add(cone(paint('#ffd23f'), 0.05, 0.3, 4, tx, 3.35, tz)); }
+    const pivot = new THREE.Group(); pivot.position.set(H, 0.18, 0); pivot.add(rbox(woodTint('#ffffff'), H * 2, 0.14, hw * 2 - 0.2, -H, 0, 0, 0.03));
+    for (const s of [-1, 1]) pivot.add(rbox(woodTint('#8a5a30'), H * 2, 0.22, 0.1, -H, 0.16, s * (hw - 0.15), 0.02));
+    for (let k = 0; k < 6; k++) pivot.add(rbox(woodTint('#8a5a30'), 0.06, 0.04, hw * 2 - 0.3, -0.15 - k * (H * 2 - 0.3) / 5, 0.09, 0, 0.01)); w.add(pivot);
     let a = 0;
     updaters.push((heroT, t, dt) => { const target = bridgeUp(hr, heroT) ? 1 : 0; a += (target - a) * Math.min(1, dt * 5); pivot.rotation.z = a * 1.2; });
-  } else if (hr.type === 'loop') {
+  } else if (hr.type === 'loop') {                         // a painted loop-the-loop on steel legs between red and white curbs
     const pts = []; for (let i = 0; i <= 48; i++) { const s = i / 48; pts.push(new THREE.Vector3(-hr.L / 2 + s * hr.L, 0.12 + hr.R * (1 - Math.cos(6.283185307 * s)), 0)); }
-    const curve = new THREE.CatmullRomCurve3(pts);
-    for (const s of [-1, 1]) { const tube = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 96, 0.1, 6, false)), s > 0 ? M.red : M.sail); tube.position.z = s * 0.55; w.add(tube); }
-    for (let i = 4; i < 48; i += 8) { const p = pts[i]; w.add(box(M.metal, 0.12, p.y, 1.2, p.x, p.y / 2, 0)); }
-    const ramp = box(M.wood, 1.7, 0.1, hr.track * 2, -hr.L / 2 - 0.8, 0.12, 0); ramp.rotation.z = 0.2; w.add(ramp);
-    for (const s of [-1, 1]) w.add(box(M.stone2, hr.L, 0.9, hw + 0.3 - hr.track, 0, 0.3, s * (hr.track + (hw + 0.3 - hr.track) / 2)));
+    const curve = new THREE.CatmullRomCurve3(pts), redM = metal('#e5483f'), whiteM = metal('#ffffff'), steel = metal('#8d97a3');
+    for (const s of [-1, 1]) { const tube = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 96, 0.11, 8, false)), s > 0 ? redM : whiteM); tube.position.z = s * 0.55; tube.castShadow = true; w.add(tube); }
+    for (let i = 2; i < 48; i += 3) { const p = pts[i], q2 = pts[Math.min(48, i + 1)], strut = rbox(steel, 0.07, 0.07, 1.2, p.x, p.y, 0, 0.015); strut.rotation.z = Math.atan2(q2.y - p.y, q2.x - p.x); w.add(strut); }
+    for (let i = 4; i < 48; i += 8) { const p = pts[i]; if (p.y > 0.3) { w.add(rbox(steel, 0.12, p.y, 0.12, p.x, p.y / 2, 0.55, 0.02)); w.add(rbox(steel, 0.12, p.y, 0.12, p.x, p.y / 2, -0.55, 0.02)); } w.add(rbox(steel, 0.3, 0.08, 1.4, p.x, 0.04, 0, 0.02)); }
+    const ramp = rbox(woodTint('#ffe0b0'), 1.7, 0.1, hr.track * 2, -hr.L / 2 - 0.8, 0.12, 0, 0.03); ramp.rotation.z = 0.2; w.add(ramp);
+    for (const s of [-1, 1]) { const lw = hw + 0.3 - hr.track, zc = s * (hr.track + lw / 2); w.add(rbox(paint('#e5483f'), hr.L, 0.6, lw, 0, 0.3, zc, 0.07)); w.add(rbox(paint('#ffffff'), hr.L + 0.04, 0.12, lw + 0.04, 0, 0.64, zc, 0.03)); }
   }
   return w;
 }

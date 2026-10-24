@@ -5,14 +5,14 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024162556';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024162556';
-import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024162556';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024162556';
-import { createFx } from './golffx.js?v=20261024162556';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024162556';
-import { buildDecor } from './golfdecor.js?v=20261024162556';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024162556';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024163030';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024163030';
+import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024163030';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024163030';
+import { createFx } from './golffx.js?v=20261024163030';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024163030';
+import { buildDecor } from './golfdecor.js?v=20261024163030';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024163030';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -27,7 +27,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const st = { mode: 'off', t: 0, hole: 0, holeT: 0, strokes: 0, scores: [], par: [], order: [], seed: 0, year: 0, month: 0, rollT: 0, idle: 0, hud: { hole: '', strokes: -1, pills: '' }, lastX: 0, lastZ: 0, multi: false, safety: false, cupScale: 1 };
   const fx = { homing: 0, ghost: 0, bounce: 0, turbo: 0, freeze: 0, mega: 0, hamster: 0 };      // seconds left of each power-up
   let holes = [], vises = [], decors = [], sites = [], Ys = [], fxs = null, lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
-  let holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
+  let dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
   const ballMeshes = [], ballShadows = [];
   const ctx = newCtx(), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0 };
   const up0 = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
@@ -324,6 +324,10 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     get active() { return st.mode !== 'off'; },
     get focusDistance() { return st.mode === 'enter' || st.mode === 'exit' || st.mode === 'finale' || st.mode === 'card' ? trip.dist : cam.phase === 'overview' || st.mode === 'travel' ? frame.dist : 12; },
     onQuit: null,
+    /** Debug: hold the camera at `pos` looking at `look` (both [x, y, z]), or let go with no arguments. */
+    debugCam(pos, look) { dbgCam = pos ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look) } : null; },
+    /** Debug: a world point `up` above and `dist` out from the hero of the current hole, as { p: [x, y, z], hero: [x, y, z] }. */
+    heroPoint() { const hr = hole.hero; const v = holeGroup.localToWorld(new THREE.Vector3(hr.x, 0, hr.z)); const v2 = holeGroup.localToWorld(new THREE.Vector3(hr.x + hr.ux, 0, hr.z + hr.uz)); return { hero: [v.x, v.y, v.z], dx: v2.x - v.x, dz: v2.z - v.z }; },
     /** Debug: jump straight to hole `i` (0-based). */
     jump(i) { if (ready && st.mode !== 'off' && st.mode !== 'exit' && st.mode !== 'enter') { elScore.hidden = true; startHole(i); framing(); cam.pos.copy(frame.pos); cam.look.copy(frame.look); } },
     /** Debug: the live state. */
@@ -382,7 +386,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         updateScenery(dt); updateHud();
         return true;
       }
-      if (st.mode !== 'card') followCamera(dt);
+      if (dbgCam) { camera.position.copy(dbgCam.pos); camera.up.copy(up0); camera.lookAt(dbgCam.look); }
+      else if (st.mode !== 'card') followCamera(dt);
       else { overviewAll(trip); camera.position.copy(trip.pos); camera.lookAt(trip.look); }
       if (hole && st.mode !== 'card' && holeGroup) {
         st.holeT += dt * (fx.freeze > 0 ? 0.12 : 1); ctx.t = st.holeT;
