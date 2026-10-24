@@ -1,8 +1,8 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH } from './golfphys.js?v=20261024150417';
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024150417';
+import { BALL_R, CUP_R, hillH } from './golfphys.js?v=20261024154218';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024154218';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -49,19 +49,15 @@ const sph = (m, rx, ry, rz, x, y, z) => { const o = new THREE.Mesh(G.sph, m); o.
 export function buildHoleVisual(h) {
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
-  // the fairway: a strip of green along the corridor, in mown stripes, raised by the hills
-  const pos = [], col = [], idx = [], c1 = new THREE.Color('#5fc65f'), c2 = new THREE.Color('#52b955'), COLS = 4; let along = 0;
-  for (let i = 0; i < h.path.length - 1; i++) {
-    const L0 = h.left[i], L1 = h.left[i + 1], R0 = h.right[i], R1 = h.right[i + 1], len = Math.hypot(h.path[i + 1].x - h.path[i].x, h.path[i + 1].z - h.path[i].z), steps = Math.ceil(len / 0.8), base = pos.length / 3;
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps, lx = L0.x + (L1.x - L0.x) * t, lz = L0.z + (L1.z - L0.z) * t, rx = R0.x + (R1.x - R0.x) * t, rz = R0.z + (R1.z - R0.z) * t;
-      for (let c = 0; c <= COLS; c++) {
-        const u = c / COLS, x = lx + (rx - lx) * u, z = lz + (rz - lz) * u;
-        pos.push(x, hillH(h, x, z) + 0.03, z); const k = (Math.floor((along + len * t) / 1.5) & 1) ? c1 : c2; col.push(k.r, k.g, k.b);
-      }
+  // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised by the hills
+  const pos = [], col = [], idx = [], c1 = new THREE.Color('#5fc65f'), c2 = new THREE.Color('#52b955'), COLS = 6, R = h.ribbon;
+  for (let i = 0; i < R.length; i++) {
+    const row = R[i], stripe = (row[4] < 0 ? i < R.length / 2 ? -1 : 1e3 : Math.floor(row[4] / 1.5)) & 1;
+    for (let c = 0; c <= COLS; c++) {
+      const u = c / COLS, x = row[0] + (row[2] - row[0]) * u, z = row[1] + (row[3] - row[1]) * u;
+      pos.push(x, hillH(h, x, z) + 0.03, z); const k = stripe ? c1 : c2; col.push(k.r, k.g, k.b);
     }
-    for (let s = 0; s < steps; s++) for (let c = 0; c < COLS; c++) { const a = base + s * (COLS + 1) + c, b = a + 1, d = a + COLS + 1, e = d + 1; idx.push(a, d, b, b, d, e); }
-    along += len;
+    if (i > 0) for (let c = 0; c < COLS; c++) { const b0 = (i - 1) * (COLS + 1) + c, a0 = b0 + 1, d0 = b0 + COLS + 1, e0 = d0 + 1; idx.push(b0, d0, a0, a0, d0, e0); }
   }
   const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); fg.setIndex(idx); fg.computeVertexNormals();
   g.add(new THREE.Mesh(fg, M.grass));
@@ -70,7 +66,7 @@ export function buildHoleVisual(h) {
   vis.forEach((w, i) => { const dx = w[2] - w[0], dz = w[3] - w[1]; _q.setFromAxisAngle(UP, Math.atan2(-dz, dx)); _m.compose(_v.set((w[0] + w[2]) / 2, 0.12, (w[1] + w[3]) / 2), _q, _s.set(Math.hypot(dx, dz) + 0.3, 0.9, 0.3)); rails.setMatrixAt(i, _m); });
   rails.instanceMatrix.needsUpdate = true; g.add(rails); disposables.push(rails);
   // tee, cup and flag
-  const tee = new THREE.Mesh(G.disc, M.white); tee.scale.set(0.55, 1, 0.55); tee.position.set(h.tee.x + 0.9, 0.06, h.tee.z); g.add(tee);
+  const tee = new THREE.Mesh(G.disc, M.white); tee.scale.set(0.55, 1, 0.55); tee.position.set(h.ball.x, 0.06, h.ball.z); g.add(tee);
   const cupMesh = new THREE.Mesh(G.disc, M.cup); cupMesh.position.set(h.cup.x, 0.07, h.cup.z); cupMesh.scale.set(CUP_R * 0.92, 1, CUP_R * 0.92); g.add(cupMesh);
   const flag = new THREE.Group(); flag.position.set(h.cup.x, 0, h.cup.z);
   flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.6), M.flag); disposables.push(fl.geometry); fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);

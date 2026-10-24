@@ -9,7 +9,7 @@ export function mulberry32(a) {
 
 export const HERO_TYPES = ['windmill', 'alligator', 'turntable', 'pendulum', 'geyser', 'cannon', 'teleport', 'drawbridge', 'loop'];
 /** The shortest leg each hero needs (in units). */
-export const NEED = { windmill: 8, alligator: 8.5, turntable: 6.5, pendulum: 8, geyser: 6.5, cannon: 8, teleport: 11, drawbridge: 8.5, loop: 11 };
+export const NEED = { windmill: 8, alligator: 8.5, turntable: 6.5, pendulum: 8, geyser: 6.5, cannon: 8, teleport: 9, drawbridge: 8.5, loop: 9.5 };
 const TIERS = [['windmill', 'alligator', 'turntable'], ['pendulum', 'geyser', 'cannon'], ['teleport', 'drawbridge', 'loop']];   // easy, middling, tricky: holes 1-3, 4-6, 7-9
 
 /** Which hero is on each of the nine holes this month: each tier is shuffled with the course seed. */

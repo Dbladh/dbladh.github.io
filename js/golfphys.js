@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024150417';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024154218';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -19,7 +19,7 @@ export function hillGrad(hole, x, z) {
   _g.x = gx; _g.z = gz; return _g;
 }
 
-export function newBall(hole) { return { x: hole.tee.x + 0.9, z: hole.tee.z, vx: 0, vz: 0, holed: false, sunk: false, rest: true, still: 0, loop: null, loaded: 0, tcool: 0, gk: -1, ly: 0, ax: 0, az: 0 }; }
+export function newBall(hole) { return { x: hole.ball.x, z: hole.ball.z, vx: 0, vz: 0, holed: false, sunk: false, rest: true, still: 0, loop: null, loaded: 0, tcool: 0, gk: -1, ly: 0, ax: 0, az: 0 }; }
 /** What the power-ups are doing right now: `t` is the hero clock, the rest are switches. */
 export function newCtx() { return { t: 0, ghost: false, bounce: false, turbo: false, homing: false, drive: false, cupR: CUP_R }; }
 

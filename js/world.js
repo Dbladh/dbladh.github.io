@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024150417';
-import { auroraColour } from './aurora.js?v=20261024150417';
+import { PAL } from './palette.js?v=20261024154218';
+import { auroraColour } from './aurora.js?v=20261024154218';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261024150417';
+} from './houses.js?v=20261024154218';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -808,60 +808,92 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   terrain.receiveShadow = true;
   scene.add(terrain);
 
-  // ---- Carving (for the mini-golf): the ground under a round site is levelled into a lawn, with the old hillside blending back in around it; and everything standing there is hidden.
-  // It is all undone by `carve.end()`. Only the ground mesh changes (not `heightAt`), which is why the scenery on the site has to be hidden while it is levelled.
-  const carveS = { on: false, idx: [], w: [], H: 0, origY: null, origC: null, cells: [], houses: [] };
+  // ---- Carving (for the mini-golf): the ground under each hole's course is levelled into a lawn (flat within a set distance of the hole's centre line, with the old hillside blending back in
+  // around it) and everything standing there is hidden. Several sites can be carved at once, each brought in separately (`set`). Where two blends overlap they are averaged.
+  // It is all undone by `carve.end()`. The ground mesh changes but `heightAt` does not; `carve.groundNow` reads the real, current height.
+  const carveS = { on: false, H: [], K: [], verts: [], sites: [], origY: null, origC: null, cells: [], houses: [] };
   const lawn = new THREE.Color('#79cf63');
-  const gridNx = SEG[0] + 1, gridDx = 380 / SEG[0], gridDz = 250 / SEG[1];
-  function carveNormals() {                                                    // the ground's slope at each changed point, from its neighbours (the mesh is a regular grid)
-    const arr = p.array, nrm = geo.attributes.normal.array, n = p.count;
-    for (const i of carveS.idx) {
-      const ix = i % gridNx, iy = (i / gridNx) | 0;
+  const gridNx = SEG[0] + 1, gridDx = 380 / SEG[0], gridX0 = p.getX(0), gridZ0 = p.getZ(0), gridDz = p.getZ(gridNx) - gridZ0, gridNy = (p.count / gridNx) | 0;
+  function carveNormals(list) {                                                // the ground's slope at each changed point, from its neighbours (the mesh is a regular grid)
+    const arr = p.array, nrm = geo.attributes.normal.array, n = p.count, adz = Math.abs(gridDz);
+    for (const v of list) {
+      const i = v.i, ix = i % gridNx, iy = (i / gridNx) | 0;
       const hL = arr[(i - (ix > 0 ? 1 : 0)) * 3 + 1], hR = arr[(i + (ix < gridNx - 1 ? 1 : 0)) * 3 + 1];
       const hU = arr[(i - (iy > 0 ? gridNx : 0)) * 3 + 1], hD = arr[Math.min(n - 1, i + gridNx) * 3 + 1];
-      const nx = (hL - hR) / (2 * gridDx), nz = (hU - hD) / (2 * gridDz), l = Math.sqrt(nx * nx + 1 + nz * nz);
+      const nx = (hL - hR) / (2 * gridDx), nz = ((hU - hD) / (2 * adz)) * (gridDz > 0 ? 1 : -1), l = Math.sqrt(nx * nx + 1 + nz * nz);
       nrm[i * 3] = nx / l; nrm[i * 3 + 1] = 1 / l; nrm[i * 3 + 2] = nz / l;
     }
     geo.attributes.normal.needsUpdate = true;
   }
+  function carveApply(v) {                                                     // the height and colour of one affected point, from every site that touches it
+    let sw = 0, sy = 0;
+    for (let e = 0; e < v.s.length; e++) { const f = v.w[e] * carveS.K[v.s[e]]; sw += f; sy += f * carveS.H[v.s[e]]; }
+    const i = v.i, { origY, origC } = carveS, arr = p.array, col = geo.attributes.color.array;
+    arr[i * 3 + 1] = sw > 1 ? sy / sw : origY[i] * (1 - sw) + sy;
+    const g = Math.min(1, sw) * 0.85;
+    col[i * 3] = origC[i * 3] + (lawn.r - origC[i * 3]) * g; col[i * 3 + 1] = origC[i * 3 + 1] + (lawn.g - origC[i * 3 + 1]) * g; col[i * 3 + 2] = origC[i * 3 + 2] + (lawn.b - origC[i * 3 + 2]) * g;
+  }
   const carve = {
     get active() { return carveS.on; },
-    /** Start levelling the ground round (cx, cz): flat inside radius `r`, easing back to the hillside over `blend` more. Returns the height of the new lawn. Call `set(k)` to bring it in. */
-    begin(cx, cz, r, blend) {
+    /**
+     * Start levelling the ground under several sites. Each site is a list of [x, z, flatRadius] points (a hole's centre line): the ground is flat within each point's radius and eases back to the
+     * hillside over `blend` more. Returns the height of each new lawn. Call `set(k, site)` to bring one in (or all, without `site`).
+     */
+    begin(sites, blend = 5.5) {
       if (carveS.on) carve.end();
       if (!carveS.origY) { carveS.origY = new Float32Array(p.count); for (let i = 0; i < p.count; i++) carveS.origY[i] = p.getY(i); carveS.origC = Float32Array.from(colors); }
-      const idx = [], ws = []; let sum = 0, cnt = 0;
-      for (let i = 0; i < p.count; i++) {
-        const dx = p.getX(i) - cx, dz = p.getZ(i) - cz, d = Math.sqrt(dx * dx + dz * dz);
-        if (d > r + blend + 2.6) continue;
-        idx.push(i); ws.push(d <= r ? 1 : d >= r + blend ? 0 : 1 - smooth(r, r + blend, d));
-        if (d <= r * 0.6) { sum += carveS.origY[i]; cnt++; }
-      }
-      carveS.idx = idx; carveS.w = ws; carveS.H = cnt ? sum / cnt : heightAt(cx, cz); carveS.on = true;
-      const reach = r + blend + 1.5;
-      carveS.cells = [];
-      for (const m of cellMeshes) {                                              // hide every plant, rock and rail standing on the site
+      const map = new Map(), H = [], K = [], per = [];
+      sites.forEach((pts, si) => {
+        let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9, reachMax = 0;
+        for (const q of pts) { minX = Math.min(minX, q[0] - q[2]); maxX = Math.max(maxX, q[0] + q[2]); minZ = Math.min(minZ, q[1] - q[2]); maxZ = Math.max(maxZ, q[1] + q[2]); reachMax = Math.max(reachMax, q[2]); }
+        const pad = blend + 2.6 + 0.5, ix0 = Math.max(0, Math.floor((minX - pad - gridX0) / gridDx)), ix1 = Math.min(gridNx - 1, Math.ceil((maxX + pad - gridX0) / gridDx));
+        const za = (minZ - pad - gridZ0) / gridDz, zb = (maxZ + pad - gridZ0) / gridDz, iy0 = Math.max(0, Math.floor(Math.min(za, zb))), iy1 = Math.min(gridNy - 1, Math.ceil(Math.max(za, zb)));
+        let sum = 0, cnt = 0; const list = [];
+        for (let iy = iy0; iy <= iy1; iy++) for (let ix = ix0; ix <= ix1; ix++) {
+          const i = iy * gridNx + ix, x = p.getX(i), z = p.getZ(i); let dd = 1e9;
+          for (const q of pts) { const d = Math.sqrt((x - q[0]) * (x - q[0]) + (z - q[1]) * (z - q[1])) - q[2]; if (d < dd) dd = d; }
+          if (dd >= blend) continue;
+          const w = dd <= 0 ? 1 : 1 - smooth(0, blend, dd);
+          if (dd <= 0) { sum += carveS.origY[i]; cnt++; }
+          let v = map.get(i); if (!v) { v = { i, s: [], w: [] }; map.set(i, v); }
+          v.s.push(si); v.w.push(w); list.push(v);
+        }
+        H.push(cnt ? sum / cnt : heightAt(pts[0][0], pts[0][1])); K.push(0); per.push(list);
+        let cx = 0, cz = 0; for (const q of pts) { cx += q[0]; cz += q[1]; } cx /= pts.length; cz /= pts.length;
+        let rad = 0; for (const q of pts) rad = Math.max(rad, Math.hypot(q[0] - cx, q[1] - cz) + q[2]);
+        carveS.sites[si] = { pts, cx, cz, rad };
+      });
+      carveS.H = H; carveS.K = K; carveS.verts = per; carveS.on = true;
+      carveS.cells = []; carveS.houses = [];
+      const hit = (si, x, z, extra) => { const S = carveS.sites[si]; if (Math.hypot(x - S.cx, z - S.cz) > S.rad + blend + extra) return false; for (const q of S.pts) if (Math.hypot(x - q[0], z - q[1]) < q[2] + blend + extra) return true; return false; };
+      for (const m of cellMeshes) {                                              // hide every plant, rock and rail standing on a site
         const bs = m.boundingSphere; if (!bs) continue;
-        if (Math.hypot(bs.center.x - cx, bs.center.z - cz) > bs.radius + reach) continue;
+        let near = false; for (let si = 0; si < sites.length && !near; si++) { const S = carveS.sites[si]; near = Math.hypot(bs.center.x - S.cx, bs.center.z - S.cz) < bs.radius + S.rad + blend + 1.5; }
+        if (!near) continue;
         const a = m.instanceMatrix.array, orig = a.slice(); let hid = 0;
-        for (let j = 0; j < m.count; j++) { const o = j * 16; if (Math.hypot(orig[o + 12] - cx, orig[o + 14] - cz) < reach) { for (let q = 0; q < 16; q++) a[o + q] = 0; a[o + 15] = 1; hid++; } }
+        for (let j = 0; j < m.count; j++) {
+          const o = j * 16, x = orig[o + 12], z = orig[o + 14];
+          for (let si = 0; si < sites.length; si++) if (hit(si, x, z, 1.5)) { for (let q = 0; q < 16; q++) a[o + q] = 0; a[o + 15] = 1; hid++; break; }
+        }
         if (hid) { m.instanceMatrix.needsUpdate = true; carveS.cells.push({ m, orig }); }
       }
-      carveS.houses = [];
-      for (const h of houses) if (h.group && h.group.visible && Math.hypot(h.x - cx, h.z - cz) < reach + h.r) { h.group.visible = false; carveS.houses.push(h.group); }
-      return carveS.H;
+      for (const h of houses) if (h.group && h.group.visible) for (let si = 0; si < sites.length; si++) if (hit(si, h.x, h.z, 1.5 + h.r)) { h.group.visible = false; carveS.houses.push(h.group); break; }
+      return H.slice();
     },
-    /** How far the ground has been levelled: 0 (the hillside as it was) to 1 (the lawn). */
-    set(k) {
+    /** How far a site has been levelled: 0 (the hillside as it was) to 1 (the lawn). Without `site`, all of them. */
+    set(k, site) {
       if (!carveS.on) return;
-      const arr = p.array, col = geo.attributes.color.array, { idx, w, H, origY, origC } = carveS;
-      for (let n = 0; n < idx.length; n++) {
-        const i = idx[n], f = w[n] * k;
-        arr[i * 3 + 1] = origY[i] + (H - origY[i]) * f;
-        const g = f * 0.85;
-        col[i * 3] = origC[i * 3] + (lawn.r - origC[i * 3]) * g; col[i * 3 + 1] = origC[i * 3 + 1] + (lawn.g - origC[i * 3 + 1]) * g; col[i * 3 + 2] = origC[i * 3 + 2] + (lawn.b - origC[i * 3 + 2]) * g;
-      }
-      p.needsUpdate = true; geo.attributes.color.needsUpdate = true; carveNormals();
+      const todo = site === undefined ? carveS.verts.map((_, i) => i) : [site], seen = new Set(), changed = [];
+      for (const si of todo) { carveS.K[si] = k; for (const v of carveS.verts[si]) if (!seen.has(v)) { seen.add(v); carveApply(v); changed.push(v); } }
+      p.needsUpdate = true; geo.attributes.color.needsUpdate = true; carveNormals(changed);
+    },
+    /** The height of the ground right now (levelled or not), read from the mesh. */
+    groundNow(x, z) {
+      const fx = (x - gridX0) / gridDx, fz = (z - gridZ0) / gridDz;
+      if (fx < 0 || fz < 0 || fx >= gridNx - 1 || fz >= gridNy - 1) return heightAt(x, z);
+      const ix = Math.floor(fx), iy = Math.floor(fz), tx = fx - ix, tz = fz - iy, arr = p.array, i = iy * gridNx + ix;
+      const a = arr[i * 3 + 1], b = arr[(i + 1) * 3 + 1], c = arr[(i + gridNx) * 3 + 1], d = arr[(i + gridNx + 1) * 3 + 1];
+      return (a + (b - a) * tx) * (1 - tz) + (c + (d - c) * tx) * tz;
     },
     /** Put the hillside and everything on it back. */
     end() {
@@ -869,7 +901,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       carve.set(0);
       for (const c of carveS.cells) { c.m.instanceMatrix.array.set(c.orig); c.m.instanceMatrix.needsUpdate = true; }
       for (const g of carveS.houses) g.visible = true;
-      carveS.cells = []; carveS.houses = []; carveS.idx = []; carveS.on = false;
+      carveS.cells = []; carveS.houses = []; carveS.verts = []; carveS.sites = []; carveS.on = false;
     },
   };
 
