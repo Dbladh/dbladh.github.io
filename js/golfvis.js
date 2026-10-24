@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024170416';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024170416';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024170416';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024170416';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024171924';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024171924';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024171924';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024171924';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -330,8 +330,8 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     wr.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); wr.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); wr.setIndex(idx); track(wr);
     const wm = waterMaterial(ctx.look, 0, 0, 0); ctx.disposables?.push(wm); const moat = new THREE.Mesh(wr, wm); moat.renderOrder = 2; w.add(moat);
     const stone = stoneTint('#b9b4a8'), roofM = paint('#d24a45');
-    for (const e of [-1, 1]) { w.add(rbox(stone, 0.35, 0.5, W * 2, e * (H + 0.15), 0.25, 0, 0.05)); for (let k = 0; k < 5; k++) w.add(rbox(stone, 0.35, 0.22, 0.32, e * (H + 0.15), 0.6, -W + 0.3 + k * ((2 * W - 0.6) / 4), 0.03)); }
-    for (const s of [-1, 1]) for (const e of [-1, 1]) { const tx = e * (H + 0.2), tz = s * (hw + 0.05); w.add(cyl(stone, 0.55, 2.3, tx, 1.15, tz)); w.add(cone(roofM, 0.75, 0.9, 8, tx, 2.75, tz)); w.add(rbox(paint('#2a2a33'), 0.1, 0.4, 0.2, tx - e * 0.0, 1.5, tz - s * 0.5, 0.02)); w.add(cone(paint('#ffd23f'), 0.05, 0.3, 4, tx, 3.35, tz)); }
+    for (const e of [-1, 1]) w.add(rbox(stone, 0.5, 0.05, W * 2, e * (H + 0.35), 0.03, 0, 0.01));        // (flat paving at each end of the moat: nothing stands in the lane)
+    for (const s of [-1, 1]) for (const e of [-1, 1]) { const tx = e * (H + 0.2), tz = s * (hw + 0.95); w.add(cyl(stone, 0.55, 2.3, tx, 1.15, tz)); w.add(cone(roofM, 0.75, 0.9, 8, tx, 2.75, tz)); w.add(rbox(paint('#2a2a33'), 0.1, 0.4, 0.2, tx, 1.5, tz - s * 0.5, 0.02)); w.add(cone(paint('#ffd23f'), 0.05, 0.3, 4, tx, 3.35, tz)); }
     const pivot = new THREE.Group(); pivot.position.set(H, 0.18, 0); pivot.add(rbox(woodTint('#ffffff'), H * 2, 0.14, hw * 2 - 0.2, -H, 0, 0, 0.03));
     for (const s of [-1, 1]) pivot.add(rbox(woodTint('#8a5a30'), H * 2, 0.22, 0.1, -H, 0.16, s * (hw - 0.15), 0.02));
     for (let k = 0; k < 6; k++) pivot.add(rbox(woodTint('#8a5a30'), 0.06, 0.04, hw * 2 - 0.3, -0.15 - k * (H * 2 - 0.3) / 5, 0.09, 0, 0.01)); w.add(pivot);
