@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019223730';
-import { buildWorld } from './world.js?v=20261019223730';
-import { createSky } from './sky.js?v=20261019223730';
-import { createDOF } from './dof.js?v=20261019223730';
-import { createRide } from './ride.js?v=20261019223730';
-import { createGame } from './bikegame.js?v=20261019223730';
-import { createAurora, setWarm } from './aurora.js?v=20261019223730';
-import { createAudio, pickFlicker } from './audio.js?v=20261019223730';
+import { PAL } from './palette.js?v=20261024095655';
+import { buildWorld } from './world.js?v=20261024095655';
+import { createSky } from './sky.js?v=20261024095655';
+import { createDOF } from './dof.js?v=20261024095655';
+import { createRide } from './ride.js?v=20261024095655';
+import { createGame } from './bikegame.js?v=20261024095655';
+import { createAurora, setWarm } from './aurora.js?v=20261024095655';
+import { createAudio, pickFlicker } from './audio.js?v=20261024095655';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -532,9 +532,11 @@ function start() {
   // ---- Hints that something here can be played with (without saying what): a label on the riding bike, a note drifting up from a house now and then, and a swell in the sun's and moon's glow.
   // Each stops once that thing has been used during this visit, and all of them wait while a section is open, the game runs or music mode is on.
   // (Remembered for this visit only, not in the browser: after a reload or a new visit the hints are back.)
+  let golf = null, golfLoading = false;                                       // (the mini-golf at the windmill: loaded the first time it is clicked)
+  const busy = () => !!(game?.active || golf?.active);                        // (a game is running: the landscape's other interactions wait)
   const seen = { bike: false, house: false, dial: false };
   const markSeen = (k) => { seen[k] = true; };
-  const hintsOn = () => active === 'home' && !openId && !tween && !game?.active && songDark < 0.05 && !document.hidden;
+  const hintsOn = () => active === 'home' && !openId && !tween && !busy() && songDark < 0.05 && !document.hidden;
   let hintBikeT = 0, hintBikeOn = false, hintBikeD = 0, hintHouseT = 9 + Math.random() * 4, hintClock = 0, hintSun = 0;
   const hintV = new THREE.Vector3();
   function hintTick(dt) {
@@ -571,8 +573,32 @@ function start() {
     const want = on && !seen.dial && !dialOn && !reduceMotion && hintClock > 8 ? Math.max(0, Math.sin(Math.PI * Math.min(1, (hintClock % 20) / 6))) : 0;
     hintSun += (want - hintSun) * (1 - Math.exp(-dt * 3)); sky.setHint(hintSun);
   }
+  async function playGolf() {
+    if (golf?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
+    golfLoading = true;
+    try {
+      if (!golf) {
+        const mod = await import('./golf.js?v=20261024095655');
+        golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion });
+        golf.onQuit = () => { ride?.reset(); riseName(); };
+      }
+    } catch (err) { console.warn('mini-golf could not load', err); return; } finally { golfLoading = false; }
+    if (active !== 'home' || openId || game?.active) return;
+    stopSong(); audio.unlock(); audio.autoOn(); ride?.reset();
+    golf.start({ pos: camera.position.clone(), look: look.clone() });
+  }
+  let millT = -1e9, millHit = false;
+  function windmillHit(e) {                                                   // is the pointer over the windmill in the background?
+    ndc.set((e.clientX / VW()) * 2 - 1, -(e.clientY / VH()) * 2 + 1); ray.setFromCamera(ndc, camera);
+    return world.windmillAt(ray);
+  }
+  function overMill(e) {                                                      // (for the pointer cursor: checked at most every 90 ms)
+    if (e.timeStamp - millT < 90) return millHit;
+    millT = e.timeStamp; millHit = !busy() && active === 'home' && !openId && !tween && windmillHit(e);
+    return millHit;
+  }
   async function playBike() {
-    if (!game || game.active || starting || active !== 'home' || openId) return;
+    if (!game || game.active || golf?.active || golfLoading || starting || active !== 'home' || openId) return;
     markSeen('bike');
     const bx = ride?.riding ? ride.position.x : 0, homeCam = { pos: camera.position.clone(), look: look.clone() };
     if (!game.ready) {                                   // clicked before the background preparation finished: a short loading card instead of a stall
@@ -629,11 +655,12 @@ function start() {
   }
   canvas.addEventListener('click', (e) => {
     if (suppressClick) return;
-    if (active !== 'home' || game?.active) return;
+    if (active !== 'home' || busy()) return;
     if (pickBike(e)) { playBike(); return; }
     const id = pick(e);
     if (id) { goTo(id); return; }
     if (openId) return;
+    if (windmillHit(e)) { playGolf(); return; }
     const hi = world.houseAt(ray);                                           // a hidden extra: click a house and it plays a song, faint and far away
     if (hi >= 0) toggleHouseSong(hi);
   });
@@ -641,18 +668,18 @@ function start() {
   canvas.addEventListener('pointermove', (e) => {
     const overBike = pickBike(e);
     if (ride) ride.hover = overBike;
-    const hoverId = !game?.active && active === 'home' && !openId && e.pointerType === 'mouse' ? pick(e) : null;
+    const hoverId = !busy() && active === 'home' && !openId && e.pointerType === 'mouse' ? pick(e) : null;
     if (hoverId !== lastHover) {
       if (hoverId) { const pat = pickFlicker(hoverId); audio.flicker(pat); world.setHover(hoverId, pat.events); }
       else { world.setHover(null); audio.flickerOff(); }
       lastHover = hoverId;
     }
     hoverBody = dialOn ? hoverBody : bodyAt(e);
-    if (!dialOn) canvas.style.cursor = !game?.active && active === 'home' && (overBike || hoverId || pick(e)) ? 'pointer' : hoverBody ? 'grab' : 'default';
+    if (!dialOn) canvas.style.cursor = !busy() && active === 'home' && (overBike || hoverId || pick(e) || (e.pointerType === 'mouse' && overMill(e))) ? 'pointer' : hoverBody ? 'grab' : 'default';
   });
   canvas.addEventListener('pointerleave', () => { hoverBody = null; world.setHover(null); if (lastHover) audio.flickerOff(); lastHover = null; });
   // Canvas covers the page, so let clicks on empty sky/hills go back "home" when zoomed in.
-  canvas.addEventListener('dblclick', () => { if (!game?.active) goTo('home'); });
+  canvas.addEventListener('dblclick', () => { if (!busy()) goTo('home'); });
 
   nav.addEventListener('click', (e) => {
     const a = e.target.closest('a');
@@ -666,7 +693,7 @@ function start() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (simple || game?.active || e.target.closest('input, button')) return;
+    if (simple || busy() || e.target.closest('input, button')) return;
     const i = ORDER.indexOf(active);
     if (e.key === 'ArrowRight') { goTo(ORDER[(i + 1) % ORDER.length]); e.preventDefault(); }
     else if (e.key === 'ArrowLeft') { goTo(ORDER[(i + ORDER.length - 1) % ORDER.length]); e.preventDefault(); }
@@ -755,7 +782,7 @@ function start() {
   }
   /** Which of the sun / moon is under the pointer (null for none): only a body that is up and not faded away (music mode hides them). */
   function bodyAt(e) {
-    if (active !== 'home' || openId || tween || game?.active || songDark > 0.05) return null;
+    if (active !== 'home' || openId || tween || busy() || songDark > 0.05) return null;
     let best = null, bestD = 1e9;
     for (const [name, mesh, r] of [['sun', sky.bodies.sun, 10], ['moon', sky.bodies.moon, 7]]) {
       if (!mesh.visible || mesh.material.opacity < 0.3) continue;
@@ -856,7 +883,7 @@ function start() {
     if (!game?.active || (skyN++ % 3) === 0) skyRenderer.render(skyScene, camera);          // in the game the soft sky only needs every third frame
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
-      const want = game?.active ? game.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
+      const want = game?.active ? game.focusDistance : golf?.active ? golf.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
       if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48; scene.fog.near = fn; scene.fog.far = fn + 167; }   // the game's camera sits further back: start the fog beyond the ride itself
@@ -921,7 +948,7 @@ function start() {
     camera.position.y += -pointer.sy * 0.4 * parallax;
     look.copy(cur.look);
     look.x += pointer.sx * 0.5 * parallax;
-    if ((songShot.on || songShotS.z > 0.0005 || Math.abs(songShotS.x) > 0.01) && active === 'home' && !openId && !tween && !game?.active) {       // the camera's shot across the song: a slow push, an orbit to one side and the other, the 1:10 push-in, then a long pull-back (all three billboards stay in view)
+    if ((songShot.on || songShotS.z > 0.0005 || Math.abs(songShotS.x) > 0.01) && active === 'home' && !openId && !tween && !busy()) {       // the camera's shot across the song: a slow push, an orbit to one side and the other, the 1:10 push-in, then a long pull-back (all three billboards stay in view)
       const base = camera.position.clone(), T = songShot;
       if (songRoomT <= 0 || performance.now() - songRoomT > 400) {                                    // (how much of the shot fits with all three billboards in view: bisected a few times a second from the fixed view, so it cannot jitter)
         songRoomT = performance.now();
@@ -936,7 +963,7 @@ function start() {
       camera.position.lerp(look, S.z); camera.position.x += S.x; camera.position.y += S.y; look.x += S.x * 0.5;
     }
     let songRoll = 0;
-    if ((songDark > 0.01 || songDrift.env > 0.002) && active === 'home' && !openId && !tween && !game?.active) {   // the film-style drift: a slow, heavily smoothed sway and a very gentle swell once a bar, all counted in beats (so it slows with the final ritardando)
+    if ((songDark > 0.01 || songDrift.env > 0.002) && active === 'home' && !openId && !tween && !busy()) {   // the film-style drift: a slow, heavily smoothed sway and a very gentle swell once a bar, all counted in beats (so it slows with the final ritardando)
       const bp = audio.songBeatPos(), D = songDrift;
       const on = bp >= 0 ? songDark * Math.max(0, 1 - songZoom * 2.5) : 0;                                 // (it gives way to the push-in, so the billboards stay in view)
       const bars = bp >= 0 ? bp / 3 : D.bars;
@@ -950,7 +977,7 @@ function start() {
       songRoll = D.roll * D.env;
     }
     camera.lookAt(look); camera.rotation.z += songRoll;
-    const gT = performance.now(); game?.update(dt, camera); secT('game', gT);
+    const gT = performance.now(); game?.update(dt, camera); golf?.update(dt, camera); secT('game', gT);
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
@@ -995,7 +1022,7 @@ function start() {
       } else if (songSeen || performance.now() - songAt > 9000) stopSong();
     }
     if (audio.enabled) {                                                      // the landscape's sound: day/night, the windmill, the far-off bike
-      const gameOn = !!game?.active;
+      const gameOn = busy();
       if (!gameOn) { sndV.set(-23, 10, -92).project(camera); }
       let bike = null;
       if (!gameOn && ride?.riding) {
@@ -1009,7 +1036,7 @@ function start() {
     const wT = performance.now(); if (!reduceMotion) world.update(dt, camera); secT('world', wT);
     if (ride) {
       ride.hold = songDark > 0.02 || (songHouse >= 0 && audio.songPlaying);                          // music mode: no new bike (one already riding carries on)
-      ride.update(dt, active === 'home' && !openId && !tween && !game?.active);
+      ride.update(dt, active === 'home' && !openId && !tween && !busy());
       if (bikeBtn) bikeBtn.hidden = !ride.riding;
     }
     hintTick(dt);
@@ -1021,7 +1048,7 @@ function start() {
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back
     // to the overview they fade in with its progress (the name first, the tagline a little after).
     let wantName, wantTag, direct = false;
-    if (active !== 'home' || openId || game?.active) { wantName = wantTag = 0; }
+    if (active !== 'home' || openId || busy()) { wantName = wantTag = 0; }
     else if (tween && tween.to === stops.home) {
       const u = Math.min(tween.t, 1);
       wantName = THREE.MathUtils.smoothstep(u, 0.05, 0.65);
@@ -1065,5 +1092,5 @@ function start() {
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); hideBoot(); }
   requestAnimationFrame(() => requestAnimationFrame(hideBoot)); setTimeout(hideBoot, 450);   // the first scene frame has been drawn: lift the splash (the timer covers a background tab, where frames do not run)
-  window.__portfolio = { dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { get golf() { return golf; }, playGolf, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }

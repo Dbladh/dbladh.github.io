@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261019223730';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261024095655';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -503,6 +503,15 @@ export function createAudio({ base = 'audio/' } = {}) {
     milestone() { if (!ctx) return; [784, 1047, 1319].forEach((f, i) => tone(f, 0.55 + i * 0.1, { type: 'sine', gain: 0.085 - i * 0.012, delay: i * 0.08, dest: soft })); },
     /** The score passed the best. */
     newBest() { if (!ctx) return; [523, 659, 784, 1047, 1319].forEach((f, i) => { tone(f, 0.4, { type: 'sine', gain: 0.1, delay: i * 0.08, dest: soft }); tone(f * 2.01, 0.25, { type: 'triangle', gain: 0.03, delay: i * 0.08, dest: soft }); }); },
+    /** The mini-golf's sounds: putt (v = power), wall and post knocks (v = strength), the cup, and a small jingle. */
+    golf(kind = 'putt', v = 0.5) {
+      if (!ctx) return;
+      if (kind === 'putt') { if (!gate('gputt', 0.1)) return; tone(190 + 120 * v, 0.09, { type: 'triangle', gain: 0.12 + 0.1 * v, slide: 90, dest: soft }); swoosh(0.07, 2400, 900, { gain: 0.04 + 0.05 * v, q: 0.7 }); }
+      else if (kind === 'wall') { if (!gate('gwall', 0.05)) return; tone(420 + 380 * v, 0.07, { type: 'triangle', gain: 0.03 + 0.05 * v, slide: 260, dest: soft }); }
+      else if (kind === 'post') { if (!gate('gpost', 0.05)) return; tone(880 + 300 * v, 0.1, { type: 'sine', gain: 0.05 + 0.05 * v, dest: soft }); }
+      else if (kind === 'cup') { tone(330, 0.2, { type: 'sine', gain: 0.1, slide: 180, dest: soft }); tone(247, 0.3, { type: 'sine', gain: 0.08, delay: 0.1, dest: soft }); }
+      else if (kind === 'win') [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.32, { type: 'sine', gain: 0.085, delay: i * 0.09, dest: soft }));
+    },
     /** A soft, quiet two-note chime: the note rising from a house (a hint that it can be played). */
     chime() { if (!ctx || !gate('chime', 2)) return; tone(988, 0.5, { type: 'sine', gain: 0.045, dest: soft }); tone(1319, 0.8, { type: 'sine', gain: 0.035, delay: 0.14, dest: soft }); },
     /** Buttons and cards: soft ticks. */
@@ -532,6 +541,6 @@ export function createAudio({ base = 'audio/' } = {}) {
 function stub() {
   const f = () => {};
   const out = { enabled: false };
-  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'fuelBeep', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songNotes', 'chime', 'songTime']) out[n] = f;
+  for (const n of ['onChange', 'unlock', 'start', 'stop', 'pause', 'resume', 'update', 'jump', 'land', 'coin', 'combo', 'comboDrop', 'comboLost', 'trick', 'trickDone', 'crash', 'bounce', 'over', 'fuelUp', 'sputter', 'stumble', 'lowFuel', 'fuelBeep', 'outOfFuel', 'nearMiss', 'chargeReady', 'milestone', 'newBest', 'ui', 'autoOn', 'sceneUpdate', 'easter', 'zoom', 'flicker', 'flickerOff', 'songStart', 'songStop', 'songPan', 'songSpectrum', 'songBeatPos', 'songNotes', 'chime', 'golf', 'songTime']) out[n] = f;
   return out;
 }

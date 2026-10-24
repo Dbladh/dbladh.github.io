@@ -873,3 +873,34 @@ body.scene-mode .bike-hint { display: block; }
 .bike-hint-pill { position: absolute; left: 0; top: calc(var(--d, 64px) / -2 - 40px); transform: translateX(-50%); padding: 7px 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: #3a3340; font: 700 0.95rem var(--name-font, system-ui); letter-spacing: 0.03em; white-space: nowrap; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25); }
 @keyframes bike-ping { 0% { transform: scale(0.75); opacity: 0.95; } 70% { transform: scale(1.35); opacity: 0; } 100% { transform: scale(1.35); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .bike-hint-ring { animation: none; } }
+
+/* The mini-golf game (js/golf.js) */
+.golf-hud { position: fixed; inset: 0; z-index: 40; pointer-events: none; color: #fff; font-family: var(--name-font, system-ui); transition: opacity 0.3s ease; }
+.golf-hud[hidden] { display: none; }
+.golf-hud.leaving { opacity: 0; }
+.golf-top { position: absolute; left: 14px; right: 14px; top: 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.golf-info { display: flex; flex-direction: column; gap: 2px; padding: 9px 16px; border-radius: 16px; background: rgba(24, 20, 44, 0.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-size: 0.95rem; }
+.golf-info b { font-size: 1.05rem; letter-spacing: 0.02em; }
+.golf-info span { opacity: 0.85; }
+.golf-quit { pointer-events: auto; border: 0; border-radius: 999px; padding: 9px 18px; background: rgba(255, 255, 255, 0.92); color: #3a3340; font: 700 0.9rem var(--name-font, system-ui); cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+.golf-quit:hover { background: #fff; }
+.golf-banner, .golf-toast { position: absolute; left: 50%; transform: translate(-50%, 8px); opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease; text-align: center; font-weight: 700; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); white-space: nowrap; }
+.golf-banner { top: 22%; font-size: clamp(1.4rem, 5vw, 2.6rem); }
+.golf-toast { top: 34%; font-size: clamp(1.2rem, 4vw, 2rem); }
+.golf-banner.show, .golf-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.golf-power { position: absolute; left: 50%; bottom: 7%; width: min(60vw, 320px); height: 10px; transform: translateX(-50%); border-radius: 999px; background: rgba(255, 255, 255, 0.28); opacity: 0; transition: opacity 0.2s ease; overflow: hidden; }
+.golf-power.show { opacity: 1; }
+.golf-power i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #8be28b, #ffd84a 60%, #ff7b5a); border-radius: inherit; }
+.golf-score { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: auto; min-width: min(86vw, 340px); padding: 20px 24px 22px; border-radius: 22px; background: rgba(255, 253, 248, 0.97); color: #3a3340; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35); text-align: center; }
+.golf-score[hidden] { display: none; }
+.golf-score h2 { margin: 0 0 10px; font-size: 1.25rem; }
+.golf-score table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.golf-score th, .golf-score td { padding: 4px 8px; text-align: center; }
+.golf-score thead th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; }
+.golf-score tbody tr:nth-child(odd) { background: rgba(0, 0, 0, 0.04); }
+.golf-total { margin: 12px 0 2px; font-size: 1.3rem; font-weight: 700; }
+.golf-total small { font-weight: 500; opacity: 0.6; font-size: 0.8rem; }
+.golf-best { margin: 0 0 14px; font-size: 0.9rem; opacity: 0.75; }
+.golf-btns { display: flex; gap: 10px; justify-content: center; }
+.golf-btns button { border: 0; border-radius: 999px; padding: 9px 20px; font: 700 0.9rem var(--name-font, system-ui); cursor: pointer; background: #3a3340; color: #fff; }
+.golf-btns button[data-a="leave"] { background: #e8e2d4; color: #3a3340; }

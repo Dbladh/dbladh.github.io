@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261019223730';
-import { auroraColour } from './aurora.js?v=20261019223730';
+import { PAL } from './palette.js?v=20261024095655';
+import { auroraColour } from './aurora.js?v=20261024095655';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261019223730';
+} from './houses.js?v=20261024095655';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -808,6 +808,71 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   terrain.receiveShadow = true;
   scene.add(terrain);
 
+  // ---- Carving (for the mini-golf): the ground under a round site is levelled into a lawn, with the old hillside blending back in around it; and everything standing there is hidden.
+  // It is all undone by `carve.end()`. Only the ground mesh changes (not `heightAt`), which is why the scenery on the site has to be hidden while it is levelled.
+  const carveS = { on: false, idx: [], w: [], H: 0, origY: null, origC: null, cells: [], houses: [] };
+  const lawn = new THREE.Color('#79cf63');
+  const gridNx = SEG[0] + 1, gridDx = 380 / SEG[0], gridDz = 250 / SEG[1];
+  function carveNormals() {                                                    // the ground's slope at each changed point, from its neighbours (the mesh is a regular grid)
+    const arr = p.array, nrm = geo.attributes.normal.array, n = p.count;
+    for (const i of carveS.idx) {
+      const ix = i % gridNx, iy = (i / gridNx) | 0;
+      const hL = arr[(i - (ix > 0 ? 1 : 0)) * 3 + 1], hR = arr[(i + (ix < gridNx - 1 ? 1 : 0)) * 3 + 1];
+      const hU = arr[(i - (iy > 0 ? gridNx : 0)) * 3 + 1], hD = arr[Math.min(n - 1, i + gridNx) * 3 + 1];
+      const nx = (hL - hR) / (2 * gridDx), nz = (hU - hD) / (2 * gridDz), l = Math.sqrt(nx * nx + 1 + nz * nz);
+      nrm[i * 3] = nx / l; nrm[i * 3 + 1] = 1 / l; nrm[i * 3 + 2] = nz / l;
+    }
+    geo.attributes.normal.needsUpdate = true;
+  }
+  const carve = {
+    get active() { return carveS.on; },
+    /** Start levelling the ground round (cx, cz): flat inside radius `r`, easing back to the hillside over `blend` more. Returns the height of the new lawn. Call `set(k)` to bring it in. */
+    begin(cx, cz, r, blend) {
+      if (carveS.on) carve.end();
+      if (!carveS.origY) { carveS.origY = new Float32Array(p.count); for (let i = 0; i < p.count; i++) carveS.origY[i] = p.getY(i); carveS.origC = Float32Array.from(colors); }
+      const idx = [], ws = []; let sum = 0, cnt = 0;
+      for (let i = 0; i < p.count; i++) {
+        const dx = p.getX(i) - cx, dz = p.getZ(i) - cz, d = Math.sqrt(dx * dx + dz * dz);
+        if (d > r + blend + 2.6) continue;
+        idx.push(i); ws.push(d <= r ? 1 : d >= r + blend ? 0 : 1 - smooth(r, r + blend, d));
+        if (d <= r * 0.6) { sum += carveS.origY[i]; cnt++; }
+      }
+      carveS.idx = idx; carveS.w = ws; carveS.H = cnt ? sum / cnt : heightAt(cx, cz); carveS.on = true;
+      const reach = r + blend + 1.5;
+      carveS.cells = [];
+      for (const m of cellMeshes) {                                              // hide every plant, rock and rail standing on the site
+        const bs = m.boundingSphere; if (!bs) continue;
+        if (Math.hypot(bs.center.x - cx, bs.center.z - cz) > bs.radius + reach) continue;
+        const a = m.instanceMatrix.array, orig = a.slice(); let hid = 0;
+        for (let j = 0; j < m.count; j++) { const o = j * 16; if (Math.hypot(orig[o + 12] - cx, orig[o + 14] - cz) < reach) { for (let q = 0; q < 16; q++) a[o + q] = 0; a[o + 15] = 1; hid++; } }
+        if (hid) { m.instanceMatrix.needsUpdate = true; carveS.cells.push({ m, orig }); }
+      }
+      carveS.houses = [];
+      for (const h of houses) if (h.group && h.group.visible && Math.hypot(h.x - cx, h.z - cz) < reach + h.r) { h.group.visible = false; carveS.houses.push(h.group); }
+      return carveS.H;
+    },
+    /** How far the ground has been levelled: 0 (the hillside as it was) to 1 (the lawn). */
+    set(k) {
+      if (!carveS.on) return;
+      const arr = p.array, col = geo.attributes.color.array, { idx, w, H, origY, origC } = carveS;
+      for (let n = 0; n < idx.length; n++) {
+        const i = idx[n], f = w[n] * k;
+        arr[i * 3 + 1] = origY[i] + (H - origY[i]) * f;
+        const g = f * 0.85;
+        col[i * 3] = origC[i * 3] + (lawn.r - origC[i * 3]) * g; col[i * 3 + 1] = origC[i * 3 + 1] + (lawn.g - origC[i * 3 + 1]) * g; col[i * 3 + 2] = origC[i * 3 + 2] + (lawn.b - origC[i * 3 + 2]) * g;
+      }
+      p.needsUpdate = true; geo.attributes.color.needsUpdate = true; carveNormals();
+    },
+    /** Put the hillside and everything on it back. */
+    end() {
+      if (!carveS.on) return;
+      carve.set(0);
+      for (const c of carveS.cells) { c.m.instanceMatrix.array.set(c.orig); c.m.instanceMatrix.needsUpdate = true; }
+      for (const g of carveS.houses) g.visible = true;
+      carveS.cells = []; carveS.houses = []; carveS.idx = []; carveS.on = false;
+    },
+  };
+
   // Pond water: a soft cartoon look. Gentle drifting ripples, a sky reflection, shallows that go light, a thin
   // foam line at the shore, glints, and rings spreading from the odd raindrop or fish. The shoreline is found per
   // pixel from a fine ground-height map, so the water can never hang over land or objects.
@@ -1013,7 +1078,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
   const _sd = new THREE.Object3D();
 
   // Barn, windmill and a few hay bales
-  const windmills = [];
+  const windmills = [], windmillGroups = [], cellMeshes = [];
   for (const f of farm) {
     if (f.kind === 'barn') {
       const bn = buildBarn();
@@ -1040,7 +1105,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       wm.group.scale.setScalar(1.8);                                      // far away, so bigger than a village building
       wm.group.rotation.y = Math.atan2(-f.x, 22 - f.z) - 0.25;           // face roughly toward the viewer
       scene.add(wm.group);
-      windmills.push(wm.rotor);
+      windmills.push(wm.rotor); windmillGroups.push(wm.group);
       houses.push({ x: f.x, z: f.z, r: wm.radius * 1.8, w: 3.2, d: 3.2, rot: 0 });
     }
   }
@@ -1598,6 +1663,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
       target.add(mesh);
+      if (target === scene) cellMeshes.push(mesh);                                        // (kept so the mini-golf can clear the scenery from its site)
       first = first || mesh;
     }
     return first;
@@ -2614,6 +2680,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       houses.forEach((h, i) => { if (!h.group) return; const hit = ray.intersectObject(h.group, true)[0]; if (hit && hit.distance < bd) { bd = hit.distance; best = i; } });
       return best;
     },
+    /** Level a round site of ground for the mini-golf (see `carve` above). */
+    carve,
+    /** Is the pointer ray over the windmill in the background? (It starts the hidden mini-golf.) */
+    windmillAt(ray) { for (const g of windmillGroups) if (ray.intersectObject(g, true).length) return true; return false; },
     /** How many houses there are (for picking one at random). */
     get houseCount() { return houses.length; },
     /** A hint that the houses can be played: one glowing note drifts up from house `i`. */
