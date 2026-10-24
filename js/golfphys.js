@@ -1,25 +1,46 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024163030';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024163833';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
-const G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
+const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
 
-/** Height of the ground (the hills) at a point. */
+const sm = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+/** The height one feature (a berm, platform, jump ramp or canyon gap, see golfgen.js) adds at a point. */
+function featH(f, x, z) {
+  if (f.t === 'berm') {                                    // a banked ridge along a segment
+    const dx = f.bx - f.ax, dz = f.bz - f.az, l2 = dx * dx + dz * dz || 1; let t = ((x - f.ax) * dx + (z - f.az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ex = x - (f.ax + dx * t), ez = z - (f.az + dz * t), u = 1 - (ex * ex + ez * ez) / (f.w * f.w); return u > 0 ? f.h * u * u : 0;
+  }
+  const rx = x - f.x, rz = z - f.z, s = rx * f.ux + rz * f.uz, c = rx * f.nx + rz * f.nz;
+  if (c > f.wid || c < -f.wid) return 0;
+  if (f.t === 'plat') return f.h * sm((s + f.len / 2 + f.ramp) / f.ramp) * (1 - sm((s - f.len / 2) / f.edge));      // a long ramp up, a flat top and a short steep edge down
+  if (f.t === 'jump') { if (s < -f.len / 2) return 0; const k = (s + f.len / 2) / f.len; return k <= 1 ? f.h * k : f.h * (1 - sm((s - f.len / 2) / 0.25)); }     // a ramp that ends in a lip
+  if (f.t === 'gap') return -f.d * (1 - sm((Math.abs(s) - f.len / 2 + 0.1) / 0.25));                                 // a chasm across the lane
+  return 0;
+}
+/** Height of the ground (the hills and every feature) at a point. */
 export function hillH(hole, x, z) {
   let h = 0;
   for (const k of hole.hills) { const dx = x - k.x, dz = z - k.z, u = 1 - (dx * dx + dz * dz) / (k.r * k.r); if (u > 0) h += k.h * u * u; }
+  if (hole.feats) for (const f of hole.feats) h += featH(f, x, z);
   return h;
 }
-const _g = { x: 0, z: 0 };
-/** The slope of the hills at a point (written into a shared object). */
+const _g = { x: 0, z: 0 }, EPS = 0.07, MAX_SLOPE = 1.8;
+/** The slope of the ground at a point (written into a shared object): the hills analytically, features by differences; steep cliffs are capped so they cannot fling the ball. */
 export function hillGrad(hole, x, z) {
   let gx = 0, gz = 0;
   for (const k of hole.hills) { const dx = x - k.x, dz = z - k.z, r2 = k.r * k.r, u = 1 - (dx * dx + dz * dz) / r2; if (u > 0) { const f = (-4 * k.h * u) / r2; gx += f * dx; gz += f * dz; } }
+  if (hole.feats && hole.feats.length) {
+    let fx = 0, fz = 0;
+    for (const f of hole.feats) { fx += featH(f, x + EPS, z) - featH(f, x - EPS, z); fz += featH(f, x, z + EPS) - featH(f, x, z - EPS); }
+    gx += fx / (2 * EPS); gz += fz / (2 * EPS);
+  }
+  const m = Math.sqrt(gx * gx + gz * gz); if (m > MAX_SLOPE) { gx *= MAX_SLOPE / m; gz *= MAX_SLOPE / m; }
   _g.x = gx; _g.z = gz; return _g;
 }
 
-export function newBall(hole) { return { x: hole.ball.x, z: hole.ball.z, vx: 0, vz: 0, holed: false, sunk: false, rest: true, still: 0, loop: null, loaded: 0, tcool: 0, gk: -1, ly: 0, ax: 0, az: 0 }; }
+export function newBall(hole) { return { y: hillH(hole, hole.ball.x, hole.ball.z), vy: 0, air: false, x: hole.ball.x, z: hole.ball.z, vx: 0, vz: 0, holed: false, sunk: false, rest: true, still: 0, loop: null, loaded: 0, tcool: 0, gk: -1, ly: 0, ax: 0, az: 0 }; }
 /** What the power-ups are doing right now: `t` is the hero clock, the rest are switches. */
 export function newCtx() { return { t: 0, ghost: false, bounce: false, turbo: false, homing: false, drive: false, cupR: CUP_R }; }
 
@@ -66,7 +87,7 @@ const dist2 = (b, x, z) => { const dx = b.x - x, dz = b.z - z; return dx * dx + 
  * fx (a special moment: 1 teleport, 2 cannon loads, 3 cannon fires, 4 loop entered, 5 geyser kick).
  */
 export function stepBall(b, hole, ctx, dt, ev) {
-  ev.wall = 0; ev.post = 0; ev.holed = false; ev.splash = false; ev.fx = 0;
+  ev.wall = 0; ev.post = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
   if (b.holed || b.sunk) return;
   const n = Math.max(1, Math.ceil(dt / STEP)), h = dt / n, W = hole.walls, hero = hole.hero, ghost = ctx.ghost;
   const fric = FRICTION * (ctx.turbo ? 0.55 : 1) * (ctx.drive ? 0.6 : 1), maxV = ctx.turbo ? MAX_V * 1.35 : ctx.drive ? 9 : MAX_V;
@@ -88,8 +109,8 @@ export function stepBall(b, hole, ctx, dt, ev) {
       continue;
     }
     // slopes, rivers, the turntable, the power-ups
-    const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h;
-    for (const rv of hole.rivers) {
+    if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; }
+    if (!b.air) for (const rv of hole.rivers) {
       const dx = rv.b.x - rv.a.x, dz = rv.b.z - rv.a.z, l2 = dx * dx + dz * dz; let t = ((b.x - rv.a.x) * dx + (b.z - rv.a.z) * dz) / l2; if (t < -0.05 || t > 1.05) continue;
       t = t < 0 ? 0 : t > 1 ? 1 : t; const px = rv.a.x + dx * t - b.x, pz = rv.a.z + dz * t - b.z;
       if (px * px + pz * pz < rv.hw * rv.hw) { const l = Math.sqrt(l2); b.vx += (dx / l) * rv.acc * h; b.vz += (dz / l) * rv.acc * h; }
@@ -98,11 +119,22 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (ctx.drive) { b.vx += b.ax * h; b.vz += b.az * h; }
     let sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (ctx.homing && sp > 0.8) { const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz); if (cd > 0.05 && cd < 6 && (b.vx * cx + b.vz * cz) / (sp * cd) > 0.5) { const k = (9 * (1 - cd / 6) * h) / cd; b.vx += cx * k; b.vz += cz * k; } }
-    let f = fric; for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r) { f *= 2.8; break; }
+    let f = b.air ? 0 : fric; if (!b.air) for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r) { f *= 2.8; break; }
     sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
-    if (sp > 0) { const ns = Math.max(0, sp - f * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; }
+    if (sp > 0 && f > 0) { const ns = Math.max(0, sp - f * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; }
     if (sp > maxV) { const k = maxV / sp; b.vx *= k; b.vz *= k; }
     b.x += b.vx * h; b.z += b.vz * h;
+    { // up and down: on the ground the ball follows the surface; if the surface falls away faster than the ball's own path it takes off, then gravity brings it down again
+      const H1 = hillH(hole, b.x, b.z);
+      if (!b.air) {
+        const yb = b.y + b.vy * h - 0.5 * GA * h * h;
+        if (H1 < yb - 0.03) { b.air = true; b.y = yb; b.vy -= GA * h; }
+        else { b.vy = Math.max(-6, Math.min(6, (H1 - b.y) / h)); b.y = H1; }
+      } else {
+        b.vy -= GA * h; b.y += b.vy * h;
+        if (b.y <= H1) { b.y = H1; b.air = false; b.vy = 0; b.vx *= 0.9; b.vz *= 0.9; if (H1 < -0.7) { b.sunk = true; ev.splash = true; ev.fall = true; return; } }
+      }
+    }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
     for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev); }
     if (hero && hero.gate && !ghost && gateBlocked(hero, tt)) collideSeg(b, hero.gate[0], hero.gate[1], hero.gate[2], hero.gate[3], 0.55, ev);
@@ -141,13 +173,14 @@ export function stepBall(b, hole, ctx, dt, ev) {
       }
     }
     // water
-    if (!ghost) for (const p of hole.ponds) if (dist2(b, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, b.x, b.z)) { b.sunk = true; ev.splash = true; return; }
+    if (!ghost && !b.air) for (const p of hole.ponds) if (dist2(b, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, b.x, b.z)) { b.sunk = true; ev.splash = true; return; }
     // the cup: it takes a ball that gets there slowly enough, and gently pulls in one that is close and slow
     const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz), sp2 = Math.sqrt(b.vx * b.vx + b.vz * b.vz), cr = ctx.cupR, big = cr / CUP_R;
+    if (b.air) continue;
     if (cd < cr && sp2 < 7.5 * Math.sqrt(big)) { b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
     if (cd < 1.15 * big && sp2 < 4.5 * big) { const k = 7 * (1 - cd / (1.15 * big)) * h / (cd || 1); b.vx += cx * k; b.vz += cz * k; }
   }
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);
-  if (s < 0.07 && slope < FRICTION * 0.9 && !b.loop && b.loaded <= 0 && !ctx.drive) b.still += dt; else b.still = 0;
+  if (s < 0.07 && slope < FRICTION * 0.9 && !b.loop && !b.air && b.loaded <= 0 && !ctx.drive) b.still += dt; else b.still = 0;
   if (b.still > 0.3) { b.rest = true; b.vx = b.vz = 0; }
 }

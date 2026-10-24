@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024163030';
-import { auroraColour } from './aurora.js?v=20261024163030';
+import { PAL } from './palette.js?v=20261024163833';
+import { auroraColour } from './aurora.js?v=20261024163833';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261024163030';
+} from './houses.js?v=20261024163833';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -829,9 +829,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
     let sw = 0, sy = 0;
     for (let e = 0; e < v.s.length; e++) { const f = v.w[e] * carveS.K[v.s[e]]; sw += f; sy += f * carveS.H[v.s[e]]; }
     const i = v.i, { origY, origC } = carveS, arr = p.array, col = geo.attributes.color.array;
-    arr[i * 3 + 1] = sw > 1 ? sy / sw : origY[i] * (1 - sw) + sy;
+    arr[i * 3 + 1] = (sw > 1 ? sy / sw : origY[i] * (1 - sw) + sy) + (v.dig ? v.dig * carveS.K[v.ds] : 0);
     const g = Math.min(1, sw) * 0.85;
     col[i * 3] = origC[i * 3] + (lawn.r - origC[i * 3]) * g; col[i * 3 + 1] = origC[i * 3 + 1] + (lawn.g - origC[i * 3 + 1]) * g; col[i * 3 + 2] = origC[i * 3 + 2] + (lawn.b - origC[i * 3 + 2]) * g;
+    if (v.dig) { const k = Math.min(1, -v.dig / 1.2) * carveS.K[v.ds]; col[i * 3] += (0.22 - col[i * 3]) * k; col[i * 3 + 1] += (0.18 - col[i * 3 + 1]) * k; col[i * 3 + 2] += (0.15 - col[i * 3 + 2]) * k; }
     const pt = carveS.paint.get(i); if (pt) { col[i * 3] += (pt.r - col[i * 3]) * pt.a; col[i * 3 + 1] += (pt.g - col[i * 3 + 1]) * pt.a; col[i * 3 + 2] += (pt.b - col[i * 3 + 2]) * pt.a; }
   }
   const carve = {
@@ -840,7 +841,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
      * Start levelling the ground under several sites. Each site is a list of [x, z, flatRadius] points (a hole's centre line): the ground is flat within each point's radius and eases back to the
      * hillside over `blend` more. Returns the height of each new lawn. Call `set(k, site)` to bring one in (or all, without `site`).
      */
-    begin(sites, blend = 5.5) {
+    begin(sites, blend = 5.5, digs = []) {
       if (carveS.on) carve.end();
       if (!carveS.origY) { carveS.origY = new Float32Array(p.count); for (let i = 0; i < p.count; i++) carveS.origY[i] = p.getY(i); carveS.origC = Float32Array.from(colors); }
       const map = new Map(), H = [], K = [], per = [];
@@ -858,6 +859,10 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           if (dd <= 0) { sum += carveS.origY[i]; cnt++; }
           let v = map.get(i); if (!v) { v = { i, s: [], w: [] }; map.set(i, v); }
           v.s.push(si); v.w.push(w); list.push(v);
+          if (digs[si]) for (const d of digs[si]) {                              // a chasm: the ground under it is dug out (with a short slope round the edge)
+            const rx = x - d.x, rz = z - d.z, s2 = rx * d.ux + rz * d.uz, c2 = rx * d.nx + rz * d.nz, dd = Math.max(Math.abs(s2) - d.len / 2, Math.abs(c2) - d.wid);
+            const f = dd <= 0 ? 1 : dd >= 0.9 ? 0 : 1 - smooth(0, 0.9, dd); if (f > 0 && -d.depth * f < (v.dig || 0)) { v.dig = -d.depth * f; v.ds = si; }
+          }
         }
         H.push(cnt ? sum / cnt : heightAt(pts[0][0], pts[0][1])); K.push(0); per.push(list);
         let cx = 0, cz = 0; for (const q of pts) { cx += q[0]; cz += q[1]; } cx /= pts.length; cz /= pts.length;

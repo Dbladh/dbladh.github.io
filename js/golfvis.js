@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024163030';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024163030';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024163030';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024163030';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024163833';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024163833';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024163833';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024163833';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -67,7 +67,7 @@ function buildBorder(h, g, disposables) {
   const sgn = area > 0 ? 1 : -1, col = new THREE.Color();
   const make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; g.add(m); disposables.push(m); return m; };
   const place = (mesh, i, w, off, y, lenK, hgt, thick, shift, palette, tilt = 0) => {
-    const dx = w[2] - w[0], dz = w[3] - w[1], l = Math.sqrt(dx * dx + dz * dz) || 1, hy = hillH(h, (w[0] + w[2]) / 2, (w[1] + w[3]) / 2), ox = (sgn * dz) / l, oz = (-sgn * dx) / l, ux = dx / l, uz = dz / l;
+    const dx = w[2] - w[0], dz = w[3] - w[1], l = Math.sqrt(dx * dx + dz * dz) || 1, hy = Math.max(0, hillH(h, (w[0] + w[2]) / 2, (w[1] + w[3]) / 2)), ox = (sgn * dz) / l, oz = (-sgn * dx) / l, ux = dx / l, uz = dz / l;
     _q.setFromAxisAngle(UP, Math.atan2(-dz, dx)); if (tilt) { _q2.setFromAxisAngle(_vx, tilt); _q.multiply(_q2); }
     _m.compose(_v.set((w[0] + w[2]) / 2 + ox * (thick / 2 + off) + ux * shift, y + hy, (w[1] + w[3]) / 2 + oz * (thick / 2 + off) + uz * shift), _q, _s.set(l * lenK + 0.07, hgt, thick));
     mesh.setMatrixAt(i, _m); col.set(palette[(r() * palette.length) | 0]); col.offsetHSL(0, 0, (r() - 0.5) * 0.05); mesh.setColorAt(i, col);
@@ -103,21 +103,36 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   skin(lowEnd);
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
-  // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised by the hills
-  const pos = [], uvs = [], col = [], idx = [], c1 = new THREE.Color('#78e075'), c2 = new THREE.Color('#68d06b'), COLS = 16, R = h.ribbon, crest = new THREE.Color('#b6f58a'), shade = new THREE.Color('#3f9a55'), tmp = new THREE.Color();
+  // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised and lowered by the terrain (hills, berms, platforms, ramps, canyons)
+  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color('#78e075'), c2 = new THREE.Color('#68d06b'), COLS = 16, crest = new THREE.Color('#b6f58a'), shade = new THREE.Color('#3f9a55'), tmp = new THREE.Color();
+  const rock = new THREE.Color('#8d8579'), deep = new THREE.Color('#4a4239'), plank = new THREE.Color('#e0a868'), feats = h.feats || [];
+  let R = h.ribbon;
+  if (feats.length) { const R2 = []; for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, a0 = R[i], b0 = R[i + 1]; R2.push([0, 1, 2, 3, 4].map((j) => (j === 4 && (a0[4] < 0 || b0[4] < 0) ? a0[4] : a0[j] + (b0[j] - a0[j]) * t))); } R2.push(R[R.length - 1]); R = R2; }
   for (let i = 0; i < R.length; i++) {
     const row = R[i], stripe = (row[4] < 0 ? i < R.length / 2 ? -1 : 1e3 : Math.floor(row[4] / 1.5)) & 1;
     for (let c = 0; c <= COLS; c++) {
       const u = c / COLS, x = row[0] + (row[2] - row[0]) * u, z = row[1] + (row[3] - row[1]) * u;
-      const hh = hillH(h, x, z), gr = hillGrad(h, x, z), sl = Math.min(1, Math.sqrt(gr.x * gr.x + gr.z * gr.z) * 1.7);      // hills read by shading: crests go lighter and warmer, the slopes darker and greener
-      pos.push(x, hh + 0.03, z); uvs.push(x * 0.4, z * 0.4); const lit = Math.max(0, Math.min(1, 0.5 - (gr.x * 0.7 - gr.z * 0.7) * 1.6)), band = hh > 0.04 ? 0.5 + 0.5 * Math.cos(hh * 20.9) : 1;      // sunlit and shaded sides, plus faint contour bands every 0.3
-      tmp.copy(stripe ? c1 : c2).lerp(crest, Math.min(1, hh / 0.9) * 0.7).lerp(shade, sl * 0.8).multiplyScalar(0.72 + 0.5 * lit - 0.07 * band);
+      const hh = hillH(h, x, z), gr = hillGrad(h, x, z), gm = Math.sqrt(gr.x * gr.x + gr.z * gr.z), sl = Math.min(1, gm * 1.7), up = Math.max(0, hh);      // slopes read by shading: crests go lighter and warmer, the slopes darker and greener
+      pos.push(x, hh + 0.03, z); uvs.push(x * 0.4, z * 0.4); hts.push(hh); const lit = Math.max(0, Math.min(1, 0.5 - (gr.x * 0.7 - gr.z * 0.7) * 1.6)), band = up > 0.04 ? 0.5 + 0.5 * Math.cos(up * 20.9) : 1;      // sunlit and shaded sides, plus faint contour bands every 0.3
+      tmp.copy(stripe ? c1 : c2).lerp(crest, Math.min(1, up / 0.9) * 0.7).lerp(shade, sl * 0.8).multiplyScalar(0.72 + 0.5 * lit - 0.07 * band);
+      const rk = Math.max(0, Math.min(1, (gm - 0.55) / 0.65)); if (rk > 0) tmp.lerp(hh < -0.2 ? deep : rock, rk);                          // steep faces turn to rock
+      for (const f of feats) if (f.t === 'jump') { const rx = x - f.x, rz = z - f.z, s2 = rx * f.ux + rz * f.uz; if (s2 > -f.len / 2 - 0.05 && s2 < f.len / 2 + 0.05 && Math.abs(rx * f.nx + rz * f.nz) < f.wid) tmp.lerp(plank, 0.85).multiplyScalar(0.92 + 0.08 * Math.sin(s2 * 14)); }
       col.push(tmp.r, tmp.g, tmp.b);
     }
-    if (i > 0) for (let c = 0; c < COLS; c++) { const b0 = (i - 1) * (COLS + 1) + c, a0 = b0 + 1, d0 = b0 + COLS + 1, e0 = d0 + 1; idx.push(b0, d0, a0, a0, d0, e0); }
+    if (i > 0) for (let c = 0; c < COLS; c++) {
+      const b0 = (i - 1) * (COLS + 1) + c, a0 = b0 + 1, d0 = b0 + COLS + 1, e0 = d0 + 1;
+      if ((hts[b0] + hts[a0] + hts[d0] + hts[e0]) / 4 < -0.6 && Math.max(hts[b0], hts[a0], hts[d0], hts[e0]) < -0.3) continue;                    // (nothing to draw over a chasm)
+      idx.push(b0, d0, a0, a0, d0, e0);
+    }
   }
   const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); fg.setIndex(idx); fg.computeVertexNormals();
   const fair = new THREE.Mesh(fg, M.grass); fair.receiveShadow = true; g.add(fair);
+  for (const f of feats) if (f.t === 'gap') {                // the chasm: a dark floor and rock walls down both sides, under the border
+    const yaw = Math.atan2(-f.uz, f.ux), wide = 2 * (h.hw + 0.35), dk = stoneTint('#4a4239'), grp = new THREE.Group(); grp.position.set(f.x, 0, f.z); grp.rotation.y = yaw; g.add(grp);
+    grp.add(rbox(paint('#241d18'), f.len + 0.2, 0.1, wide, 0, -f.d - 0.02, 0, 0.02));
+    for (const sd of [-1, 1]) { grp.add(rbox(dk, f.len + 0.3, f.d + 0.1, 0.5, 0, -f.d / 2 + 0.03, sd * (h.hw + 0.3), 0.04)); }
+    for (const e of [-1, 1]) grp.add(rbox(dk, 0.3, f.d + 0.1, wide, e * (f.len / 2 + 0.05), -f.d / 2 + 0.03, 0, 0.04));
+  }
   // the border: bricks, boulders or planks all the way round
   buildBorder(h, g, disposables);
   // the tee sign, on a post beside the round green at the start
@@ -246,14 +261,15 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     updaters.push((heroT) => { disc.rotation.y = -hr.omega * heroT; });
   } else if (hr.type === 'pendulum') {                     // a blue painted gantry with hammers on yellow chains
     const blue = metal('#3c6fd8'), yel = paint('#ffd23f'), padM = paint('#3a62c9');
-    w.add(rbox(blue, 0.3, 0.3, (hw + 0.5) * 2, 0, 3.5, 0, 0.06));
-    for (const s of [-1, 1]) { w.add(rbox(blue, 0.3, 3.6, 0.3, 0, 1.75, s * (hw + 0.45), 0.06)); w.add(rbox(blue, 0.9, 0.16, 0.55, 0, 0.1, s * (hw + 0.45), 0.04)); }
     hr.hammers.forEach((m) => {
+      w.add(rbox(blue, 0.3, 0.3, (hw + 0.5) * 2, m.du, 3.5, 0, 0.06));                                   // an arch over each hammer: a bar across the lane on two legs, the chain hangs from a ring on the bar
+      for (const sd of [-1, 1]) { w.add(rbox(blue, 0.3, 3.6, 0.3, m.du, 1.75, sd * (hw + 0.45), 0.06)); w.add(rbox(blue, 0.9, 0.16, 0.55, m.du, 0.1, sd * (hw + 0.45), 0.04)); }
+      w.add(torus(yel, 0.13, 0.05, m.du, 3.32, 0, 0, Math.PI / 2)); w.add(rbox(blue, 0.12, 0.2, 0.12, m.du, 3.36, 0, 0.02));
       const head = new THREE.Group(), body = cyl(padM, hr.rad, 0.9, 0, 0, 0); head.add(body); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, 0.18, 0)); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, -0.2, 0)); head.add(torus(blue, 0.12, 0.05, 0, 0.5, 0, Math.PI / 2)); w.add(head);
       const links = []; for (let i = 0; i < 9; i++) { const lk = torus(yel, 0.11, 0.035, 0, 0, 0); lk.scale.set(1, 1.5, 1); w.add(lk); links.push(lk); }
       updaters.push((heroT) => {
         const off = hr.A * Math.sin(hr.w * heroT + m.ph); head.position.set(m.du, 0.6, off);
-        const topY = 3.4, hx = m.du, hy = 1.12, hz = off;
+        const topY = 3.3, hx = m.du, hy = 1.12, hz = off;
         links.forEach((lk, i) => { const u = (i + 0.5) / links.length; lk.position.set(hx, topY + (hy - topY) * u, hz * u); lk.rotation.set(-Math.atan2(hz, topY - hy), i % 2 ? Math.PI / 2 : 0, 0); });
       });
     });

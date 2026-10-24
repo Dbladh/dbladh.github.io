@@ -5,14 +5,14 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024163030';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024163030';
-import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024163030';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024163030';
-import { createFx } from './golffx.js?v=20261024163030';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024163030';
-import { buildDecor } from './golfdecor.js?v=20261024163030';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024163030';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024163833';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024163833';
+import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024163833';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024163833';
+import { createFx } from './golffx.js?v=20261024163833';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024163833';
+import { buildDecor } from './golfdecor.js?v=20261024163833';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024163833';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -84,7 +84,11 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     fxs = createFx(lowEnd); scene.add(fxs.group);
     holes = []; for (let i = 0; i < HOLES; i++) holes.push(makeHole(holeSeed(st.seed, i), i, st.order[i]));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
-    Ys = world.carve.begin(plan.shapes.map((sh) => sh.map((p) => [p[0], p[1], p[2] + MARGIN])), BLEND);
+    const digs = holes.map((h, i) => (h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
+      const o = toWorld(sites[i], 0, 0), c = toWorld(sites[i], f.x, f.z), u = toWorld(sites[i], f.ux, f.uz), n = toWorld(sites[i], f.nx, f.nz);
+      return { x: c.x, z: c.z, ux: u.x - o.x, uz: u.z - o.z, nx: n.x - o.x, nz: n.z - o.z, len: f.len + 0.2, wid: h.hw + 0.55, depth: 2.2 };
+    }));
+    Ys = world.carve.begin(plan.shapes.map((sh) => sh.map((p) => [p[0], p[1], p[2] + MARGIN])), BLEND, digs);
     vises = holes.map((h, i) => {
       const v = buildHoleVisual(h, { lowEnd, look: world.waterLook, fx: fxs }), g = v.group; g.rotation.y = (sites[i].k * Math.PI) / 4; g.position.set(sites[i].x, Ys[i] + 0.06, sites[i].z); g.scale.set(1, 0.001, 1); scene.add(g); return v;
     });
@@ -152,7 +156,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     balls.forEach((b, i) => {
       const m = ballMeshes[i], s = ballShadows[i]; if (!m) return;
       const y = hillH(hole, b.x, b.z) + 0.03;
-      m.position.set(b.x, y + BALL_R + (b.ly || 0), b.z); s.position.set(b.x, y + 0.02, b.z);
+      m.position.set(b.x, (b.air || b.y < y ? b.y + 0.03 : y) + BALL_R + (b.ly || 0), b.z); s.position.set(b.x, Math.max(y, -0.05) + 0.02, b.z);
       m.visible = !b.holed && !b.sunk && !(i === 0 && fx.hamster > 0); s.visible = m.visible && !(b.ly > 0.1); m.material = fx.ghost > 0 ? M.ghost : m.userData.mat;
     });
     if (fx.hamster > 0 && balls[0]) { hamster.visible = true; hamster.position.set(balls[0].x, hillH(hole, balls[0].x, balls[0].z) + 0.03 + BALL_R * 1.75, balls[0].z); } else hamster.visible = false;
@@ -280,7 +284,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     return out;
   }
   function behindPose(b, dx, dz, back, upH, ahead, out) {  // behind the ball, looking the way it will go
-    const S = sites[st.hole], P = toWorld(S, b.x - dx * back, b.z - dz * back), L = toWorld(S, b.x + dx * ahead, b.z + dz * ahead), base = Ys[st.hole] + 0.06 + hillH(hole, b.x, b.z);
+    const S = sites[st.hole], P = toWorld(S, b.x - dx * back, b.z - dz * back), L = toWorld(S, b.x + dx * ahead, b.z + dz * ahead), base = Ys[st.hole] + 0.06 + Math.max(0, hillH(hole, b.x, b.z));
     out.pos.set(P.x, Math.max(base + upH, world.carve.groundNow(P.x, P.z) + 2.4), P.z); out.look.set(L.x, base + 0.3, L.z);
   }
   function followCamera(dt) {
@@ -406,7 +410,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
             if (ev.wall > 1.2) audio?.golf?.('wall', Math.min(1, ev.wall / 12)); if (ev.post > 1.2) audio?.golf?.('post', Math.min(1, ev.post / 12));
             if (ev.fx) audio?.golf?.(ev.fx === 1 ? 'tele' : ev.fx === 2 ? 'load' : ev.fx === 3 ? 'boom' : ev.fx === 4 ? 'loop' : 'geyser');
             if (ev.fx === 5 && fxs) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.2, b.z)); fxs.burst('kick', p.x, p.y, p.z); }
-            if (ev.splash) { audio?.golf?.('splash'); if (fxs) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.1, b.z)); fxs.burst('splash', p.x, p.y, p.z); } if (balls.length > 1) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } continue; }
+            if (ev.splash) { st.fell = ev.fall; audio?.golf?.(ev.fall ? 'wall' : 'splash'); if (fxs && !ev.fall) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.1, b.z)); fxs.burst('splash', p.x, p.y, p.z); } if (balls.length > 1) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } continue; }
             if (ev.holed) { holedBall = b; continue; }
             if (!b.rest) live++;
             const sp = Math.hypot(b.vx, b.vz); if (sp > 0.05) { tmpV.set(-b.vz, 0, b.vx).normalize(); ballMeshes[i].rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); }
@@ -414,7 +418,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
           collect();
           if (holedBall) { balls = [holedBall]; hideExtraBalls(); st.mode = 'sink'; sinkT = 0; fx.hamster = 0; }
           else if (balls.every((b) => b.sunk)) {                      // into the water: back to where it was hit from, a stroke more unless the safety net is up
-            if (st.safety) { st.safety = false; say(elToast, 'Safety net!', 1300, 'toast'); } else { st.strokes++; say(elToast, 'Splash! +1', 1300, 'toast'); }
+            if (st.safety) { st.safety = false; say(elToast, 'Safety net!', 1300, 'toast'); } else { st.strokes++; say(elToast, st.fell ? 'Into the canyon! +1' : 'Splash! +1', 1300, 'toast'); }
             const nb = newBall(hole); nb.x = st.lastX; nb.z = st.lastZ; balls = [nb]; hideExtraBalls(); fx.hamster = 0; st.mode = 'aim';
           } else if (live === 0 || (st.mode === 'roll' && st.rollT > 14)) {
             const alive = balls.filter((b) => !b.sunk);

@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024163030';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024163833';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -192,6 +192,34 @@ function build(seed, index, type, force) {
     const li = others[((r() * others.length) | 0)], side = r() < 0.5 ? 1 : -1, p = onLeg(li, 0.5, 0.85 * side);
     if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15, poly: blobPoly(q(p.x), q(p.z), 1.15, seed ^ 0x3c6ef372) }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
+  // terrain features beyond the hills (not on the first holes): a banked berm on a bend, a raised platform, and a jump ramp that clears a canyon gap
+  const feats = [];
+  if (index >= 1) {
+    const longs = others.filter((i) => legs[i].l >= 7.0);
+    const place = (kind) => {
+      for (let tries = 0; tries < 4 && longs.length; tries++) {
+        const li = longs[(r() * longs.length) | 0], L = legs[li], t = 0.46 + r() * 0.14, c = onLeg(li, t, 0);
+        const f = { x: c.x, z: c.z, ux: L.x, uz: L.z, nx: -L.z, nz: L.x, wid: 4 };
+        if (kind === 'plat') { if (!free(c.x, c.z, 0.7)) continue; feats.push({ t: 'plat', ...f, len: 3.2 + r() * 1.0, h: 0.5 + r() * 0.25, ramp: 2.4, edge: 0.5 }); keep.push({ x: c.x, z: c.z, r: 5.2 }); return true; }
+        if (!free(c.x, c.z, 0.7)) continue;                                       // a jump: the ramp ends at the lip, the canyon starts there
+        const lipX = c.x, lipZ = c.z, ramp = 2.2, gap = 1.9 + r() * 0.5;
+        feats.push({ t: 'jump', ...f, x: lipX - L.x * ramp / 2, z: lipZ - L.z * ramp / 2, len: ramp, h: 0.8 }, { t: 'gap', ...f, x: lipX + L.x * gap / 2, z: lipZ + L.z * gap / 2, len: gap, d: 1.4 });
+        keep.push({ x: lipX, z: lipZ, r: 5.4 }); return true;
+      }
+      return false;
+    };
+    if (index >= 3 && type !== 'drawbridge' && r() < 0.6) place('jump');
+    if (index >= 2 && r() < 0.5) place('plat');
+    if (r() < 0.55) {                                                              // a berm on the outside of a bend
+      for (let v = 1; v < nLegs; v++) {
+        const ia = apex[v]; if (ia === undefined || ia < 5 || ia > N - 6 || r() < 0.4) continue;
+        const a = cl[ia - 4], b = cl[ia + 4], mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, ox = cl[ia].x - mx, oz = cl[ia].z - mz, ol = Math.sqrt(ox * ox + oz * oz) || 1, off = w[ia] - 0.5;
+        const p0 = cl[ia - 4], p1 = cl[ia + 4], px = ox / ol, pz = oz / ol;
+        if (!free(cl[ia].x, cl[ia].z, 1.0)) continue;
+        feats.push({ t: 'berm', ax: p0.x + px * off, az: p0.z + pz * off, bx: p1.x + px * off, bz: p1.z + pz * off, w: 1.7, h: 0.5 + r() * 0.2 }); keep.push({ x: cl[ia].x, z: cl[ia].z, r: 2.4 }); break;
+      }
+    }
+  }
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
   const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);
   const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
@@ -224,5 +252,5 @@ function build(seed, index, type, force) {
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  return { seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  return { feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
 }
