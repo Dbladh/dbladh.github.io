@@ -17,6 +17,9 @@ export function createFx(lowEnd = false) {
   const MAX_SAND = 240, MAX_DUST = 40, sands = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), sandMat, MAX_SAND), dusts = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), dustMat, MAX_DUST);
   for (const im of [sands, dusts]) { im.frustumCulled = false; im.renderOrder = 4; for (let i = 0; i < im.count; i++) im.setMatrixAt(i, zero); group.add(im); }
   const S = Array.from({ length: MAX_SAND }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s: 0.04, floor: 0 })), U = Array.from({ length: MAX_DUST }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0, life: 1, s: 0.3 }));
+  const fogMat = new THREE.MeshBasicMaterial({ color: '#b7a5ff', transparent: true, opacity: 0.11, depthWrite: false, fog: true }), MAX_FOG = 70, fogs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), fogMat, MAX_FOG);
+  fogs.frustumCulled = false; fogs.renderOrder = 4; for (let i = 0; i < MAX_FOG; i++) fogs.setMatrixAt(i, zero); group.add(fogs);
+  const F = Array.from({ length: MAX_FOG }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vz: 0, t: 0, life: 1, s: 0.5 })); let fCur = 0, accF = 0;
   let sCur = 0, uCur = 0, accS = 0;
   let dCur = 0, mCur = 0, rCur = 0, acc = 0, accM = 0;
   const rnd = Math.random, k = lowEnd ? 0.55 : 1;
@@ -32,6 +35,11 @@ export function createFx(lowEnd = false) {
       for (let i = 0; i < n; i++) { const a = rnd() * 6.283, sp = 0.6 + rnd() * 1.8; addDrop(x, y, z, Math.cos(a) * sp, 3.2 + rnd() * 3.2, Math.sin(a) * sp, 0.05 + rnd() * 0.06, y - 0.02); }
       for (let i = 0; i < Math.round(5 * k); i++) { const a = rnd() * 6.283; addMist(x + Math.cos(a) * 0.2, y + 0.1, z + Math.sin(a) * 0.2, Math.cos(a) * 0.5, 0.6 + rnd() * 0.5, Math.sin(a) * 0.5, 0.7 + rnd() * 0.4, 0.28 + rnd() * 0.2); }
       addRing(x, y + 0.01, z, 1.0, 0.9); addRing(x, y + 0.01, z, 1.7, 1.3);
+    },
+    /** An eerie low fog drifting round (x, y, z) within `radius` (the ghost power-up). */
+    ghostFog(x, y, z, radius, dt) {
+      accF += dt * 14 * k;
+      while (accF >= 1) { accF -= 1; const a = rnd() * 6.283, d = Math.sqrt(rnd()) * radius, p = F[fCur]; fCur = (fCur + 1) % MAX_FOG; p.on = true; p.x = x + Math.cos(a) * d; p.z = z + Math.sin(a) * d; p.y = y + 0.1 + rnd() * 0.5; p.vx = (rnd() - 0.5) * 0.35; p.vz = (rnd() - 0.5) * 0.35; p.t = 0; p.life = 1.8 + rnd() * 1.4; p.s = 0.55 + rnd() * 0.6; }
     },
     /** Sand thrown up by a ball ploughing through a pit at (x, y, z) moving (vx, vz). */
     sand(x, y, z, vx, vz, dt) {
@@ -81,8 +89,14 @@ export function createFx(lowEnd = false) {
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; const u = p.t / p.life, s = p.s * (0.6 + u) * (1 - u * u * 0.5);
         m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s, s * 0.7, s)); dusts.setMatrixAt(i, m);
       }
-      if (any) { sands.instanceMatrix.needsUpdate = true; dusts.instanceMatrix.needsUpdate = true; drops.instanceMatrix.needsUpdate = true; mists.instanceMatrix.needsUpdate = true; }
+      for (let i = 0; i < MAX_FOG; i++) {
+        const p = F[i]; if (!p.on) continue; any = true; p.t += dt;
+        if (p.t >= p.life) { p.on = false; fogs.setMatrixAt(i, zero); continue; }
+        p.x += p.vx * dt; p.z += p.vz * dt; p.y += 0.12 * dt; const u = p.t / p.life, s = p.s * (0.6 + 0.7 * u) * Math.sin(Math.PI * Math.min(1, u * 1.1)) ** 0.5;
+        m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s, s * 0.45, s)); fogs.setMatrixAt(i, m);
+      }
+      if (any) { fogs.instanceMatrix.needsUpdate = true; sands.instanceMatrix.needsUpdate = true; dusts.instanceMatrix.needsUpdate = true; drops.instanceMatrix.needsUpdate = true; mists.instanceMatrix.needsUpdate = true; }
     },
-    dispose() { sands.geometry.dispose(); dusts.geometry.dispose(); sandMat.dispose(); dustMat.dispose(); drops.geometry.dispose(); mists.geometry.dispose(); ringGeo.dispose(); dropMat.dispose(); mistMat.dispose(); for (const r of rings) r.mat.dispose(); },
+    dispose() { fogs.geometry.dispose(); fogMat.dispose(); sands.geometry.dispose(); dusts.geometry.dispose(); sandMat.dispose(); dustMat.dispose(); drops.geometry.dispose(); mists.geometry.dispose(); ringGeo.dispose(); dropMat.dispose(); mistMat.dispose(); for (const r of rings) r.mat.dispose(); },
   };
 }

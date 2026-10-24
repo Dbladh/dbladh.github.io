@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024171924';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024171924';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024171924';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024171924';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024172414';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024172414';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024172414';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024172414';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -178,7 +178,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     im.instanceMatrix.needsUpdate = im.instanceColor.needsUpdate = true; g.add(im); disposables.push(im);
   }
   // the hero
-  if (h.hero) { const hv = heroVisual(h.hero, track, updaters, { look, fx, disposables }); if (hv) g.add(hv); }
+  let heroRoot = null; if (h.hero) { const hv = heroVisual(h.hero, track, updaters, { look, fx, disposables }); if (hv) { g.add(hv); heroRoot = hv; } }
   // power-up orbs
   const pickups = [];
   for (const p of h.pickups) {
@@ -192,8 +192,15 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     updaters.push((heroT, t) => { if (rec.taken) return; o.position.y = 0.78 + 0.14 * Math.sin(t * 2.4 + rec.ph); ring.rotation.z = t * 1.4; });
   }
   g.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry !== G.disc && o.material !== M.shadow && o !== fair) o.castShadow = true; if (o.isMesh && o.material !== M.shadow && o.material !== M.bubble) o.receiveShadow = true; });
+  // the ghost power-up: the obstacles (and posts and bumpers) turn see-through while it lasts
+  const ghosted = [], ghostMats = new Map(); let ghostOn = false;
+  const ghostOf = (m) => { let c = ghostMats.get(m); if (!c) { c = m.clone(); c.transparent = true; c.opacity = 0.3; c.depthWrite = false; if (c.color) c.color.lerp(new THREE.Color('#c9bdff'), 0.35); ghostMats.set(m, c); disposables.push(c); } return c; };
+  const collect = (root) => root.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.material && (o.material.isMeshLambertMaterial || o.material.isMeshBasicMaterial) && o.material !== M.cup) ghosted.push([o, o.material]); });
+  if (heroRoot) collect(heroRoot);
+  g.children.forEach((o) => { if (o.isMesh && (o.material === M.post || o.material === M.bumper || o.material === M.white)) ghosted.push([o, o.material]); });
   return {
-    group: g, pickups, cupMesh, flag,
+    setGhost(on) { if (on === ghostOn) return; ghostOn = on; for (const [o, m] of ghosted) { o.material = on ? ghostOf(m) : m; o.castShadow = !on; } },
+    heroRoot, group: g, pickups, cupMesh, flag,
     update(heroT, t, dt, st) { for (const u of updaters) u(heroT, t, dt, st); },
     dispose() { for (const d of disposables) d.dispose?.(); g.traverse((o) => { if (o.material && o.material !== M.rail && o.material.map === undefined) { /* shared materials are kept */ } }); },
   };

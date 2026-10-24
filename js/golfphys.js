@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024171924';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024172414';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -96,6 +96,39 @@ export function inPoly(poly, x, z) {
 }
 /** Is the ball in a sand pit? */
 export function inSand(hole, b) { for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r * 1.45 && inPoly(s.poly, b.x, b.z)) return true; return false; }
+/** The push needed to take the ball clear of whatever it overlaps that a ghost passes through (hero walls, posts, bumpers): adds to (out.x, out.z) and returns whether it overlaps. */
+function overlapPush(b, hole, out) {
+  let hit = false;
+  for (const w of hole.walls) {
+    if (!w[5]) continue;
+    const dx = w[2] - w[0], dz = w[3] - w[1], l2 = dx * dx + dz * dz; let t = l2 > 0 ? ((b.x - w[0]) * dx + (b.z - w[1]) * dz) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ox = b.x - (w[0] + dx * t), oz = b.z - (w[1] + dz * t), d2 = ox * ox + oz * oz; if (d2 >= BALL_R * BALL_R) continue;
+    const d = Math.sqrt(d2); let nx, nz; if (d < 1e-6) { const l = Math.sqrt(l2) || 1; nx = -dz / l; nz = dx / l; } else { nx = ox / d; nz = oz / d; }
+    out.x += nx * (BALL_R - d + 0.02); out.z += nz * (BALL_R - d + 0.02); hit = true;
+  }
+  const hw = hole.hero ? hole.hero.walls : null;              // the hero's walls come as closed boxes of four: a ball whose centre is inside one is pushed out through the nearest side
+  if (hw) for (let k = 0; k + 3 < hw.length; k += 4) {
+    const poly = [hw[k][0], hw[k][1], hw[k + 1][0], hw[k + 1][1], hw[k + 2][0], hw[k + 2][1], hw[k + 3][0], hw[k + 3][1]]; if (!inPoly(poly, b.x, b.z)) continue;
+    let best = 1e9, bx = 0, bz = 0;
+    for (let e = 0; e < 4; e++) {
+      const w = hw[k + e], dx = w[2] - w[0], dz = w[3] - w[1], l2 = dx * dx + dz * dz || 1; let t = ((b.x - w[0]) * dx + (b.z - w[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = w[0] + dx * t, pz = w[1] + dz * t, d2 = (b.x - px) * (b.x - px) + (b.z - pz) * (b.z - pz); if (d2 < best) { best = d2; bx = px; bz = pz; }
+    }
+    const d = Math.sqrt(best) || 1e-6; out.x += ((bx - b.x) / d) * (d + BALL_R + 0.03); out.z += ((bz - b.z) / d) * (d + BALL_R + 0.03); hit = true;
+  }
+  for (const list of [hole.posts, hole.bumpers]) for (const p of list) {
+    const dx = b.x - p.x, dz = b.z - p.z, rr = BALL_R + p.r, d2 = dx * dx + dz * dz; if (d2 >= rr * rr) continue;
+    const d = Math.sqrt(d2) || 1e-6; out.x += (dx / d) * (rr - d + 0.02); out.z += (dz / d) * (rr - d + 0.02); hit = true;
+  }
+  return hit;
+}
+const _push = { x: 0, z: 0 };
+/** Move a ball that is inside an obstacle (a ghost that stopped there) out to the nearest clear spot. */
+export function ejectBall(b, hole) {
+  let moved = false;
+  for (let i = 0; i < 12; i++) { _push.x = 0; _push.z = 0; if (!overlapPush(b, hole, _push)) break; b.x += _push.x; b.z += _push.z; moved = true; }
+  if (moved) { b.vx = b.vz = 0; b.rest = true; b.still = 0; }
+}
 const dist2 = (b, x, z) => { const dx = b.x - x, dz = b.z - z; return dx * dx + dz * dz; };
 
 /**
@@ -197,6 +230,8 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (cd < 1.15 * big && sp2 < 4.5 * big) { const k = 7 * (1 - cd / (1.15 * big)) * h / (cd || 1); b.vx += cx * k; b.vz += cz * k; }
   }
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);
-  if (s < 0.07 && slope < FRICTION * 0.9 && !b.loop && !b.air && b.loaded <= 0 && !ctx.drive) b.still += dt; else b.still = 0;
+  _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
+  if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
+  if (s < 0.07 && slope < FRICTION * 0.9 && !b.loop && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive) b.still += dt; else b.still = 0;
   if (b.still > 0.3) { b.rest = true; b.vx = b.vz = 0; }
 }

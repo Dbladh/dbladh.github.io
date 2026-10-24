@@ -5,14 +5,14 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024171924';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024171924';
-import { newBall, newCtx, shoot, stepBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024171924';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024171924';
-import { createFx } from './golffx.js?v=20261024171924';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024171924';
-import { buildDecor } from './golfdecor.js?v=20261024171924';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024171924';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024172414';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024172414';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024172414';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024172414';
+import { createFx } from './golffx.js?v=20261024172414';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024172414';
+import { buildDecor } from './golfdecor.js?v=20261024172414';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024172414';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -27,7 +27,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const st = { mode: 'off', t: 0, hole: 0, holeT: 0, strokes: 0, scores: [], par: [], order: [], seed: 0, year: 0, month: 0, rollT: 0, idle: 0, hud: { hole: '', strokes: -1, pills: '' }, lastX: 0, lastZ: 0, multi: false, safety: false, cupScale: 1 };
   const fx = { homing: 0, ghost: 0, bounce: 0, turbo: 0, freeze: 0, mega: 0, hamster: 0 };      // seconds left of each power-up
   let holes = [], vises = [], decors = [], sites = [], Ys = [], fxs = null, lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
-  let dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
+  let ghostOn = false, ghostVis = null, dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
   const ballMeshes = [], ballShadows = [];
   const ctx = newCtx(), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0 };
   const up0 = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
@@ -143,6 +143,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
 
   // ---------- one hole ----------
   function startHole(i) {
+    if (ghostVis) { ghostVis.setGhost(false); ghostVis = null; } ghostOn = false;
     st.hole = i; hole = holes[i]; vis = vises[i]; holeGroup = vis.group; st.par[i] = hole.par; st.strokes = 0; st.holeT = 0; st.rollT = 0; drag = null; st.t = 0; st.multi = false; st.safety = false; st.cupScale = 1;
     for (const k in fx) fx[k] = 0;
     holeGroup.add(dots, hamster); ballMeshes.forEach((m, k) => { holeGroup.add(m, ballShadows[k]); m.visible = k === 0; ballShadows[k].visible = k === 0; m.scale.setScalar(1); });
@@ -396,6 +397,14 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       if (hole && st.mode !== 'card' && holeGroup) {
         st.holeT += dt * (fx.freeze > 0 ? 0.12 : 1); ctx.t = st.holeT;
         tickPowers(dt);
+        if ((fx.ghost > 0) !== ghostOn) {                  // the ghost power-up: obstacles go see-through and an eerie fog gathers; when it ends, a ball inside something is lifted out
+          ghostOn = fx.ghost > 0; vis.setGhost(ghostOn); ghostVis = vis;
+          if (!ghostOn) for (const b of balls) if (!b.holed && !b.sunk) ejectBall(b, hole);
+        }
+        if (ghostOn && fxs) {
+          const hr = hole.hero; if (hr) { const p = holeGroup.localToWorld(new THREE.Vector3(hr.x, 0.2, hr.z)); fxs.ghostFog(p.x, p.y, p.z, 3.4, dt); }
+          const p2 = holeGroup.localToWorld(new THREE.Vector3(balls[0].x, 0.1, balls[0].z)); fxs.ghostFog(p2.x, p2.y, p2.z, 1.1, dt * 0.6);
+        }
         if (st.mode === 'roll' || st.mode === 'hamster') {
           st.rollT += dt;
           if (st.mode === 'hamster') {
