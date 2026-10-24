@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024160654';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024162556';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -28,6 +28,17 @@ export function holeSeed(cs, i) {
   let h = (cs ^ Math.imul(i + 1, 0x7f4a7c15)) >>> 0; h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0; h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0; return (h ^ (h >>> 16)) >>> 0;
 }
 
+/** An irregular pond outline round (x, z) as a flat list [x0, z0, ...]: 16 points whose radius wanders between r and 1.18 r. Only + - * and the seeded generator, so it is the same everywhere. */
+function blobPoly(x, z, r, seed) {
+  const rng = mulberry32(seed), n = 16, raw = []; for (let i = 0; i < n; i++) raw.push(rng());
+  const poly = []; let c = 1, s = 0; const C = 0.9238795325112867, S = 0.3826834323650898;      // turn by 22.5 degrees each step
+  for (let i = 0; i < n; i++) {
+    const rad = r * (1 + 0.18 * ((raw[(i + n - 1) % n] + 2 * raw[i] + raw[(i + 1) % n]) / 4));
+    poly.push(x + c * rad, z + s * rad);
+    const nc = c * C - s * S; s = s * C + c * S; c = nc;
+  }
+  return poly;
+}
 const q = (v) => Math.round(v * 2) / 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -179,7 +190,7 @@ function build(seed, index, type, force) {
   }
   if (wantPond && others.length) {
     const li = others[((r() * others.length) | 0)], side = r() < 0.5 ? 1 : -1, p = onLeg(li, 0.5, 0.85 * side);
-    if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15 }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
+    if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15, poly: blobPoly(q(p.x), q(p.z), 1.15, seed ^ 0x3c6ef372) }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
   const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);

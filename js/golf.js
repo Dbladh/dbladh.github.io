@@ -5,13 +5,14 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024160654';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024160654';
-import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024160654';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024160654';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024160654';
-import { buildDecor } from './golfdecor.js?v=20261024160654';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024160654';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024162556';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024162556';
+import { newBall, newCtx, shoot, stepBall, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024162556';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024162556';
+import { createFx } from './golffx.js?v=20261024162556';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024162556';
+import { buildDecor } from './golfdecor.js?v=20261024162556';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024162556';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -25,7 +26,7 @@ const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t
 export function createGolf(scene, camera, renderer, world, { audio = null, reduceMotion = false, sky = null, lowEnd = false } = {}) {
   const st = { mode: 'off', t: 0, hole: 0, holeT: 0, strokes: 0, scores: [], par: [], order: [], seed: 0, year: 0, month: 0, rollT: 0, idle: 0, hud: { hole: '', strokes: -1, pills: '' }, lastX: 0, lastZ: 0, multi: false, safety: false, cupScale: 1 };
   const fx = { homing: 0, ghost: 0, bounce: 0, turbo: 0, freeze: 0, mega: 0, hamster: 0 };      // seconds left of each power-up
-  let holes = [], vises = [], decors = [], sites = [], Ys = [], lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
+  let holes = [], vises = [], decors = [], sites = [], Ys = [], fxs = null, lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
   let holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
   const ballMeshes = [], ballShadows = [];
   const ctx = newCtx(), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0 };
@@ -80,11 +81,12 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   // ---------- the course: all nine holes at once ----------
   function buildCourse() {
     disposeCourse();
+    fxs = createFx(lowEnd); scene.add(fxs.group);
     holes = []; for (let i = 0; i < HOLES; i++) holes.push(makeHole(holeSeed(st.seed, i), i, st.order[i]));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
     Ys = world.carve.begin(plan.shapes.map((sh) => sh.map((p) => [p[0], p[1], p[2] + MARGIN])), BLEND);
     vises = holes.map((h, i) => {
-      const v = buildHoleVisual(h, { lowEnd }), g = v.group; g.rotation.y = (sites[i].k * Math.PI) / 4; g.position.set(sites[i].x, Ys[i] + 0.06, sites[i].z); g.scale.set(1, 0.001, 1); scene.add(g); return v;
+      const v = buildHoleVisual(h, { lowEnd, look: world.waterLook, fx: fxs }), g = v.group; g.rotation.y = (sites[i].k * Math.PI) / 4; g.position.set(sites[i].x, Ys[i] + 0.06, sites[i].z); g.scale.set(1, 0.001, 1); scene.add(g); return v;
     });
     // the planting (set in the finished ground, so the ground is brought all the way in for a moment) and the gravel paths between the holes
     const near = (x, z, m) => { for (const sh of plan.shapes) for (const p of sh) { const dx = x - p[0], dz = z - p[1]; if (dx * dx + dz * dz < (p[2] + m) * (p[2] + m)) return true; } return false; };
@@ -119,6 +121,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     dots.parent?.remove(dots); hamster.parent?.remove(hamster);
     for (const v of vises) { scene.remove(v.group); v.dispose(); }
     for (const d of decors) { scene.remove(d.group); d.dispose(); }
+    if (fxs) { scene.remove(fxs.group); fxs.dispose(); fxs = null; }
     if (lamps) { scene.remove(lamps.group); lamps.dispose(); lamps = null; }
     lights().forEach((l, i) => { if (lightHome[i]) l.position.copy(lightHome[i]); });
     sky?.shadowReset(); sky?.setLampKey(null); decors = []; vises = []; holes = []; holeGroup = null; vis = null; hole = null; ready = false;
@@ -348,7 +351,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     /** Every frame (after the page has set the camera): moves the game on and, while it is active, owns the camera. */
     update(dt) {
       if (st.mode === 'off') return false;
-      dt = Math.min(dt, 0.05); st.t += dt; st.idle += dt; lamps?.update(world.night);
+      dt = Math.min(dt, 0.05); st.t += dt; st.idle += dt; lamps?.update(world.night); fxs?.update(dt);
       if (st.mode === 'exit') {
         const k = reduceMotion ? 1 : ease(clamp01(st.t / EXIT));
         fly(k); for (let i = 0; i < vises.length; i++) setRise(i, 1 - k);
@@ -397,7 +400,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
             stepBall(b, hole, ctx, dt, ev);
             if (ev.wall > 1.2) audio?.golf?.('wall', Math.min(1, ev.wall / 12)); if (ev.post > 1.2) audio?.golf?.('post', Math.min(1, ev.post / 12));
             if (ev.fx) audio?.golf?.(ev.fx === 1 ? 'tele' : ev.fx === 2 ? 'load' : ev.fx === 3 ? 'boom' : ev.fx === 4 ? 'loop' : 'geyser');
-            if (ev.splash) { audio?.golf?.('splash'); if (balls.length > 1) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } continue; }
+            if (ev.fx === 5 && fxs) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.2, b.z)); fxs.burst('kick', p.x, p.y, p.z); }
+            if (ev.splash) { audio?.golf?.('splash'); if (fxs) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.1, b.z)); fxs.burst('splash', p.x, p.y, p.z); } if (balls.length > 1) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } continue; }
             if (ev.holed) { holedBall = b; continue; }
             if (!b.rest) live++;
             const sp = Math.hypot(b.vx, b.vz); if (sp > 0.05) { tmpV.set(-b.vz, 0, b.vx).normalize(); ballMeshes[i].rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); }

@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024160654';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024162556';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -49,6 +49,15 @@ function collideCircle(b, cx, cz, r, e, ev, vcx, vcz) {
   b.x = cx + nx * rr; b.z = cz + nz * rr;
   const vn = (b.vx - vcx) * nx + (b.vz - vcz) * nz;
   if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vz -= (1 + e) * vn * nz; if (-vn > ev.post) ev.post = -vn; }
+}
+/** Is (x, z) inside the flat polygon [x0, z0, x1, z1, ...]? */
+export function inPoly(poly, x, z) {
+  let inside = false; const n = poly.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i * 2], zi = poly[i * 2 + 1], xj = poly[j * 2], zj = poly[j * 2 + 1];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
 }
 const dist2 = (b, x, z) => { const dx = b.x - x, dz = b.z - z; return dx * dx + dz * dz; };
 
@@ -132,7 +141,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       }
     }
     // water
-    if (!ghost) for (const p of hole.ponds) if (dist2(b, p.x, p.z) < (p.r - 0.05) * (p.r - 0.05)) { b.sunk = true; ev.splash = true; return; }
+    if (!ghost) for (const p of hole.ponds) if (dist2(b, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, b.x, b.z)) { b.sunk = true; ev.splash = true; return; }
     // the cup: it takes a ball that gets there slowly enough, and gently pulls in one that is close and slow
     const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz), sp2 = Math.sqrt(b.vx * b.vx + b.vz * b.vz), cr = ctx.cupR, big = cr / CUP_R;
     if (cd < cr && sp2 < 7.5 * Math.sqrt(big)) { b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
