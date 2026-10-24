@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024165752';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024170416';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -231,8 +231,32 @@ function build(seed, index, type, force) {
     const li = others[((r() * others.length) | 0)], side = r() < 0.5 ? 1 : -1, p = onLeg(li, 0.5, 0.85 * side);
     if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15, poly: blobPoly(q(p.x), q(p.z), 1.15, seed ^ 0x3c6ef372) }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
-  // terrain features beyond the hills (not on the first holes): a banked berm on a bend, a raised platform, and a jump ramp that clears a canyon gap
   const feats = [];
+  for (let k = 0; k < 2; k++) {                            // sand pits (irregular patches that slow the ball a lot)
+    if (!(k === 0 ? index > 0 && r() < 0.75 : index > 3 && r() < 0.4)) continue;
+    for (let tries = 0; tries < 20; tries++) {
+      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() - 0.5) * 1.2, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 1.2 + r() * 0.6, kind = (r() * 5) | 0, turn = r();
+      if (!free(p.x, p.z, 0.1)) continue;
+      const C45 = 0.7071067811865476, ox0 = turn < 0.5 ? tx[ci] : turn < 0.75 ? (tx[ci] - tz[ci]) * C45 : (tx[ci] + tz[ci]) * C45, oz0 = turn < 0.5 ? tz[ci] : turn < 0.75 ? (tz[ci] + tx[ci]) * C45 : (tz[ci] - tx[ci]) * C45;
+      const poly = sandPoly(kind, q(p.x), q(p.z), rad, ox0, oz0, seed ^ (0x7f4a7c15 + k));
+      let lo = 1e9, hi = -1e9, far = 0; for (let i = 0; i < poly.length; i += 2) { const dx = poly[i] - cl[ci].x, dz = poly[i + 1] - cl[ci].z, l2 = dx * (-tz[ci]) + dz * tx[ci]; if (l2 < lo) lo = l2; if (l2 > hi) hi = l2; far = Math.max(far, Math.hypot(poly[i] - q(p.x), poly[i + 1] - q(p.z))); }
+      if (Math.max(lo + w[ci], w[ci] - hi) < 1.4 || lo < -w[ci] + 0.1 || hi > w[ci] - 0.1) continue;      // a pit never fills the corridor: there is always a clear lane past it
+      let onTerrain = false;                                                  // a pit sits on flat ground: not on a hill, berm, platform or ramp
+      for (let i = 0; i < poly.length && !onTerrain; i += 2) {
+        const px = poly[i], pz = poly[i + 1];
+        for (const hk of hills) if ((px - hk.x) * (px - hk.x) + (pz - hk.z) * (pz - hk.z) < hk.r * hk.r * 0.85) { onTerrain = true; break; }
+        for (const f of feats) {
+          if (f.t === 'berm') { const dx = f.bx - f.ax, dz = f.bz - f.az, l2 = dx * dx + dz * dz || 1; let t = ((px - f.ax) * dx + (pz - f.az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; const ex = px - f.ax - dx * t, ez = pz - f.az - dz * t; if (ex * ex + ez * ez < (f.w + 0.4) * (f.w + 0.4)) { onTerrain = true; break; } }
+          else { const rx = px - f.x, rz = pz - f.z, s2 = rx * f.ux + rz * f.uz; if (s2 > -f.len / 2 - (f.ramp || 0) - 0.6 && s2 < f.len / 2 + 0.8) { onTerrain = true; break; } }
+        }
+      }
+      if (onTerrain) continue;
+      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers])) continue;
+      sands.push({ x: q(p.x), z: q(p.z), r: far / 1.19, poly }); keep.push({ x: p.x, z: p.z, r: far * 0.8 }); break;
+    }
+  }
+
+  // terrain features beyond the hills (not on the first holes): a banked berm on a bend, a raised platform, and a jump ramp that clears a canyon gap
   if (index >= 1) {
     const longs = others.filter((i) => legs[i].l >= 7.0);
     const place = (kind) => {
@@ -259,6 +283,7 @@ function build(seed, index, type, force) {
       }
     }
   }
+  if (feats.some((f) => f.t === 'gap') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [])) { for (let i = feats.length - 1; i >= 0; i--) if (feats[i].t === 'gap' || feats[i].t === 'jump') feats.splice(i, 1); }      // (a canyon never leaves the pits as the only way past)
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
   const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);
   const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
@@ -275,20 +300,6 @@ function build(seed, index, type, force) {
   }
   const nb = index > 2 ? (r() < 0.6 ? 1 : 0) + (r() < 0.3 ? 1 : 0) : 0;
   for (let k = 0; k < nb; k++) { const li = (r() * legs.length) | 0, p = onLeg(li, 0.3 + r() * 0.4, (r() < 0.5 ? 1 : -1) * 1.15); if (free(p.x, p.z, 1.1)) { bumpers.push({ x: q(p.x), z: q(p.z), r: 0.5 }); keep.push({ x: p.x, z: p.z, r: 0.7 }); } }
-  for (let k = 0; k < 2; k++) {                            // sand pits (irregular patches that slow the ball a lot)
-    if (!(k === 0 ? index > 0 && r() < 0.75 : index > 3 && r() < 0.4)) continue;
-    for (let tries = 0; tries < 20; tries++) {
-      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() - 0.5) * 1.2, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 1.2 + r() * 0.6, kind = (r() * 5) | 0, turn = r();
-      if (!free(p.x, p.z, 0.1)) continue;
-      const C45 = 0.7071067811865476, ox0 = turn < 0.5 ? tx[ci] : turn < 0.75 ? (tx[ci] - tz[ci]) * C45 : (tx[ci] + tz[ci]) * C45, oz0 = turn < 0.5 ? tz[ci] : turn < 0.75 ? (tz[ci] + tx[ci]) * C45 : (tz[ci] - tx[ci]) * C45;
-      const poly = sandPoly(kind, q(p.x), q(p.z), rad, ox0, oz0, seed ^ (0x7f4a7c15 + k));
-      let lo = 1e9, hi = -1e9, far = 0; for (let i = 0; i < poly.length; i += 2) { const dx = poly[i] - cl[ci].x, dz = poly[i + 1] - cl[ci].z, l2 = dx * (-tz[ci]) + dz * tx[ci]; if (l2 < lo) lo = l2; if (l2 > hi) hi = l2; far = Math.max(far, Math.hypot(poly[i] - q(p.x), poly[i + 1] - q(p.z))); }
-      if (Math.max(lo + w[ci], w[ci] - hi) < 1.4 || lo < -w[ci] + 0.1 || hi > w[ci] - 0.1) continue;      // a pit never fills the corridor: there is always a clear lane past it
-      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers])) continue;
-      sands.push({ x: q(p.x), z: q(p.z), r: far / 1.19, poly }); keep.push({ x: p.x, z: p.z, r: far * 0.8 }); break;
-    }
-  }
-
   // power-up orbs, off the best line: near a wall
   const pickups = [], np = index === 0 ? 1 : 2, totalW = POWER_WEIGHTS.reduce((a, b) => a + b, 0);
   for (let k = 0; k < np; k++) {
@@ -300,6 +311,8 @@ function build(seed, index, type, force) {
       pickups.push({ x: q(p.x), z: q(p.z), type: POWERUPS[ti] }); keep.push({ x: p.x, z: p.z, r: 0.9 }); break;
     }
   }
+  const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers]);
+  while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)

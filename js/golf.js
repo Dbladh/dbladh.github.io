@@ -5,14 +5,14 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024165752';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024165752';
-import { newBall, newCtx, shoot, stepBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024165752';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024165752';
-import { createFx } from './golffx.js?v=20261024165752';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024165752';
-import { buildDecor } from './golfdecor.js?v=20261024165752';
-import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024165752';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024170416';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024170416';
+import { newBall, newCtx, shoot, stepBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024170416';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024170416';
+import { createFx } from './golffx.js?v=20261024170416';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024170416';
+import { buildDecor } from './golfdecor.js?v=20261024170416';
+import { M, G, NAMES, EMOJI, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024170416';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -84,10 +84,10 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     fxs = createFx(lowEnd); scene.add(fxs.group);
     holes = []; for (let i = 0; i < HOLES; i++) holes.push(makeHole(holeSeed(st.seed, i), i, st.order[i]));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
-    const digs = holes.map((h, i) => (h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
+    const digs = holes.map((h, i) => [...h.sands.map((sd) => { const c = toWorld(sites[i], sd.x, sd.z); return { x: c.x, z: c.z, r: sd.r * 1.19 * 0.95, depth: 0.34 }; }), ...(h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
       const o = toWorld(sites[i], 0, 0), c = toWorld(sites[i], f.x, f.z), u = toWorld(sites[i], f.ux, f.uz), n = toWorld(sites[i], f.nx, f.nz);
       const nx = n.x - o.x, nz = n.z - o.z, cm = (f.c0 + f.c1) / 2; return { x: c.x + nx * cm, z: c.z + nz * cm, ux: u.x - o.x, uz: u.z - o.z, nx, nz, len: f.len + 0.2, wid: (f.c1 - f.c0) / 2 + 0.05, depth: 2.2 };
-    }));
+    })]);
     Ys = world.carve.begin(plan.shapes.map((sh) => sh.map((p) => [p[0], p[1], p[2] + MARGIN])), BLEND, digs);
     vises = holes.map((h, i) => {
       const v = buildHoleVisual(h, { lowEnd, look: world.waterLook, fx: fxs }), g = v.group; g.rotation.y = (sites[i].k * Math.PI) / 4; g.position.set(sites[i].x, Ys[i] + 0.06, sites[i].z); g.scale.set(1, 0.001, 1); scene.add(g); return v;

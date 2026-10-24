@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024165752';
-import { auroraColour } from './aurora.js?v=20261024165752';
+import { PAL } from './palette.js?v=20261024170416';
+import { auroraColour } from './aurora.js?v=20261024170416';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261024165752';
+} from './houses.js?v=20261024170416';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -860,7 +860,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
           let v = map.get(i); if (!v) { v = { i, s: [], w: [] }; map.set(i, v); }
           v.s.push(si); v.w.push(w); list.push(v);
           if (digs[si]) for (const d of digs[si]) {                              // a chasm: the ground under it is dug out (with a short slope round the edge)
-            const rx = x - d.x, rz = z - d.z, s2 = rx * d.ux + rz * d.uz, c2 = rx * d.nx + rz * d.nz, dd = Math.max(Math.abs(s2) - d.len / 2, Math.abs(c2) - d.wid);
+            const rx = x - d.x, rz = z - d.z, s2 = d.r ? 0 : rx * d.ux + rz * d.uz, c2 = d.r ? 0 : rx * d.nx + rz * d.nz, dd = d.r ? Math.sqrt(rx * rx + rz * rz) - d.r : Math.max(Math.abs(s2) - d.len / 2, Math.abs(c2) - d.wid);
             const f = dd <= 0 ? 1 : dd >= 0.9 ? 0 : 1 - smooth(0, 0.9, dd); if (f > 0 && -d.depth * f < (v.dig || 0)) { v.dig = -d.depth * f; v.ds = si; }
           }
         }
