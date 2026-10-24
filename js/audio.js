@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261024095655';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261024101212';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -511,6 +511,13 @@ export function createAudio({ base = 'audio/' } = {}) {
       else if (kind === 'post') { if (!gate('gpost', 0.05)) return; tone(880 + 300 * v, 0.1, { type: 'sine', gain: 0.05 + 0.05 * v, dest: soft }); }
       else if (kind === 'cup') { tone(330, 0.2, { type: 'sine', gain: 0.1, slide: 180, dest: soft }); tone(247, 0.3, { type: 'sine', gain: 0.08, delay: 0.1, dest: soft }); }
       else if (kind === 'win') [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.32, { type: 'sine', gain: 0.085, delay: i * 0.09, dest: soft }));
+      else if (kind === 'splash') { if (!gate('gsplash', 0.2)) return; swoosh(0.35, 1800, 300, { gain: 0.12, q: 0.6 }); tone(260, 0.25, { type: 'sine', gain: 0.08, slide: 90, dest: soft }); }
+      else if (kind === 'pickup') [660, 880, 1175].forEach((f, i) => tone(f, 0.18, { type: 'triangle', gain: 0.08, delay: i * 0.06, dest: soft }));
+      else if (kind === 'tele') { swoosh(0.28, 400, 2400, { gain: 0.1, q: 0.8 }); tone(300, 0.25, { type: 'sine', gain: 0.06, slide: 900, dest: soft }); }
+      else if (kind === 'load') tone(150, 0.3, { type: 'square', gain: 0.05, slide: 90, dest: soft });
+      else if (kind === 'boom') { tone(110, 0.35, { type: 'sine', gain: 0.2, slide: 45, dest: soft }); swoosh(0.25, 900, 200, { gain: 0.12, q: 0.5 }); }
+      else if (kind === 'loop') { swoosh(0.7, 500, 1600, { gain: 0.1, q: 1.0 }); }
+      else if (kind === 'geyser') { if (!gate('ggey', 0.3)) return; swoosh(0.4, 700, 2600, { gain: 0.12, q: 0.5 }); }
     },
     /** A soft, quiet two-note chime: the note rising from a house (a hint that it can be played). */
     chime() { if (!ctx || !gate('chime', 2)) return; tone(988, 0.5, { type: 'sine', gain: 0.045, dest: soft }); tone(1319, 0.8, { type: 'sine', gain: 0.035, delay: 0.14, dest: soft }); },
