@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024165513';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024165752';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -38,6 +38,45 @@ function blobPoly(x, z, r, seed) {
     const nc = c * C - s * S; s = s * C + c * S; c = nc;
   }
   return poly;
+}
+/** An outline for a sand pit round (x, z), flat [x0, z0, ...] (24 points): an oval, a peanut, a banana, a rounded triangle or a lumpy blob, turned to face (ox, oz). Only + - * and sqrt-free polynomials. */
+function sandPoly(kind, x, z, rad, ox, oz, seed) {
+  const rng = mulberry32(seed), pts = []; let c = 1, s = 0; const C = 0.9659258262890683, S = 0.25881904510252074, lump = []; for (let i = 0; i < 24; i++) lump.push(rng());
+  for (let i = 0; i < 24; i++) {
+    let px, py; const bump = 1 + 0.12 * (lump[i] - 0.5);
+    if (kind === 0) { px = c * rad * 1.45; py = s * rad * 0.7; }                                  // an oval
+    else if (kind === 1) { px = c * rad * 1.5; py = s * rad * (0.5 + 0.55 * c * c); }             // a peanut
+    else if (kind === 2) { px = c * rad * 1.6; py = s * rad * 0.55 + 0.3 * (px * px) / rad - 0.45 * rad; }   // a banana
+    else if (kind === 3) { const rr = rad * (1 + 0.28 * (4 * c * c * c - 3 * c)); px = c * rr; py = s * rr; }   // a rounded triangle
+    else { const rr = rad * (1 + 0.3 * lump[i]); px = c * rr; py = s * rr; }                       // a lumpy blob
+    pts.push(x + (px * ox - py * oz) * bump, z + (px * oz + py * ox) * bump);
+    const nc = c * C - s * S; s = s * C + c * S; c = nc;
+  }
+  return pts;
+}
+/** Is (x, z) inside the flat polygon [x0, z0, ...]? */
+function inPolyG(poly, x, z) {
+  let inside = false; const n = poly.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) { const xi = poly[i * 2], zi = poly[i * 2 + 1], xj = poly[j * 2], zj = poly[j * 2 + 1]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside; }
+  return inside;
+}
+/** Is there a clear way from the ball to the cup that goes round every pit, pond and canyon (with room for the ball to roll)? A flood fill over a grid. */
+function laneExists(cl, w, ball, cup, polys, feats, discs = []) {
+  const D = 0.2, off = [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]];
+  const blocked = (x, z) => {
+    let best = 1e9; for (let i = 0; i < cl.length; i++) { const d = Math.sqrt((x - cl[i].x) * (x - cl[i].x) + (z - cl[i].z) * (z - cl[i].z)) - w[i]; if (d < best) best = d; }
+    if (best > -0.55) return true;
+    for (const p of polys) for (const [a, b] of off) if (inPolyG(p, x + a, z + b)) return true;
+    for (const d of discs) if ((x - d.x) * (x - d.x) + (z - d.z) * (z - d.z) < (d.r + 0.4) * (d.r + 0.4)) return true;
+    for (const f of feats) if (f.t === 'gap') { const rx = x - f.x, rz = z - f.z, s2 = rx * f.ux + rz * f.uz, c = rx * f.nx + rz * f.nz; if (Math.abs(s2) < f.len / 2 + 0.35 && c > f.c0 - 0.35 && c < f.c1 + 0.35) return true; }
+    return false;
+  };
+  const key = (x, z) => Math.round(x / D) * 4096 + Math.round(z / D), seen = new Set([key(ball.x, ball.z)]), st = [[ball.x, ball.z]];
+  while (st.length) {
+    const [x, z] = st.pop(); if ((x - cup.x) * (x - cup.x) + (z - cup.z) * (z - cup.z) < 0.25) return true;
+    for (const [a, b] of [[D, 0], [-D, 0], [0, D], [0, -D]]) { const nx = x + a, nz = z + b, k = key(nx, nz); if (seen.has(k) || blocked(nx, nz)) continue; seen.add(k); st.push([nx, nz]); }
+  }
+  return false;
 }
 const q = (v) => Math.round(v * 2) / 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -238,11 +277,15 @@ function build(seed, index, type, force) {
   for (let k = 0; k < nb; k++) { const li = (r() * legs.length) | 0, p = onLeg(li, 0.3 + r() * 0.4, (r() < 0.5 ? 1 : -1) * 1.15); if (free(p.x, p.z, 1.1)) { bumpers.push({ x: q(p.x), z: q(p.z), r: 0.5 }); keep.push({ x: p.x, z: p.z, r: 0.7 }); } }
   for (let k = 0; k < 2; k++) {                            // sand pits (irregular patches that slow the ball a lot)
     if (!(k === 0 ? index > 0 && r() < 0.75 : index > 3 && r() < 0.4)) continue;
-    for (let tries = 0; tries < 10; tries++) {
-      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() - 0.5) * 1.2, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 1.5 + r() * 0.7;
+    for (let tries = 0; tries < 20; tries++) {
+      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() - 0.5) * 1.2, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 1.2 + r() * 0.6, kind = (r() * 5) | 0, turn = r();
       if (!free(p.x, p.z, 0.1)) continue;
-      const RR = rad * 1.19, gapL = lat - RR + w[ci], gapR = w[ci] - (lat + RR); if (Math.max(gapL, gapR) < 1.4) continue;      // a pit never fills the corridor: there is always a clear lane past it
-      sands.push({ x: q(p.x), z: q(p.z), r: rad, poly: blobPoly(q(p.x), q(p.z), rad, seed ^ (0x7f4a7c15 + k)) }); keep.push({ x: p.x, z: p.z, r: rad * 0.8 }); break;
+      const C45 = 0.7071067811865476, ox0 = turn < 0.5 ? tx[ci] : turn < 0.75 ? (tx[ci] - tz[ci]) * C45 : (tx[ci] + tz[ci]) * C45, oz0 = turn < 0.5 ? tz[ci] : turn < 0.75 ? (tz[ci] + tx[ci]) * C45 : (tz[ci] - tx[ci]) * C45;
+      const poly = sandPoly(kind, q(p.x), q(p.z), rad, ox0, oz0, seed ^ (0x7f4a7c15 + k));
+      let lo = 1e9, hi = -1e9, far = 0; for (let i = 0; i < poly.length; i += 2) { const dx = poly[i] - cl[ci].x, dz = poly[i + 1] - cl[ci].z, l2 = dx * (-tz[ci]) + dz * tx[ci]; if (l2 < lo) lo = l2; if (l2 > hi) hi = l2; far = Math.max(far, Math.hypot(poly[i] - q(p.x), poly[i + 1] - q(p.z))); }
+      if (Math.max(lo + w[ci], w[ci] - hi) < 1.4 || lo < -w[ci] + 0.1 || hi > w[ci] - 0.1) continue;      // a pit never fills the corridor: there is always a clear lane past it
+      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers])) continue;
+      sands.push({ x: q(p.x), z: q(p.z), r: far / 1.19, poly }); keep.push({ x: p.x, z: p.z, r: far * 0.8 }); break;
     }
   }
 
