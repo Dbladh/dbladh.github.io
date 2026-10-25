@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024194108';
-import { buildWorld } from './world.js?v=20261024194108';
-import { createSky } from './sky.js?v=20261024194108';
-import { createDOF } from './dof.js?v=20261024194108';
-import { createRide } from './ride.js?v=20261024194108';
-import { createGame } from './bikegame.js?v=20261024194108';
-import { createAurora, setWarm } from './aurora.js?v=20261024194108';
-import { createAudio, pickFlicker } from './audio.js?v=20261024194108';
+import { PAL } from './palette.js?v=20261024194331';
+import { buildWorld } from './world.js?v=20261024194331';
+import { createSky } from './sky.js?v=20261024194331';
+import { createDOF } from './dof.js?v=20261024194331';
+import { createRide } from './ride.js?v=20261024194331';
+import { createGame } from './bikegame.js?v=20261024194331';
+import { createAurora, setWarm } from './aurora.js?v=20261024194331';
+import { createAudio, pickFlicker } from './audio.js?v=20261024194331';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -578,7 +578,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261024194108');
+        const mod = await import('./golf.js?v=20261024194331');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }

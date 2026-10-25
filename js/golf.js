@@ -5,16 +5,16 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024194108';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024194108';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024194108';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024194108';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024194108';
-import { createNeon } from './golfneon.js?v=20261024194108';
-import { createFx } from './golffx.js?v=20261024194108';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024194108';
-import { buildDecor } from './golfdecor.js?v=20261024194108';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024194108';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024194331';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024194331';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024194331';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024194331';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024194331';
+import { createNeon } from './golfneon.js?v=20261024194331';
+import { createFx } from './golffx.js?v=20261024194331';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024194331';
+import { buildDecor } from './golfdecor.js?v=20261024194331';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024194331';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -156,7 +156,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     for (const k in fx) fx[k] = 0;
     holeGroup.add(dots, hamster); ballMeshes.forEach((m, k) => { holeGroup.add(m, ballShadows[k]); m.visible = k === 0; ballShadows[k].visible = k === 0; m.scale.setScalar(1); });
     balls = [newBall(hole)]; st.lastX = balls[0].x; st.lastZ = balls[0].z; hamster.visible = false;
-    placeBalls(); st.hud.hole = ''; st.hud.strokes = -1; updateHud();
+    ctx.gateT = 0; placeBalls(); st.hud.hole = ''; st.hud.strokes = -1; updateHud();
     const P = hole.path, t0 = P[0], t1 = P[Math.min(P.length - 1, 10)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1; cam.dx = (t1.x - t0.x) / l; cam.dz = (t1.z - t0.z) / l; cam.phase = 'overview'; cam.t = 0;
     st.mode = 'aim'; aimShadow(i); assignLights(i); announce();
   }
@@ -435,7 +435,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         { const gp = (hole.feats || []).find((f) => f.t === 'gap'), b0 = balls[0]; if (gp && b0) { const rx = b0.x - gp.x, rz = b0.z - gp.z, s2 = rx * gp.ux + rz * gp.uz, c2 = rx * gp.nx + rz * gp.nz; if (b0.air) { if (Math.abs(s2) < gp.len / 2 && c2 > gp.c0 && c2 < gp.c1) cs.overGap = true; } else if (cs.overGap) { if (s2 > gp.len / 2 + 0.1) cs.jumped = true; cs.overGap = false; } } }
         if ((fx.ghost > 0) !== ghostOn) {                  // the ghost power-up: obstacles go see-through and an eerie fog gathers; when it ends, a ball inside something is lifted out
           ghostOn = fx.ghost > 0; vis.setGhost(ghostOn); ghostVis = vis;
-          if (!ghostOn) for (const b of balls) if (!b.holed && !b.sunk) ejectBall(b, hole);
+          if (!ghostOn) { if (hole.cage) ctx.gateT = Math.max(ctx.gateT, 5); for (const b of balls) if (!b.holed && !b.sunk) ejectBall(b, hole); }
         }
         if (ghostOn && fxs) {
           const hr = hole.hero; if (hr) { const p = holeGroup.localToWorld(new THREE.Vector3(hr.x, 0.2, hr.z)); fxs.ghostFog(p.x, p.y, p.z, 3.4, dt); }
@@ -460,9 +460,12 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
               if (ev.fx === 3) { const w = wp(hole.hero.x + hole.hero.ux * 1.2, 0.8, hole.hero.z + hole.hero.uz * 1.2); fxs.puff(w.x, w.y, w.z, 9, b.vx, b.vz); fxs.sparks(w.x, w.y, w.z, '#ffd27a', 18, 3.5, 2.5, 0.5, 0.07); }
               if (ev.fx === 2) { const w = wp(hole.hero.x, 0.6, hole.hero.z); fxs.puff(w.x, w.y, w.z, 4); }
               if (ev.fx === 1) for (const q of [hole.hero.a, hole.hero.b]) { const w = wp(q.x, 0.9, q.z); fxs.sparks(w.x, w.y, w.z, '#7fffd4', 18, 1.6, 3, 0.8, 0.06); fxs.ring(w.x, w.y - 0.85, w.z, 1.2, 0.7, '#7fffd4'); }
+              if (ev.fx === 6) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ff7fd0', 16, 2.4, 3, 0.6); fxs.ring(w.x, w.y, w.z, 1.2, 0.6, '#ff7fd0'); }
+              if (ev.fx === 7) { const w = wp(hole.cage.button.x, 0.15, hole.cage.button.z); fxs.sparks(w.x, w.y, w.z, '#6dff9a', 20, 2.2, 2.6, 0.7); fxs.ring(w.x, w.y, w.z, 1.3, 0.7, '#6dff9a'); }
+              if (ev.fx === 8) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ffe14a', 8, 1.8, 1.2, 0.4); }
               if (ev.fx === 4) { const w = wp(b.x, 0.3, b.z); fxs.sparks(w.x, w.y, w.z, '#bff4ff', 14, 2.4, 2, 0.5); }
             }
-            if (ev.fx) audio?.golf?.(ev.fx === 1 ? 'tele' : ev.fx === 2 ? 'load' : ev.fx === 3 ? 'boom' : ev.fx === 4 ? 'loop' : 'geyser');
+            if (ev.fx) audio?.golf?.(ev.fx === 1 ? 'tele' : ev.fx === 2 ? 'load' : ev.fx === 3 ? 'boom' : ev.fx === 4 ? 'loop' : ev.fx === 6 ? 'pickup' : ev.fx === 7 ? 'load' : ev.fx === 8 ? 'wall' : 'geyser');
             if (fxs && !b.air && !b.rest) { const sp0 = Math.hypot(b.vx, b.vz); if (sp0 > 0.7 && inSand(hole, b)) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, b.y + 0.05, b.z)); fxs.sand(p.x, p.y, p.z, b.vx, b.vz, dt); } }
             if (ev.fx === 5 && fxs) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.2, b.z)); fxs.burst('kick', p.x, p.y, p.z); }
             if (ev.splash) { st.fell = ev.fall; audio?.golf?.(ev.fall ? 'wall' : 'splash'); if (fxs && !ev.fall) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.1, b.z)); fxs.burst('splash', p.x, p.y, p.z); } if (balls.length > 1) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } continue; }
@@ -488,7 +491,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         } else if (st.mode === 'done') { if (st.t > 1.7) beginTravel(st.hole + 1); }
         else { placeBalls(); ballMeshes[0].scale.setScalar(1); }
         if (hamster.visible) { const b = balls[0], sp = Math.hypot(b.vx, b.vz); hamster.userData.run(st.holeT, sp); if (sp > 0.3) hamster.userData.hm.rotation.y = Math.atan2(b.vx, b.vz); }
-        vis.update(st.holeT, st.holeT, dt, st);
+        st.gateOpen = ctx.gateT > 0; vis.update(st.holeT, st.holeT, dt, st);
       }
       updateScenery(dt);
       updateHud();

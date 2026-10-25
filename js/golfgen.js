@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024194108';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024194331';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -308,7 +308,20 @@ function build(seed, index, type, force) {
       if (!free(p.x, p.z, 0.9)) continue;
       let pick = r() * totalW, ti = 0;
       for (; ti < POWERUPS.length - 1; ti++) { pick -= POWER_WEIGHTS[ti]; if (pick <= 0) break; }
-      pickups.push({ x: q(p.x), z: q(p.z), type: POWERUPS[ti] }); keep.push({ x: p.x, z: p.z, r: 0.9 }); break;
+      pickups.push({ x: q(p.x), z: q(p.z), type: POWERUPS[ti], li, side }); keep.push({ x: p.x, z: p.z, r: 0.9 }); break;
+    }
+  }
+  // interactive extras: boost strips and bounce pads on the floor, and a cage round one orb whose gate opens for a few seconds when the ball rolls over a button
+  const boosts = [], pads = [];
+  if (index >= 2 && r() < 0.65) for (let tries = 0; tries < 12; tries++) { const ci = 6 + ((r() * (N - 12)) | 0), p = cl[ci]; if (!free(p.x, p.z, 0.3) || Math.abs(w[ci] - HALF_W) > 0.05) continue; boosts.push({ x: q(p.x), z: q(p.z), ux: tx[ci], uz: tz[ci], len: 1.8, wid: 1.2 }); keep.push({ x: p.x, z: p.z, r: 1.4 }); break; }
+  if (index >= 3 && r() < 0.55) for (let tries = 0; tries < 12; tries++) { const ci = 6 + ((r() * (N - 12)) | 0), sg = r() < 0.5 ? 1 : -1, p = { x: cl[ci].x - tz[ci] * 0.9 * sg, z: cl[ci].z + tx[ci] * 0.9 * sg }; if (!free(p.x, p.z, 0.3) || Math.abs(w[ci] - HALF_W) > 0.05) continue; pads.push({ x: q(p.x), z: q(p.z), r: 0.55 }); keep.push({ x: p.x, z: p.z, r: 1.1 }); break; }
+  let cage = null;
+  if (index >= 2 && pickups.length && r() < 0.7) {
+    const pk = pickups[0], L = legs[pk.li], side = pk.side, P = (u, lat) => ({ x: pk.x + L.x * u - L.z * lat, z: pk.z + L.z * u + L.x * lat }), lat0 = side * 0.75, lat1 = side * (-0.8);      // (relative to the orb: back to the wall, out 0.8 in front of it)
+    const a0 = P(-0.9, lat0), a1 = P(-0.9, lat1), b0 = P(0.9, lat0), b1 = P(0.9, lat1), bt = P(-4.2, -side * 0.2);
+    if (free(bt.x, bt.z, 0.1)) {
+      const but = { x: q(bt.x), z: q(bt.z), r: 0.55 }; walls.push([a0.x, a0.z, a1.x, a1.z, 0, 1], [b0.x, b0.z, b1.x, b1.z, 0, 1]);
+      cage = { gate: [a1.x, a1.z, b1.x, b1.z], sides: [[a0.x, a0.z, a1.x, a1.z], [b0.x, b0.z, b1.x, b1.z]], button: but, ux: L.x, uz: L.z }; pk.caged = true; keep.push({ x: but.x, z: but.z, r: 1.0 });
     }
   }
   const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers]);
@@ -316,5 +329,5 @@ function build(seed, index, type, force) {
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  return { feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  return { cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
 }

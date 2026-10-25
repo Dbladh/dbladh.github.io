@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024194108';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024194331';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -56,7 +56,7 @@ export function hillGrad(hole, x, z) {
 
 export function newBall(hole) { return { y: hillH(hole, hole.ball.x, hole.ball.z), vy: 0, air: false, x: hole.ball.x, z: hole.ball.z, vx: 0, vz: 0, holed: false, sunk: false, rest: true, still: 0, loop: null, loaded: 0, tcool: 0, gk: -1, ly: 0, ax: 0, az: 0 }; }
 /** What the power-ups are doing right now: `t` is the hero clock, the rest are switches. */
-export function newCtx() { return { t: 0, ghost: false, bounce: false, turbo: false, homing: false, drive: false, cupR: CUP_R }; }
+export function newCtx() { return { gateT: 0, t: 0, ghost: false, bounce: false, turbo: false, homing: false, drive: false, cupR: CUP_R }; }
 
 /** Hit the ball: direction (any length, it is normalised) and power 0..1. */
 export function shoot(ball, dx, dz, power, turbo) {
@@ -186,6 +186,14 @@ export function stepBall(b, hole, ctx, dt, ev) {
     }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
     for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev); }
+    if (hole.boosts && !b.air) for (const o of hole.boosts) { const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
+    if (b.padCool > 0) b.padCool -= h;
+    if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = 3.6; b.padCool = 0.6; ev.fx = 6; }
+    if (ctx.gateT > 0) ctx.gateT -= h;
+    if (hole.cage) {
+      const cg = hole.cage; if (!b.air && dist2(b, cg.button.x, cg.button.z) < cg.button.r * cg.button.r) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }
+      if (ctx.gateT <= 0 && !ghost) collideSeg(b, cg.gate[0], cg.gate[1], cg.gate[2], cg.gate[3], 0.5, ev);
+    }
     if (hero && hero.gate && !ghost && gateBlocked(hero, tt)) collideSeg(b, hero.gate[0], hero.gate[1], hero.gate[2], hero.gate[3], 0.55, ev);
     if (!ghost) {
       for (const p of hole.posts) collideCircle(b, p.x, p.z, p.r, postE, ev, 0, 0);
