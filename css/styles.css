@@ -946,3 +946,10 @@ body.scene-mode .bike-hint { display: block; }
 .pb-lamps i[data-l="cup"].on { background: #7dffb0; color: #053a1c; border-color: #d6ffe6; box-shadow: 0 0 16px rgba(125,255,176,.95); }
 .pb-nudge { position: fixed; left: 4%; bottom: 2.5%; z-index: 22; padding: 12px 16px; border: 0; border-radius: 999px; background: rgba(40,52,72,.85); color: #fff; font: 700 14px/1 inherit; box-shadow: 0 4px 12px rgba(0,0,0,.35); cursor: pointer; }
 .pb-nudge:disabled { opacity: .4; }
+
+.pb-lamps i.flash { animation: pblamp .9s ease-out; }
+@keyframes pblamp { 0% { transform: scale(1); } 25% { transform: scale(1.45); box-shadow: 0 0 32px 8px rgba(255,255,255,.95); } 100% { transform: scale(1); } }
+.pb-flash { position: fixed; inset: 0; z-index: 30; pointer-events: none; background: radial-gradient(circle, rgba(255,255,255,.75), rgba(255,235,150,.35) 60%, transparent 80%); animation: pbflash .7s ease-out forwards; }
+@keyframes pbflash { from { opacity: 1; } to { opacity: 0; } }
+.pb-conf { position: fixed; z-index: 31; left: 50%; top: 45%; width: 10px; height: 14px; border-radius: 2px; pointer-events: none; animation: pbconf 1.5s cubic-bezier(.2,.7,.4,1) forwards; }
+@keyframes pbconf { 0% { transform: translate(0,0) rotate(0); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 340px)) rotate(720deg); opacity: 0; } }
