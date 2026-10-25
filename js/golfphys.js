@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024202911';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024203405';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -151,6 +151,14 @@ export function stepBall(b, hole, ctx, dt, ev) {
       continue;
     }
     // riding round the loop
+    if (b.rail) {                                       // riding a rail: carried along it over whatever lies below, then let go at the far end
+      const R = b.rail.r; b.rail.s += (b.rail.v * h) / R.len;
+      if (b.rail.s >= 1) { b.x = R.bx + R.ux * 0.3; b.z = R.bz + R.uz * 0.3; b.vx = R.ux * b.rail.v * 0.92; b.vz = R.uz * b.rail.v * 0.92; b.rail = null; b.ly = 0; b.y = hillH(hole, b.x, b.z); b.air = false; ev.fx = 9; }
+      else { const s = b.rail.s; b.x = R.ax + (R.bx - R.ax) * s; b.z = R.az + (R.bz - R.az) * s; b.vx = R.ux * b.rail.v; b.vz = R.uz * b.rail.v; b.ly = R.h * Math.sin(3.14159265 * s) + 0.35; }
+      continue;
+    }
+    if (hole.rails && !b.air && !b.loop) for (const R of hole.rails) if (dist2(b, R.ax, R.az) < R.r * R.r) { const sp0 = Math.sqrt(b.vx * b.vx + b.vz * b.vz); if (sp0 >= 2.8 && b.vx * R.ux + b.vz * R.uz > 0) { b.rail = { r: R, s: 0, v: Math.max(5.5, sp0 * 0.9) }; ev.fx = 10; break; } }
+    if (b.rail) continue;
     if (b.loop) {
       const lp = b.loop, L = hero.L; lp.s += (lp.v * h) / L;
       if (lp.s >= 1) { b.loop = null; b.ly = 0; b.x = hero.x + hero.ux * (L / 2 + 0.3); b.z = hero.z + hero.uz * (L / 2 + 0.3); b.vx = hero.ux * lp.v * 0.92; b.vz = hero.uz * lp.v * 0.92; }
@@ -186,7 +194,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
     }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
     for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev); }
-    if (hole.boosts && !b.air) for (const o of hole.boosts) { const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
+    if (hole.boosts && !b.air) for (const o of hole.boosts) { if (o.powered && ctx.gateT <= 0) continue; const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
     if (b.padCool > 0) b.padCool -= h;
     if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = 5.0; b.padCool = 0.6; ev.fx = 6; }
     if (ctx.gateT > 0) ctx.gateT -= h;
@@ -245,6 +253,6 @@ export function stepBall(b, hole, ctx, dt, ev) {
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);
   _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
   if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
-  if (s < 0.07 && slope < FRICTION * 0.9 && !b.loop && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive) b.still += dt; else b.still = 0;
+  if (s < 0.07 && slope < FRICTION * 0.9 && !b.loop && !b.rail && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive) b.still += dt; else b.still = 0;
   if (b.still > 0.3) { b.rest = true; b.vx = b.vz = 0; }
 }

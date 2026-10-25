@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024202911';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024202911';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024202911';
-import { THEME_BORDER } from './golfscenery.js?v=20261024202911';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024202911';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024203405';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024203405';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024203405';
+import { THEME_BORDER } from './golfscenery.js?v=20261024203405';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024203405';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -172,7 +172,15 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const tx = chev.clone(); tx.needsUpdate = true; tx.repeat.set(o.len / 1.6, 1); disposables.push(tx); const bm = new THREE.MeshBasicMaterial({ map: tx, transparent: true, opacity: 0.95 }); disposables.push(bm);
     const strip = new THREE.Mesh(track(new THREE.PlaneGeometry(o.len, o.wid).rotateX(-Math.PI / 2)), bm); strip.position.set(o.x, hillH(h, o.x, o.z) + 0.06, o.z); strip.rotation.y = Math.atan2(-o.uz, o.ux); strip.renderOrder = 1; g.add(strip);
     g.add((() => { const e = rbox(paint('#ffe14a'), o.len + 0.1, 0.03, 0.06, 0, 0, 0, 0.01); e.position.set(o.x - (-o.uz) * (o.wid / 2 + 0.03), hillH(h, o.x, o.z) + 0.06, o.z - o.ux * (o.wid / 2 + 0.03)); e.rotation.y = Math.atan2(-o.uz, o.ux); return e; })());
-    updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
+    if (o.powered) { let on = 0; updaters.push((heroT, t, dt, st) => { on += ((st && st.gateOpen ? 1 : 0) - on) * Math.min(1, dt * 6); tx.offset.x = -t * 0.9 * (0.1 + 0.9 * on); bm.opacity = 0.35 + 0.6 * on; bm.color.setScalar(0.45 + 0.55 * on); }); }
+    else updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
+  }
+  for (const R of h.rails || []) {                        // a rail: a mouth ring, an arched tube on legs, and an exit ring
+    const rm = metal('#3fd8ff'), cyan = paint('#7fe9ff'), pts = []; for (let i = 0; i <= 16; i++) { const s = i / 16; pts.push(new THREE.Vector3(R.ax + (R.bx - R.ax) * s, 0.45 + R.h * Math.sin(Math.PI * s) + Math.max(0, hillH(h, R.ax + (R.bx - R.ax) * s, R.az + (R.bz - R.az) * s)), R.az + (R.bz - R.az) * s)); }
+    const curve = new THREE.CatmullRomCurve3(pts), side = new THREE.Vector3(-R.uz, 0, R.ux);
+    for (const sd of [-0.18, 0.18]) { const tube = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 40, 0.07, 6, false)), rm); tube.position.copy(side).multiplyScalar(sd); tube.castShadow = true; g.add(tube); }
+    for (let i = 3; i <= 13; i += 5) { const p = pts[i]; g.add(rbox(rm, 0.1, p.y, 0.1, p.x, p.y / 2, p.z, 0.02)); }
+    for (const [x, z, y] of [[R.ax, R.az, 0.45], [R.bx, R.bz, 0.45]]) { const ring = torus(cyan, 0.55, 0.07, x, y, z, 0, Math.atan2(R.ux, R.uz) + Math.PI / 2, 0); g.add(ring); const pad = cyl(paint('#16405a'), 0.6, 0.05, x, 0.04, z); g.add(pad); updaters.push((heroT, t) => { ring.scale.setScalar(1 + 0.06 * Math.sin(t * 5 + x)); }); }
   }
   for (const o of h.pads || []) {
     const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint('#ff4fb3'), o.r * 0.8, 0.06, 0, 0.13, 0); gp.add(top); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2)); g.add(gp);

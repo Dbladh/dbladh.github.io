@@ -1,10 +1,11 @@
 // The "machines" of a hole: small designed chains where one piece feeds the next, stamped onto straight stretches of the corridor by the generator (golfgen.js).
 //   runup : a boost strip, then a jump ramp, then a canyon: only the speed from the strip carries the ball over (the ledge beside it is the plain way).
 //   vault : a bounce pad, then two low fences in a zigzag: the pad vaults the ball straight over them (walking the zigzag is the plain way).
+//   rail  : a cyan rail from a mouth, over a canyon, to an exit: rolling into the mouth fast enough carries the ball across (the ledge beside the canyon is the plain way).
 //   door  : a button, then two tall walls in a zigzag with a gate in the middle of each: the button opens the gates for a few seconds for a straight run.
 // Every recipe is checked with a proof shot (proveRecipe) over a band of powers, and dropped if the intended route does not work.
-import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024202911';
-import { TUNING } from './golftuning.js?v=20261024202911';
+import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024203405';
+import { TUNING } from './golftuning.js?v=20261024203405';
 
 const HALF_W = 2.3;
 
@@ -39,6 +40,13 @@ const keepAlong = (S, F, len) => { for (let u = 0.5; u <= len; u += 2) { const p
 const seg = (F, u, a, b) => { const p = F.P(u, a), q = F.P(u, b); return [p.x, p.z, q.x, q.z]; };
 
 const stamp = {
+  rail(S, sl, rid) {
+    const T = TUNING.rail, F = frameAt(S, sl.i0, sl.i1), ledge = S.r() < 0.5 ? 1 : -1, g = T.gap, len = T.exitAt + 0.9, m = F.P(T.mouthAt, 0), e = F.P(T.exitAt, 0), gc = F.P(T.gapAt + g / 2, 0);
+    S.feats.push({ t: 'gap', ux: F.ux, uz: F.uz, nx: F.nx, nz: F.nz, wid: 4, x: gc.x, z: gc.z, len: g, d: 1.4, c0: ledge > 0 ? -HALF_W - 0.05 : -HALF_W + 1.85, c1: ledge > 0 ? HALF_W - 1.85 : HALF_W + 0.05, rid });
+    S.rails.push({ ax: m.x, az: m.z, bx: e.x, bz: e.z, ux: F.ux, uz: F.uz, len: T.exitAt - T.mouthAt, r: 0.7, h: T.h, rid });
+    keepAlong(S, F, len);
+    return { kind: 'rail', rid, F, len, entryU: 0.0, targetU: T.exitAt + 0.5 };
+  },
   secret(S, sl, rid) {                                       // a pocket along the corridor wall, shut in front and on the lane side by low fences and open at its far end: the pad vaults the ball in over the front fence to the coin
     const T = TUNING.secret, F = frameAt(S, sl.i0, sl.i1), len = T.frontAt + T.len + 1.0, pd = F.P(T.padAt, T.lat), coin = F.P(T.frontAt + T.len * 0.55, T.lat + 0.2);
     S.pads.push({ x: pd.x, z: pd.z, r: 0.55, rid });
@@ -74,12 +82,13 @@ const stamp = {
     return { kind: 'vault', rid, F, len, entryU: 0.0, targetU: T.fence2 + 0.6 };
   },
   door(S, sl, rid) {
-    const T = TUNING.door, F = frameAt(S, sl.i0, sl.i1), len = T.wall2 + 1.4, bp = F.P(T.buttonAt, 0), button = { x: bp.x, z: bp.z, r: 0.55 };
+    const T = TUNING.door, F = frameAt(S, sl.i0, sl.i1), len = T.wall2 + 2.8, bp = F.P(T.buttonAt, 0), button = { x: bp.x, z: bp.z, r: 0.55 };
     for (const [u, openPlus] of [[T.wall1, true], [T.wall2, false]]) {
       const pieces = openPlus ? [[-HALF_W - 0.1, -0.55], [0.55, HALF_W - 1.7]] : [[-HALF_W + 1.7, -0.55], [0.55, HALF_W + 0.1]];
       for (const [a, b] of pieces) { const sg = seg(F, u, a, b); S.barriers.push({ a: [sg[0], sg[1]], b: [sg[2], sg[3]], low: false, rid }); S.walls.push([sg[0], sg[1], sg[2], sg[3], 0, 1, 0, rid]); }
       S.doors.push({ gate: seg(F, u, -0.55, 0.55), button, rid });
     }
+    const bs = F.P(T.wall2 + 1.2, 0); S.boosts.push({ x: bs.x, z: bs.z, ux: F.ux, uz: F.uz, len: 1.4, wid: 1.2, powered: true, rid });          // (powered by the same button: dark until the gates are open)
     keepAlong(S, F, len);
     return { kind: 'door', rid, F, len, entryU: 0.0, targetU: T.wall2 + 0.6 };
   },
@@ -88,13 +97,13 @@ const stamp = {
 /** Which recipes a hole gets, in order along the corridor. */
 function wanted(S) {
   const i = S.index, out = [], r = S.r;
-  const pick = () => { const o = ['vault']; if (i >= 3) o.push('secret'); if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
+  const pick = () => { const o = ['vault']; if (i >= 5) o.push('rail', 'rail'); if (i >= 3) o.push('secret'); if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
   if (i >= 2) out.push(pick());
   if (i >= 4 && r() < 0.6) out.push(pick());
   if (i >= 6 && r() < 0.6) out.push(pick());
   return out;
 }
-const LENGTH = { secret: () => TUNING.secret.frontAt + TUNING.secret.len + 1.0, bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 1.4 };
+const LENGTH = { rail: () => TUNING.rail.exitAt + 0.9, secret: () => TUNING.secret.frontAt + TUNING.secret.len + 1.0, bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 2.8 };
 
 /**
  * Place the recipes of a hole. `S` is the generator's state (the corridor, what is placed so far and the arrays to add to). `plainOk()` says whether the plain route still exists.
@@ -112,7 +121,7 @@ export function placeRecipes(S, plainOk) {
 }
 /** Take every piece of recipe `rid` out of the hole (or of the generator's state). */
 export function removeRecipe(H, rid) {
-  for (const k of ['boosts', 'pads', 'feats', 'barriers', 'doors']) { const a = H[k]; for (let i = a.length - 1; i >= 0; i--) if (a[i].rid === rid) a.splice(i, 1); }
+  for (const k of ['boosts', 'pads', 'feats', 'barriers', 'doors', 'rails']) { const a = H[k]; for (let i = a.length - 1; i >= 0; i--) if (a[i].rid === rid) a.splice(i, 1); }
   for (let i = H.walls.length - 1; i >= 0; i--) if (H.walls[i][7] === rid) H.walls.splice(i, 1);
   if (H.pickups) for (let i = H.pickups.length - 1; i >= 0; i--) if (H.pickups[i].rid === rid) H.pickups.splice(i, 1);
 }
