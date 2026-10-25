@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024192239';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024192239';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024192239';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024192239';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024193727';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024193727';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024193727';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024193727';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -20,7 +20,7 @@ export const M = {
 export const G = { box: new THREE.BoxGeometry(1, 1, 1), ball: new THREE.SphereGeometry(BALL_R, 16, 12), dot: new THREE.SphereGeometry(0.1, 8, 6), sph: new THREE.SphereGeometry(1, 14, 10), cyl: new THREE.CylinderGeometry(1, 1, 1, 18), disc: new THREE.CircleGeometry(1, 28) };
 G.disc.rotateX(-Math.PI / 2);
 
-const COLOURS = { homing: '#ff5a5a', ghost: '#bda7ff', multi: '#5cc8ff', hamster: '#ffb45a', mega: '#4cd964', turbo: '#ff8a3d', bounce: '#ff63c0', freeze: '#8fe3ff', safety: '#ffd84a' };
+export const COLOURS = { homing: '#ff5a5a', ghost: '#bda7ff', multi: '#5cc8ff', hamster: '#ffb45a', mega: '#4cd964', turbo: '#ff8a3d', bounce: '#ff63c0', freeze: '#8fe3ff', safety: '#ffd84a' };
 export const EMOJI = { homing: '\u{1F3AF}', ghost: '\u{1F47B}', multi: '\u{1F3B1}', hamster: '\u{1F439}', mega: '⭕', turbo: '\u{1F680}', bounce: '\u{1F3C0}', freeze: '❄️', safety: '\u{1F6DF}' };
 export const NAMES = { homing: 'Homing', ghost: 'Ghost', multi: 'Multi-ball', hamster: 'Hamster ball', mega: 'Mega cup', turbo: 'Turbo', bounce: 'Super bounce', freeze: 'Freeze', safety: 'Safety net' };
 const emojiTex = {};
@@ -147,8 +147,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const flag = new THREE.Group(); flag.position.set(h.cup.x, 0, h.cup.z);
   flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.6), M.flag); disposables.push(fl.geometry); fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);
   // posts, bumpers, sand
-  for (const p of h.posts) g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z));
-  for (const p of h.bumpers) { const b = cyl(M.bumper, p.r, 0.8, p.x, 0.4, p.z); g.add(b); g.add(cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z)); }
+  for (const p of h.posts) { g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z)); }                    // (painted warning bands: this is something the ball hits)
+  for (const p of h.bumpers) {
+    const b = cyl(M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z), ph = p.x * 3 + p.z; g.add(b); g.add(cap); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
+    updaters.push((heroT, t) => { const k = 1 + 0.05 * Math.sin(t * 4 + ph); b.scale.set(p.r * k, 0.8, p.r * k); cap.scale.set(p.r * 1.05 * k, 0.12, p.r * 1.05 * k); });          // (bumpers breathe a little: they are alive)
+  }
   for (const s of h.sands) {                                 // a sand pit: a rough patch of sand with a darker, damp rim and a few pebbles
     const sg = track(pondGeometry(s.poly, 0)), spp = sg.attributes.position; for (let i = 0; i < spp.count; i++) spp.setY(i, hillH(h, spp.getX(i), spp.getZ(i)) + 0.07); sg.computeVertexNormals(); const sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, '#ffffff', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); sm.receiveShadow = true; g.add(sm);
     const lip = track(pondGeometry(s.poly.map((v, i) => (i % 2 ? s.z : s.x) + (v - (i % 2 ? s.z : s.x)) * 1.12), 0)), lpp = lip.attributes.position; for (let i = 0; i < lpp.count; i++) lpp.setY(i, hillH(h, lpp.getX(i), lpp.getZ(i)) + 0.04); lip.computeVertexNormals(); const lm = new THREE.Mesh(lip, GM.lam(GM.tex.sand, '#c9b27a', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); lm.receiveShadow = true; g.add(lm);
@@ -261,8 +264,8 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     for (let k = 0; k < 7; k++) { const t = cone(toothM, 0.085, 0.3, 4, -H + 0.16, 1.03, -0.84 + k * 0.28); t.rotation.x = Math.PI; w.add(t); }
     const lower = new THREE.Group(); lower.position.set(-H + 0.35, 0.4, 0); lower.add(rbox(green2, 0.7, 0.8, lat0 * 2 + 0.1, 0, 0, 0, 0.1)); lower.add(rbox(redM, 0.5, 0.05, lat0 * 2 - 0.1, 0, 0.42, 0, 0.01));
     for (let k = 0; k < 7; k++) lower.add(cone(toothM, 0.085, 0.3, 4, -0.28, 0.58, -0.84 + k * 0.28)); w.add(lower);
-    let c = 0;
-    updaters.push((heroT, t, dt) => { const target = gateBlocked(hr, heroT) ? 1 : 0; c += (target - c) * Math.min(1, dt * 10); lower.position.y = -0.55 + c * 1.1; lower.scale.y = 0.8 + 0.5 * c; });
+    let c = 0; const gp = new THREE.Vector3();
+    updaters.push((heroT, t, dt) => { const target = gateBlocked(hr, heroT) ? 1 : 0; const prev = c; c += (target - c) * Math.min(1, dt * 10); if (prev < 0.85 && c >= 0.85 && ctx.fx) { w.getWorldPosition(gp); ctx.fx.puff(gp.x, gp.y + 1.0, gp.z, 6); ctx.fx.sparks(gp.x, gp.y + 1.0, gp.z, '#fffbe0', 8, 2.5, 2, 0.4, 0.04); } lower.position.y = -0.55 + c * 1.1; lower.scale.y = 0.8 + 0.5 * c; });
   } else if (hr.type === 'turntable') {                    // a stone-rimmed painted disc
     const disc = new THREE.Group(), R = hr.r; disc.add(cyl(stoneTint('#b9b4a8'), R, 0.14, 0, 0.1, 0));
     for (let k = 0; k < 6; k++) { const sc = new THREE.Mesh(track(new THREE.CircleGeometry(R * 0.97, 12, (k * Math.PI) / 3, Math.PI / 6)), k % 2 ? paint('#e5483f') : paint('#fff8e8')); sc.rotation.x = -Math.PI / 2; sc.position.y = 0.18; disc.add(sc); }

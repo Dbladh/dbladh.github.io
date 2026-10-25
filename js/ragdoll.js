@@ -2,7 +2,7 @@
 // distance constraints fly and flop under gravity, bounce on the ground under them, and drive the same meshes the rider
 // was built from (so nothing needs to be built twice). `restore()` puts everything back on the bike.
 import * as THREE from 'three';
-import { aim } from './bike.js?v=20261024192239';
+import { aim } from './bike.js?v=20261024193727';
 
 const GRAV = 24;
 const L = { torso: 0.56, neck: 0.22, upper: 0.36, fore: 0.36, thigh: 0.42, shin: 0.42 };   // rider-local lengths (before scaling)

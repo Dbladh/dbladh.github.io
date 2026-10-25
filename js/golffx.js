@@ -33,12 +33,16 @@ export function createFx(lowEnd = false) {
   });
   const fogs = new THREE.InstancedMesh(fogGeo, fogMat, MAX_FOG); fogs.frustumCulled = false; fogs.renderOrder = 4; for (let i = 0; i < MAX_FOG; i++) fogs.setMatrixAt(i, zero); group.add(fogs);
   const F = Array.from({ length: MAX_FOG }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vz: 0, t: 0, life: 1, s: 0.5, rot: 0, spin: 0 })); let fCur = 0, accF = 0;
-  let sCur = 0, uCur = 0, accS = 0;
+  let sCur = 0, uCur = 0, accS = 0, accT = 0;
+  // glowing sparks (additive, coloured per instance): power-up auras and trails, hammer and bumper hits, pickups, the cannon's flash
+  const MAX_SP = 320, sparkMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), sparkM = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), sparkMat, MAX_SP);
+  sparkM.frustumCulled = false; sparkM.renderOrder = 5; for (let i = 0; i < MAX_SP; i++) { sparkM.setMatrixAt(i, zero); sparkM.setColorAt(i, new THREE.Color('#ffffff')); } group.add(sparkM);
+  const SP = Array.from({ length: MAX_SP }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0, life: 1, s: 0.05, g: 0 })), tc = new THREE.Color(); let spCur = 0;
   let dCur = 0, mCur = 0, rCur = 0, acc = 0, accM = 0;
   const rnd = Math.random, k = lowEnd ? 0.55 : 1;
   const addDrop = (x, y, z, vx, vy, vz, s, floor) => { const p = D[dCur]; dCur = (dCur + 1) % MAX_DROPS; p.on = true; p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz; p.s = s; p.floor = floor; };
   const addMist = (x, y, z, vx, vy, vz, life, s) => { const p = M[mCur]; mCur = (mCur + 1) % MAX_MIST; p.on = true; p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz; p.t = 0; p.life = life; p.s = s; };
-  const addRing = (x, y, z, size, life) => { const r = rings[rCur]; rCur = (rCur + 1) % MAX_RINGS; r.on = true; r.t = 0; r.life = life; r.size = size; r.mesh.visible = true; r.mesh.position.set(x, y, z); };
+  const addRing = (x, y, z, size, life) => { const r = rings[rCur]; rCur = (rCur + 1) % MAX_RINGS; r.mat.color.set('#f4fcff'); r.on = true; r.t = 0; r.life = life; r.size = size; r.mesh.visible = true; r.mesh.position.set(x, y, z); };
   return {
     group,
     /** A splash: `splash` (ball into water), `kick` (ball thrown out by the geyser), `land` (a small ripple). */
@@ -54,6 +58,21 @@ export function createFx(lowEnd = false) {
       accF += dt * 11 * k;
       while (accF >= 1) { accF -= 1; const a = rnd() * 6.283, d = Math.sqrt(rnd()) * radius, p = F[fCur]; fCur = (fCur + 1) % MAX_FOG; p.on = true; p.x = x + Math.cos(a) * d; p.z = z + Math.sin(a) * d; p.y = y + 0.1 + rnd() * 0.5; p.vx = (rnd() - 0.5) * 0.35; p.vz = (rnd() - 0.5) * 0.35; p.t = 0; p.life = 2.4 + rnd() * 1.8; p.s = 1.0 + rnd() * 1.0; p.rot = rnd() * 6.28; p.spin = (rnd() - 0.5) * 0.5; }
     },
+    /** A burst of `n` glowing sparks of `color` at (x, y, z): `speed` outward, `up` upward, living `life` seconds. */
+    sparks(x, y, z, color, n, speed = 2, up = 2, life = 0.6, size = 0.06) {
+      tc.set(color); n = Math.max(1, Math.round(n * k));
+      for (let i = 0; i < n; i++) { const a = rnd() * 6.283, sd = speed * (0.3 + rnd() * 0.7), p = SP[spCur]; spCur = (spCur + 1) % MAX_SP; p.on = true; p.x = x; p.y = y; p.z = z; p.vx = Math.cos(a) * sd; p.vz = Math.sin(a) * sd; p.vy = up * (0.3 + rnd()); p.t = 0; p.life = life * (0.6 + rnd() * 0.6); p.s = size * (0.6 + rnd() * 0.8); p.g = 5; sparkM.setColorAt(spCur === 0 ? MAX_SP - 1 : spCur - 1, tc); }
+      sparkM.instanceColor.needsUpdate = true;
+    },
+    /** A trail: a few tiny sparks left at (x, y, z) per second (`rate`), drifting up slowly. */
+    trail(x, y, z, color, dt, rate = 40, size = 0.045) {
+      accT += dt * rate * k; tc.set(color);
+      while (accT >= 1) { accT -= 1; const p = SP[spCur], idx = spCur; spCur = (spCur + 1) % MAX_SP; p.on = true; p.x = x + (rnd() - 0.5) * 0.15; p.y = y + rnd() * 0.12; p.z = z + (rnd() - 0.5) * 0.15; p.vx = (rnd() - 0.5) * 0.4; p.vz = (rnd() - 0.5) * 0.4; p.vy = 0.2 + rnd() * 0.5; p.t = 0; p.life = 0.45 + rnd() * 0.35; p.s = size * (0.7 + rnd() * 0.7); p.g = -0.2; sparkM.setColorAt(idx, tc); sparkM.instanceColor.needsUpdate = true; }
+    },
+    /** A coloured ring on the ground that spreads and fades (`size` = about its final radius). */
+    ring(x, y, z, size, life, color = '#f4fcff') { addRing(x, y + 0.01, z, size, life); const r = rings[(rCur + MAX_RINGS - 1) % MAX_RINGS]; r.mat.color.set(color); },
+    /** A puff of smoke or dust (`color` tints the dust pool's puffs). */
+    puff(x, y, z, n = 5, vx = 0, vz = 0) { for (let i = 0; i < Math.max(1, Math.round(n * k)); i++) { const u = U[uCur]; uCur = (uCur + 1) % MAX_DUST; u.on = true; u.x = x + (rnd() - 0.5) * 0.3; u.y = y + 0.1; u.z = z + (rnd() - 0.5) * 0.3; u.vx = vx * 0.2 + (rnd() - 0.5) * 0.8; u.vz = vz * 0.2 + (rnd() - 0.5) * 0.8; u.vy = 0.5 + rnd() * 0.7; u.t = 0; u.life = 0.7 + rnd() * 0.6; u.s = 0.28 + rnd() * 0.25; } },
     /** Sand thrown up by a ball ploughing through a pit at (x, y, z) moving (vx, vz). */
     sand(x, y, z, vx, vz, dt) {
       const sp = Math.sqrt(vx * vx + vz * vz); accS += dt * sp * 16 * k;
@@ -109,8 +128,14 @@ export function createFx(lowEnd = false) {
         m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s2, s2, s2)); fogs.setMatrixAt(i, m); aAlpha.array[i] = 0.55 * env * env; aRot.array[i] = p.rot;
       }
       aAlpha.needsUpdate = true; aRot.needsUpdate = true;
-      if (any) { fogs.instanceMatrix.needsUpdate = true; sands.instanceMatrix.needsUpdate = true; dusts.instanceMatrix.needsUpdate = true; drops.instanceMatrix.needsUpdate = true; mists.instanceMatrix.needsUpdate = true; }
+      for (let i = 0; i < MAX_SP; i++) {
+        const p = SP[i]; if (!p.on) continue; any = true; p.t += dt;
+        if (p.t >= p.life) { p.on = false; sparkM.setMatrixAt(i, zero); continue; }
+        p.vy -= p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; const u = p.t / p.life, s = p.s * (1 - u * u);
+        m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s, s, s)); sparkM.setMatrixAt(i, m);
+      }
+      if (any) { sparkM.instanceMatrix.needsUpdate = true; fogs.instanceMatrix.needsUpdate = true; sands.instanceMatrix.needsUpdate = true; dusts.instanceMatrix.needsUpdate = true; drops.instanceMatrix.needsUpdate = true; mists.instanceMatrix.needsUpdate = true; }
     },
-    dispose() { fogGeo.dispose(); fogMat.dispose(); smokeTex.dispose(); sands.geometry.dispose(); dusts.geometry.dispose(); sandMat.dispose(); dustMat.dispose(); drops.geometry.dispose(); mists.geometry.dispose(); ringGeo.dispose(); dropMat.dispose(); mistMat.dispose(); for (const r of rings) r.mat.dispose(); },
+    dispose() { sparkM.geometry.dispose(); sparkMat.dispose(); fogGeo.dispose(); fogMat.dispose(); smokeTex.dispose(); sands.geometry.dispose(); dusts.geometry.dispose(); sandMat.dispose(); dustMat.dispose(); drops.geometry.dispose(); mists.geometry.dispose(); ringGeo.dispose(); dropMat.dispose(); mistMat.dispose(); for (const r of rings) r.mat.dispose(); },
   };
 }
