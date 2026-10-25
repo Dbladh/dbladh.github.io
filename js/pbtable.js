@@ -1,5 +1,5 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a rectangular playfield with a round top, the funnel and two flippers, the drain, slingshots, pop bumpers and the cup.
-export const TILT_PUTT1 = 3.4, TILT_PIN = 4.6, TAU_PUTT1 = 18, TAU_PIN = 24, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5;
+export const TILT_PIN = 4.6, TAU_PIN = 26, PIN_RAMP = 3.2, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5;
 
 // The table, in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom, x = -15, the round top at x = 15).
 export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 12.6, z: 0 }, pivX: -12.0, pivZ: 1.78 };
@@ -36,6 +36,7 @@ export function prepareTable(hole) {
     flips.push({ side, px: TABLE.pivX, pz: side * TABLE.pivZ, len: FLIP_LEN, rad: FLIP_RAD, restA: ang(rest), upA: ang(up), a: ang(rest), w: 0 });
   }
   hole.tiltDir = { x: -1, z: 0 };
+  hole.spots = [{ x: 2.0, z: 0 }, { x: 6.9, z: -4.9 }, { x: 6.9, z: 4.9 }];                         // (the putting spots: they appear in pinball mode and level the table)
   return { ux: 1, uz: 0, nx: 0, nz: 1, tee, L, flips, rails, tris, bottom: { x: x0, z: 0 } };
 }
 /** Swing the flippers towards up (`held`) or rest for `h` seconds. */
