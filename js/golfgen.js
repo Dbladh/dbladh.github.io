@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024211832';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261024211832';
-import { aceSearch } from './golface.js?v=20261024211832';
-import { BAKED } from './golfbake.js?v=20261024211832';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024213520';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261024213520';
+import { aceSearch } from './golface.js?v=20261024213520';
+import { BAKED } from './golfbake.js?v=20261024213520';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -47,9 +47,9 @@ function sandPoly(kind, x, z, rad, ox, oz, seed) {
   const rng = mulberry32(seed), pts = []; let c = 1, s = 0; const C = 0.9659258262890683, S = 0.25881904510252074, lump = []; for (let i = 0; i < 24; i++) lump.push(rng());
   for (let i = 0; i < 24; i++) {
     let px, py; const bump = 1 + 0.12 * (lump[i] - 0.5);
-    if (kind === 0) { px = c * rad * 1.45; py = s * rad * 0.7; }                                  // an oval
-    else if (kind === 1) { px = c * rad * 1.5; py = s * rad * (0.5 + 0.55 * c * c); }             // a peanut
-    else if (kind === 2) { px = c * rad * 1.6; py = s * rad * 0.55 + 0.3 * (px * px) / rad - 0.45 * rad; }   // a banana
+    if (kind === 0) { px = c * rad * 1.9; py = s * rad * 0.62; }                                  // an oval
+    else if (kind === 1) { px = c * rad * 1.9; py = s * rad * (0.4 + 0.45 * c * c); }             // a peanut
+    else if (kind === 2) { px = c * rad * 2.0; py = s * rad * 0.5 + 0.12 * (px * px) / rad - 0.5 * rad; }   // a banana
     else if (kind === 3) { const rr = rad * (1 + 0.28 * (4 * c * c * c - 3 * c)); px = c * rr; py = s * rr; }   // a rounded triangle
     else { const rr = rad * (1 + 0.3 * lump[i]); px = c * rr; py = s * rr; }                       // a lumpy blob
     pts.push(x + (px * ox - py * oz) * bump, z + (px * oz + py * ox) * bump);
@@ -282,8 +282,8 @@ function build(seed, index, type, force) {
     for (let tries = 0; tries < 30; tries++) {
       // a pit is a punishment for over-shooting or misjudging an angle, so it lies off to the side: on the outside of a bend (where a ball that runs on will go) or beside the last stretch, never on the line to the cup
       const bends = apex.filter((v) => v !== undefined && v > 7 && v < N - 8), ci0 = bends.length && r() < 0.8 ? bends[(r() * bends.length) | 0] + (((r() * 5) | 0) - 2) : Math.floor(N * (0.55 + 0.35 * r())), ci = Math.max(7, Math.min(N - 8, ci0));
-      const cross = tx[ci - 3] * tz[ci + 3] - tz[ci - 3] * tx[ci + 3], side = Math.abs(cross) > 0.15 ? (cross > 0 ? -1 : 1) : (r() < 0.5 ? 1 : -1), lat = side * (1.4 + r() * 0.3);
-      const p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 0.85 + r() * 0.35, kind = (r() * 5) | 0, turn = r() * 0.8;
+      const cross = tx[ci - 3] * tz[ci + 3] - tz[ci - 3] * tx[ci + 3], side = Math.abs(cross) > 0.15 ? (cross > 0 ? -1 : 1) : (r() < 0.5 ? 1 : -1), lat = side * (w[ci] - 0.75 - r() * 0.1);                                    // (hugging the wall)
+      const p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 0.8 + r() * 0.25, kind = [0, 0, 1, 2, 3][(r() * 5) | 0], turn = r() * 0.5;
       if (!free(p.x, p.z, 0.1)) continue;
       const C45 = 0.7071067811865476, ox0 = turn < 0.5 ? tx[ci] : turn < 0.75 ? (tx[ci] - tz[ci]) * C45 : (tx[ci] + tz[ci]) * C45, oz0 = turn < 0.5 ? tz[ci] : turn < 0.75 ? (tz[ci] + tx[ci]) * C45 : (tz[ci] - tx[ci]) * C45;
       const poly = sandPoly(kind, q(p.x), q(p.z), rad, ox0, oz0, seed ^ (0x7f4a7c15 + k));
