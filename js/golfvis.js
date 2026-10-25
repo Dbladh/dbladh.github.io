@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024224007';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024224007';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024224007';
-import { THEME_BORDER } from './golfscenery.js?v=20261024224007';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024224007';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024225424';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024225424';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024225424';
+import { THEME_BORDER } from './golfscenery.js?v=20261024225424';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024225424';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -76,13 +76,13 @@ function buildBorder(h, g, disposables) {
   if (style === 'brick') {
     const c0 = make(G.box, GM.brick, segs.length), c1 = make(G.box, GM.brick, segs.length), cap = make(G.box, GM.stone, segs.length);
     segs.forEach((w, i) => { place(c0, i, w, 0, 0.15, 1, 0.3, 0.4, 0, BRICKS); place(c1, i, w, 0, 0.45, 1, 0.3, 0.4, 0.3, BRICKS); place(cap, i, w, -0.03, 0.65, 1, 0.1, 0.5, 0, ['#e8dcc6', '#ddd0b8']); });
-    for (const m of [c0, c1, cap]) m.instanceMatrix.needsUpdate = m.instanceColor.needsUpdate = true;
+    for (const m of [c0, c1, cap]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   } else if (style === 'stone') {
     getRock();
     const mat = GM.lam(GM.tex.stone, '#ffffff', { flatShading: true }); disposables.push(mat);
     const rocks = make(rockGeo, mat, segs.length), top = make(rockGeo, mat, segs.length);
     segs.forEach((w, i) => { const hgt = 0.55 + r() * 0.3; place(rocks, i, w, 0.05, hgt * 0.4, 1.7, hgt, 0.7 + r() * 0.2, (r() - 0.5) * 0.3, ROCKS, (r() - 0.5) * 0.3); place(top, i, w, 0.15, 0.62 + r() * 0.12, 1.1, 0.4 + r() * 0.2, 0.55, (r() - 0.5) * 0.5, ROCKS, (r() - 0.5) * 0.4); });
-    for (const m of [rocks, top]) m.instanceMatrix.needsUpdate = m.instanceColor.needsUpdate = true;
+    for (const m of [rocks, top]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   } else {
     const p0 = make(G.box, GM.wood, segs.length), p1 = make(G.box, GM.wood, segs.length), posts = make(G.box, GM.darkwood, Math.ceil(segs.length / 5));
     segs.forEach((w, i) => { place(p0, i, w, 0, 0.15, 1, 0.3, 0.32, 0, WOODS); place(p1, i, w, 0, 0.47, 1, 0.3, 0.32, 0, WOODS); });

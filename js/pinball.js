@@ -3,12 +3,12 @@
 // slowly flattens until the ball stops, you putt again, and if that misses too the table tilts up into pinball: the ball rolls down, bumpers and obstacles knock it about, the flippers keep it
 // in play, until the tilt has flattened or it drains (a stroke) or drops in the cup.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024224007';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024224007';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024224007';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261024224007';
-import { courseMonth } from './monthseed.js?v=20261024224007';
-import { prepareTable, stepFlips, isDrained, TILT_PUTT1, TILT_PIN, TAU_PUTT1, TAU_PIN, FLIP_RAD } from './pbtable.js?v=20261024224007';
+import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024225424';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024225424';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024225424';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261024225424';
+import { courseMonth } from './monthseed.js?v=20261024225424';
+import { prepareTable, stepFlips, isDrained, TABLE, TILT_PUTT1, TILT_PIN, TAU_PUTT1, TAU_PIN, FLIP_RAD } from './pbtable.js?v=20261024225424';
 
 const HOLE_INDEX = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const SUB = 4;
@@ -36,7 +36,7 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   function buildTable() {
     const mo = courseMonth(), cs = courseSeed(mo.year, mo.month), type = heroOrder(cs)[HOLE_INDEX];
     hole = makeHole(holeSeed(cs, HOLE_INDEX), HOLE_INDEX, type);
-    frame = prepareTable(hole); flips = frame.flips; const guides = frame.guides, L = frame.L, ux = frame.ux, uz = frame.uz;
+    frame = prepareTable(hole); flips = frame.flips;
     // levelled ground and the visual
     const toW = (x, z) => toWorld(SITE, x, z), shape = hole.shape.map((p) => { const w = toW(p[0], p[1]); return [w.x, w.z, p[2] + MARGIN]; });
     Y = world.carve.begin([shape], BLEND, [])[0]; world.carve.set(0, 0);
@@ -46,21 +46,47 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
       const g = new THREE.Group(), bar = new THREE.Mesh(G.box, barM), c0 = new THREE.Mesh(G.sph, capM), c1 = new THREE.Mesh(G.sph, barM);
       bar.scale.set(f.len, 0.3, f.rad * 2); bar.position.x = f.len / 2; c0.scale.setScalar(f.rad * 1.5); c1.scale.setScalar(f.rad * 1.1); c1.position.x = f.len; g.add(bar, c0, c1); g.position.set(f.px, 0.22, f.pz); bar.castShadow = c0.castShadow = c1.castShadow = true; group.add(g); return g;
     });
-    for (const [a, b] of guides) { const r = new THREE.Mesh(G.box, M.rail), dx = b.x - a.x, dz = b.z - a.z; r.scale.set(Math.hypot(dx, dz), 0.4, 0.2); r.position.set((a.x + b.x) / 2, 0.2, (a.z + b.z) / 2); r.rotation.y = Math.atan2(-dz, dx); r.castShadow = true; group.add(r); }
-    { const dr = new THREE.Mesh(G.box, new THREE.MeshBasicMaterial({ color: '#07080b' })), c = L(-2.75, 0); dr.scale.set(1.1, 0.04, 2.0); dr.position.set(c.x, 0.07, c.z); dr.rotation.y = Math.atan2(-uz, ux); group.add(dr); }
+    dressTable();
     ballMesh = new THREE.Mesh(G.ball, M.ball.clone()); ballMesh.castShadow = true; group.add(ballMesh);
     dots = new THREE.InstancedMesh(G.dot, M.dot, 16); dots.count = 0; dots.frustumCulled = false; group.add(dots);
     { const c = toW(hole.cup.x, hole.cup.z); world.carve.setHole(0, c.x, c.z, CUP_R * 0.92 + 0.03); }
   }
+  // the look of a pinball playfield: blue lacquer with printed inserts, glossy rails, slingshots, the drain
+  const disposables = [];
+  function dressTable() {
+    const blue = new THREE.MeshLambertMaterial({ color: '#1d4fb8' }); disposables.push(blue);
+    group.traverse((o) => { if (o.isMesh && o.material === M.grass) o.material = blue; });
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 480; const c = cv.getContext('2d'), X = (x) => ((x - TABLE.x0) / 30) * 1024, Z = (z) => ((z + 7) / 14) * 480;
+    c.clearRect(0, 0, 1024, 480); c.save(); c.beginPath(); frame.outline = hole.outline; hole.outline.forEach((p, i) => (i ? c.lineTo(X(p[0]), Z(p[1])) : c.moveTo(X(p[0]), Z(p[1])))); c.closePath(); c.clip();
+    const g = c.createLinearGradient(0, 0, 1024, 0); g.addColorStop(0, '#173f96'); g.addColorStop(0.6, '#2a68d4'); g.addColorStop(1, '#6a3fb5'); c.fillStyle = g; c.fillRect(0, 0, 1024, 480);
+    for (let i = 0; i < 90; i++) { const a = i * 2.4, x = X(TABLE.cup.x) + Math.cos(a) * (40 + i * 2.6), y = Z(0) + Math.sin(a) * (40 + i * 2.6); c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); }   // (a scatter of stars)
+    [[150, '#ffd23f'], [110, '#e8594b'], [70, '#fff6e0']].forEach(([r, col]) => { c.fillStyle = col; c.beginPath(); c.arc(X(TABLE.cup.x), Z(0), (r / 480) * 14 * 34, 0, 7); c.fill(); }); c.fillStyle = '#1d4fb8'; c.beginPath(); c.arc(X(TABLE.cup.x), Z(0), 55, 0, 7); c.fill();
+    c.fillStyle = 'rgba(255,214,70,0.9)'; for (let k = 0; k < 5; k++) { const x = X(-3 + k * 3.4); c.beginPath(); c.moveTo(x + 36, Z(0)); c.lineTo(x - 20, Z(0) - 30); c.lineTo(x - 8, Z(0)); c.lineTo(x - 20, Z(0) + 30); c.closePath(); c.fill(); }   // (chevrons pointing up the table)
+    c.fillStyle = '#fff6e0'; c.font = '800 70px "Outfit", system-ui, sans-serif'; c.textAlign = 'center'; c.save(); c.translate(X(-9.6), Z(0)); c.rotate(Math.PI / 2); c.fillText('PINBALL', 0, -48); c.fillText('GOLF', 0, 24); c.restore();
+    c.restore();
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; disposables.push(tex);
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(30, 14).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); art.position.set(0, 0.05, 0); disposables.push(art.geometry, art.material); group.add(art);
+    const red = new THREE.MeshLambertMaterial({ color: '#e0443f' }), cream = new THREE.MeshLambertMaterial({ color: '#fff1d0' }); disposables.push(red, cream);
+    for (const [a, b] of frame.rails) {
+      const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz), bar = new THREE.Mesh(G.box, red), cap = new THREE.Mesh(G.box, cream);
+      for (const [m, y, h, w] of [[bar, 0.25, 0.5, 0.28], [cap, 0.54, 0.08, 0.34]]) { m.scale.set(l + 0.06, h, w); m.position.set((a.x + b.x) / 2, y, (a.z + b.z) / 2); m.rotation.y = Math.atan2(-dz, dx); m.castShadow = true; group.add(m); }
+    }
+    for (const tr of frame.tris) {                                                     // slingshots: a red wedge with a cream top
+      const sh = new THREE.Shape(tr.map((p) => new THREE.Vector2(p[0], -p[1]))), geo = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false }).rotateX(-Math.PI / 2), m = new THREE.Mesh(geo, red);
+      m.scale.set(0.97, 1, 0.97); m.castShadow = true; disposables.push(geo); group.add(m); const top = new THREE.Mesh(geo, cream); top.scale.set(0.93, 0.04, 0.93); top.position.y = 0.52; group.add(top);
+    }
+    const dr = new THREE.Mesh(G.box, new THREE.MeshBasicMaterial({ color: '#07080b' })); dr.scale.set(1.8, 0.04, 3.6); dr.position.set(-13.9, 0.07, 0); group.add(dr);
+  }
   function disposeTable() {
+    for (const d of disposables.splice(0)) d.dispose?.();
     if (!group) return; scene.remove(group); vis.dispose(); ballMesh.material.dispose(); dots.dispose(); group = vis = hole = ball = ballMesh = dots = null; flips = []; flipMeshes = [];
   }
 
   // ---------- the camera: behind the flippers, looking up the table ----------
   function tablePose(out) {
-    const b = hole.bounds, c = toWorld(SITE, b.cx, b.cz), tan = Math.tan((camera.fov * Math.PI) / 360), pitch = 0.95;
-    const long = b.hx > b.hz ? b.hx : b.hz, dist = Math.max((long * Math.sin(pitch) + 4.5) / tan, (Math.min(b.hx, b.hz) + 3) / (tan * camera.aspect)) * 1.18;
-    out.pos.set(c.x, Y + dist * Math.sin(pitch), c.z + dist * Math.cos(pitch) + 3.2); out.look.set(c.x, Y + 0.2, c.z + 2.7);
+    const b = hole.bounds, c = toWorld(SITE, b.cx, b.cz), tan = Math.tan((camera.fov * Math.PI) / 360), pitch = 1.1;
+    const long = b.hx > b.hz ? b.hx : b.hz, dist = Math.max((long * Math.sin(pitch) + 2.6) / tan, (Math.min(b.hx, b.hz) + 2) / (tan * camera.aspect)) * 1.05;
+    out.pos.set(c.x, Y + dist * Math.sin(pitch), c.z + dist * Math.cos(pitch) + 1.2); out.look.set(c.x, Y + 0.2, c.z + 1.0);
   }
 
   // ---------- one ball ----------
@@ -117,13 +143,13 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   // ---------- running ----------
   function stepFlippers(h) { stepFlips(flips, flipHeld, h); flips.forEach((f, i) => { flipMeshes[i].rotation.y = -f.a; }); }
   function updateTilt(dt) {
-    st.kindT += dt; ctx.fricK = st.kind === 'pinball' ? 0.2 : 1;          // (in pinball the ball rolls on long, so it can be played about)
+    st.kindT += dt; ctx.fricK = st.kind === 'pinball' ? 0.2 : st.kind === 'putt1' ? 0.45 : 1;          // (in pinball the ball rolls on long, so it can be played about)
     if (st.kind === 'putt1') ctx.tilt = TILT_PUTT1 * Math.exp(-(st.mode === 'roll' ? st.rollT : 0) / TAU_PUTT1);
     else if (st.kind === 'putt') ctx.tilt = 0;
     else { st.pinT = (st.pinT || 0) + dt; ctx.tilt = TILT_PIN * Math.min(1, st.pinT / 0.3) * Math.exp(-st.pinT / TAU_PIN); }
     if (group) {                                                          // (the cup end rises, pivoting about the tee: the table is seen to tilt)
       group.rotation.x = Math.min(0.3, ctx.tilt * 0.06); group.position.set(SITE.x, Y + 0.06, SITE.z); group.updateMatrix();
-      const t = toWorld(SITE, hole.tee.x, hole.tee.z), w = tmpV.set(hole.tee.x, 0, hole.tee.z).applyMatrix4(group.matrix); group.position.add(tmpV.set(t.x - w.x, Y + 0.06 - w.y, t.z - w.z));
+      const t = toWorld(SITE, frame.bottom.x, frame.bottom.z), w = tmpV.set(frame.bottom.x, 0, frame.bottom.z).applyMatrix4(group.matrix); group.position.add(tmpV.set(t.x - w.x, Y + 0.06 - w.y, t.z - w.z));
     }
     elTilt.firstChild.style.height = `${Math.round(100 * Math.min(1, ctx.tilt / TILT_PIN))}%`;
   }

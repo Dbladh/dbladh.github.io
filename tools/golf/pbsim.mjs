@@ -10,13 +10,13 @@ for (let m = 1; m <= MONTHS; m++) {
   const cs = courseSeed(2026, m), type = heroOrder(cs)[IDX], H = makeHole(holeSeed(cs, IDX), IDX, type), fr = prepareTable(H), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false };
   const path = H.path, len = path.length;
   for (let r = 0; r < REL; r++) {
-    const p = path[Math.floor(len * (0.25 + 0.6 * ((r * 0.618) % 1)))], b = newBall(H); b.x = p.x; b.z = p.z; b.y = hillH(H, b.x, b.z); b.vx = H.tiltDir.x * 1.5; b.vz = H.tiltDir.z * 1.5; b.rest = false;
+    const p = path[Math.floor(len * (0.2 + 0.7 * ((r * 0.618) % 1)))], b = newBall(H); b.x = p.x; b.z = p.z; b.y = hillH(H, b.x, b.z); b.vx = H.tiltDir.x * 1.5; b.vz = H.tiltDir.z * 1.5; b.rest = false;
     const ctx = newCtx(); ctx.capV = 13; ctx.fricK = +(opt('fric', 0.2)); ctx.cupR = 0.6 * 1.35; let t = 0, held = false, heldT = 0, flips = 0, result = 'timeout'; for (const f of fr.flips) f.a = f.restA;
     while (t < 40) {
       const tilt = TILT_PIN * Math.min(1, t / 0.3) * Math.exp(-t / TAU_PIN); ctx.tilt = tilt;
       const u = (b.x - fr.tee.x) * fr.ux + (b.z - fr.tee.z) * fr.uz, lat = (b.x - fr.tee.x) * fr.nx + (b.z - fr.tee.z) * fr.nz, vu = b.vx * fr.ux + b.vz * fr.uz;
-      const near = u < 0.2 && u > -2.3 && Math.abs(lat) < 2.2;
-      if (!held && near && vu < 0.5 && (u < -0.5 || vu < -1.5)) { held = true; heldT = 0; flips++; } if (held && (heldT > 0.28 || !near)) held = false; if (held) heldT += 1 / 60;
+      const near = u < 1.2 && u > -2.3 && Math.abs(lat) < 2.6;
+      if (!held && near && vu < 0.5 && true) { held = true; heldT = 0; flips++; } if (held && (heldT > 0.28 || !near)) held = false; if (held) heldT += 1 / 60;
       for (let i = 0; i < 4; i++) { const h = 1 / 240; stepFlips(fr.flips, held, h); ctx.t += h; stepBall(b, H, ctx, h, ev); collideFlippers(b, fr.flips); if (ev.holed) break; if (ev.splash || isDrained(fr, b)) { result = 'drained'; break; } }
       t += 1 / 60;
       if (ev.holed) { result = 'holed'; break; } if (result === 'drained') break;
