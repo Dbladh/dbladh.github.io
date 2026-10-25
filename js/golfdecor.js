@@ -1,8 +1,8 @@
 // The planting round the outside of a hole: shrubs, boulders, flower patches, small conifers and grass tufts, set in the ground in world coordinates (so each one sits at the real height of
 // the ground there). Placed along the hole's outline with a seeded generator, kept out of every other hole's corridor.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261024193727';
-import { toWorld } from './golfsites.js?v=20261024193727';
+import { mulberry32 } from './golfhero.js?v=20261024193914';
+import { toWorld } from './golfsites.js?v=20261024193914';
 
 const jitter = (geo, amt, seed) => {                       // roughen a shape so every boulder and bush is a little lumpy
   const r = mulberry32(seed), p = geo.attributes.position, seen = new Map();
@@ -16,13 +16,13 @@ const jitter = (geo, amt, seed) => {                       // roughen a shape so
 let shared = null;
 function parts() {
   if (shared) return shared;
-  const flat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+  const flat = (color, neon) => { const m = new THREE.MeshLambertMaterial({ color, flatShading: true }); m.userData.neon = neon; return m; };
   shared = {
-    bush: { geo: jitter(new THREE.IcosahedronGeometry(0.5, 1), 0.35, 11), mat: flat('#ffffff'), colors: ['#4f9d4a', '#5fb455', '#3f8a45', '#6cc060', '#74a944'], lift: 0.22 },
-    rock: { geo: jitter(new THREE.IcosahedronGeometry(0.5, 0), 0.45, 5), mat: flat('#ffffff'), colors: ['#9b968c', '#b0aa9d', '#847f78', '#a8a095', '#bdb6a6'], lift: 0.1 },
-    flower: { geo: new THREE.IcosahedronGeometry(0.5, 0), mat: flat('#ffffff'), colors: ['#ff6f91', '#ffd166', '#ffffff', '#c792ea', '#ff9f68', '#7fd1ff'], lift: 0.22 },
-    conifer: { geo: new THREE.ConeGeometry(0.5, 1.4, 7), mat: flat('#ffffff'), colors: ['#2f7a4a', '#3a8a52', '#2a6b45'], lift: 0.7 },
-    tuft: { geo: new THREE.ConeGeometry(0.5, 1, 5), mat: flat('#ffffff'), colors: ['#8fd16a', '#7cc45f', '#a3d975'], lift: 0.28 },
+    bush: { geo: jitter(new THREE.IcosahedronGeometry(0.5, 1), 0.35, 11), mat: flat('#ffffff', 'bush'), colors: ['#4f9d4a', '#5fb455', '#3f8a45', '#6cc060', '#74a944'], lift: 0.22 },
+    rock: { geo: jitter(new THREE.IcosahedronGeometry(0.5, 0), 0.45, 5), mat: flat('#ffffff', 'rock'), colors: ['#9b968c', '#b0aa9d', '#847f78', '#a8a095', '#bdb6a6'], lift: 0.1 },
+    flower: { geo: new THREE.IcosahedronGeometry(0.5, 0), mat: flat('#ffffff', 'flower'), colors: ['#ff6f91', '#ffd166', '#ffffff', '#c792ea', '#ff9f68', '#7fd1ff'], lift: 0.22 },
+    conifer: { geo: new THREE.ConeGeometry(0.5, 1.4, 7), mat: flat('#ffffff', 'conifer'), colors: ['#2f7a4a', '#3a8a52', '#2a6b45'], lift: 0.7 },
+    tuft: { geo: new THREE.ConeGeometry(0.5, 1, 5), mat: flat('#ffffff', 'tuft'), colors: ['#8fd16a', '#7cc45f', '#a3d975'], lift: 0.28 },
   };
   return shared;
 }

@@ -2,7 +2,7 @@
 // and, switched on by `update(night)`, a soft cone of light, a pool of light on the ground and a glow round the bulb. A few real point lights (borrowed from the village) light the
 // holes near the one in play (see golf.js).
 import * as THREE from 'three';
-import { toWorld } from './golfsites.js?v=20261024193727';
+import { toWorld } from './golfsites.js?v=20261024193914';
 
 const POST_H = 3.0, ARM = 1.7;
 const radial = (stops) => {
@@ -57,7 +57,7 @@ export function buildLamps(spots, ground) {
     for (const mesh of meshes) mesh.setMatrixAt(i, zero);
   });
   for (const mesh of [posts, arms, shades, bulbs, beams, pools]) mesh.instanceMatrix.needsUpdate = true;
-  const meshes = [posts, arms, shades, bulbs, beams, pools], day = new THREE.Color('#f4efe2'), nightC = new THREE.Color('#fff0c4'); let lastNight = -1;
+  const meshes = [posts, arms, shades, bulbs, beams, pools], day = new THREE.Color('#f4efe2'), nightC = new THREE.Color('#fff0c4'); let lastNight = -1; const warmC = new THREE.Color('#ffcf8a'), warmP = new THREE.Color('#ffc77a'), warmG = new THREE.Color('#ffd28a'), uvC = new THREE.Color('#8a4dff'), uvG = new THREE.Color('#b57dff'), uvBulb = new THREE.Color('#e3c2ff');
   return {
     group, count: n,
     /** Show or hide the lamps of hole `hole` (they appear once the hole has risen). */
@@ -70,7 +70,9 @@ export function buildLamps(spots, ground) {
     update(night) {
       if (Math.abs(night - lastNight) < 0.004) return; lastNight = night;
       const k = Math.min(1, night * 1.6);
-      beamMat.opacity = 0.06 * k; poolMat.opacity = 0.42 * k; glowMat.opacity = 0.95 * k; bulbMat.color.copy(day).lerp(nightC, k);
+      const uv = Math.min(1, Math.max(0, (night - 0.35) / 0.5)), u = uv * uv * (3 - 2 * uv);                // (deep night: the warm lamps turn to ultraviolet)
+      beamMat.opacity = (0.06 + 0.05 * u) * k; poolMat.opacity = (0.42 + 0.25 * u) * k; glowMat.opacity = 0.95 * k;
+      bulbMat.color.copy(day).lerp(nightC, k).lerp(uvBulb, u); beamMat.color.copy(warmC).lerp(uvC, u); poolMat.color.copy(warmP).lerp(uvC, u); glowMat.color.copy(warmG).lerp(uvG, u);
       glow.visible = beamMat.visible = poolMat.visible = k > 0.003;
     },
     dispose() { for (const mesh of meshes) { mesh.geometry.dispose(); mesh.dispose?.(); } glowGeo.dispose(); poolTex.dispose(); glowTex.dispose(); for (const mt of [dark, shadeMat, bulbMat, beamMat, poolMat, glowMat]) mt.dispose(); },

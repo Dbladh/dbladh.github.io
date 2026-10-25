@@ -87,7 +87,7 @@ let built = null;
 export function golfMaterials(lowEnd = false) {
   if (built) return built;
   const T = { turf: makeTurf(), brick: makeBrick(), stone: makeStone(), wood: makeWood(), metal: makeMetal(), sand: makeSand() };
-  const lam = (t, color = '#ffffff', extra = {}) => new THREE.MeshLambertMaterial({ map: t.map, normalMap: lowEnd ? null : t.normal, normalScale: new THREE.Vector2(0.9, 0.9), color, ...extra });
+  const lam = (t, color = '#ffffff', extra = {}) => { const m = new THREE.MeshLambertMaterial({ map: t.map, normalMap: lowEnd ? null : t.normal, normalScale: new THREE.Vector2(0.9, 0.9), color, ...extra }); for (const key in T) if (T[key] === t) m.userData.neon = key; return m; };
   built = {
     tex: T,
     turf: lam(T.turf, '#ffffff', { vertexColors: true }),

@@ -5,14 +5,15 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024193727';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024193727';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024193727';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024193727';
-import { createFx } from './golffx.js?v=20261024193727';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024193727';
-import { buildDecor } from './golfdecor.js?v=20261024193727';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024193727';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024193914';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024193914';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024193914';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024193914';
+import { createNeon } from './golfneon.js?v=20261024193914';
+import { createFx } from './golffx.js?v=20261024193914';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024193914';
+import { buildDecor } from './golfdecor.js?v=20261024193914';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024193914';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -27,7 +28,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const st = { mode: 'off', t: 0, hole: 0, holeT: 0, strokes: 0, scores: [], par: [], order: [], seed: 0, year: 0, month: 0, rollT: 0, idle: 0, hud: { hole: '', strokes: -1, pills: '' }, lastX: 0, lastZ: 0, multi: false, safety: false, cupScale: 1 };
   const fx = { homing: 0, ghost: 0, bounce: 0, turbo: 0, freeze: 0, mega: 0, hamster: 0 };      // seconds left of each power-up
   let holes = [], vises = [], decors = [], sites = [], Ys = [], fxs = null, lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
-  let ghostOn = false, ghostVis = null, dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
+  let neon = null, neonK = 0, ghostOn = false, ghostVis = null, dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
   const ballMeshes = [], ballShadows = [];
   const ctx = newCtx(), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0 };
   const up0 = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
@@ -105,6 +106,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     }
     lamps = buildLamps(lampSpotsAll, world.carve.groundNow); scene.add(lamps.group); shown = [];
     world.carve.set(0);
+    neon = createNeon(); for (const v of vises) neon.add(v.group); for (const d of decors) neon.add(d.group);
     ready = true;
   }
   function pathBetween(i) {                                // from behind the cup of hole i to behind the tee of the next, in a smooth curve
@@ -125,12 +127,14 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     dots.parent?.remove(dots); hamster.parent?.remove(hamster);
     for (const v of vises) { scene.remove(v.group); v.dispose(); }
     for (const d of decors) { scene.remove(d.group); d.dispose(); }
+    if (neon) { neon.reset(); neon = null; }
     if (fxs) { scene.remove(fxs.group); fxs.dispose(); fxs = null; }
     if (lamps) { scene.remove(lamps.group); lamps.dispose(); lamps = null; }
     lights().forEach((l, i) => { if (lightHome[i]) l.position.copy(lightHome[i]); });
     sky?.shadowReset(); sky?.setLampKey(null); decors = []; vises = []; holes = []; holeGroup = null; vis = null; hole = null; ready = false;
   }
   const setRise = (i, k) => { vises[i].group.scale.y = Math.max(0.001, k); world.carve.set(k, i); if (decors[i]) decors[i].group.visible = k > 0.92; const on = k > 0.92; if (lamps && shown[i] !== on) { shown[i] = on; lamps.showHole(i, on); } };
+  const UVC = new THREE.Color('#8a4dff');
   const lights = () => world.lampLights?.() ?? [];
   function assignLights(i) {                               // the village's real lights stand in for the lamps near the hole in play
     const L = lights(); if (!L.length) return; if (!lightHome.length) lightHome = L.map((l) => l.position.clone());
@@ -194,6 +198,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     if (!fxs || !balls.length) return; fxT += dt;
     for (const b of balls) {
       if (b.holed || b.sunk) continue; const sp = Math.hypot(b.vx, b.vz), w = wp(b.x, Math.max(b.y, 0) + 0.2, b.z);
+      if (neonK > 0.3 && sp > 0.4) fxs.trail(w.x, w.y, w.z, '#7ffcff', dt, 50 * neonK, 0.05);
       if (fx.turbo > 0 && sp > 1) fxs.trail(w.x, w.y, w.z, '#ff8a3d', dt, 90 * Math.min(1, sp / 8), 0.06);
       if (b.loop) fxs.trail(w.x, w.y, w.z, '#bff4ff', dt, 110, 0.07);
       if (fx.freeze > 0) fxs.trail(w.x, w.y + 0.1, w.z, '#bfefff', dt, 22, 0.05);
@@ -377,6 +382,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     update(dt) {
       if (st.mode === 'off') return false;
       dt = Math.min(dt, 0.05); st.t += dt; st.idle += dt; lamps?.update(world.night); fxs?.update(dt);
+      { const u = Math.min(1, Math.max(0, (world.night - 0.35) / 0.5)); neonK = u * u * (3 - 2 * u); neon?.set(neonK); const L = lights(); if (L.length && lampSpotsAll.length) for (const l of L) l.color.set('#ffc27a').lerp(UVC, neonK); }
       if (st.mode === 'exit') {
         const k = reduceMotion ? 1 : ease(clamp01(st.t / EXIT));
         fly(k); for (let i = 0; i < vises.length; i++) setRise(i, 1 - k);

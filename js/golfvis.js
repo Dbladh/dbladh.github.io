@@ -1,10 +1,10 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024193727';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024193727';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024193727';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024193727';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024193914';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024193914';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024193914';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024193914';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -12,7 +12,7 @@ export const M = {
   cup: new THREE.MeshBasicMaterial({ color: '#17171c' }), pole: mat('#f4f1e8'), flag: new THREE.MeshBasicMaterial({ color: '#ef5b4d', side: THREE.DoubleSide }),
   body: mat('#f1e8cf'), roof: mat('#d9534f'), sail: mat('#fffaf0'), stone: mat('#9b968c'), stone2: mat('#b9b4a8'), green: mat('#58a955'), green2: mat('#6dbf63'), dark: mat('#3a3340'), wood: mat('#a8754a'),
   metal: mat('#6c7480'), sand: new THREE.MeshLambertMaterial({ color: '#e8d49a' }), tooth: mat('#fffdf4'), red: mat('#e04a4a'),
-  ball: mat('#ffffff'), shadow: new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false }),
+  ball: Object.assign(mat('#ffffff'), { userData: { neon: 'ball' } }), shadow: new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false }),
   dot: new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 }),
   bubble: new THREE.MeshBasicMaterial({ color: '#cfeaff', transparent: true, opacity: 0.28, depthWrite: false }),
   ghost: new THREE.MeshBasicMaterial({ color: '#d9ccff', transparent: true, opacity: 0.45 }),
@@ -139,7 +139,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   { const t0 = h.path[0], t1 = h.path[Math.min(4, h.path.length - 1)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1, tx = (t1.x - t0.x) / l, tz = (t1.z - t0.z) / l;
     const sg = new THREE.Group(); sg.position.set(t0.x - tz * 0 + -tz * 3.9 - tx * 0.4, 0, t0.z + tx * 3.9 - tz * 0.4);
     const post = box(M.wood, 0.16, 1.9, 0.16, 0, 0.95, -0.16), tex = signTexture(h.index + 1, h.par); disposables.push(tex);
-    const board = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.25, 0.08), [mat('#6b4a2c'), mat('#6b4a2c'), mat('#6b4a2c'), mat('#6b4a2c'), new THREE.MeshLambertMaterial({ map: tex }), mat('#6b4a2c')]); board.position.y = 1.9;
+    const board = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.25, 0.08), [mat('#6b4a2c'), mat('#6b4a2c'), mat('#6b4a2c'), mat('#6b4a2c'), Object.assign(new THREE.MeshLambertMaterial({ map: tex }), { userData: { neon: 'sign' } }), mat('#6b4a2c')]); board.position.y = 1.9;
     disposables.push(board.geometry); sg.add(post, board); sg.rotation.y = Math.atan2(-tx, -tz) + Math.PI; sg.rotation.y = Math.atan2(-tx, -tz); g.add(sg); }
   // tee, cup and flag
   const tee = new THREE.Mesh(G.disc, M.white); tee.scale.set(0.55, 1, 0.55); tee.position.set(h.ball.x, 0.06, h.ball.z); g.add(tee);

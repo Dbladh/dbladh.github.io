@@ -1,11 +1,11 @@
 // Water for the mini-golf: the same soft cartoon look as the village pond (sky reflection, shallows that go light, glints, foam at the edge, the same day/night and aurora), drawn on
 // irregular shapes: blob-shaped ponds and winding rivers that visibly flow. The sky colours and the clock are the village pond's own uniforms (world.waterLook), so the two always match.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261024193727';
+import { mulberry32 } from './golfhero.js?v=20261024193914';
 
 /** A water material. `flow` is the direction the water runs (world x, z; zero for still water) and `speed` how fast. */
 export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
-  const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uFlow: { value: new THREE.Vector2(flowX, flowZ) }, uSpeed: { value: speed } }]);
+  const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uFlow: { value: new THREE.Vector2(flowX, flowZ) }, uSpeed: { value: speed }, uNeon: { value: 0 } }]);
   for (const k of ['uTime', 'uDay', 'uHorizon', 'uSkyTop', 'uAurora']) u[k] = look[k];      // (shared with the pond, so they stay live)
   return new THREE.ShaderMaterial({
     uniforms: u, fog: true, transparent: true, side: THREE.DoubleSide, depthWrite: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
@@ -18,7 +18,7 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      uniform float uTime, uDay, uSpeed; uniform vec3 uHorizon, uSkyTop, uAurora; uniform vec2 uFlow;
+      uniform float uTime, uDay, uSpeed, uNeon; uniform vec3 uHorizon, uSkyTop, uAurora; uniform vec2 uFlow;
       varying vec3 vW; varying float vD;
       #include <fog_pars_fragment>
       vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
@@ -47,6 +47,7 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
           float st = smoothstep(0.72, 1.0, sin(dot(p, s) * 6.5 + sin(dot(p, f) * 1.4) * 2.0) * sin(dot(p, f) * 2.6 - uTime * uSpeed * 1.2));
           col += lin(vec3(0.95, 0.99, 1.0)) * st * (0.25 + 0.2 * uDay) * (1.0 - 0.4 * depth);
         }
+        col += vec3(0.05, 0.62, 0.7) * uNeon * (0.3 + 0.7 * depth) * (0.8 + 0.4 * band);
         float shore = 1.0 - smoothstep(0.0, 0.2, depth);
         float fn = 0.5 + 0.5 * sin(dot(p, vec2(5.0, 3.5)) + uTime * 0.8) * sin(dot(p, vec2(-3.5, 5.5)) - uTime * 0.6);
         col = mix(col, lin(vec3(0.97, 0.99, 1.0)) * (0.4 + 0.6 * uDay), shore * smoothstep(0.2, 0.6, fn + 0.35) * 0.85);
