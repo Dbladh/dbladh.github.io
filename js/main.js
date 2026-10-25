@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024232956';
-import { buildWorld } from './world.js?v=20261024232956';
-import { createSky } from './sky.js?v=20261024232956';
-import { createDOF } from './dof.js?v=20261024232956';
-import { createRide } from './ride.js?v=20261024232956';
-import { createGame } from './bikegame.js?v=20261024232956';
-import { createAurora, setWarm } from './aurora.js?v=20261024232956';
-import { createAudio, pickFlicker } from './audio.js?v=20261024232956';
+import { PAL } from './palette.js?v=20261024234345';
+import { buildWorld } from './world.js?v=20261024234345';
+import { createSky } from './sky.js?v=20261024234345';
+import { createDOF } from './dof.js?v=20261024234345';
+import { createRide } from './ride.js?v=20261024234345';
+import { createGame } from './bikegame.js?v=20261024234345';
+import { createAurora, setWarm } from './aurora.js?v=20261024234345';
+import { createAudio, pickFlicker } from './audio.js?v=20261024234345';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -581,7 +581,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261024232956');
+        const mod = await import('./golf.js?v=20261024234345');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -595,7 +595,7 @@ function start() {
     golfLoading = true;
     try {
       if (!pinball) {
-        const mod = await import('./pinball.js?v=20261024232956');
+        const mod = await import('./pinball.js?v=20261024234345');
         pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
         pinball.onQuit = () => { ride?.reset(); riseName(); };
       }

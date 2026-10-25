@@ -933,3 +933,9 @@ body.scene-mode .bike-hint { display: block; }
 .pb-pop { position: fixed; z-index: 25; pointer-events: none; transform: translate(-50%, -50%); font: 800 22px/1 inherit; color: #ffe27a; text-shadow: 0 2px 0 #7a3b00, 0 0 12px rgba(255,200,60,.8); animation: pbpop .9s ease-out forwards; }
 .pb-pop.c2 { font-size: 26px; color: #ffb84a; } .pb-pop.c3 { font-size: 30px; color: #ff8a3c; } .pb-pop.c4 { font-size: 34px; color: #ff5f5f; } .pb-pop.c5 { font-size: 40px; color: #ff4fa0; }
 @keyframes pbpop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.25); } 100% { opacity: 0; transform: translate(-50%, -210%) scale(1); } }
+.pb-lamps { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 22; pointer-events: none; }
+.pb-lamps i { font: 800 11px/1 inherit; letter-spacing: .06em; font-style: normal; padding: 6px 10px; border-radius: 999px; background: rgba(20,24,34,.72); color: rgba(255,255,255,.55); border: 2px solid rgba(255,255,255,.25); transition: all .25s; }
+.pb-lamps i.on { background: #ffd23f; color: #3a2400; border-color: #fff2a8; box-shadow: 0 0 14px rgba(255,210,63,.9); }
+.pb-lamps i[data-l="cup"].on { background: #7dffb0; color: #053a1c; border-color: #d6ffe6; box-shadow: 0 0 16px rgba(125,255,176,.95); }
+.pb-nudge { position: fixed; left: 4%; bottom: 2.5%; z-index: 22; padding: 12px 16px; border: 0; border-radius: 999px; background: rgba(40,52,72,.85); color: #fff; font: 700 14px/1 inherit; box-shadow: 0 4px 12px rgba(0,0,0,.35); cursor: pointer; }
+.pb-nudge:disabled { opacity: .4; }
