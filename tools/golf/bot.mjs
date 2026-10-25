@@ -3,7 +3,7 @@ import { newBall, newCtx, shoot, stepBall } from '../../js/golfphys.js';
 import { laneExists } from '../../js/golfgen.js';
 
 /** The plain route round everything (the bot steers by it), or the centre line when none is found. */
-export const routeOf = (h) => laneExists(h.path, h.widths, h.ball, h.cup, [...h.ponds.map((p) => p.poly), ...h.sands.map((s) => s.poly)], h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...(h.doors || []).map((d) => d.gate)], true) || h.path;
+export const routeOf = (h) => laneExists(h.path, h.widths, h.ball, h.cup, [...h.ponds.map((p) => p.poly), ...h.sands.map((s) => s.poly)], h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...(h.doors || []).filter((d) => d.gate).map((d) => d.gate)], true) || h.path;
 
 const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false };
 function remaining(h, x, z, P) {

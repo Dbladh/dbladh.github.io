@@ -3,8 +3,8 @@
 //   vault : a bounce pad, then two low fences in a zigzag: the pad vaults the ball straight over them (walking the zigzag is the plain way).
 //   door  : a button, then two tall walls in a zigzag with a gate in the middle of each: the button opens the gates for a few seconds for a straight run.
 // Every recipe is checked with a proof shot (proveRecipe) over a band of powers, and dropped if the intended route does not work.
-import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024201516';
-import { TUNING } from './golftuning.js?v=20261024201516';
+import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024202218';
+import { TUNING } from './golftuning.js?v=20261024202218';
 
 const HALF_W = 2.3;
 
@@ -39,6 +39,13 @@ const keepAlong = (S, F, len) => { for (let u = 0.5; u <= len; u += 2) { const p
 const seg = (F, u, a, b) => { const p = F.P(u, a), q = F.P(u, b); return [p.x, p.z, q.x, q.z]; };
 
 const stamp = {
+  bridge(S, sl, rid) {
+    const T = TUNING.bridge, F = frameAt(S, sl.i0, sl.i1), ledge = S.r() < 0.5 ? 1 : -1, g = T.gap, len = T.gapAt + g + 1.0, bp = F.P(T.buttonAt, 0), gc = F.P(T.gapAt + g / 2, 0);
+    S.feats.push({ t: 'gap', ux: F.ux, uz: F.uz, nx: F.nx, nz: F.nz, wid: 4, x: gc.x, z: gc.z, len: g, d: 1.4, bridge: true, c0: ledge > 0 ? -HALF_W - 0.05 : -HALF_W + 1.85, c1: ledge > 0 ? HALF_W - 1.85 : HALF_W + 0.05, rid });
+    S.doors.push({ gate: null, button: { x: bp.x, z: bp.z, r: 0.55 }, wireTo: { x: gc.x, z: gc.z }, rid });
+    keepAlong(S, F, len);
+    return { kind: 'bridge', rid, F, len, entryU: 0.0, targetU: T.gapAt + g + 0.3 };
+  },
   runup(S, sl, rid) {
     const T = TUNING.runup, F = frameAt(S, sl.i0, sl.i1), ledge = S.r() < 0.5 ? 1 : -1, g = T.gap, rampStart = T.rampAt, lip = rampStart + T.ramp, len = lip + g + 1.0;
     const b = F.P(T.boostAt, 0), j = F.P(rampStart + T.ramp / 2, 0), gc = F.P(lip + g / 2, 0), base = { ux: F.ux, uz: F.uz, nx: F.nx, nz: F.nz, wid: 4, rid };
@@ -72,13 +79,13 @@ const stamp = {
 /** Which recipes a hole gets, in order along the corridor. */
 function wanted(S) {
   const i = S.index, out = [], r = S.r;
-  const pick = () => { const o = ['vault']; if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
+  const pick = () => { const o = ['vault']; if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
   if (i >= 2) out.push(pick());
   if (i >= 4 && r() < 0.6) out.push(pick());
   if (i >= 6 && r() < 0.6) out.push(pick());
   return out;
 }
-const LENGTH = { runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 1.4 };
+const LENGTH = { bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 1.4 };
 
 /**
  * Place the recipes of a hole. `S` is the generator's state (the corridor, what is placed so far and the arrays to add to). `plainOk()` says whether the plain route still exists.
@@ -87,7 +94,7 @@ const LENGTH = { runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.r
 export function placeRecipes(S, plainOk) {
   let rid = 1;
   for (const kind of wanted(S)) {
-    const sl = findSlot(S, LENGTH[kind](), kind === 'runup' ? 0.25 : 0.4); if (!sl) { S.log.push({ kind, out: 'no slot' }); continue; }
+    const sl = findSlot(S, LENGTH[kind](), kind === 'runup' ? 0.35 : 0.4); if (!sl) { S.log.push({ kind, out: 'no slot' }); continue; }
     const before = { boosts: S.boosts.length, pads: S.pads.length, feats: S.feats.length, barriers: S.barriers.length, doors: S.doors.length, walls: S.walls.length };
     const rec = stamp[kind](S, sl, rid);
     if (!plainOk()) { removeRecipe(S, rid); S.used.pop(); S.log.push({ kind, out: 'blocks the plain route' }); continue; }

@@ -4,8 +4,8 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024201516';
-import { placeRecipes, removeRecipe, proveRecipe } from './golfrecipes.js?v=20261024201516';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024202218';
+import { placeRecipes, removeRecipe, proveRecipe } from './golfrecipes.js?v=20261024202218';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -250,7 +250,7 @@ function build(seed, index, type, force) {
     if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15, poly: blobPoly(q(p.x), q(p.z), 1.15, seed ^ 0x3c6ef372) }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
   const feats = [], boosts = [], pads = [], barriers = [], doors = [], recipes = [], recipeLog = [];
-  const segsAll = () => [...heroSegs, ...barriers.map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...doors.map((d) => d.gate)];
+  const segsAll = () => [...heroSegs, ...barriers.map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...doors.filter((d) => d.gate).map((d) => d.gate)];
   placeRecipes({ index, type, r, cl, w, tx, tz, sAt, N, length, sHero, heroHalf, free, keep, walls, feats, boosts, pads, barriers, doors, recipes, log: recipeLog, used: [] },
     () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll()));            // (the machines of the hole: each is a designed chain; see golfrecipes.js)
   for (let k = 0; k < 2; k++) {                            // sand pits (irregular patches that slow the ball a lot)
@@ -351,5 +351,6 @@ function build(seed, index, type, force) {
     const res = proveRecipe(H, rec);
     if (res.pass < 3) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; }
   }
+  H.cover = 0;                                            // (the proof shots may have left a bridge out)
   return H;
 }

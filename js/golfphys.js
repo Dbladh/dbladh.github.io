@@ -1,13 +1,13 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024201516';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024202218';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
 
 const sm = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 /** The height one feature (a berm, platform, jump ramp or canyon gap, see golfgen.js) adds at a point. */
-function featH(f, x, z) {
+function featH(f, x, z, cover) {
   if (f.t === 'berm') {                                    // a banked ridge along a segment
     const dx = f.bx - f.ax, dz = f.bz - f.az, l2 = dx * dx + dz * dz || 1; let t = ((x - f.ax) * dx + (z - f.az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
     const ex = x - (f.ax + dx * t), ez = z - (f.az + dz * t), u = 1 - (ex * ex + ez * ez) / (f.w * f.w); return u > 0 ? f.h * u * u : 0;
@@ -16,7 +16,7 @@ function featH(f, x, z) {
   if (c > f.wid || c < -f.wid) return 0;
   if (f.t === 'plat') return f.h * sm((s + f.len / 2 + f.ramp) / f.ramp) * (1 - sm((s - f.len / 2) / f.edge));      // a long ramp up, a flat top and a short steep edge down
   if (f.t === 'jump') { if (s < -f.len / 2) return 0; const k = (s + f.len / 2) / f.len; return k <= 1 ? f.h * k : f.h * (1 - sm((s - f.len / 2) / 0.25)); }     // a ramp that ends in a lip
-  if (f.t === 'gap') return -f.d * (1 - sm((Math.abs(s) - f.len / 2 + 0.1) / 0.25)) * (1 - sm((Math.abs(c - (f.c0 + f.c1) / 2) - (f.c1 - f.c0) / 2 + 0.1) / 0.25));                                 // a chasm across the lane
+  if (f.t === 'gap') return (f.bridge && cover ? 0 : -f.d) * (1 - sm((Math.abs(s) - f.len / 2 + 0.1) / 0.25)) * (1 - sm((Math.abs(c - (f.c0 + f.c1) / 2) - (f.c1 - f.c0) / 2 + 0.1) / 0.25));                                 // a chasm across the lane
   return 0;
 }
 const SAND_DEPTH = 0.24;
@@ -35,7 +35,7 @@ function sandH(s, x, z) {
 export function hillH(hole, x, z) {
   let h = 0;
   for (const k of hole.hills) { const dx = x - k.x, dz = z - k.z, u = 1 - (dx * dx + dz * dz) / (k.r * k.r); if (u > 0) h += k.h * u * u; }
-  if (hole.feats) for (const f of hole.feats) h += featH(f, x, z);
+  if (hole.feats) for (const f of hole.feats) h += featH(f, x, z, hole.cover);
   for (const s of hole.sands) h += sandH(s, x, z);
   return h;
 }
@@ -46,7 +46,7 @@ export function hillGrad(hole, x, z) {
   for (const k of hole.hills) { const dx = x - k.x, dz = z - k.z, r2 = k.r * k.r, u = 1 - (dx * dx + dz * dz) / r2; if (u > 0) { const f = (-4 * k.h * u) / r2; gx += f * dx; gz += f * dz; } }
   if ((hole.feats && hole.feats.length) || hole.sands.length) {
     let fx = 0, fz = 0;
-    if (hole.feats) for (const f of hole.feats) { fx += featH(f, x + EPS, z) - featH(f, x - EPS, z); fz += featH(f, x, z + EPS) - featH(f, x, z - EPS); }
+    if (hole.feats) for (const f of hole.feats) { fx += featH(f, x + EPS, z, hole.cover) - featH(f, x - EPS, z, hole.cover); fz += featH(f, x, z + EPS, hole.cover) - featH(f, x, z - EPS, hole.cover); }
     for (const s of hole.sands) { fx += sandH(s, x + EPS, z) - sandH(s, x - EPS, z); fz += sandH(s, x, z + EPS) - sandH(s, x, z - EPS); }
     gx += fx / (2 * EPS); gz += fz / (2 * EPS);
   }
@@ -190,9 +190,10 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (b.padCool > 0) b.padCool -= h;
     if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = 5.0; b.padCool = 0.6; ev.fx = 6; }
     if (ctx.gateT > 0) ctx.gateT -= h;
+    hole.cover = ctx.gateT > 0 ? 1 : 0;                 // (a retractable bridge covers its canyon while the button's time lasts)
     if (hole.doors) for (const dr of hole.doors) {
       if (!b.air && dist2(b, dr.button.x, dr.button.z) < dr.button.r * dr.button.r) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }
-      if (ctx.gateT <= 0 && !ghost) collideSeg(b, dr.gate[0], dr.gate[1], dr.gate[2], dr.gate[3], 0.5, ev);
+      if (dr.gate && ctx.gateT <= 0 && !ghost) collideSeg(b, dr.gate[0], dr.gate[1], dr.gate[2], dr.gate[3], 0.5, ev);
     }
     if (hole.cage) {
       const cg = hole.cage; if (!b.air && dist2(b, cg.button.x, cg.button.z) < cg.button.r * cg.button.r) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }

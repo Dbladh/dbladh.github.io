@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024201516';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024201516';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024201516';
-import { THEME_BORDER } from './golfscenery.js?v=20261024201516';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024201516';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024202218';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024202218';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024202218';
+import { THEME_BORDER } from './golfscenery.js?v=20261024202218';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024202218';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -99,6 +99,15 @@ function signTexture(n, par) {
 }
 const _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
 
+let wireTex = null;
+/** A glowing wire on the ground from a to b with pulses running along it; it brightens while the machine it feeds is switched on (st.gateOpen). */
+function wireVisual(h, g, a, b, updaters, disposables) {
+  const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); if (l < 0.6) return;
+  if (!wireTex) { const c = document.createElement('canvas'); c.width = 64; c.height = 16; const x = c.getContext('2d'); x.fillStyle = 'rgba(255,255,255,0.18)'; x.fillRect(0, 6, 64, 4); x.fillStyle = '#ffffff'; x.fillRect(6, 4, 14, 8); wireTex = new THREE.CanvasTexture(c); wireTex.wrapS = THREE.RepeatWrapping; wireTex.colorSpace = THREE.SRGBColorSpace; }
+  const tx = wireTex.clone(); tx.needsUpdate = true; tx.repeat.set(l / 1.6, 1); const mat = new THREE.MeshBasicMaterial({ map: tx, color: '#6dff9a', transparent: true, opacity: 0.5, depthWrite: false });
+  const geo = new THREE.PlaneGeometry(l, 0.16).rotateX(-Math.PI / 2), m = new THREE.Mesh(geo, mat); m.position.set((a.x + b.x) / 2, Math.max(0, hillH(h, (a.x + b.x) / 2, (a.z + b.z) / 2)) + 0.07, (a.z + b.z) / 2); m.rotation.y = Math.atan2(-dz, dx); m.renderOrder = 1; g.add(m); disposables.push(geo, tx, mat);
+  let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); tx.offset.x -= dt * (0.6 + 2.2 * open); mat.opacity = 0.4 + 0.55 * open; });
+}
 /** The meshes for hole `h`. Returns { group, update(heroT, t, dt, state), pickups, cupMesh, flag, dispose() }. */
 export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   skin(lowEnd);
@@ -133,6 +142,10 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     grp.add(rbox(paint('#241d18'), f.len + 0.2, 0.1, wide, 0, -f.d - 0.02, 0, 0.02));
     for (const sd of [-1, 1]) { grp.add(rbox(dk, f.len + 0.3, f.d + 0.1, 0.3, 0, -f.d / 2 + 0.03, sd * (wide / 2 + 0.05), 0.04)); }
     for (const e of [-1, 1]) grp.add(rbox(dk, 0.3, f.d + 0.1, wide, e * (f.len / 2 + 0.05), -f.d / 2 + 0.03, 0, 0.04));
+    if (f.bridge) {                                          // a bridge that slides out over the chasm while the button's time lasts
+      const deck = new THREE.Group(); for (let k = 0; k < Math.ceil(f.len / 0.45); k++) deck.add(rbox(woodTint(k % 2 ? '#d9b87a' : '#c89358'), 0.4, 0.1, wide - 0.1, -f.len / 2 + 0.25 + k * 0.45, 0, 0, 0.02)); for (const sd of [-1, 1]) deck.add(rbox(metal('#e5483f'), f.len + 0.2, 0.08, 0.08, 0, 0.1, sd * (wide / 2 - 0.1), 0.02)); grp.add(deck);
+      let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 5); deck.position.set(0, 0.04 - 0.5 * (1 - open), 0); deck.scale.set(0.1 + 0.9 * open, 1, 1); });
+    }
   }
   // the border: bricks, boulders or planks all the way round
   buildBorder(h, g, disposables);
@@ -179,11 +192,13 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     }
   }
   { const gates = [], buttons = new Map();
-    for (const dr of h.doors || []) {
+    for (const dr of (h.doors || []).filter((d) => d.gate)) {
       const gdx = dr.gate[2] - dr.gate[0], gdz = dr.gate[3] - dr.gate[1], gl = Math.hypot(gdx, gdz), gate = new THREE.Group(); gate.position.set((dr.gate[0] + dr.gate[2]) / 2, 0, (dr.gate[1] + dr.gate[3]) / 2); gate.rotation.y = Math.atan2(-gdz, gdx);
       const bar = rbox(metal('#e5483f'), gl, 0.8, 0.1, 0, 0.45, 0, 0.03); gate.add(bar); for (const e of [-1, 1]) gate.add(rbox(metal('#ffffff'), 0.1, 0.95, 0.12, e * gl / 2, 0.47, 0, 0.02)); g.add(gate); gates.push(bar);
       const kb = `${dr.button.x}|${dr.button.z}`; if (!buttons.has(kb)) buttons.set(kb, dr.button);
+      wireVisual(h, g, dr.button, { x: (dr.gate[0] + dr.gate[2]) / 2, z: (dr.gate[1] + dr.gate[3]) / 2 }, updaters, disposables);
     }
+    for (const dr of (h.doors || []).filter((d) => !d.gate)) { const kb = `${dr.button.x}|${dr.button.z}`; if (!buttons.has(kb)) buttons.set(kb, dr.button); if (dr.wireTo) wireVisual(h, g, dr.button, dr.wireTo, updaters, disposables); }
     const plates = []; for (const bt of buttons.values()) { const btn = new THREE.Group(); btn.position.set(bt.x, hillH(h, bt.x, bt.z), bt.z); const plate = cyl(paint('#ffd23f'), bt.r, 0.08, 0, 0.06, 0); btn.add(cyl(paint('#2b2b3a'), bt.r * 1.15, 0.06, 0, 0.04, 0), plate, torus(paint('#ffffff'), bt.r * 0.55, 0.04, 0, 0.11, 0, Math.PI / 2)); g.add(btn); plates.push(plate); }
     if (gates.length) { let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); for (const b of gates) b.position.y = 0.45 - 1.0 * open; for (const p of plates) { p.position.y = 0.06 - 0.03 * open; p.material = open > 0.5 ? paint('#6dff9a') : paint('#ffd23f'); } }); }
   }
