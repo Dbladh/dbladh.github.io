@@ -4,7 +4,8 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024200931';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024201516';
+import { placeRecipes, removeRecipe, proveRecipe } from './golfrecipes.js?v=20261024201516';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -12,8 +13,8 @@ export const POWERUPS = ['homing', 'ghost', 'multi', 'hamster', 'mega', 'turbo',
 const POWER_WEIGHTS = [3, 2, 2, 1.5, 2, 2, 2, 2, 2];
 const HALF_W = 2.3;                                       // half the corridor width
 const PAD_R = 2.9;                                        // the round tee and cup greens
-const END_X = 10.5, REACH = 11.4;                         // where the centre line starts and ends, and how far from the centre it may go
-const WALL_REACH = 15.2;                                  // nothing of the hole may be further than this from its centre
+const END_X = 11.5, REACH = 12.4;                         // where the centre line starts and ends, and how far from the centre it may go
+const WALL_REACH = 16.2;                                  // nothing of the hole may be further than this from its centre
 const SPACING = 0.6, CUT_MAX = 2.6;                       // distance between centre-line points; the most a bend cuts off a leg
 const C15 = 0.9659258262890683, S15 = 0.25881904510252074;     // cos and sin of 15 degrees: arcs are built by turning by this a fixed number of times, so no trig is needed
 const CAP_STEPS = 6;
@@ -123,7 +124,7 @@ function capRows(c, tx, tz, hw, dir) {
 
 function build(seed, index, type, force) {
   const r = mulberry32(seed);
-  const bends = force ? 0 : index < 2 ? 1 + (r() < 0.4 ? 1 : 0) : 1 + ((r() * 3) | 0);
+  const bends = force ? 0 : index < 2 ? 1 + (r() < 0.4 ? 1 : 0) : 1 + (r() < 0.5 ? 1 : 0) + (index > 5 && r() < 0.2 ? 1 : 0);      // (fewer bends from hole 3: longer straight runs leave room for the machines)
   const xs = [-END_X];
   for (let k = 1; k <= bends; k++) xs.push(q(-END_X + ((2 * END_X) * k) / (bends + 1) + (r() - 0.5) * (bends === 1 ? 4 : 2.2)));
   xs.push(END_X);
@@ -248,7 +249,10 @@ function build(seed, index, type, force) {
     const li = others[((r() * others.length) | 0)], side = r() < 0.5 ? 1 : -1, p = onLeg(li, 0.5, 0.85 * side);
     if (free(p.x, p.z, 1.3)) { ponds.push({ x: q(p.x), z: q(p.z), r: 1.15, poly: blobPoly(q(p.x), q(p.z), 1.15, seed ^ 0x3c6ef372) }); keep.push({ x: p.x, z: p.z, r: 2.2 }); }
   }
-  const feats = [];
+  const feats = [], boosts = [], pads = [], barriers = [], doors = [], recipes = [], recipeLog = [];
+  const segsAll = () => [...heroSegs, ...barriers.map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...doors.map((d) => d.gate)];
+  placeRecipes({ index, type, r, cl, w, tx, tz, sAt, N, length, sHero, heroHalf, free, keep, walls, feats, boosts, pads, barriers, doors, recipes, log: recipeLog, used: [] },
+    () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll()));            // (the machines of the hole: each is a designed chain; see golfrecipes.js)
   for (let k = 0; k < 2; k++) {                            // sand pits (irregular patches that slow the ball a lot)
     if (!(k === 0 ? index > 0 && r() < 0.75 : index > 3 && r() < 0.4)) continue;
     for (let tries = 0; tries < 20; tries++) {
@@ -268,7 +272,7 @@ function build(seed, index, type, force) {
         }
       }
       if (onTerrain) continue;
-      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers], heroSegs)) continue;
+      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers], segsAll())) continue;
       sands.push({ x: q(p.x), z: q(p.z), r: far / 1.19, poly }); keep.push({ x: p.x, z: p.z, r: far * 0.8 }); break;
     }
   }
@@ -288,7 +292,6 @@ function build(seed, index, type, force) {
       }
       return false;
     };
-    if (index >= 3 && type !== 'drawbridge' && r() < 0.6) place('jump');
     if (index >= 2 && r() < 0.5) place('plat');
     if (r() < 0.55) {                                                              // a berm on the outside of a bend
       for (let v = 1; v < nLegs; v++) {
@@ -300,7 +303,7 @@ function build(seed, index, type, force) {
       }
     }
   }
-  if (feats.some((f) => f.t === 'gap') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [], heroSegs)) { for (let i = feats.length - 1; i >= 0; i--) if (feats[i].t === 'gap' || feats[i].t === 'jump') feats.splice(i, 1); }      // (a canyon never leaves the pits as the only way past)
+  if (feats.some((f) => f.t === 'gap') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [], segsAll())) { for (let i = feats.length - 1; i >= 0; i--) if (feats[i].t === 'gap' || feats[i].t === 'jump') feats.splice(i, 1); }      // (a canyon never leaves the pits as the only way past)
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
   const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);
   const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
@@ -329,9 +332,6 @@ function build(seed, index, type, force) {
     }
   }
   // interactive extras: boost strips and bounce pads on the floor, and a cage round one orb whose gate opens for a few seconds when the ball rolls over a button
-  const boosts = [], pads = [];
-  if (index >= 2 && r() < 0.65) for (let tries = 0; tries < 12; tries++) { const ci = 6 + ((r() * (N - 12)) | 0), p = cl[ci]; if (!free(p.x, p.z, 0.3) || Math.abs(w[ci] - HALF_W) > 0.05) continue; boosts.push({ x: q(p.x), z: q(p.z), ux: tx[ci], uz: tz[ci], len: 1.8, wid: 1.2 }); keep.push({ x: p.x, z: p.z, r: 1.4 }); break; }
-  if (index >= 3 && r() < 0.55) for (let tries = 0; tries < 12; tries++) { const ci = 6 + ((r() * (N - 12)) | 0), sg = r() < 0.5 ? 1 : -1, p = { x: cl[ci].x - tz[ci] * 0.9 * sg, z: cl[ci].z + tx[ci] * 0.9 * sg }; if (!free(p.x, p.z, 0.3) || Math.abs(w[ci] - HALF_W) > 0.05) continue; pads.push({ x: q(p.x), z: q(p.z), r: 0.55 }); keep.push({ x: p.x, z: p.z, r: 1.1 }); break; }
   let cage = null;
   if (index >= 2 && pickups.length && r() < 0.7) {
     const pk = pickups[0], L = legs[pk.li], side = pk.side, P = (u, lat) => ({ x: pk.x + L.x * u - L.z * lat, z: pk.z + L.z * u + L.x * lat }), lat0 = side * 0.75, lat1 = side * (-0.8);      // (relative to the orb: back to the wall, out 0.8 in front of it)
@@ -341,10 +341,15 @@ function build(seed, index, type, force) {
       cage = { gate: [a1.x, a1.z, b1.x, b1.z], sides: [[a0.x, a0.z, a1.x, a1.z], [b0.x, b0.z, b1.x, b1.z]], button: but, ux: L.x, uz: L.z }; pk.caged = true; keep.push({ x: but.x, z: but.z, r: 1.0 });
     }
   }
-  const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers], heroSegs);
+  const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll());
   while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  return { theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  const H = { recipeLog, barriers, doors, recipes, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
+    const res = proveRecipe(H, rec);
+    if (res.pass < 3) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; }
+  }
+  return H;
 }

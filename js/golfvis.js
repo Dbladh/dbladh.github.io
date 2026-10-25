@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024200931';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024200931';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024200931';
-import { THEME_BORDER } from './golfscenery.js?v=20261024200931';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024200931';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024201516';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024201516';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024201516';
+import { THEME_BORDER } from './golfscenery.js?v=20261024201516';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024201516';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -164,6 +164,28 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   for (const o of h.pads || []) {
     const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint('#ff4fb3'), o.r * 0.8, 0.06, 0, 0.13, 0); gp.add(top); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2)); g.add(gp);
     updaters.push((heroT, t) => { const k = 1 + 0.08 * Math.sin(t * 5 + o.x); top.scale.set(o.r * 0.8 * k, 0.06, o.r * 0.8 * k); });
+  }
+  // the walls and gates of the machines: low fences (the ball can be vaulted over them), tall walls, gates that sink when the button is pressed, and the buttons
+  for (const b of h.barriers || []) {
+    const dx = b.b[0] - b.a[0], dz = b.b[1] - b.a[1], l = Math.hypot(dx, dz) || 1, mx = (b.a[0] + b.b[0]) / 2, mz = (b.a[1] + b.b[1]) / 2, hy = Math.max(0, hillH(h, mx, mz)), yaw = Math.atan2(-dz, dx);
+    if (b.low) {
+      const rail = rbox(woodTint('#f1e0b4'), l, 0.12, 0.1, 0, 0, 0, 0.02), rail2 = rbox(woodTint('#d9b87a'), l, 0.12, 0.1, 0, 0, 0, 0.02);
+      rail.position.set(mx, hy + 0.36, mz); rail.rotation.y = yaw; rail2.position.set(mx, hy + 0.16, mz); rail2.rotation.y = yaw; g.add(rail, rail2);
+      for (const e of [0, 1]) g.add(rbox(woodTint('#a87040'), 0.1, 0.5, 0.1, e ? b.b[0] : b.a[0], hy + 0.25, e ? b.b[1] : b.a[1], 0.02));
+      const cl = Math.floor(l / 0.9); for (let k = 1; k < cl; k++) g.add(rbox(woodTint('#a87040'), 0.08, 0.46, 0.08, b.a[0] + (dx / cl) * k, hy + 0.23, b.a[1] + (dz / cl) * k, 0.02));
+    } else {
+      const wall = rbox(GM.brick, l, 0.9, 0.28, 0, 0, 0, 0.04), cap = rbox(GM.stone, l + 0.06, 0.1, 0.38, 0, 0, 0, 0.02);
+      wall.material = GM.lam(GM.tex.stone, '#c9bfd9'); disposables.push(wall.material); wall.position.set(mx, hy + 0.45, mz); wall.rotation.y = yaw; cap.position.set(mx, hy + 0.95, mz); cap.rotation.y = yaw; g.add(wall, cap);
+    }
+  }
+  { const gates = [], buttons = new Map();
+    for (const dr of h.doors || []) {
+      const gdx = dr.gate[2] - dr.gate[0], gdz = dr.gate[3] - dr.gate[1], gl = Math.hypot(gdx, gdz), gate = new THREE.Group(); gate.position.set((dr.gate[0] + dr.gate[2]) / 2, 0, (dr.gate[1] + dr.gate[3]) / 2); gate.rotation.y = Math.atan2(-gdz, gdx);
+      const bar = rbox(metal('#e5483f'), gl, 0.8, 0.1, 0, 0.45, 0, 0.03); gate.add(bar); for (const e of [-1, 1]) gate.add(rbox(metal('#ffffff'), 0.1, 0.95, 0.12, e * gl / 2, 0.47, 0, 0.02)); g.add(gate); gates.push(bar);
+      const kb = `${dr.button.x}|${dr.button.z}`; if (!buttons.has(kb)) buttons.set(kb, dr.button);
+    }
+    const plates = []; for (const bt of buttons.values()) { const btn = new THREE.Group(); btn.position.set(bt.x, hillH(h, bt.x, bt.z), bt.z); const plate = cyl(paint('#ffd23f'), bt.r, 0.08, 0, 0.06, 0); btn.add(cyl(paint('#2b2b3a'), bt.r * 1.15, 0.06, 0, 0.04, 0), plate, torus(paint('#ffffff'), bt.r * 0.55, 0.04, 0, 0.11, 0, Math.PI / 2)); g.add(btn); plates.push(plate); }
+    if (gates.length) { let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); for (const b of gates) b.position.y = 0.45 - 1.0 * open; for (const p of plates) { p.position.y = 0.06 - 0.03 * open; p.material = open > 0.5 ? paint('#6dff9a') : paint('#ffd23f'); } }); }
   }
   if (h.cage) {
     const cg = h.cage, wd = woodTint('#c89358');

@@ -24,12 +24,12 @@ function structure(h) {
   if (distWall(h, h.cup.x, h.cup.z) < 0.7) bad.push('cup too near a wall');
   if (distCl(h, h.ball.x, h.ball.z) > -0.4) bad.push('ball starts outside the corridor');
   const inside = (list, name, m = 0.3) => { for (const p of list) if (distCl(h, p.x, p.z) > -m) bad.push(`${name} outside the corridor at (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`); };
-  inside(h.posts, 'post'); inside(h.bumpers, 'bumper'); inside(h.pads, 'pad'); inside(h.boosts, 'boost'); inside(h.pickups, 'pickup', 0.45); inside(h.sands, 'sand', 0); inside(h.ponds, 'pond', 0);
-  if (h.cage) inside([h.cage.button], 'cage button');
+  inside(h.posts, 'post'); inside(h.bumpers, 'bumper'); inside(h.pads, 'pad'); inside(h.boosts, 'boost'); inside(h.pickups, 'pickup', 0.35); inside(h.sands, 'sand', 0); inside(h.ponds, 'pond', 0);
+  if (h.cage) inside([h.cage.button], 'cage button'); inside((h.doors || []).map((d) => d.button), 'door button');
   const pts = [...h.posts, ...h.bumpers, ...h.pads, ...h.pickups.filter((p) => !p.caged)];
   for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < 0.6) bad.push('two pieces overlap');
   const polys = [...h.ponds.map((p) => p.poly), ...h.sands.map((s) => s.poly)];
-  if (!laneExists(h.path, h.widths, h.ball, h.cup, polys, h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]])])) bad.push('no plain route to the cup');
+  if (!laneExists(h.path, h.widths, h.ball, h.cup, polys, h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...(h.doors || []).map((d) => d.gate)])) bad.push('no plain route to the cup');
   return bad;
 }
 /** Does a stroke from the tee in six directions and a few powers stay finite (no NaN, nothing flung out of the hole)? */
@@ -42,7 +42,7 @@ function sane(h) {
   return true;
 }
 
-const rows = [], t0 = Date.now(), groups = { hero: {}, feat: {} };
+const recipeStats = {}, rows = [], t0 = Date.now(), groups = { hero: {}, feat: {} };
 const bump = (g, k, field) => { const o = (g[k] ||= { n: 0, bad: 0, botFail: 0, strokes: 0, botN: 0 }); o[field]++; return o; };
 function runHole(year, month, i) {
   const cs = courseSeed(year, month), type = heroOrder(cs)[i], seed = holeSeed(cs, i), h = makeHole(seed, i, type), problems = structure(h);
@@ -50,9 +50,11 @@ function runHole(year, month, i) {
   if (!sane(h)) problems.push('a stroke went non-finite or out of the hole');
   let strokes = null;
   if (BOT) { const r = playHole(h); strokes = r.strokes; if (r.nan) problems.push('bot stroke non-finite'); if (strokes > 8) problems.push(`bot needs ${strokes === 99 ? 'more than 16' : strokes} strokes`); }
-  const tags = [h.cage && 'cage', h.boosts.length && 'boost', h.pads.length && 'pad', (h.feats || []).some((f) => f.t === 'gap') && 'canyon', (h.feats || []).some((f) => f.t === 'plat') && 'platform', (h.feats || []).some((f) => f.t === 'berm') && 'berm', h.sands.length && 'sand', h.ponds.length && 'pond', h.rivers.length && 'river'].filter(Boolean);
+  const tags = [...(h.recipes || []).map((x) => `recipe:${x.kind}`), h.cage && 'cage', h.boosts.length && 'boost', h.pads.length && 'pad', (h.feats || []).some((f) => f.t === 'gap') && 'canyon', (h.feats || []).some((f) => f.t === 'plat') && 'platform', (h.feats || []).some((f) => f.t === 'berm') && 'berm', h.sands.length && 'sand', h.ponds.length && 'pond', h.rivers.length && 'river'].filter(Boolean);
   const he = bump(groups.hero, type, 'n'); if (problems.length) he.bad++; if (strokes !== null) { he.botN++; he.strokes += Math.min(strokes, 20); if (strokes > 8) he.botFail++; }
   for (const t of tags) { const o = bump(groups.feat, t, 'n'); if (problems.length) o.bad++; if (strokes !== null) { o.botN++; o.strokes += Math.min(strokes, 20); if (strokes > 8) o.botFail++; } }
+  for (const l of h.recipeLog || []) { const o = (recipeStats[l.kind] ||= { placed: 0, dropped: {}, forg: [] }); o.dropped[l.out] = (o.dropped[l.out] || 0) + 1; }
+  for (const x of h.recipes || []) { const o = (recipeStats[x.kind] ||= { placed: 0, dropped: {}, forg: [] }); o.placed++; o.forg.push(x.forgiveness); }
   rows.push({ year, month, i, type, tags, problems, strokes });
   return { h, problems, tags, strokes };
 }
@@ -70,6 +72,8 @@ const fails = rows.filter((r) => r.problems.length), pct = (a, b) => (b ? `${((a
 console.log(`checked ${rows.length} holes (${regressN} regression seeds + ${MONTHS} months from ${YEAR}-${START}) in ${((Date.now() - t0) / 1000).toFixed(1)} s${BOT ? ' with the bot' : ''}`);
 const table = (title, g) => { console.log(`\n${title}`); for (const k of Object.keys(g).sort()) { const o = g[k]; console.log(`  ${k.padEnd(11)} ${String(o.n).padStart(4)} holes  problems ${pct(o.bad, o.n).padStart(6)}${BOT ? `  bot avg ${(o.strokes / (o.botN || 1)).toFixed(2)}  slow/stuck ${pct(o.botFail, o.botN)}` : ''}`); } };
 table('By hero obstacle', groups.hero); table('By feature present', groups.feat);
+console.log('\nMachine recipes (placed / dropped and why / average forgiveness = share of the 8 test powers that work)');
+for (const k of Object.keys(recipeStats).sort()) { const o = recipeStats[k]; console.log(`  ${k.padEnd(7)} placed ${String(o.placed).padStart(3)}  forgiveness ${o.forg.length ? (o.forg.reduce((a, b) => a + b, 0) / o.forg.length * 100).toFixed(0) + '%' : '-'}  dropped ${JSON.stringify(o.dropped)}`); }
 console.log(`\n${fails.length} of ${rows.length} holes have problems`);
 for (const r of fails.slice(0, 25)) console.log(`  ${r.year}-${r.month} hole ${r.i} ${r.type} [${r.tags.join(', ')}]: ${r.problems.join('; ')}   (node tools/golf/check.mjs --only ${r.year}-${r.month}:${r.i} --bot)`);
 process.exit(fails.length ? 1 : 0);
