@@ -27,7 +27,9 @@ function structure(h) {
   inside(h.posts, 'post'); inside(h.bumpers, 'bumper'); inside(h.pads, 'pad'); inside(h.boosts, 'boost'); inside(h.pickups, 'pickup', 0.35); inside(h.sands, 'sand', 0); inside(h.ponds, 'pond', 0);
   if (h.cage) inside([h.cage.button], 'cage button'); inside((h.doors || []).map((d) => d.button), 'door button');
   const pts = [...h.posts, ...h.bumpers, ...h.pads, ...h.pickups.filter((p) => !p.caged)];
-  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < 0.6) bad.push('two pieces overlap');
+  const nameOf = (p) => (h.posts.includes(p) ? 'post' : h.bumpers.includes(p) ? 'bumper' : h.pads.includes(p) ? 'pad' : 'orb');
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < 0.6) bad.push(`${nameOf(pts[i])} and ${nameOf(pts[j])} overlap`);
+  for (const rc of h.recipes || []) { const l = Math.hypot(rc.F.ux, rc.F.uz); if (!(l > 0.99 && l < 1.01)) bad.push(`recipe ${rc.kind} has a degenerate frame`); }
   const polys = [...h.ponds.map((p) => p.poly), ...h.sands.map((s) => s.poly)];
   if (!laneExists(h.path, h.widths, h.ball, h.cup, polys, h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...(h.doors || []).filter((d) => d.gate).map((d) => d.gate)])) bad.push('no plain route to the cup');
   return bad;

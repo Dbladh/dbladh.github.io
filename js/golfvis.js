@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024202218';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024202218';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024202218';
-import { THEME_BORDER } from './golfscenery.js?v=20261024202218';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024202218';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024202911';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024202911';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024202911';
+import { THEME_BORDER } from './golfscenery.js?v=20261024202911';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024202911';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -21,7 +21,7 @@ export const M = {
 export const G = { box: new THREE.BoxGeometry(1, 1, 1), ball: new THREE.SphereGeometry(BALL_R, 16, 12), dot: new THREE.SphereGeometry(0.1, 8, 6), sph: new THREE.SphereGeometry(1, 14, 10), cyl: new THREE.CylinderGeometry(1, 1, 1, 18), disc: new THREE.CircleGeometry(1, 28) };
 G.disc.rotateX(-Math.PI / 2);
 
-export const COLOURS = { homing: '#ff5a5a', ghost: '#bda7ff', multi: '#5cc8ff', hamster: '#ffb45a', mega: '#4cd964', turbo: '#ff8a3d', bounce: '#ff63c0', freeze: '#8fe3ff', safety: '#ffd84a' };
+export const COLOURS = { coin: '#ffd23f', homing: '#ff5a5a', ghost: '#bda7ff', multi: '#5cc8ff', hamster: '#ffb45a', mega: '#4cd964', turbo: '#ff8a3d', bounce: '#ff63c0', freeze: '#8fe3ff', safety: '#ffd84a' };
 export const EMOJI = { homing: '\u{1F3AF}', ghost: '\u{1F47B}', multi: '\u{1F3B1}', hamster: '\u{1F439}', mega: '⭕', turbo: '\u{1F680}', bounce: '\u{1F3C0}', freeze: '❄️', safety: '\u{1F6DF}' };
 export const NAMES = { homing: 'Homing', ghost: 'Ghost', multi: 'Multi-ball', hamster: 'Hamster ball', mega: 'Mega cup', turbo: 'Turbo', bounce: 'Super bounce', freeze: 'Freeze', safety: 'Safety net' };
 const emojiTex = {};
@@ -243,6 +243,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   // power-up orbs
   const pickups = [];
   for (const p of h.pickups) {
+    if (p.type === 'coin') {                                 // a secret coin: gold, spinning, with a glow
+      const o = new THREE.Group(), gold = paint('#ffd23f'), coin = cyl(gold, 0.34, 0.07, 0, 0, 0); coin.rotation.x = Math.PI / 2; o.add(coin); o.add(torus(paint('#fff3a8'), 0.34, 0.04, 0, 0, 0)); const ring = torus(paint('#ffe27a'), 0.52, 0.03, 0, 0, 0, Math.PI / 2); o.add(ring);
+      const y0 = Math.max(0, hillH(h, p.x, p.z)) + 0.85; o.position.set(p.x, y0, p.z); g.add(o); const rec = { x: p.x, z: p.z, type: 'coin', mesh: o, taken: false, ph: p.x };
+      pickups.push(rec); updaters.push((heroT, t) => { if (rec.taken) return; o.position.y = y0 + 0.1 * Math.sin(t * 2.6 + rec.ph); o.rotation.y = t * 2.2; ring.rotation.z = t; }); continue;
+    }
     const o = new THREE.Group(), colr = COLOURS[p.type];
     const orb = new THREE.Mesh(G.sph, new THREE.MeshBasicMaterial({ color: colr })); orb.scale.setScalar(0.3); o.add(orb);
     const ring = new THREE.Mesh(track(new THREE.TorusGeometry(0.52, 0.05, 6, 24)), new THREE.MeshBasicMaterial({ color: colr, transparent: true, opacity: 0.8 })); ring.rotation.x = Math.PI / 2; o.add(ring);

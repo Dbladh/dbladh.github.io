@@ -3,8 +3,8 @@
 //   vault : a bounce pad, then two low fences in a zigzag: the pad vaults the ball straight over them (walking the zigzag is the plain way).
 //   door  : a button, then two tall walls in a zigzag with a gate in the middle of each: the button opens the gates for a few seconds for a straight run.
 // Every recipe is checked with a proof shot (proveRecipe) over a band of powers, and dropped if the intended route does not work.
-import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024202218';
-import { TUNING } from './golftuning.js?v=20261024202218';
+import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024202911';
+import { TUNING } from './golftuning.js?v=20261024202911';
 
 const HALF_W = 2.3;
 
@@ -39,6 +39,15 @@ const keepAlong = (S, F, len) => { for (let u = 0.5; u <= len; u += 2) { const p
 const seg = (F, u, a, b) => { const p = F.P(u, a), q = F.P(u, b); return [p.x, p.z, q.x, q.z]; };
 
 const stamp = {
+  secret(S, sl, rid) {                                       // a pocket along the corridor wall, shut in front and on the lane side by low fences and open at its far end: the pad vaults the ball in over the front fence to the coin
+    const T = TUNING.secret, F = frameAt(S, sl.i0, sl.i1), len = T.frontAt + T.len + 1.0, pd = F.P(T.padAt, T.lat), coin = F.P(T.frontAt + T.len * 0.55, T.lat + 0.2);
+    S.pads.push({ x: pd.x, z: pd.z, r: 0.55, rid });
+    const front = seg(F, T.frontAt, T.fenceLat, HALF_W + 0.1), side = [F.P(T.frontAt, T.fenceLat), F.P(T.frontAt + T.len, T.fenceLat)];
+    for (const sg of [front, [side[0].x, side[0].z, side[1].x, side[1].z]]) { S.barriers.push({ a: [sg[0], sg[1]], b: [sg[2], sg[3]], low: true, rid }); S.walls.push([sg[0], sg[1], sg[2], sg[3], 0, 1, 1, rid]); }
+    S.secrets.push({ x: coin.x, z: coin.z, type: 'coin', secret: true, rid });
+    keepAlong(S, F, len);
+    return { kind: 'secret', rid, F, len, entryU: 0.0, lat: T.lat, coin, minPass: 3 };
+  },
   bridge(S, sl, rid) {
     const T = TUNING.bridge, F = frameAt(S, sl.i0, sl.i1), ledge = S.r() < 0.5 ? 1 : -1, g = T.gap, len = T.gapAt + g + 1.0, bp = F.P(T.buttonAt, 0), gc = F.P(T.gapAt + g / 2, 0);
     S.feats.push({ t: 'gap', ux: F.ux, uz: F.uz, nx: F.nx, nz: F.nz, wid: 4, x: gc.x, z: gc.z, len: g, d: 1.4, bridge: true, c0: ledge > 0 ? -HALF_W - 0.05 : -HALF_W + 1.85, c1: ledge > 0 ? HALF_W - 1.85 : HALF_W + 0.05, rid });
@@ -79,13 +88,13 @@ const stamp = {
 /** Which recipes a hole gets, in order along the corridor. */
 function wanted(S) {
   const i = S.index, out = [], r = S.r;
-  const pick = () => { const o = ['vault']; if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
+  const pick = () => { const o = ['vault']; if (i >= 3) o.push('secret'); if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
   if (i >= 2) out.push(pick());
   if (i >= 4 && r() < 0.6) out.push(pick());
   if (i >= 6 && r() < 0.6) out.push(pick());
   return out;
 }
-const LENGTH = { bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 1.4 };
+const LENGTH = { secret: () => TUNING.secret.frontAt + TUNING.secret.len + 1.0, bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 1.4 };
 
 /**
  * Place the recipes of a hole. `S` is the generator's state (the corridor, what is placed so far and the arrays to add to). `plainOk()` says whether the plain route still exists.
@@ -105,6 +114,7 @@ export function placeRecipes(S, plainOk) {
 export function removeRecipe(H, rid) {
   for (const k of ['boosts', 'pads', 'feats', 'barriers', 'doors']) { const a = H[k]; for (let i = a.length - 1; i >= 0; i--) if (a[i].rid === rid) a.splice(i, 1); }
   for (let i = H.walls.length - 1; i >= 0; i--) if (H.walls[i][7] === rid) H.walls.splice(i, 1);
+  if (H.pickups) for (let i = H.pickups.length - 1; i >= 0; i--) if (H.pickups[i].rid === rid) H.pickups.splice(i, 1);
 }
 
 const POWERS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -112,9 +122,9 @@ const POWERS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
 export function proveRecipe(H, rec) {
   const F = rec.F, ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false }; let pass = 0;
   for (const pw of POWERS) {
-    const b = newBall(H), ctx = newCtx(), p = F.P(rec.entryU, 0); b.x = p.x; b.z = p.z; b.y = hillH(H, p.x, p.z); shoot(b, F.ux, F.uz, pw, false); let umax = -9;
-    for (let n = 0; n < 600 && !b.rest && !b.holed && !b.sunk; n++) { stepBall(b, H, ctx, 1 / 60, ev); ctx.t += 1 / 60; const u = (b.x - F.o.x) * F.ux + (b.z - F.o.z) * F.uz; if (u > umax) umax = u; }
-    if (!b.sunk && umax >= rec.targetU) pass++;
+    const b = newBall(H), ctx = newCtx(), p = F.P(rec.entryU, rec.lat || 0); b.x = p.x; b.z = p.z; b.y = hillH(H, p.x, p.z); shoot(b, F.ux, F.uz, pw, false); let umax = -9, near = 9;
+    for (let n = 0; n < 600 && !b.rest && !b.holed && !b.sunk; n++) { stepBall(b, H, ctx, 1 / 60, ev); ctx.t += 1 / 60; const u = (b.x - F.o.x) * F.ux + (b.z - F.o.z) * F.uz; if (u > umax) umax = u; if (rec.coin) near = Math.min(near, Math.hypot(b.x - rec.coin.x, b.z - rec.coin.z)); }
+    if (rec.coin ? near < 0.55 : !b.sunk && umax >= rec.targetU) pass++;
   }
   return { pass, forgiveness: pass / POWERS.length };
 }

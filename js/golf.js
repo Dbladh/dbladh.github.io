@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024202218';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024202218';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024202218';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024202218';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024202218';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024202218';
-import { createNeon } from './golfneon.js?v=20261024202218';
-import { createFx } from './golffx.js?v=20261024202218';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024202218';
-import { buildDecor } from './golfdecor.js?v=20261024202218';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024202218';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024202911';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024202911';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024202911';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024202911';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024202911';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024202911';
+import { createNeon } from './golfneon.js?v=20261024202911';
+import { createFx } from './golffx.js?v=20261024202911';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024202911';
+import { buildDecor } from './golfdecor.js?v=20261024202911';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024202911';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -175,7 +175,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   }
   function finishHole() {
     st.scores[st.hole] = st.strokes;
-    { const ch = chals[st.hole], ok = ch && chalStatus(ch, cs, hole, st.strokes, true, false) === 'done'; st.chalDone[st.hole] = !!ok; st.pts = st.pts || []; st.pts[st.hole] = holePoints(st.strokes, hole.par) + (ok ? CHAL_POINTS : 0); if (ok) setTimeout(() => say(elBanner, `Challenge complete! +${CHAL_POINTS}`, 1800, 'banner'), 700); }
+    { const ch = chals[st.hole], ok = ch && chalStatus(ch, cs, hole, st.strokes, true, false) === 'done'; st.chalDone[st.hole] = !!ok; st.pts = st.pts || []; st.pts[st.hole] = holePoints(st.strokes, hole.par) + (ok ? CHAL_POINTS : 0) + (cs.secret ? 100 : 0); if (ok) setTimeout(() => say(elBanner, `Challenge complete! +${CHAL_POINTS}`, 1800, 'banner'), 700); }
     const d = st.strokes - hole.par, name = st.strokes === 1 ? 'Hole in one!' : d <= -2 ? 'Eagle!' : d === -1 ? 'Birdie!' : d === 0 ? 'Par' : d === 1 ? 'Bogey' : `+${d}`;
     say(elToast, name, 1500, 'toast'); st.mode = 'done'; st.t = 0;
     audio?.golf?.(st.strokes === 1 || d < 0 ? 'win' : 'cup');
@@ -262,7 +262,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       for (const b of balls) {
         if (b.holed || b.sunk) continue;
         const dx = b.x - p.x, dz = b.z - p.z;
-        if (dx * dx + dz * dz < 0.62 * 0.62) { p.taken = true; cs.orbs++; p.mesh.visible = false; applyPower(p.type); if (fxs) { const w = wp(p.x, 0.7, p.z); fxs.sparks(w.x, w.y, w.z, COLOURS[p.type], 30, 3.2, 3.6, 0.9, 0.07); fxs.ring(w.x, w.y - 0.6, w.z, 1.5, 0.8, COLOURS[p.type]); } break; }
+        if (dx * dx + dz * dz < 0.62 * 0.62) { p.taken = true; p.mesh.visible = false; if (p.type === 'coin') { cs.secret++; audio?.golf?.('pickup'); say(elBanner, 'Secret found! +100', 1800, 'banner'); if (fxs) { const w = wp(p.x, 0.9, p.z); fxs.sparks(w.x, w.y, w.z, '#ffd23f', 34, 3, 3.8, 0.9, 0.07); fxs.ring(w.x, w.y - 0.8, w.z, 1.6, 0.8, '#ffd23f'); } break; } cs.orbs++; applyPower(p.type); if (fxs) { const w = wp(p.x, 0.7, p.z); fxs.sparks(w.x, w.y, w.z, COLOURS[p.type], 30, 3.2, 3.6, 0.9, 0.07); fxs.ring(w.x, w.y - 0.6, w.z, 1.5, 0.8, COLOURS[p.type]); } break; }
       }
     }
   }
