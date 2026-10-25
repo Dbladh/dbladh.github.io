@@ -3,12 +3,12 @@
 // slowly flattens until the ball stops, you putt again, and if that misses too the table tilts up into pinball: the ball rolls down, bumpers and obstacles knock it about, the flippers keep it
 // in play, until the tilt has flattened or it drains (a stroke) or drops in the cup.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024231623';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024231623';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024231623';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261024231623';
-import { courseMonth } from './monthseed.js?v=20261024231623';
-import { prepareTable, stepFlips, isDrained, TABLE, PLAT_H, TILT_PIN, TAU_PIN, PIN_RAMP, FLIP_RAD } from './pbtable.js?v=20261024231623';
+import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024232607';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024232607';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024232607';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261024232607';
+import { courseMonth } from './monthseed.js?v=20261024232607';
+import { prepareTable, stepFlips, isDrained, TABLE, PLAT_H, TILT_PIN, TAU_PIN, PIN_RAMP, FLIP_RAD } from './pbtable.js?v=20261024232607';
 
 const HOLE_INDEX = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const SUB = 4;
@@ -49,10 +49,11 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
       bar.scale.set(f.len, 0.3, f.rad * 2); bar.position.x = f.len / 2; c0.scale.setScalar(f.rad * 1.5); c1.scale.setScalar(f.rad * 1.1); c1.position.x = f.len; g.add(bar, c0, c1); g.position.set(f.px, 0.22, f.pz); bar.castShadow = c0.castShadow = c1.castShadow = true; group.add(g); return g;
     });
     dressTable();
-    { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d'); c.fillStyle = 'rgba(255,226,122,0.28)'; c.beginPath(); c.arc(64, 64, 58, 0, 7); c.fill(); c.strokeStyle = '#ffe27a'; c.lineWidth = 9; c.beginPath(); c.arc(64, 64, 56, 0, 7); c.stroke();
-      c.fillStyle = '#fff6c8'; c.font = '800 30px "Outfit", system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.save(); c.translate(64, 64); c.rotate(Math.PI / 2); c.fillText('PUTT', 0, 0); c.restore();
-      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; const geo = new THREE.PlaneGeometry(2.1, 2.1).rotateX(-Math.PI / 2); disposables.push(tex, geo);
-      spots = hole.spots; spotMeshes = spots.map((sp) => { const mt = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); disposables.push(mt); const m = new THREE.Mesh(geo, mt); m.position.set(sp.x, 0.07, sp.z); m.visible = false; group.add(m); return m; }); spotShow = 0; spotTarget = 0; }
+    { const dg = new THREE.CircleGeometry(0.62, 32).rotateX(-Math.PI / 2), rg = new THREE.RingGeometry(0.62, 0.8, 40).rotateX(-Math.PI / 2), gg = new THREE.RingGeometry(0.9, 1.12, 40).rotateX(-Math.PI / 2), dm = new THREE.MeshBasicMaterial({ color: '#05060a' }); disposables.push(dg, rg, gg, dm);
+      spots = hole.spots; spotMeshes = spots.map((sp) => {                                    // (a hole in the ground with a white rim; the rim glows while the table is in pinball mode)
+        const g = new THREE.Group(), rm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75 }), gm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }); disposables.push(rm, gm);
+        const d = new THREE.Mesh(dg, dm), r = new THREE.Mesh(rg, rm), gl = new THREE.Mesh(gg, gm); r.position.y = 0.01; gl.position.y = 0.02; g.add(d, r, gl); g.position.set(sp.x, hillH(hole, sp.x, sp.z) + 0.065, sp.z); g.userData = { rm, gm, gl }; group.add(g); return g;
+      }); spotShow = 0; spotTarget = 0; }
     tgMeshes = hole.targets.map((t) => { const g = new THREE.Group(), body = new THREE.Mesh(G.cyl || new THREE.CylinderGeometry(1, 1, 1, 14), tgRed), top = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 14), tgWhite); body.scale.set(t.r, 0.75, t.r); body.position.y = 0.375; top.scale.set(t.r * 1.02, 0.12, t.r * 1.02); top.position.y = 0.78; g.add(body, top); g.position.set(t.x, 0, t.z); body.castShadow = true; group.add(g); return g; });
     { const rg = new THREE.RingGeometry(0.75, 1, 40).rotateX(-Math.PI / 2); disposables.push(rg); pulses = Array.from({ length: 12 }, () => { const mt = new THREE.MeshBasicMaterial({ color: '#fff2a8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); disposables.push(mt); const m = new THREE.Mesh(rg, mt); m.visible = false; group.add(m); return { m, t: 9, r: 1 }; }); }
     ballMesh = new THREE.Mesh(G.ball, M.ball.clone()); ballMesh.castShadow = true; group.add(ballMesh);
@@ -201,12 +202,11 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   let spots = [], spotMeshes = [], spotShow = 0, spotTarget = 0;
   function showSpots(on) { spotTarget = on ? 1 : 0; }
   function updateSpots(dt) {
-    spotShow += (spotTarget - spotShow) * (1 - Math.exp(-dt * 3)); const pl = 1 + 0.08 * Math.sin(st.clock * 5);
-    for (const m of spotMeshes) { m.visible = spotShow > 0.02; m.scale.setScalar(Math.max(0.01, spotShow * pl)); m.material.opacity = Math.min(1, spotShow * 1.2); }
+    spotShow += (spotTarget - spotShow) * (1 - Math.exp(-dt * 3)); const pl = 0.5 + 0.5 * Math.sin(st.clock * 6);
+    for (const g of spotMeshes) { const u = g.userData; u.rm.opacity = 0.7 + 0.3 * spotShow; u.gm.opacity = spotShow * (0.35 + 0.5 * pl); u.gl.scale.setScalar(1 + 0.12 * pl * spotShow); u.gl.visible = spotShow > 0.02; }
   }
-  function levelUp(sp) {
-    setKind('putt'); st.leveled = true; showSpots(false); ball.vx *= 0.3; ball.vz *= 0.3; st.pts += 100; pulse(sp.x, sp.z, 1.1); popup('+100', sp.x, sp.z, 3); shake = 0.1;
-    say(elBanner, 'LEVEL! The table flattens', 1800, 'banner'); audio?.golf?.('pickup');
+  function spotSink(sp) {                                  // the ball drops into a putting hole: the table levels and the ball comes back up in the hole, ready to putt
+    setKind('putt'); st.leveled = false; st.mode = 'spotsink'; st.spot = sp; sinkT = 0; ball.vx = ball.vz = 0; showSpots(false); pulse(sp.x, sp.z, 1.1); st.pts += 100; popup('+100', sp.x, sp.z, 3); audio?.golf?.('pickup'); shake = 0.1;
   }
   // ---------- the action: scoring with a combo, floating points, rings that flash where the ball hit ----------
   let pulses = [], tgMeshes = [], tgDown = new Set(), tgAll = 0;
@@ -250,7 +250,7 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
         st.strokes++; say(elToast, ev.splash ? 'Splash! +1' : 'Ball lost! +1', 1600, 'toast'); audio?.golf?.(ev.splash ? 'splash' : 'pbdrain'); teeBall(); st.mode = 'aim'; return;
       }
     }
-    if (st.kind === 'pinball' && !ball.air) { for (const sp of spots) if (Math.hypot(ball.x - sp.x, ball.z - sp.z) < 0.95) { levelUp(sp); break; } }
+    if (st.kind === 'pinball' && !ball.air && Math.hypot(ball.vx, ball.vz) < 9) { for (const sp of spots) if (Math.hypot(ball.x - sp.x, ball.z - sp.z) < 0.5) { spotSink(sp); return; } }
     if (ball.rest && st.mode === 'roll' && st.rollT > 0.6 && !ramp) afterStop();
   }
   function finish() {
@@ -261,7 +261,7 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   elScore.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (a === 'again') { elScore.hidden = true; st.strokes = 0; st.pts = 0; st.flips = 0; st.combo = 0; st.lastHit = -99; teeBall(); st.mode = 'aim'; } else if (a === 'leave') api.stop(); });
   function updateHud() {
     elPar.textContent = `Par ${hole.par}`; elStrokes.textContent = `${st.strokes === 1 ? '1 stroke' : `${st.strokes} strokes`} · ${st.pts} pts`;
-    elMsg.textContent = st.mode === 'aim' ? '◎ Drag back and putt: the green is level' : st.kind === 'pinball' ? '◎ Pinball! Hit a PUTT spot to level the table' : '◎ Flip it up the table (Space / FLIP)';
+    elMsg.textContent = st.mode === 'aim' ? '◎ Drag back and putt: the green is level' : st.kind === 'pinball' ? '◎ Pinball! Drop the ball in a white hole to level the table' : '◎ Flip it up the table (Space / FLIP)';
   }
 
   const api = {
@@ -309,8 +309,12 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
       else if (st.mode === 'sink') {
         ctx.t += dt; sinkT += dt; const s = clamp01(sinkT / 0.55); ballMesh.scale.setScalar(1 - 0.7 * s); ballMesh.position.set(hole.cup.x, hillH(hole, hole.cup.x, hole.cup.z) + 0.2 - 1.2 * s + BALL_R * (1 - s), hole.cup.z); stepFlippers(dt);
         if (s >= 1) { ballMesh.visible = false; finish(); }
+      } else if (st.mode === 'spotsink') {
+        ctx.t += dt; sinkT += dt; const s = clamp01(sinkT / 1.0), sp = st.spot, down = s < 0.45 ? s / 0.45 : 1 - (s - 0.45) / 0.55;
+        ballMesh.scale.setScalar(1 - 0.85 * down); ballMesh.position.set(sp.x, hillH(hole, sp.x, sp.z) + 0.03 + BALL_R * (1 - 0.85 * down) - 0.5 * down, sp.z); stepFlippers(dt);
+        if (s >= 1) { ball.x = sp.x; ball.z = sp.z; ball.vx = ball.vz = 0; ball.rest = true; ball.still = 0; ball.air = false; ball.y = hillH(hole, sp.x, sp.z); st.mode = 'aim'; ballMesh.scale.setScalar(1); say(elBanner, 'Level! Putt again', 1800, 'banner'); }
       } else stepFlippers(dt);
-      if (st.mode !== 'sink' && st.mode !== 'card') { place(); ballMesh.scale.setScalar(1); const sp = Math.hypot(ball.vx, ball.vz); if (sp > 0.05) { tmpV.set(-ball.vz, 0, ball.vx).normalize(); ballMesh.rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); } }
+      if (st.mode !== 'sink' && st.mode !== 'card' && st.mode !== 'spotsink') { place(); ballMesh.scale.setScalar(1); const sp = Math.hypot(ball.vx, ball.vz); if (sp > 0.05) { tmpV.set(-ball.vz, 0, ball.vx).normalize(); ballMesh.rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); } }
       vis.update(ctx.t, ctx.t, dt, st); updatePulses(dt); updateTargets(dt); updateSpots(dt); updateHud();
       return true;
     },

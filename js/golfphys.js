@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024231623';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024232607';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -32,11 +32,26 @@ function sandH(s, x, z) {
   return u <= 0 ? 0 : -SAND_DEPTH * (u >= 1 ? 1 : u * u * (3 - 2 * u));
 }
 /** Height of the ground (the hills and every feature) at a point. */
+/** A pinball lane (a winding ramp or a raised deck): a path of samples [x, z, distance along] with a half-width; the ground rises along it by smoothstep from s0 over `ramp` to height H, and eases out over `edge` beside it. */
+function laneH(L, x, z) {
+  const P = L.pts, last = P.length - 2; let best = 1e9, bs = 0, bover = 0, blat = 0;
+  for (let i = 0; i <= last; i++) {
+    const a = P[i], b = P[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1e-9, len = Math.sqrt(l2), t = ((x - a[0]) * dx + (z - a[1]) * dz) / l2, tc = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ex = x - (a[0] + dx * tc), ez = z - (a[1] + dz * tc), d = Math.sqrt(ex * ex + ez * ez);
+    if (d < best) { best = d; bs = a[2] + tc * (b[2] - a[2]); bover = i === 0 && t < 0 ? -t * len : i === last && t > 1 ? (t - 1) * len : 0; blat = Math.abs((x - a[0]) * dz - (z - a[1]) * dx) / len; }
+  }
+  if (bover > 0) best = Math.max(blat - L.w, bover) + L.w;                      // (the ends are cut square, not rounded)
+  const ex = best - L.w; if (ex > L.edge) return 0;
+  const k = L.ramp > 0 ? Math.min(1, Math.max(0, (bs - L.s0) / L.ramp)) : 1;
+  return L.H * k * k * (3 - 2 * k) * (ex <= 0 ? 1 : 1 - sm(ex / L.edge));
+}
+function lanesH(hole, x, z) { let m = 0; for (const L of hole.lanes) { const v = laneH(L, x, z); if (v > m) m = v; } return m; }
 export function hillH(hole, x, z) {
   let h = 0;
   for (const k of hole.hills) { const dx = x - k.x, dz = z - k.z, u = 1 - (dx * dx + dz * dz) / (k.r * k.r); if (u > 0) h += k.h * u * u; }
   if (hole.feats) for (const f of hole.feats) h += featH(f, x, z, hole.cover);
   for (const s of hole.sands) h += sandH(s, x, z);
+  if (hole.lanes) h += lanesH(hole, x, z);
   return h;
 }
 const _g = { x: 0, z: 0 }, EPS = 0.07, MAX_SLOPE = 1.8;
@@ -44,8 +59,9 @@ const _g = { x: 0, z: 0 }, EPS = 0.07, MAX_SLOPE = 1.8;
 export function hillGrad(hole, x, z) {
   let gx = 0, gz = 0;
   for (const k of hole.hills) { const dx = x - k.x, dz = z - k.z, r2 = k.r * k.r, u = 1 - (dx * dx + dz * dz) / r2; if (u > 0) { const f = (-4 * k.h * u) / r2; gx += f * dx; gz += f * dz; } }
-  if ((hole.feats && hole.feats.length) || hole.sands.length) {
+  if ((hole.feats && hole.feats.length) || hole.sands.length || (hole.lanes && hole.lanes.length)) {
     let fx = 0, fz = 0;
+    if (hole.lanes) { fx += lanesH(hole, x + EPS, z) - lanesH(hole, x - EPS, z); fz += lanesH(hole, x, z + EPS) - lanesH(hole, x, z - EPS); }
     if (hole.feats) for (const f of hole.feats) { fx += featH(f, x + EPS, z, hole.cover) - featH(f, x - EPS, z, hole.cover); fz += featH(f, x, z + EPS, hole.cover) - featH(f, x, z - EPS, hole.cover); }
     for (const s of hole.sands) { fx += sandH(s, x + EPS, z) - sandH(s, x - EPS, z); fz += sandH(s, x, z + EPS) - sandH(s, x, z - EPS); }
     gx += fx / (2 * EPS); gz += fz / (2 * EPS);

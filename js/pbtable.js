@@ -1,9 +1,38 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a rectangular playfield with a round top, the funnel and two flippers, the drain, slingshots, pop bumpers and the cup.
-export const TILT_PIN = 4.6, TAU_PIN = 26, PIN_RAMP = 3.2, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, LANE = 1.75, RAMP_X0 = 1.6;
+export const TILT_PIN = 3.8, TAU_PIN = 26, PIN_RAMP = 3.2, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, LANE = 1.75, RAMP_X0 = 1.6, DECK_W = 3.4;
 
 // The table, in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom, x = -15, the round top at x = 15).
-export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 12.6, z: 0 }, pivX: -12.0, pivZ: 1.78 };
+export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 11.8, z: 0 }, pivX: -12.0, pivZ: 1.78 };
 const tableHalf = (x) => (x > TABLE.arcX ? Math.sqrt(Math.max(0, TABLE.W * TABLE.W - (x - TABLE.arcX) * (x - TABLE.arcX))) : x > -9.4 ? TABLE.W : x > -11.85 ? 1.71 + (x + 11.85) * (5.29 / 2.45) : 1.85);
+
+/** A lane: a smooth path (Catmull-Rom through `ctrl`) as samples [x, z, distance along] with its half-width w, the height H it climbs to by smoothstep from s0 over `ramp`, and a soft edge. Read by hillH in golfphys.js. */
+function mkLane(ctrl, w, H, s0, ramp) {
+  const C = [ctrl[0], ...ctrl, ctrl[ctrl.length - 1]], pts = [];
+  for (let i = 1; i < C.length - 2; i++) {
+    const p0 = C[i - 1], p1 = C[i], p2 = C[i + 1], p3 = C[i + 2], n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 0.4));
+    for (let k = 0; k < n; k++) { const t = k / n, t2 = t * t, t3 = t2 * t, f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3); pts.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1]), 0]); }
+  }
+  pts.push([...ctrl[ctrl.length - 1], 0]); let acc = 0; for (let i = 1; i < pts.length; i++) { acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); pts[i][2] = acc; }
+  return { pts, w, H, s0, ramp, edge: 0.3, len: acc };
+}
+/** Is (x, z) alongside the lane (not past its ends) and nearer its centre line than `r`? */
+function insideLane(L, x, z, r) {
+  const P = L.pts;
+  for (let i = 0; i < P.length - 1; i++) {
+    const a = P[i], b = P[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1e-9, t = ((x - a[0]) * dx + (z - a[1]) * dz) / l2;
+    if (t < 0.03 || t > 0.97 + (i === P.length - 2 ? 0 : 0.03)) continue; const ex = x - (a[0] + dx * t), ez = z - (a[1] + dz * t); if (ex * ex + ez * ez < r * r) return true;
+  }
+  return false;
+}
+const BR = 0.32, segDist = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1e-9; let t = ((px - ax) * dx + (pz - az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(px - (ax + dx * t), pz - (az + dz * t)); };
+const segsCross = (a, b, c, d) => { const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])); return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b); };
+/** Can a ball roll in a straight line from `p` to `q` (a clear shot): nothing but open ground, with room for the ball all along? */
+export function clearShot(hole, p, q, margin = 0.12) {
+  const a = [p.x, p.z], b = [q.x, q.z], room = BR + margin;
+  for (const w of hole.walls) { const c = [w[0], w[1]], d = [w[2], w[3]]; if (segsCross(a, b, c, d) || segDist(c[0], c[1], a[0], a[1], b[0], b[1]) < room || segDist(d[0], d[1], a[0], a[1], b[0], b[1]) < room || segDist(a[0], a[1], c[0], c[1], d[0], d[1]) < room) return false; }
+  for (const o of [...hole.bumpers, ...hole.posts, ...(hole.elevated || [])]) if (segDist(o.x, o.z, a[0], a[1], b[0], b[1]) < o.r + room) return false;
+  return true;
+}
 
 /** Turn `hole` (any generated hole, used only for its seed and defaults) into a pinball playfield: a rectangle with a round top, a funnel down to two flippers and a drain, two slingshots, pop bumpers and the cup at the top. Sets hole.tiltDir. Returns { ux, uz, nx, nz, tee, L(u, lat), flips, rails, tris, bottom }. */
 export function prepareTable(hole) {
@@ -25,13 +54,25 @@ export function prepareTable(hole) {
   for (let x = x0; x <= x1 + 1e-6; x += 2.5) for (let z = -6.9; z <= 6.9; z += 2.3) if (Math.abs(z) <= tableHalf(x) + 0.4) shape.push([x, z, 2.4]);
   for (let x = x0; x <= x1; x += 1) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 1) poly.push([x, -tableHalf(x)]);
   const path = []; for (let x = -13; x <= 13; x += 1) path.push({ x, z: 0 });
-  // the ramp: a lane up the middle between two rails climbs to a raised deck at the top with the cup on it; a boost strip at the foot launches the ball up it
-  for (const sd of [-1, 1]) { seg(T(-0.2, sd * 3.2), T(RAMP_X0, sd * LANE)); seg(T(RAMP_X0, sd * LANE), T(14.7, sd * LANE)); }
-  const plat = { t: 'plat', x: 10.6, z: 0, ux: 1, uz: 0, nx: 0, nz: 1, wid: LANE + 0.1, len: 8, h: PLAT_H, ramp: 5, edge: 0.5 }, boosts = [{ x: 0.6, z: 0, ux: 1, uz: 0, len: 2.0, wid: 1.4 }];
-  const bumpers = []; for (const [x, z] of [[-1.8, 4.0], [3.0, 4.9], [7.4, 4.4], [11.0, 4.4]]) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
-  const elevated = [{ x: 10.2, z: 0, r: 0.65 }];                                                  // (a bumper on the deck in front of the cup: added to the physics, drawn by the game at deck height)
-  const targets = [-2.2, 0, 2.2].map((z) => ({ x: -1.0, z, r: 0.28 })), posts = [...targets];
-  Object.assign(hole, { walls, bumpers, posts, targets, elevated, ponds: [], rivers: [], sands: [], pads: [], boosts, rails: [], barriers: [], doors: [], cage: null, feats: [plat], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
+  // the ramps: a straight lane up the middle and two winding ones up the sides all climb to a raised deck at the top, where the cup is. Where lanes meet, their rails open into each other.
+  for (const sd of [-1, 1]) seg(T(0.4, sd * 2.6), T(RAMP_X0, sd * LANE));                                  // (the flared mouth of the middle lane)
+  const lanes = [mkLane([[RAMP_X0, 0], [8.5, 0]], LANE, PLAT_H, 0, 5.4), mkLane([[7.0, 0], [13.8, 0]], DECK_W, PLAT_H, -1, 0.1)];
+  for (const sd of [-1, 1]) lanes.push(mkLane([[2.2, 5.6 * sd], [4.2, 4.6 * sd], [6.2, 5.6 * sd], [8.2, 4.8 * sd], [9.8, 3.7 * sd], [11.0, 2.3 * sd]], 1.3, PLAT_H, 0, 7.0));
+  lanes.forEach((L, i) => laneRails(i, L, i === 1 ? 'both' : ''));
+  function laneRails(i, L, caps) {
+    const P = L.pts, n = P.length, left = [], right = [];
+    for (let k = 0; k < n; k++) { const a = P[Math.max(0, k - 1)], b = P[Math.min(n - 1, k + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / l, nz = (b[0] - a[0]) / l; left.push([P[k][0] + nx * L.w, P[k][1] + nz * L.w]); right.push([P[k][0] - nx * L.w, P[k][1] - nz * L.w]); }
+    const piece = (a, b) => { const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; if (!lanes.some((O, j) => j !== i && insideLane(O, mx, mz, O.w - 0.15))) seg(a, b); };
+    for (const side of [left, right]) for (let k = 0; k < n - 1; k++) piece(side[k], side[k + 1]);
+    const cap = (a, b) => { const m = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.4)); for (let q = 0; q < m; q++) piece([a[0] + ((b[0] - a[0]) * q) / m, a[1] + ((b[1] - a[1]) * q) / m], [a[0] + ((b[0] - a[0]) * (q + 1)) / m, a[1] + ((b[1] - a[1]) * (q + 1)) / m]); };
+    if (caps) { cap(left[0], right[0]); cap(left[n - 1], right[n - 1]); }
+  }
+  const boosts = [{ x: 0.9, z: 0, ux: 1, uz: 0, len: 1.6, wid: 1.4 }];
+  for (const sd of [-1, 1]) { const dx = 2.0, dz = -1.0 * sd, l = Math.hypot(dx, dz); boosts.push({ x: 3.0, z: 5.2 * sd, ux: dx / l, uz: dz / l, len: 1.6, wid: 1.0 }); }
+  const bumpers = []; for (const [x, z] of [[-2.0, 3.9], [0.4, 4.1]]) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
+  const elevated = [{ x: 9.4, z: 1.3, r: 0.4 }, { x: 9.4, z: -1.3, r: 0.4 }];                                // (two bumpers on the deck in front of the cup, a narrow gap between them: added to the physics, drawn by the game at deck height)
+  const targets = [-2.5, 2.5].map((z) => ({ x: -0.6, z, r: 0.28 })), posts = [...targets];
+  Object.assign(hole, { walls, bumpers, posts, targets, elevated, ponds: [], rivers: [], sands: [], pads: [], boosts, rails: [], barriers: [], doors: [], cage: null, feats: [], lanes, dense: true, cols: 64, recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
     tee: { ...TABLE.tee }, ball: { ...TABLE.tee }, cup: { ...TABLE.cup }, bounds: { cx: 0, cz: 0, hx: 15, hz: 7 }, par: 3 });
   const tee = { x: TABLE.pivX + 1.35, z: 0 }, L = (u, lat) => ({ x: tee.x + u, z: lat });         // (u = 0 at the line the flippers' tips reach, as the flipper bot and the drain test expect)
   const flips = [], ang = (phi) => phi;
@@ -40,7 +81,7 @@ export function prepareTable(hole) {
     flips.push({ side, px: TABLE.pivX, pz: side * TABLE.pivZ, len: FLIP_LEN, rad: FLIP_RAD, restA: ang(rest), upA: ang(up), a: ang(rest), w: 0 });
   }
   hole.tiltDir = { x: -1, z: 0 };
-  hole.spots = [{ x: 5.2, z: -4.6 }, { x: 5.2, z: 4.6 }, { x: 9.2, z: -5.6 }, { x: 9.2, z: 5.6 }];                         // (the putting spots: they appear in pinball mode and level the table)
+  hole.spots = [[-3.0, 1.2], [-3.0, -1.2], [-1.8, 0]].map(([x, z]) => ({ x, z })).filter((p) => clearShot(hole, p, hole.cup));                // (the putting holes: a ball that drops into one levels the table, and from there the cup is in clear sight)
   return { ux: 1, uz: 0, nx: 0, nz: 1, tee, L, flips, rails, tris, bottom: { x: x0, z: 0 } };
 }
 /** Swing the flippers towards up (`held`) or rest for `h` seconds. */
