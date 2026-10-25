@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024210129';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024211832';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -199,12 +199,14 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = 5.0; b.padCool = 0.6; ev.fx = 6; }
     if (ctx.gateT > 0) ctx.gateT -= h;
     hole.cover = ctx.gateT > 0 ? 1 : 0;                 // (a retractable bridge covers its canyon while the button's time lasts)
+    if (hole.feats && !b.air) for (const f of hole.feats) if (f.bridge) { const rx = b.x - f.x, rz = b.z - f.z, s2 = rx * f.ux + rz * f.uz, c2 = rx * f.nx + rz * f.nz; if (Math.abs(s2) < f.len / 2 + 0.5 && c2 > f.c0 && c2 < f.c1 && ctx.gateT > 0) ctx.gateT = Math.max(ctx.gateT, 0.8); }       // (a bridge stays out while a ball is on it)
     if (hole.doors) for (const dr of hole.doors) {
       if (!b.air && dist2(b, dr.button.x, dr.button.z) < dr.button.r * dr.button.r) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }
       if (dr.gate && ctx.gateT <= 0 && !ghost) collideSeg(b, dr.gate[0], dr.gate[1], dr.gate[2], dr.gate[3], 0.5, ev);
     }
     if (hole.cage) {
-      const cg = hole.cage; if (!b.air && dist2(b, cg.button.x, cg.button.z) < cg.button.r * cg.button.r) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }
+      const cg = hole.cage, s0 = cg.sides[0], s1 = cg.sides[1]; if (!b.air && inPoly([s0[0], s0[1], s0[2], s0[3], s1[2], s1[3], s1[0], s1[1]], b.x, b.z)) ctx.gateT = Math.max(ctx.gateT, 0.8);           // (the gate never shuts on a ball that is inside the pen)
+      if (!b.air && dist2(b, cg.button.x, cg.button.z) < cg.button.r * cg.button.r) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }
       if (ctx.gateT <= 0 && !ghost) collideSeg(b, cg.gate[0], cg.gate[1], cg.gate[2], cg.gate[3], 0.5, ev);
     }
     if (hero && hero.gate && !ghost && gateBlocked(hero, tt)) collideSeg(b, hero.gate[0], hero.gate[1], hero.gate[2], hero.gate[3], 0.55, ev);

@@ -43,3 +43,15 @@ export function playHole(h, max = 16) {
   }
   return { strokes: ball.holed ? strokes : 99, nan };
 }
+
+/** Is a hole in one possible? One stroke from the tee, over many aims, powers and hero timings (aims nearest the plain route's first leg tried first); stops at the first that holes out. Returns { ace, tries }. */
+export function aceSearch(h) {
+  const route = routeOf(h), t = route[Math.min(3, route.length - 1)], base = Math.atan2(t.z - h.ball.z, t.x - h.ball.x), order = [0];
+  for (let k = 1; k <= 90; k++) order.push(k, -k);
+  let tries = 0;
+  for (const k of order) for (const pw of [0.5, 0.7, 0.9, 0.35, 1.0]) for (const to of [0, 0.7, 1.4, 2.1]) {
+    const a = base + (k * 2 * Math.PI) / 180, r = sim(h, newBall(h), to, Math.cos(a), Math.sin(a), pw); tries++;
+    if (r.b.holed) return { ace: true, tries };
+  }
+  return { ace: false, tries };
+}

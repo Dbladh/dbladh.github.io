@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024210129';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024210129';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024210129';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024210129';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024210129';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024210129';
-import { createNeon } from './golfneon.js?v=20261024210129';
-import { createFx } from './golffx.js?v=20261024210129';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024210129';
-import { buildDecor } from './golfdecor.js?v=20261024210129';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024210129';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024211832';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024211832';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024211832';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024211832';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024211832';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024211832';
+import { createNeon } from './golfneon.js?v=20261024211832';
+import { createFx } from './golffx.js?v=20261024211832';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024211832';
+import { buildDecor } from './golfdecor.js?v=20261024211832';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024211832';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -49,7 +49,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   // ---------- the HUD ----------
   const hud = document.createElement('div');
   hud.className = 'golf-hud'; hud.hidden = true;
-  hud.innerHTML = '<div class="golf-top"><div class="golf-left"><div class="golf-info"><b data-k="hole"></b><span data-k="par"></span><span data-k="strokes"></span><span data-k="chal" class="golf-chal"></span></div><div class="golf-pills" data-k="pills"></div></div><button class="golf-quit" type="button">Leave</button></div>' +
+  hud.innerHTML = '<div class="golf-top"><div class="golf-left"><div class="golf-info"><b data-k="hole"></b><span data-k="par"></span><span data-k="strokes"></span><span data-k="chal" class="golf-chal"></span></div><div class="golf-pills" data-k="pills"></div></div><button class="golf-quit" type="button">Leave</button></div><button class="golf-reset" type="button" hidden>Stuck? Reset ball (+1)</button>' +
     '<div class="golf-banner" data-k="banner"></div><div class="golf-toast" data-k="toast"></div><div class="golf-power" data-k="power"><i></i></div><div class="golf-score" data-k="score" hidden></div>';
   document.body.append(hud);
   const $ = (k) => hud.querySelector(`[data-k="${k}"]`);
@@ -155,7 +155,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   // ---------- one hole ----------
   function startHole(i) {
     if (ghostVis) { ghostVis.setGhost(false); ghostVis = null; } ghostOn = false;
-    cs = newChalState(); st.chalDone = st.chalDone || [];
+    cs = newChalState(); st.chalDone = st.chalDone || []; st.stuck = 0; elReset.hidden = true;
     st.hole = i; hole = holes[i]; vis = vises[i]; holeGroup = vis.group; st.par[i] = hole.par; st.strokes = 0; st.holeT = 0; st.rollT = 0; drag = null; st.t = 0; st.multi = false; st.safety = false; st.cupScale = 1;
     for (const k in fx) fx[k] = 0;
     holeGroup.add(dots, hamster); ballMeshes.forEach((m, k) => { holeGroup.add(m, ballShadows[k]); m.visible = k === 0; ballShadows[k].visible = k === 0; m.scale.setScalar(1); });
@@ -165,6 +165,11 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     st.mode = 'aim'; aimShadow(i); assignLights(i); announce();
   }
   const MACHINE_HINTS = { runup: 'Run over the boost strip and up the ramp to clear the canyon', vault: 'Roll over the pad to vault the fences', door: 'Roll over the button, then run the gates', bridge: 'The button slides out a bridge over the canyon', rail: 'Roll fast into the rail to cross the canyon', secret: 'Vault the fence from the pad to find the coin' };
+  const elReset = hud.querySelector('.golf-reset');
+  elReset.addEventListener('click', () => { if (st.mode !== 'aim' || !hole) return; const nb = newBall(hole); balls = [nb]; hideExtraBalls(); st.strokes++; st.stuck = 0; st.lastX = nb.x; st.lastZ = nb.z; elReset.hidden = true; say(elToast, 'Ball reset to the tee · +1', 1600, 'toast'); const w = wp(nb.x, 0.3, nb.z); fxs?.sparks(w.x, w.y, w.z, '#ffffff', 16, 2, 2.4, 0.6); });
+  function noteRest() {                                    // a ball that stops where it started twice in a row may be penned in: offer a reset to the tee
+    const b = balls[0]; if (!b) return; if (Math.hypot(b.x - st.lastX, b.z - st.lastZ) < 0.35) st.stuck = (st.stuck || 0) + 1; else st.stuck = 0; elReset.hidden = st.stuck < 2;
+  }
   const announce = () => { say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast'); const m = (hole.recipes || [])[0]; if (m) setTimeout(() => { if (st.mode === 'aim' && vis === vises[st.hole]) say(elBanner, `Machine: ${MACHINE_HINTS[m.kind]}`, 3200, 'banner'); }, 2700); };
   function placeBalls() {
     balls.forEach((b, i) => {
@@ -526,7 +531,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
             const alive = balls.filter((b) => !b.sunk);
             if (alive.length > 1) { alive.sort((p, q) => Math.hypot(p.x - hole.cup.x, p.z - hole.cup.z) - Math.hypot(q.x - hole.cup.x, q.z - hole.cup.z)); balls = [alive[0]]; hideExtraBalls(); } else balls = alive;
             for (const b of balls) { b.vx = b.vz = 0; b.rest = true; }
-            st.mode = 'aim';
+            st.mode = 'aim'; noteRest();
           }
         } else if (st.mode === 'aim') { stepBall(balls[0], hole, ctx, dt, ev); collect(); }
         if (st.mode === 'sink') {

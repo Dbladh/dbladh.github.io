@@ -7,11 +7,12 @@
 import { readFileSync } from 'node:fs';
 import { makeHole, courseSeed, holeSeed, heroOrder, HOLES, laneExists } from '../../js/golfgen.js';
 import { newBall, newCtx, shoot, stepBall } from '../../js/golfphys.js';
-import { playHole } from './bot.mjs';
+import { playHole, routeOf } from './bot.mjs';
+import { aceSearch } from '../../js/golface.js';
 import { TUNING } from '../../js/golfrecipes.js';
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--${k}`); return i < 0 ? d : args[i + 1] === undefined || args[i + 1].startsWith('--') ? true : args[i + 1]; };
-const seeds = JSON.parse(readFileSync(new URL('./seeds.json', import.meta.url), 'utf8')), YEAR = +opt('year', seeds.year), MONTHS = +opt('months', 12), START = +opt('start', 1), BOT = !!opt('bot', false), ONLY = opt('only', null);
+const seeds = JSON.parse(readFileSync(new URL('./seeds.json', import.meta.url), 'utf8')), YEAR = +opt('year', seeds.year), MONTHS = +opt('months', 12), START = +opt('start', 1), BOT = !!opt('bot', false), ACE = !!opt('ace', false), ONLY = opt('only', null);
 
 const hashOf = (o) => { const s = JSON.stringify(o); let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; };
 const distCl = (h, x, z) => { let best = 1e9; for (let i = 0; i < h.path.length; i++) { const d = Math.hypot(x - h.path[i].x, z - h.path[i].z) - h.widths[i]; if (d < best) best = d; } return best; };      // (negative: inside the corridor)
@@ -35,6 +36,14 @@ function structure(h) {
   if (!laneExists(h.path, h.widths, h.ball, h.cup, polys, h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...(h.doors || []).filter((d) => d.gate).map((d) => d.gate)])) bad.push('no plain route to the cup');
   return bad;
 }
+/** A ball that ends up inside a cage (the gate was open when it rolled in) must be able to roll out again, whatever the gate does. */
+function penEscape(h) {
+  if (!h.cage) return true;
+  const cg = h.cage, a = cg.sides[0], b = cg.sides[1], cx = (a[0] + a[2] + b[0] + b[2]) / 4, cz = (a[1] + a[3] + b[1] + b[3]) / 4, gx = (cg.gate[0] + cg.gate[2]) / 2, gz = (cg.gate[1] + cg.gate[3]) / 2;
+  const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false }, ball = newBall(h), ctx = newCtx(); ball.x = cx; ball.z = cz; const dx = gx - cx, dz = gz - cz; shoot(ball, dx, dz, 0.5, false);
+  for (let n = 0; n < 300 && !ball.rest; n++) { stepBall(ball, h, ctx, 1 / 60, ev); ctx.t += 1 / 60; }
+  return Math.hypot(ball.x - cx, ball.z - cz) > Math.hypot(dx, dz) + 0.2;                    // (it got past the gate)
+}
 /** Does a stroke from the tee in six directions and a few powers stay finite (no NaN, nothing flung out of the hole)? */
 function sane(h) {
   const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false };
@@ -51,6 +60,8 @@ function runHole(year, month, i) {
   const cs = courseSeed(year, month), type = heroOrder(cs)[i], seed = holeSeed(cs, i), h = makeHole(seed, i, type), problems = structure(h);
   if (hashOf(h) !== hashOf(makeHole(seed, i, type))) problems.push('not deterministic');
   if (!sane(h)) problems.push('a stroke went non-finite or out of the hole');
+  if (!penEscape(h)) problems.push('a ball inside the cage cannot get out');
+  if (ACE) { const rt = routeOf(h), t = rt[Math.min(3, rt.length - 1)]; if (!aceSearch(h, [], Math.atan2(t.z - h.ball.z, t.x - h.ball.x), 4000)) problems.push('no hole in one found (4000 strokes tried)'); }
   let strokes = null;
   if (BOT) { const r = playHole(h); strokes = r.strokes; if (r.nan) problems.push('bot stroke non-finite'); if (strokes > 8) problems.push(`bot needs ${strokes === 99 ? 'more than 16' : strokes} strokes`); }
   const tags = [...(h.recipes || []).map((x) => `recipe:${x.kind}`), h.cage && 'cage', h.boosts.length && 'boost', h.pads.length && 'pad', (h.feats || []).some((f) => f.t === 'gap') && 'canyon', (h.feats || []).some((f) => f.t === 'plat') && 'platform', (h.feats || []).some((f) => f.t === 'berm') && 'berm', h.sands.length && 'sand', h.ponds.length && 'pond', h.rivers.length && 'river'].filter(Boolean);

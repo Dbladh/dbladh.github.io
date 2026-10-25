@@ -4,8 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024210129';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261024210129';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024211832';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261024211832';
+import { aceSearch } from './golface.js?v=20261024211832';
+import { BAKED } from './golfbake.js?v=20261024211832';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -98,19 +100,41 @@ export function laneExists(cl, w, ball, cup, polys, feats, discs = [], segs = []
 const q = (v) => Math.round(v * 2) / 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-/** Make hole number `index` (0-based) with hero `type`, trying neighbouring sub-seeds until the layout is valid. */
-export function makeHole(seed, index, type = 'windmill') {
+/** The seed of attempt number `a` for a hole. */
+const attemptSeed = (seed, a) => (seed + Math.imul(a, 0x9e3779b1)) >>> 0;
+/**
+ * Find the layout of hole `index` the slow way: try neighbouring sub-seeds until one is valid and has a hole in one (see holeInOnePossible). Returns { h, attempt, drop } where `drop` says
+ * whether the bonuses had to be taken off. The results for the coming years are worked out ahead of time (tools/golf/bake.mjs) and kept in golfbake.js, so the game does not have to search.
+ */
+export function findHole(seed, index, type = 'windmill') {
   for (let attempt = 0; attempt < 120; attempt++) {
-    const h = build((seed + Math.imul(attempt, 0x9e3779b1)) >>> 0, index, type, false);
-    if (h) return h;
+    const h = build(attemptSeed(seed, attempt), index, type, false); if (!h) continue;
+    const res = holeInOnePossible(h); if (res) return { h, attempt, drop: res === 2 };
   }
   for (let attempt = 0; attempt < 40; attempt++) {         // (it should never come to this) a plain straight hole
-    const h = build((seed + Math.imul(attempt, 0x9e3779b1)) >>> 0, index, type, true);
-    if (h) return h;
+    const h = build(attemptSeed(seed, attempt), index, type, true); if (h) return { h, attempt: 1000 + attempt, drop: false };
   }
   throw new Error('no valid mini-golf hole');
 }
+/** Make hole number `index` (0-based) with hero `type` (from the baked answer when there is one, else by searching). */
+export function makeHole(seed, index, type = 'windmill') {
+  const baked = BAKED[`${seed}.${index}`];
+  if (baked !== undefined) { const h = build(attemptSeed(seed, baked >> 1), index, type, false); if (h) { if (baked & 1) dropBonuses(h); return h; } }
+  return findHole(seed, index, type).h;
+}
 
+/** Take the bonuses that need a trick (the secret coin, the caged orb) off a hole: they stay only where one stroke can collect them and still hole out. */
+function dropBonuses(H) {
+  for (const rc of H.recipes.filter((r) => r.kind === 'secret')) { removeRecipe(H, rc.rid); H.recipes.splice(H.recipes.indexOf(rc), 1); }
+  if (H.cage) { H.cage = null; for (let i = H.walls.length - 1; i >= 0; i--) if (H.walls[i][7] === 'cage') H.walls.splice(i, 1); for (const p of H.pickups) p.caged = false; }
+}
+/** A hole in one must always be possible, with every bonus collected on the way: bonuses that would need extra strokes are removed, and a hole with no ace at all is rejected (a new layout is tried). */
+function holeInOnePossible(H) {
+  const route = laneExists(H.path, H.widths, H.ball, H.cup, [...H.ponds.map((p) => p.poly), ...H.sands.map((s) => s.poly)], H.feats, [...H.posts, ...H.bumpers], [...H.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...H.barriers.map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]]), ...H.doors.filter((d) => d.gate).map((d) => d.gate)], true);
+  const toward = (p) => Math.atan2(p.z - H.ball.z, p.x - H.ball.x), need = H.pickups.filter((p) => p.type === 'coin' || p.caged).map((p) => ({ x: p.x, z: p.z }));
+  let dropped = false; if (need.length && !aceSearch(H, need, toward(need[0]), 400)) { dropBonuses(H); dropped = true; }
+  return aceSearch(H, [], toward(route ? route[Math.min(3, route.length - 1)] : H.cup), 500) ? (dropped ? 2 : 1) : 0;
+}
 /** The arc round the end of a corridor: rows of [leftX, leftZ, rightX, rightZ], from the corridor outwards to the tip. `dir` is -1 behind the start, 1 beyond the end. */
 function capRows(c, tx, tz, hw, dir) {
   const rows = []; let ca = 1, sa = 0;
@@ -255,13 +279,16 @@ function build(seed, index, type, force) {
     () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll()));            // (the machines of the hole: each is a designed chain; see golfrecipes.js)
   for (let k = 0; k < 2; k++) {                            // sand pits (irregular patches that slow the ball a lot)
     if (!(k === 0 ? index > 0 && r() < 0.75 : index > 3 && r() < 0.4)) continue;
-    for (let tries = 0; tries < 20; tries++) {
-      const ci = 6 + ((r() * (N - 12)) | 0), lat = (r() - 0.5) * 1.2, p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 1.2 + r() * 0.6, kind = (r() * 5) | 0, turn = r();
+    for (let tries = 0; tries < 30; tries++) {
+      // a pit is a punishment for over-shooting or misjudging an angle, so it lies off to the side: on the outside of a bend (where a ball that runs on will go) or beside the last stretch, never on the line to the cup
+      const bends = apex.filter((v) => v !== undefined && v > 7 && v < N - 8), ci0 = bends.length && r() < 0.8 ? bends[(r() * bends.length) | 0] + (((r() * 5) | 0) - 2) : Math.floor(N * (0.55 + 0.35 * r())), ci = Math.max(7, Math.min(N - 8, ci0));
+      const cross = tx[ci - 3] * tz[ci + 3] - tz[ci - 3] * tx[ci + 3], side = Math.abs(cross) > 0.15 ? (cross > 0 ? -1 : 1) : (r() < 0.5 ? 1 : -1), lat = side * (1.4 + r() * 0.3);
+      const p = { x: cl[ci].x - tz[ci] * lat, z: cl[ci].z + tx[ci] * lat }, rad = 0.85 + r() * 0.35, kind = (r() * 5) | 0, turn = r() * 0.8;
       if (!free(p.x, p.z, 0.1)) continue;
       const C45 = 0.7071067811865476, ox0 = turn < 0.5 ? tx[ci] : turn < 0.75 ? (tx[ci] - tz[ci]) * C45 : (tx[ci] + tz[ci]) * C45, oz0 = turn < 0.5 ? tz[ci] : turn < 0.75 ? (tz[ci] + tx[ci]) * C45 : (tz[ci] - tx[ci]) * C45;
       const poly = sandPoly(kind, q(p.x), q(p.z), rad, ox0, oz0, seed ^ (0x7f4a7c15 + k));
       let lo = 1e9, hi = -1e9, far = 0; for (let i = 0; i < poly.length; i += 2) { const dx = poly[i] - cl[ci].x, dz = poly[i + 1] - cl[ci].z, l2 = dx * (-tz[ci]) + dz * tx[ci]; if (l2 < lo) lo = l2; if (l2 > hi) hi = l2; far = Math.max(far, Math.hypot(poly[i] - q(p.x), poly[i + 1] - q(p.z))); }
-      if (Math.max(lo + w[ci], w[ci] - hi) < 1.4 || lo < -w[ci] + 0.1 || hi > w[ci] - 0.1) continue;      // a pit never fills the corridor: there is always a clear lane past it
+      if (side > 0 ? lo < 0.9 || hi > w[ci] - 0.1 : hi > -0.9 || lo < -w[ci] + 0.1) continue;      // the middle of the corridor (0.9 either side of the centre line) is always clear of sand
       let onTerrain = false;                                                  // a pit sits on flat ground: not on a hill, berm, platform or ramp
       for (let i = 0; i < poly.length && !onTerrain; i += 2) {
         const px = poly[i], pz = poly[i + 1];
@@ -337,7 +364,7 @@ function build(seed, index, type, force) {
     const pk = pickups[0], L = legs[pk.li], side = pk.side, P = (u, lat) => ({ x: pk.x + L.x * u - L.z * lat, z: pk.z + L.z * u + L.x * lat }), lat0 = side * 0.75, lat1 = side * (-0.8);      // (relative to the orb: back to the wall, out 0.8 in front of it)
     const a0 = P(-0.9, lat0), a1 = P(-0.9, lat1), b0 = P(0.9, lat0), b1 = P(0.9, lat1), bt = P(-4.2, -side * 0.2);
     if (free(bt.x, bt.z, 0.1)) {
-      const but = { x: q(bt.x), z: q(bt.z), r: 0.55 }; walls.push([a0.x, a0.z, a1.x, a1.z, 0, 1], [b0.x, b0.z, b1.x, b1.z, 0, 1]);
+      const but = { x: q(bt.x), z: q(bt.z), r: 0.55 }; walls.push([a0.x, a0.z, a1.x, a1.z, 0, 1, 0, 'cage'], [b0.x, b0.z, b1.x, b1.z, 0, 1, 0, 'cage']);
       cage = { gate: [a1.x, a1.z, b1.x, b1.z], sides: [[a0.x, a0.z, a1.x, a1.z], [b0.x, b0.z, b1.x, b1.z]], button: but, ux: L.x, uz: L.z }; pk.caged = true; keep.push({ x: but.x, z: but.z, r: 1.0 });
     }
   }
