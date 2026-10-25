@@ -19,7 +19,7 @@ function mkLane(ctrl, w, H, s0, ramp) {
     for (let k = 0; k < n; k++) { const t = k / n, t2 = t * t, t3 = t2 * t, f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3); pts.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1]), 0]); }
   }
   pts.push([...ctrl[ctrl.length - 1], 0]); let acc = 0; for (let i = 1; i < pts.length; i++) { acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); pts[i][2] = acc; }
-  return { pts, w, H, s0, ramp, edge: 0.3, len: acc };
+  return { pts, w, H, s0, ramp: ramp < 0 ? -ramp * acc : ramp, edge: 0.3, len: acc };
 }
 /** Is (x, z) alongside the lane (not past its ends) and nearer its centre line than `r`? */
 function insideLane(L, x, z, r) {
@@ -41,8 +41,22 @@ export function clearShot(hole, p, q, margin = 0.12) {
   return true;
 }
 
+
+/** Four table layouts (each also mirrored): where the ramps wind, the bumpers, the spinner and the drop targets stand. z is across the table (the mirror turns it round). */
+export const LAYOUTS = [
+  { name: 'Classic', centre: [[2.6, 0], [6.4, 0]], cramp: 3.4, lw: 0.95, left: [[1.6, 4.1], [3.0, 3.3], [4.4, 4.1], [5.6, 3.3], [6.6, 2.0]], right: [[1.6, -4.1], [3.0, -3.3], [4.4, -4.1], [5.6, -3.3], [6.6, -2.0]],
+    bumpers: [[-0.8, 3.1, 0.6], [0.8, 1.7, 0.55], [0.8, -1.7, 0.55]], spinner: [-0.8, -3.1], targets: [[-2.0, -1.9], [-2.0, 1.9]] },
+  { name: 'Lopsided', centre: [[2.4, 0], [6.2, 0]], cramp: 3.2, lw: 0.95, left: [[1.4, 4.3], [2.8, 3.5], [4.2, 4.2], [5.4, 3.2], [6.4, 2.2]], right: [[2.4, -3.9], [4.0, -3.5], [5.4, -2.8], [6.4, -1.9]],
+    bumpers: [[-1.0, -3.2, 0.6], [0.8, 2.0, 0.55], [1.0, -1.9, 0.55]], spinner: [-1.0, 3.2], targets: [[-2.2, -2.1], [-2.2, 2.0]] },
+  { name: 'Gateway', centre: [[2.8, 0], [6.4, 0]], cramp: 3.2, lw: 1.05, left: [[2.0, 4.2], [3.6, 3.6], [5.0, 3.0], [6.2, 2.0]], right: [[2.0, -4.2], [3.6, -3.6], [5.0, -3.0], [6.2, -2.0]],
+    bumpers: [[-1.2, 3.2, 0.6], [0.9, 2.0, 0.55], [0.9, -2.0, 0.55]], spinner: [-1.0, -3.2], targets: [[-2.0, -2.0], [-2.0, 2.0]] },
+  { name: 'Serpent', centre: [[2.0, 0], [6.4, 0]], cramp: 4.0, lw: 0.95, left: [[1.2, 4.4], [2.5, 3.6], [3.8, 4.3], [5.0, 3.4], [6.0, 2.6], [6.9, 1.9]], right: [[1.8, -4.4], [3.2, -3.6], [4.6, -4.2], [5.8, -3.0], [6.8, -2.0]],
+    bumpers: [[-0.6, 3.2, 0.6], [0.6, 1.8, 0.5]], spinner: [-0.6, -3.2], targets: [[-2.4, -2.6], [-2.4, 2.6]] },
+];
+
 /** Turn `hole` (any generated hole, used only for its seed and defaults) into the pinball table. Sets hole.tiltDir. Returns { ux, uz, nx, nz, tee, L(u, lat), flips, rails, tris, bottom }. */
-export function prepareTable(hole) {
+export function prepareTable(hole, layout = 0, mirror = false) {
+  const LY = LAYOUTS[layout % LAYOUTS.length], mz = mirror ? -1 : 1, zf = (p) => [p[0], p[1] * mz, ...p.slice(2)];
   const { x0, x1, W, arcX } = TABLE, walls = [], rails = [], seg = (a, b, kick = 0) => { walls.push(kick ? [a[0], a[1], b[0], b[1], 0, 0, 0, 0, kick] : [a[0], a[1], b[0], b[1], 0, 0]); rails.push([{ x: a[0], z: a[1] }, { x: b[0], z: b[1] }]); };
   const T = (x, z) => [x, z], poly = [];
   for (const s of [-1, 1]) { seg(T(arcX, s * W), T(FUN.sideX, s * W)); seg(T(FUN.sideX, s * W), T(FUN.ex, s * FUN.ez)); seg(T(FUN.ox, s * FUN.oz), T(TABLE.pocketX, s * FUN.oz)); }
@@ -57,8 +71,8 @@ export function prepareTable(hole) {
   for (let x = x0; x <= x1; x += 1) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 1) poly.push([x, -tableHalf(x)]);
   const path = []; for (let x = -8; x <= 8; x += 1) path.push({ x, z: 0 });
   // the ramps: a straight one up the middle and two winding ones up the sides all climb to a raised deck at the top, where the cup is. Where lanes meet, their rails open into each other.
-  const lanes = [mkLane([[2.6, 0], [6.4, 0]], 1.5, PLAT_H, 0, 3.4), mkLane([[5.8, 0], [9.0, 0]], 2.9, PLAT_H, -1, 0.1)];
-  for (const sd of [-1, 1]) lanes.push(mkLane([[1.6, 4.1 * sd], [3.0, 3.3 * sd], [4.4, 4.1 * sd], [5.6, 3.3 * sd], [6.6, 2.0 * sd]], 0.95, PLAT_H, 0, 5.2));
+  const lanes = [mkLane(LY.centre, 1.5, PLAT_H, 0, LY.cramp), mkLane([[LY.centre[1][0] - 0.6, 0], [9.0, 0]], 2.9, PLAT_H, -1, 0.1)];
+  for (const ctrl of [LY.left, LY.right]) lanes.push(mkLane(ctrl.map(zf), LY.lw, PLAT_H, 0, -0.8));
   lanes.forEach((L, i) => laneRails(i, L, i === 1 ? 'both' : ''));
   function laneRails(i, L, caps) {
     const P = L.pts, n = P.length, left = [], right = [];
@@ -68,12 +82,12 @@ export function prepareTable(hole) {
     const cap = (a, b) => { const m = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.4)); for (let q = 0; q < m; q++) piece([a[0] + ((b[0] - a[0]) * q) / m, a[1] + ((b[1] - a[1]) * q) / m], [a[0] + ((b[0] - a[0]) * (q + 1)) / m, a[1] + ((b[1] - a[1]) * (q + 1)) / m]); };
     if (caps) { cap(left[0], right[0]); cap(left[n - 1], right[n - 1]); }
   }
-  const boosts = [{ x: 1.9, z: 0, ux: 1, uz: 0, len: 1.2, wid: 1.2 }];
-  const bumpers = [{ x: -0.8, z: 3.1, r: 0.6 }, { x: 0.8, z: 1.7, r: 0.55 }, { x: 0.8, z: -1.7, r: 0.55 }];
-  const elevated = [{ x: 6.5, z: 2.0, r: 0.4 }, { x: 6.5, z: -2.0, r: 0.4 }];                                // (two bumpers on the deck in front of the cup, a narrow gap between them: added to the physics, drawn by the game at deck height)
-  const targets = [-1.9, 1.9].map((z) => ({ x: -2.0, z, r: 0.28 })), posts = [...targets];
+  const boosts = [{ x: LY.centre[0][0] - 0.7, z: 0, ux: 1, uz: 0, len: 1.2, wid: 1.2 }];
+  const bumpers = LY.bumpers.map((q) => ({ x: q[0], z: q[1] * mz, r: q[2] }));
+  const elevated = [{ x: 6.5, z: 2.0, r: 0.4 }, { x: 6.5, z: -2.0, r: 0.4 }];                                // (two bumpers on the deck in front of the cup, a wide gap between them: added to the physics, drawn by the game at deck height)
+  const targets = LY.targets.map((q) => ({ x: q[0], z: q[1] * mz, r: 0.28 })), posts = [...targets];
   const cover = { x: TABLE.cup.x, z: TABLE.cup.z, r: 0.55 };                                                    // (the plate over the cup: in the physics while the cup is closed)
-  const spinner = { x: -0.8, z: -3.1, len: 0.85, rad: 0.1 };
+  const spinner = { x: LY.spinner[0], z: LY.spinner[1] * mz, len: 0.85, rad: 0.1 };
   Object.assign(hole, { walls, bumpers, posts, targets, elevated, cover, spinner, ponds: [], rivers: [], sands: [], pads: [], boosts, rails: [], barriers: [], doors: [], cage: null, feats: [], lanes, dense: true, cols: 56, recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
     tee: { ...TABLE.tee }, ball: { ...TABLE.tee }, cup: { ...TABLE.cup }, bounds: { cx: 0, cz: 0, hx: 10, hz: 5.5 }, par: 3 });
   const tee = { x: TABLE.pivX + 1.35, z: 0 }, L = (u, lat) => ({ x: tee.x + u, z: lat });         // (u = 0 at the line the flippers' tips reach, as the flipper bot and the drain test expect)

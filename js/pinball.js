@@ -2,12 +2,12 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024235848';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024235848';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024235848';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261024235848';
-import { courseMonth } from './monthseed.js?v=20261024235848';
-import { prepareTable, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261024235848';
+import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261025000055';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261025000055';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261025000055';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261025000055';
+import { courseMonth } from './monthseed.js?v=20261025000055';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261025000055';
 
 const HOLE_INDEX = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMPS = ['ramp', 'spin', 'tgt'], LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS' };
@@ -40,7 +40,8 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   function buildTable() {
     const mo = courseMonth(), cs = courseSeed(mo.year, mo.month), type = heroOrder(cs)[HOLE_INDEX];
     hole = makeHole(holeSeed(cs, HOLE_INDEX), HOLE_INDEX, type);
-    frame = prepareTable(hole); flips = frame.flips;
+    const q = new URLSearchParams(location.search), li = q.has('layout') ? +q.get('layout') : (mo.month - 1) % LAYOUTS.length, mir = q.has('mirror') ? q.get('mirror') === '1' : Math.floor((mo.month - 1) / LAYOUTS.length) === 1;      // (the table changes with the month)
+    frame = prepareTable(hole, li, mir); flips = frame.flips; st.layout = LAYOUTS[li % LAYOUTS.length].name;
     const toW = (x, z) => toWorld(SITE, x, z), shape = hole.shape.map((p) => { const w = toW(p[0], p[1]); return [w.x, w.z, p[2] + MARGIN]; });
     Y = world.carve.begin([shape], BLEND, [])[0]; world.carve.set(0, 0);
     vis = buildHoleVisual(hole, { lowEnd, look: world.waterLook }); group = vis.group; group.rotation.y = (SITE.k * Math.PI) / 4; group.position.set(SITE.x, Y + 0.06, SITE.z); group.scale.set(1, 0.001, 1); scene.add(group);
@@ -307,7 +308,7 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
       Object.assign(st, { mode: 'enter', t: 0, balls: 0, pts: 0, clock: 0, flipT: -99, combo: 0, lastHit: -99, spins: 0, lamps: {}, open: false }); flipHeld = false;
       setBoards(false); buildTable(); teeBall(); showLamps(); cam.mix = 0; cam.init = false; camPose(want, 0.016);
       document.body.classList.add('game-mode'); hud.hidden = false; elScore.hidden = true; listen(true); audio?.zoom?.('in', 1.7);
-      say(elBanner, 'Pinball Golf', 2600, 'banner');
+      say(elBanner, `Pinball Golf · ${st.layout}`, 2600, 'banner');
     },
     stop() {
       if (st.mode === 'off' || st.mode === 'exit') return;
