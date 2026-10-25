@@ -1,5 +1,5 @@
 // Scoring and the per-hole challenges of the mini-golf. Pure data and rules (no THREE): which challenge a hole has (from its seed), how it is tracked, and how a hole and a round are scored.
-import { mulberry32 } from './golfhero.js?v=20261024194705';
+import { mulberry32 } from './golfhero.js?v=20261024200405';
 
 export const CHALLENGES = {
   ace: 'Hole in one', nowall: 'No wall bounces', nohazard: 'Stay out of sand and water', par: 'Finish at or under par', orbs: 'Collect every orb',

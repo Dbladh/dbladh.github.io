@@ -1,0 +1,8 @@
+{
+  "year": 2026,
+  "note": "Courses that once failed a check. They are always re-run (months here are courseSeed(year, month), months past 12 are fine).",
+  "regress": [
+    { "month": 12, "hole": 5, "why": "geyser hole with pad, boost, cage and pond: bot could not hole out in 16 strokes" },
+    { "month": 37, "hole": 2, "why": "alligator hole: bot could not hole out in 16 strokes" }
+  ]
+}

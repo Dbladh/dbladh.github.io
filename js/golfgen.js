@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024194705';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024200405';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -61,7 +61,7 @@ function inPolyG(poly, x, z) {
   return inside;
 }
 /** Is there a clear way from the ball to the cup that goes round every pit, pond and canyon (with room for the ball to roll)? A flood fill over a grid. */
-function laneExists(cl, w, ball, cup, polys, feats, discs = []) {
+export function laneExists(cl, w, ball, cup, polys, feats, discs = []) {
   const D = 0.2, off = [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]];
   const blocked = (x, z) => {
     let best = 1e9; for (let i = 0; i < cl.length; i++) { const d = Math.sqrt((x - cl[i].x) * (x - cl[i].x) + (z - cl[i].z) * (z - cl[i].z)) - w[i]; if (d < best) best = d; }
@@ -71,7 +71,7 @@ function laneExists(cl, w, ball, cup, polys, feats, discs = []) {
     for (const f of feats) if (f.t === 'gap') { const rx = x - f.x, rz = z - f.z, s2 = rx * f.ux + rz * f.uz, c = rx * f.nx + rz * f.nz; if (Math.abs(s2) < f.len / 2 + 0.35 && c > f.c0 - 0.35 && c < f.c1 + 0.35) return true; }
     return false;
   };
-  const key = (x, z) => Math.round(x / D) * 4096 + Math.round(z / D), seen = new Set([key(ball.x, ball.z)]), st = [[ball.x, ball.z]];
+  const key = (x, z) => Math.round(x / D) * 4096 + Math.round(z / D), sx = Math.round(ball.x / D) * D + 0.0001, sz = Math.round(ball.z / D) * D + 0.0001, seen = new Set([key(sx, sz)]), st = [[sx, sz]];      // (the search starts on the grid, so a start between two cells is not mistaken for its neighbour)
   while (st.length) {
     const [x, z] = st.pop(); if ((x - cup.x) * (x - cup.x) + (z - cup.z) * (z - cup.z) < 0.25) return true;
     for (const [a, b] of [[D, 0], [-D, 0], [0, D], [0, -D]]) { const nx = x + a, nz = z + b, k = key(nx, nz); if (seen.has(k) || blocked(nx, nz)) continue; seen.add(k); st.push([nx, nz]); }
