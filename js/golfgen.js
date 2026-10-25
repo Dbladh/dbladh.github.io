@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024215312';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261024215312';
-import { aceSearch } from './golface.js?v=20261024215312';
-import { BAKED } from './golfbake.js?v=20261024215312';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024220531';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261024220531';
+import { aceSearch } from './golface.js?v=20261024220531';
+import { BAKED } from './golfbake.js?v=20261024220531';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -252,9 +252,11 @@ function build(seed, index, type, force) {
   const hero = buildHero(type, { x: d.sx, z: d.sz, ux: d.x, uz: d.z, nx: -d.z, nz: d.x, len: hl, hw: HALF_W }, r);
   for (const wl of hero.walls) walls.push(wl);
   const heroSegs = hero.walls.map((wl) => [wl[0], wl[1], wl[2], wl[3]]);
-  const tee = cl[0], cup = cl[N - 1], ball = { x: tee.x + tx[0] * 1.3, z: tee.z + tz[0] * 1.3 };
+  const tee = cl[0], cup = cl[N - 1], ball = { x: tee.x + tx[0] * 0.8, z: tee.z + tz[0] * 0.8 };
+  const REACH_OF = { windmill: 1.8, alligator: 2.1, turntable: 2.0, pendulum: 2.4, geyser: 1.6, cannon: 1.4, teleport: 1.2, drawbridge: 2.0, loop: 4.4 };      // (how far a hero's parts reach from its centre)
+  { const hx = type === 'teleport' ? hero.a.x : hero.x, hz = type === 'teleport' ? hero.a.z : hero.z, reach = type === 'teleport' ? 0.9 : REACH_OF[type] || 2; if (Math.hypot(hx - ball.x, hz - ball.z) < reach + 1.7) return null; }      // (the ball never starts beside the obstacle)
   const keep = [{ x: hero.x, z: hero.z, r: type === 'teleport' ? hl * 0.4 : type === 'loop' ? hl * 0.5 : 3.2 }];       // places the other features keep clear of
-  keep.push({ x: ball.x, z: ball.z, r: 1.7 }, { x: cup.x, z: cup.z, r: 1.8 });
+  keep.push({ x: ball.x, z: ball.z, r: 2.6 }, { x: cup.x, z: cup.z, r: 1.8 });
   const free = (x, zz, m) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < k.r + m) return false; } return true; };
   const onLeg = (li, t, lat) => { const L = legs[li]; return { x: L.sx + L.x * L.l * t - L.z * lat, z: L.sz + L.z * L.l * t + L.x * lat }; };
   const others = []; for (let i = 0; i < legs.length; i++) if (i !== hi && legs[i].l >= 6.5) others.push(i);
@@ -266,8 +268,11 @@ function build(seed, index, type, force) {
     const li = others[(r() * others.length) | 0], L = legs[li], t0 = 0.18 + r() * 0.18, len = Math.min(L.l * 0.55, 6.5);
     const a = onLeg(li, t0, 0), fwd = r() < 0.78;
     const b = { x: a.x + L.x * len, z: a.z + L.z * len };
-    rivers.push({ a: fwd ? a : b, b: fwd ? b : a, hw: 1.0, acc: 6.5 });
-    keep.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: len / 2 });
+    const clearOf = (pt, m) => { const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1; let t = ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(pt.x - a.x - dx * t, pt.z - a.z - dz * t) > m; };
+    if (clearOf(ball, 3.0) && clearOf(cup, 2.6)) {                                    // (a river never starts at the tee: the ball must be well clear of it, since it would be carried away before the first putt)
+      rivers.push({ a: fwd ? a : b, b: fwd ? b : a, hw: 1.0, acc: 6.5 });
+      keep.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: len / 2 });
+    }
   }
   if (wantPond && others.length) {
     const li = others[((r() * others.length) | 0)], side = r() < 0.5 ? 1 : -1, p = onLeg(li, 0.5, 0.85 * side);

@@ -25,6 +25,10 @@ function structure(h) {
   if (distWall(h, h.ball.x, h.ball.z) < 0.45) bad.push('ball starts against a wall');
   if (distWall(h, h.cup.x, h.cup.z) < 0.7) bad.push('cup too near a wall');
   if (distCl(h, h.ball.x, h.ball.z) > -0.4) bad.push('ball starts outside the corridor');
+  const segDist = (p, a, b) => { const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1; let t = ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(p.x - a.x - dx * t, p.z - a.z - dz * t); };
+  for (const rv of h.rivers) if (segDist(h.ball, rv.a, rv.b) < rv.hw + 1.8) bad.push('the ball starts next to a river');
+  for (const o of [...h.ponds, ...h.sands, ...h.pads, ...h.boosts, ...h.posts, ...h.bumpers, ...(h.doors || []).map((d) => d.button)]) if (Math.hypot(o.x - h.ball.x, o.z - h.ball.z) < (o.r || 1) + 1.4) bad.push('the ball starts next to an obstacle');
+  if (h.hero && Math.hypot(h.hero.x - h.ball.x, h.hero.z - h.ball.z) < 3.0) bad.push('the ball starts beside the hero obstacle');
   const inside = (list, name, m = 0.3) => { for (const p of list) if (distCl(h, p.x, p.z) > -m) bad.push(`${name} outside the corridor at (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`); };
   inside(h.posts, 'post'); inside(h.bumpers, 'bumper'); inside(h.pads, 'pad'); inside(h.boosts, 'boost'); inside(h.pickups, 'pickup', 0.35); inside(h.sands, 'sand', 0); inside(h.ponds, 'pond', 0);
   if (h.cage) inside([h.cage.button], 'cage button'); inside((h.doors || []).map((d) => d.button), 'door button');
