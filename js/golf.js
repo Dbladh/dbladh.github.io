@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024194538';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024194538';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024194538';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024194538';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024194538';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024194538';
-import { createNeon } from './golfneon.js?v=20261024194538';
-import { createFx } from './golffx.js?v=20261024194538';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024194538';
-import { buildDecor } from './golfdecor.js?v=20261024194538';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024194538';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024194705';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024194705';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024194705';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024194705';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024194705';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024194705';
+import { createNeon } from './golfneon.js?v=20261024194705';
+import { createFx } from './golffx.js?v=20261024194705';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024194705';
+import { buildDecor } from './golfdecor.js?v=20261024194705';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024194705';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -180,6 +180,37 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     say(elToast, name, 1500, 'toast'); st.mode = 'done'; st.t = 0;
     audio?.golf?.(st.strokes === 1 || d < 0 ? 'win' : 'cup');
   }
+  // ---------- replay of the best hole and sharing ----------
+  const rp = { on: false, i: 0, k: 0, t: 0, wait: 0, rest: 0 };
+  function bestHole() {                                    // the hole with the best score against par (a hole in one first); not one where multi-ball was used (its other balls are not kept)
+    let best = -1, bs = 1e9;
+    for (let i = 0; i < st.scores.length; i++) { const sh = st.shots[i]; if (!sh || !sh.length || sh.some((s) => s.multi)) continue; const sc = st.scores[i] === 1 ? -99 : st.scores[i] - st.par[i]; if (sc < bs) { bs = sc; best = i; } }
+    return best;
+  }
+  function startReplay() {
+    const i = bestHole(); if (i < 0) return;
+    elScore.hidden = true; const keep = { scores: st.scores.slice(), pts: st.pts.slice(), done: st.chalDone.slice(), shots: st.shots, playT: st.playT, par: st.par.slice() };
+    startHole(i); Object.assign(st, { scores: keep.scores, pts: keep.pts, chalDone: keep.done, shots: keep.shots, playT: keep.playT, par: keep.par });
+    st.mode = 'replay'; toastOff(); rp.on = true; rp.i = i; rp.k = -1; rp.wait = 0.6; cam.phase = 'follow'; cam.t = 0; say(elBanner, `Replay · Hole ${i + 1}`, 2400, 'banner');
+  }
+  function replayStep(dt) {
+    const sh = st.shots[rp.i], sdt = dt * 0.6, b = balls[0];
+    if (rp.wait > 0) { rp.wait -= dt; if (rp.wait > 0) return; }
+    if (rp.k < 0 || (b.rest || b.holed || b.sunk) && (rp.rest += dt) > 0.5) {
+      rp.rest = 0; rp.k++;
+      if (rp.k >= sh.length) { rp.on = false; st.mode = 'card'; st.t = 0; elScore.hidden = false; return; }
+      const s = sh[rp.k]; balls = [newBall(hole)]; Object.assign(balls[0], { x: s.x, z: s.z, y: hillH(hole, s.x, s.z) }); const l = Math.hypot(s.dx, s.dz) || 1; cam.dx = s.dx / l; cam.dz = s.dz / l;
+      Object.assign(ctx, s.f); ctx.t = s.t; st.holeT = s.t; shoot(balls[0], s.dx, s.dz, s.pw, s.f.turbo); st.rollT = 0; audio?.golf?.('putt', 0.7);
+    }
+    const bb = balls[0]; if (!bb.holed && !bb.sunk) { stepBall(bb, hole, ctx, sdt, ev); ctx.t += sdt; st.holeT = ctx.t; }
+    if (ev.holed) { const m = ballMeshes[0]; m.visible = false; audio?.golf?.('cup'); }
+    if (ev.splash) { if (fxs && !ev.fall) { const p = holeGroup.localToWorld(new THREE.Vector3(bb.x, 0.1, bb.z)); fxs.burst('splash', p.x, p.y, p.z); } }
+    placeBalls(); const sp = Math.hypot(bb.vx, bb.vz); if (sp > 0.05) { tmpV.set(-bb.vz, 0, bb.vx).normalize(); ballMeshes[0].rotateOnWorldAxis(tmpV, (sp * sdt) / BALL_R); }
+  }
+  function shareResult(btn) {
+    const text = `${st.summary} ${location.origin}${location.pathname}`, done = () => { if (btn) { const o = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = o; }, 1400); } };
+    try { navigator.clipboard.writeText(text).then(done, () => { prompt('Copy your result:', text); }); } catch (e) { prompt('Copy your result:', text); }
+  }
   const ptsKey = () => `golf.pts.${monthKey(st)}`;
   const readPts = () => { try { const v = parseInt(localStorage.getItem(ptsKey()), 10); return Number.isFinite(v) ? v : null; } catch (e) { return null; } };
   function showScore() {
@@ -194,10 +225,11 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       `<table><thead><tr><th>#</th><th>Hole</th><th>Par</th><th>You</th><th>◎</th><th>Pts</th></tr></thead><tbody>${rows}</tbody></table>` +
       `<p class="golf-total">${pts} points <small>${total} strokes (par ${par}) · ${done} of ${HOLES} challenges · ${mins}:${String(secs).padStart(2, '0')}${bonus ? ` · +${bonus} speed` : ''}</small></p>` +
       `<p class="golf-best">${np ? 'A new points best for this month!' : `Your best this month: ${bestPts} points`}${nb ? ' · fewest strokes too!' : ''}</p>` +
-      '<div class="golf-btns"><button type="button" data-a="again">Play again</button><button type="button" data-a="leave">Leave</button></div>';
+      `<div class="golf-btns">${bestHole() >= 0 ? '<button type="button" data-a="replay">Watch best hole</button>' : ''}<button type="button" data-a="share">Copy result</button><button type="button" data-a="again">Play again</button><button type="button" data-a="leave">Leave</button></div>`;
+    st.summary = `⛳ ${monthLabel(st)} mini-golf: ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} · ${pts} points · ${total} strokes (par ${par}) · ${mins}:${String(secs).padStart(2, '0')} · ${done}/${HOLES} challenges`;
     elScore.hidden = false; audio?.golf?.('win');
   }
-  elScore.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (a === 'again') { elScore.hidden = true; st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.playT = 0; beginTravel(0); } else if (a === 'leave') api.stop(); });
+  elScore.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (a === 'replay') startReplay(); else if (a === 'share') shareResult(e.target.closest('button')); else if (a === 'again') { elScore.hidden = true; st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.shots = []; st.playT = 0; beginTravel(0); } else if (a === 'leave') api.stop(); });
 
   // ---------- power-ups ----------
   function applyPower(type) {
@@ -264,6 +296,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function fire(a) {
     const b = balls[0], l = Math.hypot(a.dx, a.dz) || 1, pw = Math.pow(a.power, 1.15);
     st.lastX = b.x; st.lastZ = b.z; st.strokes++; st.mode = 'roll'; st.rollT = 0; audio?.golf?.('putt', a.power);
+    (st.shots[st.hole] ||= []).push({ x: b.x, z: b.z, dx: a.dx, dz: a.dz, pw, t: ctx.t, multi: st.multi, f: { homing: ctx.homing, ghost: ctx.ghost, bounce: ctx.bounce, turbo: ctx.turbo, drive: false, cupR: ctx.cupR } });      // (every stroke is kept so the best hole can be replayed)
     shoot(b, a.dx, a.dz, pw, fx.turbo > 0);
     if (st.multi) {                                        // multi-ball: four more balls fly off at slightly different angles; the one nearest the cup is kept
       st.multi = false;
@@ -377,7 +410,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       if (st.mode !== 'off') return;
       if (!ballMeshes.length) buildBits();
       Object.assign(st, courseMonth());                    // (the same course for everyone, all month)
-      st.seed = courseSeed(st.year, st.month); st.order = heroOrder(st.seed); st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.playT = 0; st.idle = 0;
+      st.seed = courseSeed(st.year, st.month); st.order = heroOrder(st.seed); st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.shots = []; st.playT = 0; st.idle = 0;
       home.pos.copy(homeCam.pos); home.look.copy(homeCam.look); flyFrom.pos.copy(homeCam.pos); flyFrom.look.copy(homeCam.look);
       setBoards(false); buildCourse(); overviewAll(trip);
       document.body.classList.add('game-mode'); hud.hidden = false; elScore.hidden = true;
@@ -429,10 +462,12 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         updateScenery(dt); updateHud();
         return true;
       }
+      if (st.mode === 'replay') { replayStep(dt); }
       if (dbgCam) { camera.position.copy(dbgCam.pos); camera.up.copy(up0); camera.lookAt(dbgCam.look); }
       else if (st.mode !== 'card') followCamera(dt);
       else { overviewAll(trip); camera.position.copy(trip.pos); camera.lookAt(trip.look); }
-      if (hole && st.mode !== 'card' && holeGroup) {
+      if (hole && st.mode === 'replay' && holeGroup) { vis.update(st.holeT, st.holeT, dt, st); }
+      if (hole && st.mode !== 'card' && st.mode !== 'replay' && holeGroup) {
         st.holeT += dt * (fx.freeze > 0 ? 0.12 : 1); ctx.t = st.holeT;
         tickPowers(dt); powerFx(dt);
         if (st.mode === 'aim' || st.mode === 'roll' || st.mode === 'hamster') { cs.clock += dt; st.playT += dt; }
