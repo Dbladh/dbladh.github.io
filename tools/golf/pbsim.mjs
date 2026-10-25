@@ -7,7 +7,7 @@ import { prepareTable, stepFlips, isDrained, TILT_PIN, TAU_PIN } from '../../js/
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--${k}`); return i < 0 ? d : +args[i + 1]; }, MONTHS = opt('months', 12), IDX = opt('hole', 3), REL = opt('releases', 12);
 const tally = { holed: 0, drained: 0, rest: 0, stuck: 0, timeout: 0 }; let total = 0, flipsUsed = 0, holedWithFlips = 0; const bad = [];
 for (let m = 1; m <= MONTHS; m++) {
-  const cs = courseSeed(2026, m), type = heroOrder(cs)[IDX], H = makeHole(holeSeed(cs, IDX), IDX, type), fr = prepareTable(H), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false };
+  const cs = courseSeed(2026, m), type = heroOrder(cs)[IDX], H = makeHole(holeSeed(cs, IDX), IDX, type), fr = prepareTable(H), el = H.bumpers.push(...H.elevated), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false };
   const path = H.path, len = path.length;
   for (let r = 0; r < REL; r++) {
     const p = path[Math.floor(len * (0.2 + 0.7 * ((r * 0.618) % 1)))], b = newBall(H); b.x = p.x; b.z = p.z; b.y = hillH(H, b.x, b.z); b.vx = H.tiltDir.x * 1.5; b.vz = H.tiltDir.z * 1.5; b.rest = false;

@@ -1,5 +1,5 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a rectangular playfield with a round top, the funnel and two flippers, the drain, slingshots, pop bumpers and the cup.
-export const TILT_PIN = 4.6, TAU_PIN = 26, PIN_RAMP = 3.2, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5;
+export const TILT_PIN = 4.6, TAU_PIN = 26, PIN_RAMP = 3.2, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, LANE = 1.75, RAMP_X0 = 1.6;
 
 // The table, in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom, x = -15, the round top at x = 15).
 export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 12.6, z: 0 }, pivX: -12.0, pivZ: 1.78 };
@@ -25,9 +25,13 @@ export function prepareTable(hole) {
   for (let x = x0; x <= x1 + 1e-6; x += 2.5) for (let z = -6.9; z <= 6.9; z += 2.3) if (Math.abs(z) <= tableHalf(x) + 0.4) shape.push([x, z, 2.4]);
   for (let x = x0; x <= x1; x += 1) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 1) poly.push([x, -tableHalf(x)]);
   const path = []; for (let x = -13; x <= 13; x += 1) path.push({ x, z: 0 });
-  const bumpers = [{ x: 9.0, z: 0, r: 0.9 }], P = [[-0.5, 3.4], [4.5, 4.6], [8.5, 3.0]]; for (const [x, z] of P) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
-  const targets = [-2.4, 0, 2.4].map((z) => ({ x: 5.2, z, r: 0.28 })), posts = [...targets]; for (const s of [-1, 1]) { posts.push({ x: 10.4, z: s * 1.9, r: 0.32 }, { x: 11.6, z: s * 3.6, r: 0.32 }); }               // (the guards in front of the cup: no straight shot, no easy hole in one)
-  Object.assign(hole, { walls, bumpers, posts, targets, ponds: [], rivers: [], sands: [], pads: [], boosts: [], rails: [], barriers: [], doors: [], cage: null, feats: [], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
+  // the ramp: a lane up the middle between two rails climbs to a raised deck at the top with the cup on it; a boost strip at the foot launches the ball up it
+  for (const sd of [-1, 1]) { seg(T(-0.2, sd * 3.2), T(RAMP_X0, sd * LANE)); seg(T(RAMP_X0, sd * LANE), T(14.7, sd * LANE)); }
+  const plat = { t: 'plat', x: 10.6, z: 0, ux: 1, uz: 0, nx: 0, nz: 1, wid: LANE + 0.1, len: 8, h: PLAT_H, ramp: 5, edge: 0.5 }, boosts = [{ x: 0.6, z: 0, ux: 1, uz: 0, len: 2.0, wid: 1.4 }];
+  const bumpers = []; for (const [x, z] of [[-1.8, 4.0], [3.0, 4.9], [7.4, 4.4], [11.0, 4.4]]) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
+  const elevated = [{ x: 10.2, z: 0, r: 0.65 }];                                                  // (a bumper on the deck in front of the cup: added to the physics, drawn by the game at deck height)
+  const targets = [-2.2, 0, 2.2].map((z) => ({ x: -1.0, z, r: 0.28 })), posts = [...targets];
+  Object.assign(hole, { walls, bumpers, posts, targets, elevated, ponds: [], rivers: [], sands: [], pads: [], boosts, rails: [], barriers: [], doors: [], cage: null, feats: [plat], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
     tee: { ...TABLE.tee }, ball: { ...TABLE.tee }, cup: { ...TABLE.cup }, bounds: { cx: 0, cz: 0, hx: 15, hz: 7 }, par: 3 });
   const tee = { x: TABLE.pivX + 1.35, z: 0 }, L = (u, lat) => ({ x: tee.x + u, z: lat });         // (u = 0 at the line the flippers' tips reach, as the flipper bot and the drain test expect)
   const flips = [], ang = (phi) => phi;
@@ -36,7 +40,7 @@ export function prepareTable(hole) {
     flips.push({ side, px: TABLE.pivX, pz: side * TABLE.pivZ, len: FLIP_LEN, rad: FLIP_RAD, restA: ang(rest), upA: ang(up), a: ang(rest), w: 0 });
   }
   hole.tiltDir = { x: -1, z: 0 };
-  hole.spots = [{ x: 2.0, z: 0 }, { x: 6.9, z: -4.9 }, { x: 6.9, z: 4.9 }];                         // (the putting spots: they appear in pinball mode and level the table)
+  hole.spots = [{ x: 5.2, z: -4.6 }, { x: 5.2, z: 4.6 }, { x: 9.2, z: -5.6 }, { x: 9.2, z: 5.6 }];                         // (the putting spots: they appear in pinball mode and level the table)
   return { ux: 1, uz: 0, nx: 0, nz: 1, tee, L, flips, rails, tris, bottom: { x: x0, z: 0 } };
 }
 /** Swing the flippers towards up (`held`) or rest for `h` seconds. */
