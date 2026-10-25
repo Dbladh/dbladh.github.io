@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024200405';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024200405';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024200405';
-import { THEME_BORDER } from './golfscenery.js?v=20261024200405';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024200405';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024200931';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024200931';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024200931';
+import { THEME_BORDER } from './golfscenery.js?v=20261024200931';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024200931';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {

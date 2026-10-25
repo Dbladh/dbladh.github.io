@@ -4,7 +4,7 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024200405';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261024200931';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -60,23 +60,39 @@ function inPolyG(poly, x, z) {
   for (let i = 0, j = n - 1; i < n; j = i++) { const xi = poly[i * 2], zi = poly[i * 2 + 1], xj = poly[j * 2], zj = poly[j * 2 + 1]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside; }
   return inside;
 }
-/** Is there a clear way from the ball to the cup that goes round every pit, pond and canyon (with room for the ball to roll)? A flood fill over a grid. */
-export function laneExists(cl, w, ball, cup, polys, feats, discs = []) {
-  const D = 0.2, off = [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]];
-  const blocked = (x, z) => {
+/** What the ball cannot roll through when going round everything (with room to spare): outside the corridor, pits, ponds, posts and bumpers, canyons, and the barrier walls of a chicane. */
+function makeBlocked(cl, w, polys, feats, discs, segs) {
+  const off = [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]];
+  return (x, z) => {
     let best = 1e9; for (let i = 0; i < cl.length; i++) { const d = Math.sqrt((x - cl[i].x) * (x - cl[i].x) + (z - cl[i].z) * (z - cl[i].z)) - w[i]; if (d < best) best = d; }
     if (best > -0.55) return true;
     for (const p of polys) for (const [a, b] of off) if (inPolyG(p, x + a, z + b)) return true;
     for (const d of discs) if ((x - d.x) * (x - d.x) + (z - d.z) * (z - d.z) < (d.r + 0.4) * (d.r + 0.4)) return true;
     for (const f of feats) if (f.t === 'gap') { const rx = x - f.x, rz = z - f.z, s2 = rx * f.ux + rz * f.uz, c = rx * f.nx + rz * f.nz; if (Math.abs(s2) < f.len / 2 + 0.35 && c > f.c0 - 0.35 && c < f.c1 + 0.35) return true; }
+    for (const g of segs) { const dx = g[2] - g[0], dz = g[3] - g[1], l2 = dx * dx + dz * dz || 1; let t = ((x - g[0]) * dx + (z - g[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; const ex = x - g[0] - dx * t, ez = z - g[1] - dz * t; if (ex * ex + ez * ez < 0.2025) return true; }
     return false;
   };
-  const key = (x, z) => Math.round(x / D) * 4096 + Math.round(z / D), sx = Math.round(ball.x / D) * D + 0.0001, sz = Math.round(ball.z / D) * D + 0.0001, seen = new Set([key(sx, sz)]), st = [[sx, sz]];      // (the search starts on the grid, so a start between two cells is not mistaken for its neighbour)
-  while (st.length) {
-    const [x, z] = st.pop(); if ((x - cup.x) * (x - cup.x) + (z - cup.z) * (z - cup.z) < 0.25) return true;
-    for (const [a, b] of [[D, 0], [-D, 0], [0, D], [0, -D]]) { const nx = x + a, nz = z + b, k = key(nx, nz); if (seen.has(k) || blocked(nx, nz)) continue; seen.add(k); st.push([nx, nz]); }
+}
+/**
+ * Is there a clear way from the ball to the cup that goes round every pit, pond, canyon and barrier (with room for the ball to roll)? A flood fill over a grid (the plain route).
+ * With `wantPath`, returns the route instead ({ x, z } waypoints about a unit apart, or null).
+ */
+export function laneExists(cl, w, ball, cup, polys, feats, discs = [], segs = [], wantPath = false) {
+  const D = 0.2, blocked = makeBlocked(cl, w, polys, feats, discs, segs);
+  const key = (x, z) => Math.round(x / D) * 4096 + Math.round(z / D), sx = Math.round(ball.x / D) * D + 0.0001, sz = Math.round(ball.z / D) * D + 0.0001, seen = new Map([[key(sx, sz), null]]); let st = [[sx, sz]];
+  while (st.length) {                                       // (breadth first, so the route found is a shortest one)
+    const next = [];
+    for (const [x, z] of st) {
+      if ((x - cup.x) * (x - cup.x) + (z - cup.z) * (z - cup.z) < 0.25) {
+        if (!wantPath) return true;
+        const out = []; let c = [x, z]; while (c) { out.push({ x: c[0], z: c[1] }); c = seen.get(key(c[0], c[1])); }
+        out.reverse(); const path = [out[0]]; for (let i = 1; i < out.length; i++) if (Math.hypot(out[i].x - path[path.length - 1].x, out[i].z - path[path.length - 1].z) >= 1.0) path.push(out[i]); path.push({ x: cup.x, z: cup.z }); return path;
+      }
+      for (const [a, b] of [[D, 0], [-D, 0], [0, D], [0, -D]]) { const nx = x + a, nz = z + b, k = key(nx, nz); if (seen.has(k) || blocked(nx, nz)) continue; seen.set(k, [x, z]); next.push([nx, nz]); }
+    }
+    st = next;
   }
-  return false;
+  return wantPath ? null : false;
 }
 const q = (v) => Math.round(v * 2) / 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -210,6 +226,7 @@ function build(seed, index, type, force) {
   const d = legs[hi];
   const hero = buildHero(type, { x: d.sx, z: d.sz, ux: d.x, uz: d.z, nx: -d.z, nz: d.x, len: hl, hw: HALF_W }, r);
   for (const wl of hero.walls) walls.push(wl);
+  const heroSegs = hero.walls.map((wl) => [wl[0], wl[1], wl[2], wl[3]]);
   const tee = cl[0], cup = cl[N - 1], ball = { x: tee.x + tx[0] * 1.3, z: tee.z + tz[0] * 1.3 };
   const keep = [{ x: hero.x, z: hero.z, r: type === 'teleport' ? hl * 0.4 : type === 'loop' ? hl * 0.5 : 3.2 }];       // places the other features keep clear of
   keep.push({ x: ball.x, z: ball.z, r: 1.7 }, { x: cup.x, z: cup.z, r: 1.8 });
@@ -251,7 +268,7 @@ function build(seed, index, type, force) {
         }
       }
       if (onTerrain) continue;
-      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers])) continue;
+      if (!laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), poly], feats, [...posts, ...bumpers], heroSegs)) continue;
       sands.push({ x: q(p.x), z: q(p.z), r: far / 1.19, poly }); keep.push({ x: p.x, z: p.z, r: far * 0.8 }); break;
     }
   }
@@ -283,7 +300,7 @@ function build(seed, index, type, force) {
       }
     }
   }
-  if (feats.some((f) => f.t === 'gap') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [])) { for (let i = feats.length - 1; i >= 0; i--) if (feats[i].t === 'gap' || feats[i].t === 'jump') feats.splice(i, 1); }      // (a canyon never leaves the pits as the only way past)
+  if (feats.some((f) => f.t === 'gap') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [], heroSegs)) { for (let i = feats.length - 1; i >= 0; i--) if (feats[i].t === 'gap' || feats[i].t === 'jump') feats.splice(i, 1); }      // (a canyon never leaves the pits as the only way past)
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
   const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);
   const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
@@ -324,7 +341,7 @@ function build(seed, index, type, force) {
       cage = { gate: [a1.x, a1.z, b1.x, b1.z], sides: [[a0.x, a0.z, a1.x, a1.z], [b0.x, b0.z, b1.x, b1.z]], button: but, ux: L.x, uz: L.z }; pk.caged = true; keep.push({ x: but.x, z: but.z, r: 1.0 });
     }
   }
-  const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers]);
+  const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers], heroSegs);
   while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };

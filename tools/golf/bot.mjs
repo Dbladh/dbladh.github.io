@@ -1,9 +1,13 @@
 // A simple putting bot: for each stroke it tries many aims, powers and timings and keeps the best (closest along the corridor to the cup), so it shows whether a hole can be holed out at all.
 import { newBall, newCtx, shoot, stepBall } from '../../js/golfphys.js';
+import { laneExists } from '../../js/golfgen.js';
+
+/** The plain route round everything (the bot steers by it), or the centre line when none is found. */
+export const routeOf = (h) => laneExists(h.path, h.widths, h.ball, h.cup, [...h.ponds.map((p) => p.poly), ...h.sands.map((s) => s.poly)], h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]])], true) || h.path;
 
 const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false };
-function remaining(h, x, z) {
-  const P = h.path; let best = 1e9, rem = 0, acc = 0; const legs = [];
+function remaining(h, x, z, P) {
+ let best = 1e9, rem = 0, acc = 0; const legs = [];
   for (let i = 0; i < P.length - 1; i++) legs.push(Math.hypot(P[i + 1].x - P[i].x, P[i + 1].z - P[i].z));
   const total = legs.reduce((a, b) => a + b, 0);
   for (let i = 0; i < P.length - 1; i++) {
@@ -21,17 +25,19 @@ function sim(h, ball, t0, dx, dz, power) {
 }
 /** Strokes the bot needs to hole out (99 if it never does within `max`), and whether any simulated stroke produced a non-finite position. */
 export function playHole(h, max = 16) {
-  let ball = newBall(h), t = 0, strokes = 0, nan = false;
+  let ball = newBall(h), t = 0, strokes = 0, nan = false; const route = routeOf(h);
   while (strokes < max && !ball.holed) {
-    let best = null; const P = h.path; let k = P.length - 1; const remNow = remaining(h, ball.x, ball.z);
-    for (let i = 1; i < P.length; i++) { if (remNow > remaining(h, P[i].x, P[i].z) + 0.3) { k = i; break; } }
+    let best = null; const P = route; let k = P.length - 1; const remNow = remaining(h, ball.x, ball.z, P);
+    for (let i = 1; i < P.length; i++) { if (remNow > remaining(h, P[i].x, P[i].z, P) + 0.3) { k = i; break; } }
     const target = P[k], base = Math.atan2(target.z - ball.z, target.x - ball.x);
-    for (let da = -0.35; da <= 0.351; da += 0.0875) for (let pw = 0.25; pw <= 1.001; pw += 0.125) for (let to = 0; to < 3; to += 0.5) {
+    const search = (span, step, pws, tos) => { for (let da = -span; da <= span + 0.001; da += step) for (const pw of pws) for (let to = 0; to < tos; to += 0.5) {
       const a = base + da, r = sim(h, ball, t + to, Math.cos(a), Math.sin(a), pw);
       if (r.bad) { nan = true; continue; } if (r.b.sunk) continue;
-      const score = r.b.holed ? -1 : remaining(h, r.b.x, r.b.z);
+      const score = r.b.holed ? -1 : remaining(h, r.b.x, r.b.z, P);
       if (!best || score < best.score) best = { score, r, to };
-    }
+    } };
+    search(0.35, 0.0875, [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1], 3);
+    if (!best || best.score > remNow - 0.2) search(1.0, 0.1, [0.2, 0.3, 0.45, 0.6, 0.8, 1], 4);          // (no progress: look wider before giving up on the stroke)
     if (!best) { strokes++; continue; }
     ball = best.r.b; ball.rest = true; t = best.r.t; strokes++;
   }

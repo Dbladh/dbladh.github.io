@@ -29,7 +29,7 @@ function structure(h) {
   const pts = [...h.posts, ...h.bumpers, ...h.pads, ...h.pickups.filter((p) => !p.caged)];
   for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < 0.6) bad.push('two pieces overlap');
   const polys = [...h.ponds.map((p) => p.poly), ...h.sands.map((s) => s.poly)];
-  if (!laneExists(h.path, h.widths, h.ball, h.cup, polys, h.feats || [], [...h.posts, ...h.bumpers])) bad.push('no plain route to the cup');
+  if (!laneExists(h.path, h.widths, h.ball, h.cup, polys, h.feats || [], [...h.posts, ...h.bumpers], [...h.hero.walls.map((w) => [w[0], w[1], w[2], w[3]]), ...(h.barriers || []).map((b) => [b.a[0], b.a[1], b.b[0], b.b[1]])])) bad.push('no plain route to the cup');
   return bad;
 }
 /** Does a stroke from the tee in six directions and a few powers stay finite (no NaN, nothing flung out of the hole)? */
