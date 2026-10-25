@@ -2,7 +2,7 @@
 // how often the ball goes in the cup, drains, comes to rest, or gets stuck. Usage: node tools/golf/pbsim.mjs [--months 12] [--hole 3] [--releases 12]
 import { makeHole, courseSeed, holeSeed, heroOrder } from '../../js/golfgen.js';
 import { newBall, newCtx, stepBall, collideFlippers, hillH } from '../../js/golfphys.js';
-import { prepareTable, stepFlips, isDrained, TILT_PIN, TAU_PIN } from '../../js/pbtable.js';
+import { prepareTable, stepFlips, isDrained, TILT_PIN, TAU_PIN, PIN_HOLD } from '../../js/pbtable.js';
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--${k}`); return i < 0 ? d : +args[i + 1]; }, MONTHS = opt('months', 12), IDX = opt('hole', 3), REL = opt('releases', 12);
 const tally = { holed: 0, drained: 0, rest: 0, stuck: 0, timeout: 0 }; let total = 0, flipsUsed = 0, holedWithFlips = 0; const bad = [];
@@ -13,7 +13,7 @@ for (let m = 1; m <= MONTHS; m++) {
     const p = path[Math.floor(len * (0.2 + 0.7 * ((r * 0.618) % 1)))], b = newBall(H); b.x = p.x; b.z = p.z; b.y = hillH(H, b.x, b.z); b.vx = H.tiltDir.x * 1.5; b.vz = H.tiltDir.z * 1.5; b.rest = false;
     const ctx = newCtx(); ctx.capV = 13; ctx.fricK = +(opt('fric', 0.2)); ctx.cupR = 0.6 * 1.35; let t = 0, held = false, heldT = 0, flips = 0, result = 'timeout'; for (const f of fr.flips) f.a = f.restA;
     while (t < 40) {
-      const tilt = TILT_PIN * Math.min(1, t / 0.3) * Math.exp(-t / TAU_PIN); ctx.tilt = tilt;
+      const tilt = TILT_PIN * Math.min(1, t / 0.3) * (t < PIN_HOLD ? 1 : Math.exp(-(t - PIN_HOLD) / TAU_PIN)); ctx.tilt = tilt;
       const u = (b.x - fr.tee.x) * fr.ux + (b.z - fr.tee.z) * fr.uz, lat = (b.x - fr.tee.x) * fr.nx + (b.z - fr.tee.z) * fr.nz, vu = b.vx * fr.ux + b.vz * fr.uz;
       const near = u < 1.2 && u > -2.3 && Math.abs(lat) < 2.6;
       if (!held && near && vu < 0.5 && true) { held = true; heldT = 0; flips++; } if (held && (heldT > 0.28 || !near)) held = false; if (held) heldT += 1 / 60;

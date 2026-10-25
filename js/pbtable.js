@@ -1,5 +1,5 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a rectangular playfield with a round top, the funnel and two flippers, the drain, slingshots, pop bumpers and the cup.
-export const TILT_PIN = 3.8, TAU_PIN = 26, PIN_RAMP = 3.2, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, LANE = 1.75, RAMP_X0 = 1.6, DECK_W = 3.4;
+export const TILT_PIN = 3.8, TAU_PIN = 7, PIN_RAMP = 2.2, PIN_HOLD = 30, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, LANE = 1.75, RAMP_X0 = 1.6, DECK_W = 3.4;
 
 // The table, in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom, x = -15, the round top at x = 15).
 export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 11.8, z: 0 }, pivX: -12.0, pivZ: 1.78 };
