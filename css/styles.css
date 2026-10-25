@@ -919,3 +919,10 @@ body.scene-mode .bike-hint { display: block; }
 .golf-pills span b { margin-left: 4px; opacity: 0.55; font-variant-numeric: tabular-nums; }
 .golf-score { max-height: 90vh; overflow: auto; }
 .golf-score tbody td:nth-child(2) { text-align: left; }
+
+/* Pinball Golf */
+.pb-flip { position: absolute; left: 50%; bottom: 2.5%; transform: translateX(-50%); pointer-events: auto; width: min(40vw, 190px); height: 56px; border: 0; border-radius: 32px; background: linear-gradient(#ff7a68, #e8594b); color: #fff; font: inherit; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.12em; box-shadow: 0 6px 0 #a63a30, 0 10px 24px rgba(0, 0, 0, 0.35); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pb-flip:active { transform: translateX(-50%) translateY(4px); box-shadow: 0 2px 0 #a63a30; }
+.pb-tilt { position: absolute; right: 16px; top: 50%; width: 22px; height: 120px; transform: translateY(-50%); border-radius: 12px; background: rgba(24, 20, 44, 0.55); overflow: hidden; display: flex; flex-direction: column-reverse; align-items: center; }
+.pb-tilt i { display: block; width: 100%; background: linear-gradient(#ffd23f, #ff6a3d); height: 0; }
+.pb-tilt span { position: absolute; bottom: -18px; font-size: 0.6rem; letter-spacing: 0.1em; color: #fff; opacity: 0.8; }

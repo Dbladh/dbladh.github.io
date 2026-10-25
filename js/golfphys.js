@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024220531';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024222737';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -94,6 +94,26 @@ export function inPoly(poly, x, z) {
   }
   return inside;
 }
+/**
+ * Knock the ball about with the flippers (pinball mode): each flipper is a rounded bar from its pivot (px, pz) at angle `a` (direction cos a, sin a in the hole's own x, z) for `len`, turning at `w` radians a second.
+ * The ball bounces off the bar's moving surface, so a swinging flipper gives it real speed. Returns the hardest hit.
+ */
+export function collideFlippers(b, flips) {
+  let hard = 0;
+  for (const f of flips) {
+    const dx = Math.cos(f.a) * f.len, dz = Math.sin(f.a) * f.len, l2 = dx * dx + dz * dz; let t = ((b.x - f.px) * dx + (b.z - f.pz) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const cx = f.px + dx * t, cz = f.pz + dz * t, ox = b.x - cx, oz = b.z - cz, d2 = ox * ox + oz * oz, rr = BALL_R + f.rad;
+    if (d2 >= rr * rr) continue;
+    const d = Math.sqrt(d2) || 1e-6, nx = ox / d, nz = oz / d;
+    b.x = cx + nx * rr; b.z = cz + nz * rr;
+    const rx = cx - f.px, rz = cz - f.pz, sx = -f.w * rz, sz = f.w * rx;         // the bar's own velocity at the contact point
+    const vn = (b.vx - sx) * nx + (b.vz - sz) * nz;
+    if (vn < 0) { b.vx -= (1 + 0.45) * vn * nx; b.vz -= (1 + 0.45) * vn * nz; if (-vn > hard) hard = -vn; }
+    const sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz); if (sp > 24) { b.vx *= 24 / sp; b.vz *= 24 / sp; }
+    if (-vn > 0.6) { b.rest = false; b.still = 0; b.dawdle = 0; }                       // (a ball just resting on a flipper stays at rest)
+  }
+  return hard;
+}
 /** Is the ball in a sand pit? */
 export function inSand(hole, b) { for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r * 1.45 && inPoly(s.poly, b.x, b.z)) return true; return false; }
 /** The push needed to take the ball clear of whatever it overlaps that a ghost passes through (hero walls, posts, bumpers): adds to (out.x, out.z) and returns whether it overlaps. */
@@ -139,7 +159,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
   ev.wall = 0; ev.post = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
   if (b.holed || b.sunk) return;
   const n = Math.max(1, Math.ceil(dt / STEP)), h = dt / n, W = hole.walls, hero = hole.hero, ghost = ctx.ghost;
-  const fric = FRICTION * (ctx.turbo ? 0.55 : 1) * (ctx.drive ? 0.6 : 1), maxV = ctx.turbo ? MAX_V * 1.35 : ctx.drive ? 9 : MAX_V;
+  const fric = FRICTION * (ctx.turbo ? 0.55 : 1) * (ctx.drive ? 0.6 : 1) * (ctx.fricK === undefined ? 1 : ctx.fricK), maxV = ctx.turbo ? MAX_V * 1.35 : ctx.drive ? 9 : MAX_V;
   const wallE = ctx.bounce ? 1.02 : WALL_E, postE = ctx.bounce ? 1.35 : POST_E;
   for (let i = 0; i < n; i++) {
     const tt = ctx.t + i * h;
@@ -166,7 +186,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       continue;
     }
     // slopes, rivers, the turntable, the power-ups
-    if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; }
+    if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; if (ctx.tilt && hole.tiltDir) { b.vx += hole.tiltDir.x * ctx.tilt * h; b.vz += hole.tiltDir.z * ctx.tilt * h; } }
     if (!b.air) for (const rv of hole.rivers) {
       const dx = rv.b.x - rv.a.x, dz = rv.b.z - rv.a.z, l2 = dx * dx + dz * dz; let t = ((b.x - rv.a.x) * dx + (b.z - rv.a.z) * dz) / l2; if (t < -0.05 || t > 1.05) continue;
       t = t < 0 ? 0 : t > 1 ? 1 : t; const px = rv.a.x + dx * t - b.x, pz = rv.a.z + dz * t - b.z;
@@ -249,15 +269,15 @@ export function stepBall(b, hole, ctx, dt, ev) {
     // the cup: it takes a ball that gets there slowly enough, and gently pulls in one that is close and slow
     const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz), sp2 = Math.sqrt(b.vx * b.vx + b.vz * b.vz), cr = ctx.cupR, big = cr / CUP_R;
     if (b.air) continue;
-    if (cd < cr && sp2 < 7.5 * Math.sqrt(big)) { b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
+    if (cd < cr && sp2 < (ctx.capV || 7.5) * Math.sqrt(big)) { b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
     if (cd < 1.15 * big && sp2 < 4.5 * big) { const k = 7 * (1 - cd / (1.15 * big)) * h / (cd || 1); b.vx += cx * k; b.vz += cz * k; }
   }
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);
   _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
   if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
-  const grip = FRICTION * (inSand(hole, b) ? 3.2 : 1);                        // (sand holds the ball on a slope that would roll it on grass)
+  const tiltPull = ctx.tilt || 0, grip = FRICTION * (inSand(hole, b) ? 3.2 : 1);                        // (sand holds the ball on a slope that would roll it on grass)
   const calm = !b.loop && !b.rail && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive;
-  if (s < 0.07 && slope < grip * 0.9 && calm) b.still += dt; else b.still = 0;
-  if (s < 0.2 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
+  if (s < 0.07 && slope + tiltPull < grip * 0.9 && calm) b.still += dt; else b.still = 0;
+  if (s < 0.2 && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
   if (b.still > 0.3 || b.dawdle > 1.5) { b.rest = true; b.vx = b.vz = 0; b.dawdle = 0; }
 }

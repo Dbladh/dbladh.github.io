@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024220531';
-import { buildWorld } from './world.js?v=20261024220531';
-import { createSky } from './sky.js?v=20261024220531';
-import { createDOF } from './dof.js?v=20261024220531';
-import { createRide } from './ride.js?v=20261024220531';
-import { createGame } from './bikegame.js?v=20261024220531';
-import { createAurora, setWarm } from './aurora.js?v=20261024220531';
-import { createAudio, pickFlicker } from './audio.js?v=20261024220531';
+import { PAL } from './palette.js?v=20261024222737';
+import { buildWorld } from './world.js?v=20261024222737';
+import { createSky } from './sky.js?v=20261024222737';
+import { createDOF } from './dof.js?v=20261024222737';
+import { createRide } from './ride.js?v=20261024222737';
+import { createGame } from './bikegame.js?v=20261024222737';
+import { createAurora, setWarm } from './aurora.js?v=20261024222737';
+import { createAudio, pickFlicker } from './audio.js?v=20261024222737';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -532,8 +532,9 @@ function start() {
   // ---- Hints that something here can be played with (without saying what): a label on the riding bike, a note drifting up from a house now and then, and a swell in the sun's and moon's glow.
   // Each stops once that thing has been used during this visit, and all of them wait while a section is open, the game runs or music mode is on.
   // (Remembered for this visit only, not in the browser: after a reload or a new visit the hints are back.)
+  let pinball = null;
   let golf = null, golfLoading = false;                                       // (the mini-golf at the windmill: loaded the first time it is clicked)
-  const busy = () => !!(game?.active || golf?.active);                        // (a game is running: the landscape's other interactions wait)
+  const busy = () => !!(game?.active || golf?.active || pinball?.active);                        // (a game is running: the landscape's other interactions wait)
   const seen = { bike: false, house: false, dial: false };
   const markSeen = (k) => { seen[k] = true; };
   const hintsOn = () => active === 'home' && !openId && !tween && !busy() && songDark < 0.05 && !document.hidden;
@@ -574,11 +575,11 @@ function start() {
     hintSun += (want - hintSun) * (1 - Math.exp(-dt * 3)); sky.setHint(hintSun);
   }
   async function playGolf() {
-    if (golf?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
+    if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261024220531');
+        const mod = await import('./golf.js?v=20261024222737');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -586,6 +587,20 @@ function start() {
     if (active !== 'home' || openId || game?.active) return;
     stopSong(); audio.unlock(); audio.autoOn(); ride?.reset();
     golf.start({ pos: camera.position.clone(), look: look.clone() });
+  }
+  async function playPinball() {
+    if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
+    golfLoading = true;
+    try {
+      if (!pinball) {
+        const mod = await import('./pinball.js?v=20261024222737');
+        pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
+        pinball.onQuit = () => { ride?.reset(); riseName(); };
+      }
+    } catch (err) { console.warn('pinball golf could not load', err); return; } finally { golfLoading = false; }
+    if (active !== 'home' || openId || game?.active) return;
+    stopSong(); audio.unlock(); audio.autoOn(); ride?.reset();
+    pinball.start({ pos: camera.position.clone(), look: look.clone() });
   }
   let millT = -1e9, millHit = false;
   function windmillHit(e) {                                                   // is the pointer over the windmill in the background?
@@ -598,7 +613,7 @@ function start() {
     return millHit;
   }
   async function playBike() {
-    if (!game || game.active || golf?.active || golfLoading || starting || active !== 'home' || openId) return;
+    if (!game || game.active || golf?.active || pinball?.active || golfLoading || starting || active !== 'home' || openId) return;
     markSeen('bike');
     const bx = ride?.riding ? ride.position.x : 0, homeCam = { pos: camera.position.clone(), look: look.clone() };
     if (!game.ready) {                                   // clicked before the background preparation finished: a short loading card instead of a stall
@@ -635,6 +650,7 @@ function start() {
     window.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') game.release(); });
     window.addEventListener('blur', () => game.release());
     if (/[?&]game=1\b/.test(location.search)) setTimeout(playBike, 600);
+    if (/[?&]pinball=1\b/.test(location.search)) setTimeout(playPinball, 900);
   }
   function pick(e) {
     ndc.set((e.clientX / VW()) * 2 - 1, -(e.clientY / VH()) * 2 + 1);
@@ -883,8 +899,8 @@ function start() {
     if (!game?.active || (skyN++ % 3) === 0) skyRenderer.render(skyScene, camera);          // in the game the soft sky only needs every third frame
     if (dof && dof.enabled) {
       // Depth of field: on the overview, focus mid-village so nearby houses blur and the middle ones stay crisp.
-      const want = game?.active ? game.focusDistance : golf?.active ? golf.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
-      dof.setBlur(golf?.active ? 0.5 : 1);
+      const want = game?.active ? game.focusDistance : golf?.active ? golf.focusDistance : pinball?.active ? pinball.focusDistance : active === 'home' ? (camera.aspect < 0.8 ? 30 : 54) : camera.position.distanceTo(cur.look);   // portrait: focus closer so the foreground planting stays readable
+      dof.setBlur(golf?.active || pinball?.active ? 0.5 : 1);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
       if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48; scene.fog.near = fn; scene.fog.far = fn + 167; }   // the game's camera sits further back: start the fog beyond the ride itself
@@ -978,7 +994,7 @@ function start() {
       songRoll = D.roll * D.env;
     }
     camera.lookAt(look); camera.rotation.z += songRoll;
-    const gT = performance.now(); game?.update(dt, camera); golf?.update(dt, camera); secT('game', gT);
+    const gT = performance.now(); game?.update(dt, camera); golf?.update(dt, camera); pinball?.update(dt, camera); secT('game', gT);
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
@@ -1043,7 +1059,7 @@ function start() {
     hintTick(dt);
     orbitA += ((dialOn ? 1 : 0) - orbitA) * (1 - Math.exp(-dt * 9)); sky.setOrbitAlpha(orbitA);
     hoverSunV += ((hoverBody === 'sun' ? 1 : 0) - hoverSunV) * (1 - Math.exp(-dt * 10)); hoverMoonV += ((hoverBody === 'moon' ? 1 : 0) - hoverMoonV) * (1 - Math.exp(-dt * 10)); sky.setHover(hoverSunV, hoverMoonV);       // (the sun or moon under the pointer, or being dragged, glows brighter)                  // (the dotted orbit fades in and out with the dial)
-    if (shadowTick++ % (game?.active ? 2 : golf?.active ? (lowEnd ? 2 : 1) : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
+    if (shadowTick++ % (game?.active ? 2 : golf?.active || pinball?.active ? (lowEnd ? 2 : 1) : 4) === 0) { renderer.shadowMap.needsUpdate = true; prof.shadow++; }
     if (dt > 0) perf.fps += (1 / dt - perf.fps) * 0.05;
 
     // Name and tagline: hidden while a sign is open or being reached; while the camera pulls back
@@ -1093,5 +1109,5 @@ function start() {
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); hideBoot(); }
   requestAnimationFrame(() => requestAnimationFrame(hideBoot)); setTimeout(hideBoot, 450);   // the first scene frame has been drawn: lift the splash (the timer covers a background tab, where frames do not run)
-  window.__portfolio = { get golf() { return golf; }, playGolf, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { get golf() { return golf; }, get pinball() { return pinball; }, playGolf, playPinball, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }
