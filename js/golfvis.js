@@ -1,10 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024194331';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024194331';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024194331';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024194331';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024194538';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024194538';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024194538';
+import { THEME_BORDER } from './golfscenery.js?v=20261024194538';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024194538';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -62,7 +63,7 @@ const BRICKS = ['#d3694a', '#bd5a3e', '#dc7d58', '#ad5039', '#c96348', '#c9a58a'
 const WOODS = ['#ffffff', '#f0dcc0', '#e0c49c', '#ffe9cc'];
 /** The low wall round the edge of the hole: bricks, boulders or planks (by the hole's seed), in instanced meshes. */
 function buildBorder(h, g, disposables) {
-  const style = ['brick', 'stone', 'wood'][(h.seed >>> 4) % 3], r = mulberry32(h.seed ^ 0x5bd1e995), O = h.outline, segs = h.walls.filter((w) => w[4]);
+  const style = THEME_BORDER[h.theme] || ['brick', 'stone', 'wood'][(h.seed >>> 4) % 3], r = mulberry32(h.seed ^ 0x5bd1e995), O = h.outline, segs = h.walls.filter((w) => w[4]);
   let area = 0; for (let i = 0; i < O.length; i++) { const a = O[i], b = O[(i + 1) % O.length]; area += a[0] * b[1] - b[0] * a[1]; }
   const sgn = area > 0 ? 1 : -1, col = new THREE.Color();
   const make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; g.add(m); disposables.push(m); return m; };
