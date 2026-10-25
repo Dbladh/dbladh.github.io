@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024203405';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024203405';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024203405';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024203405';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024203405';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024203405';
-import { createNeon } from './golfneon.js?v=20261024203405';
-import { createFx } from './golffx.js?v=20261024203405';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024203405';
-import { buildDecor } from './golfdecor.js?v=20261024203405';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024203405';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024204345';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024204345';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024204345';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024204345';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024204345';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024204345';
+import { createNeon } from './golfneon.js?v=20261024204345';
+import { createFx } from './golffx.js?v=20261024204345';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024204345';
+import { buildDecor } from './golfdecor.js?v=20261024204345';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024204345';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -163,7 +163,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     const P = hole.path, t0 = P[0], t1 = P[Math.min(P.length - 1, 10)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1; cam.dx = (t1.x - t0.x) / l; cam.dz = (t1.z - t0.z) / l; cam.phase = 'overview'; cam.t = 0;
     st.mode = 'aim'; aimShadow(i); assignLights(i); announce();
   }
-  const announce = () => say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast');
+  const MACHINE_HINTS = { runup: 'Run over the boost strip and up the ramp to clear the canyon', vault: 'Roll over the pad to vault the fences', door: 'Roll over the button, then run the gates', bridge: 'The button slides out a bridge over the canyon', rail: 'Roll fast into the rail to cross the canyon', secret: 'Vault the fence from the pad to find the coin' };
+  const announce = () => { say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast'); const m = (hole.recipes || [])[0]; if (m) setTimeout(() => { if (st.mode === 'aim' && vis === vises[st.hole]) say(elBanner, `Machine: ${MACHINE_HINTS[m.kind]}`, 3200, 'banner'); }, 2700); };
   function placeBalls() {
     balls.forEach((b, i) => {
       const m = ballMeshes[i], s = ballShadows[i]; if (!m) return;
@@ -200,7 +201,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       rp.rest = 0; rp.k++;
       if (rp.k >= sh.length) { rp.on = false; st.mode = 'card'; st.t = 0; elScore.hidden = false; return; }
       const s = sh[rp.k]; balls = [newBall(hole)]; Object.assign(balls[0], { x: s.x, z: s.z, y: hillH(hole, s.x, s.z) }); const l = Math.hypot(s.dx, s.dz) || 1; cam.dx = s.dx / l; cam.dz = s.dz / l;
-      Object.assign(ctx, s.f); ctx.t = s.t; st.holeT = s.t; shoot(balls[0], s.dx, s.dz, s.pw, s.f.turbo); st.rollT = 0; audio?.golf?.('putt', 0.7);
+      Object.assign(ctx, s.f); ctx.t = s.t; ctx.gateT = s.gate || 0; st.holeT = s.t; shoot(balls[0], s.dx, s.dz, s.pw, s.f.turbo); st.rollT = 0; audio?.golf?.('putt', 0.7);
     }
     const bb = balls[0]; if (!bb.holed && !bb.sunk) { stepBall(bb, hole, ctx, sdt, ev); ctx.t += sdt; st.holeT = ctx.t; }
     if (ev.holed) { const m = ballMeshes[0]; m.visible = false; audio?.golf?.('cup'); }
@@ -296,7 +297,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function fire(a) {
     const b = balls[0], l = Math.hypot(a.dx, a.dz) || 1, pw = Math.pow(a.power, 1.15);
     st.lastX = b.x; st.lastZ = b.z; st.strokes++; st.mode = 'roll'; st.rollT = 0; audio?.golf?.('putt', a.power);
-    (st.shots[st.hole] ||= []).push({ x: b.x, z: b.z, dx: a.dx, dz: a.dz, pw, t: ctx.t, multi: st.multi, f: { homing: ctx.homing, ghost: ctx.ghost, bounce: ctx.bounce, turbo: ctx.turbo, drive: false, cupR: ctx.cupR } });      // (every stroke is kept so the best hole can be replayed)
+    (st.shots[st.hole] ||= []).push({ x: b.x, z: b.z, dx: a.dx, dz: a.dz, pw, t: ctx.t, gate: ctx.gateT, multi: st.multi, f: { homing: ctx.homing, ghost: ctx.ghost, bounce: ctx.bounce, turbo: ctx.turbo, drive: false, cupR: ctx.cupR } });      // (every stroke is kept so the best hole can be replayed)
     shoot(b, a.dx, a.dz, pw, fx.turbo > 0);
     if (st.multi) {                                        // multi-ball: four more balls fly off at slightly different angles; the one nearest the cup is kept
       st.multi = false;
@@ -429,7 +430,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     /** Every frame (after the page has set the camera): moves the game on and, while it is active, owns the camera. */
     update(dt) {
       if (st.mode === 'off') return false;
-      dt = Math.min(dt, 0.05); st.t += dt; st.idle += dt; lamps?.update(world.night); fxs?.update(dt); scenery?.update(dt, fxs);
+      dt = Math.min(dt, 0.05); if (st.moment > 0) { st.moment -= dt; dt *= 0.5; } st.t += dt; st.idle += dt; lamps?.update(world.night); fxs?.update(dt); scenery?.update(dt, fxs);
       { const u = Math.min(1, Math.max(0, (world.night - 0.35) / 0.5)); neonK = u * u * (3 - 2 * u); neon?.set(neonK); const L = lights(); if (L.length && lampSpotsAll.length) for (const l of L) l.color.set('#ffc27a').lerp(UVC, neonK); }
       if (st.mode === 'exit') {
         const k = reduceMotion ? 1 : ease(clamp01(st.t / EXIT));
@@ -499,6 +500,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
               if (ev.fx === 3) { const w = wp(hole.hero.x + hole.hero.ux * 1.2, 0.8, hole.hero.z + hole.hero.uz * 1.2); fxs.puff(w.x, w.y, w.z, 9, b.vx, b.vz); fxs.sparks(w.x, w.y, w.z, '#ffd27a', 18, 3.5, 2.5, 0.5, 0.07); }
               if (ev.fx === 2) { const w = wp(hole.hero.x, 0.6, hole.hero.z); fxs.puff(w.x, w.y, w.z, 4); }
               if (ev.fx === 1) for (const q of [hole.hero.a, hole.hero.b]) { const w = wp(q.x, 0.9, q.z); fxs.sparks(w.x, w.y, w.z, '#7fffd4', 18, 1.6, 3, 0.8, 0.06); fxs.ring(w.x, w.y - 0.85, w.z, 1.2, 0.7, '#7fffd4'); }
+              if (ev.fx === 6 || ev.fx === 7 || ev.fx === 10) st.moment = Math.max(st.moment || 0, 0.4);          // (a short slow-motion beat when a machine fires)
               if (ev.fx === 6) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ff7fd0', 16, 2.4, 3, 0.6); fxs.ring(w.x, w.y, w.z, 1.2, 0.6, '#ff7fd0'); }
               if (ev.fx === 7) { const w = wp(hole.cage.button.x, 0.15, hole.cage.button.z); fxs.sparks(w.x, w.y, w.z, '#6dff9a', 20, 2.2, 2.6, 0.7); fxs.ring(w.x, w.y, w.z, 1.3, 0.7, '#6dff9a'); }
               if (ev.fx === 8) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ffe14a', 8, 1.8, 1.2, 0.4); }

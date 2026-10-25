@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { makeHole, courseSeed, holeSeed, heroOrder, HOLES, laneExists } from '../../js/golfgen.js';
 import { newBall, newCtx, shoot, stepBall } from '../../js/golfphys.js';
 import { playHole } from './bot.mjs';
+import { TUNING } from '../../js/golfrecipes.js';
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--${k}`); return i < 0 ? d : args[i + 1] === undefined || args[i + 1].startsWith('--') ? true : args[i + 1]; };
 const seeds = JSON.parse(readFileSync(new URL('./seeds.json', import.meta.url), 'utf8')), YEAR = +opt('year', seeds.year), MONTHS = +opt('months', 12), START = +opt('start', 1), BOT = !!opt('bot', false), ONLY = opt('only', null);
@@ -56,11 +57,24 @@ function runHole(year, month, i) {
   const he = bump(groups.hero, type, 'n'); if (problems.length) he.bad++; if (strokes !== null) { he.botN++; he.strokes += Math.min(strokes, 20); if (strokes > 8) he.botFail++; }
   for (const t of tags) { const o = bump(groups.feat, t, 'n'); if (problems.length) o.bad++; if (strokes !== null) { o.botN++; o.strokes += Math.min(strokes, 20); if (strokes > 8) o.botFail++; } }
   for (const l of h.recipeLog || []) { const o = (recipeStats[l.kind] ||= { placed: 0, dropped: {}, forg: [] }); o.dropped[l.out] = (o.dropped[l.out] || 0) + 1; }
-  for (const x of h.recipes || []) { const o = (recipeStats[x.kind] ||= { placed: 0, dropped: {}, forg: [] }); o.placed++; o.forg.push(x.forgiveness); }
+  for (const x of h.recipes || []) { const o = (recipeStats[x.kind] ||= { placed: 0, dropped: {}, forg: [] }); o.placed++; o.forg.push(x.forgiveness); (o.nec ||= []).push(x.necessity); }
   rows.push({ year, month, i, type, tags, problems, strokes });
   return { h, problems, tags, strokes };
 }
 
+if (opt('tune', false)) {                                  // sweep the numbers the recipes are built from and report how each choice does (placed, forgiveness, how much the machine matters)
+  const grids = { 'runup.gap': [2.0, 2.6, 3.2], 'rail.gap': [2.0, 2.8, 3.6, 4.4], 'bridge.gap': [2.4, 3.2, 4.0] }, months = +opt('months', 24);
+  for (const key of Object.keys(grids)) {
+    const [kind, field] = key.split('.'), keep = TUNING[kind][field]; console.log(`\n${key} (current ${keep})`);
+    for (const v of grids[key]) {
+      TUNING[kind][field] = v; let placed = 0, forg = 0, nec = 0, drop = 0;
+      for (let m = 1; m <= months; m++) { const cs = courseSeed(YEAR, m), order = heroOrder(cs); for (let i = 2; i < HOLES; i++) { const h = makeHole(holeSeed(cs, i), i, order[i]); for (const x of h.recipes) if (x.kind === kind) { placed++; forg += x.forgiveness; nec += x.necessity; } for (const l of h.recipeLog) if (l.kind === kind) drop++; } }
+      console.log(`  ${field} = ${String(v).padEnd(4)} placed ${String(placed).padStart(3)}  forgiveness ${placed ? (forg / placed * 100).toFixed(0) : '-'}%  machine needed ${placed ? (nec / placed * 100).toFixed(0) : '-'}%  dropped ${drop}`);
+    }
+    TUNING[kind][field] = keep;
+  }
+  process.exit(0);
+}
 if (ONLY) {
   const [ym, hi] = String(ONLY).split(':'), [y, m] = ym.includes('-') ? ym.split('-').map(Number) : [YEAR, +ym], r = runHole(y, m, +hi);
   console.log(`${y}-${m} hole ${hi}: ${r.h.type} [${r.tags.join(', ')}] par ${r.h.par} bot ${r.strokes ?? 'off'} -> ${r.problems.length ? r.problems.join('; ') : 'ok'}`);
@@ -75,7 +89,7 @@ console.log(`checked ${rows.length} holes (${regressN} regression seeds + ${MONT
 const table = (title, g) => { console.log(`\n${title}`); for (const k of Object.keys(g).sort()) { const o = g[k]; console.log(`  ${k.padEnd(11)} ${String(o.n).padStart(4)} holes  problems ${pct(o.bad, o.n).padStart(6)}${BOT ? `  bot avg ${(o.strokes / (o.botN || 1)).toFixed(2)}  slow/stuck ${pct(o.botFail, o.botN)}` : ''}`); } };
 table('By hero obstacle', groups.hero); table('By feature present', groups.feat);
 console.log('\nMachine recipes (placed / dropped and why / average forgiveness = share of the 8 test powers that work)');
-for (const k of Object.keys(recipeStats).sort()) { const o = recipeStats[k]; console.log(`  ${k.padEnd(7)} placed ${String(o.placed).padStart(3)}  forgiveness ${o.forg.length ? (o.forg.reduce((a, b) => a + b, 0) / o.forg.length * 100).toFixed(0) + '%' : '-'}  dropped ${JSON.stringify(o.dropped)}`); }
+for (const k of Object.keys(recipeStats).sort()) { const o = recipeStats[k]; console.log(`  ${k.padEnd(7)} placed ${String(o.placed).padStart(3)}  forgiveness ${o.forg.length ? (o.forg.reduce((a, b) => a + b, 0) / o.forg.length * 100).toFixed(0) + '%' : '-'}  machine needed ${o.nec && o.nec.length ? (o.nec.reduce((a, b) => a + b, 0) / o.nec.length * 100).toFixed(0) + '%' : '-'}  dropped ${JSON.stringify(o.dropped)}`); }
 console.log(`\n${fails.length} of ${rows.length} holes have problems`);
 for (const r of fails.slice(0, 25)) console.log(`  ${r.year}-${r.month} hole ${r.i} ${r.type} [${r.tags.join(', ')}]: ${r.problems.join('; ')}   (node tools/golf/check.mjs --only ${r.year}-${r.month}:${r.i} --bot)`);
 process.exit(fails.length ? 1 : 0);

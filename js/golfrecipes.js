@@ -4,9 +4,10 @@
 //   rail  : a cyan rail from a mouth, over a canyon, to an exit: rolling into the mouth fast enough carries the ball across (the ledge beside the canyon is the plain way).
 //   door  : a button, then two tall walls in a zigzag with a gate in the middle of each: the button opens the gates for a few seconds for a straight run.
 // Every recipe is checked with a proof shot (proveRecipe) over a band of powers, and dropped if the intended route does not work.
-import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024203405';
-import { TUNING } from './golftuning.js?v=20261024203405';
+import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261024204345';
+import { TUNING } from './golftuning.js?v=20261024204345';
 
+export { TUNING };                                         // (so the tester can sweep the numbers on the very copy the recipes read)
 const HALF_W = 2.3;
 
 /** A frame along the corridor from centre-line point `i0` towards `i1` (the chord between them): P(u, lat) is the world point u along it and lat to its left. */
@@ -21,7 +22,7 @@ function frameAt(S, i0, i1) {
 function findSlot(S, len, tol) {
   const { cl, w, sAt, N, r } = S, start = (r() * N) | 0;
   for (let k = 0; k < N; k++) {
-    const i0 = (start + k) % N; if (sAt[i0] < 3.6 || sAt[i0] + len > S.length - 3.6) continue;
+    const i0 = (start + k) % N; if (sAt[i0] < 2.6 || sAt[i0] + len > S.length - 2.6) continue;
     let i1 = i0; while (i1 < N - 1 && sAt[i1 + 1] - sAt[i0] <= len) i1++;
     if (sAt[i1] - sAt[i0] < len - 0.7) continue;
     const dx = cl[i1].x - cl[i0].x, dz = cl[i1].z - cl[i0].z, l = Math.sqrt(dx * dx + dz * dz) || 1, ux = dx / l, uz = dz / l;
@@ -127,13 +128,28 @@ export function removeRecipe(H, rid) {
 }
 
 const POWERS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+const LOW_POWERS = [0.2, 0.25, 0.3, 0.35];
+/** Take the machine out of a recipe (boost strips, pads and rails removed; for buttons, the button moved out of reach so the gates stay shut); returns a function that puts it back. */
+function disable(H, rec) {
+  const saved = [];
+  for (const k of { runup: ['boosts'], vault: ['pads'], secret: ['pads'], rail: ['rails'] }[rec.kind] || []) { saved.push([k, H[k]]); H[k] = H[k].filter((p) => p.rid !== rec.rid); }
+  const doors = (H.doors || []).filter((d) => d.rid === rec.rid), old = doors.map((d) => d.button); doors.forEach((d) => { d.button = { x: 1e6, z: 1e6, r: 0.55 }; });
+  return () => { for (const [k, v] of saved) H[k] = v; doors.forEach((d, i) => { d.button = old[i]; }); H.cover = 0; };
+}
+/** How much the machine matters at moderate power: the proof shot at four moderate powers again without the machine, as the share of those that worked with it that now fail (1 = a moderate putt only works with the machine). */
+export function necessityOf(H, rec) {
+  const withP = proveRecipe(H, rec, LOW_POWERS).pass; if (!withP) return 0;
+  const restore = disable(H, rec), without = proveRecipe(H, rec, LOW_POWERS).pass; restore();
+  return Math.max(0, 1 - without / withP);
+}
 /** The proof shot of a recipe on the finished hole `H`: from the recipe's start, straight along it, at eight powers. Returns { pass, forgiveness (0-1) }. */
-export function proveRecipe(H, rec) {
+export function proveRecipe(H, rec, powers = POWERS) {
   const F = rec.F, ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false }; let pass = 0;
-  for (const pw of POWERS) {
+  for (const pw of powers) {
     const b = newBall(H), ctx = newCtx(), p = F.P(rec.entryU, rec.lat || 0); b.x = p.x; b.z = p.z; b.y = hillH(H, p.x, p.z); shoot(b, F.ux, F.uz, pw, false); let umax = -9, near = 9;
     for (let n = 0; n < 600 && !b.rest && !b.holed && !b.sunk; n++) { stepBall(b, H, ctx, 1 / 60, ev); ctx.t += 1 / 60; const u = (b.x - F.o.x) * F.ux + (b.z - F.o.z) * F.uz; if (u > umax) umax = u; if (rec.coin) near = Math.min(near, Math.hypot(b.x - rec.coin.x, b.z - rec.coin.z)); }
     if (rec.coin ? near < 0.55 : !b.sunk && umax >= rec.targetU) pass++;
   }
-  return { pass, forgiveness: pass / POWERS.length };
+  H.cover = 0;
+  return { pass, forgiveness: pass / powers.length };
 }

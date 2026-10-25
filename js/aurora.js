@@ -6,7 +6,7 @@
 //   colour -> follows how bright the sound is and how loud: green, teal, blue, violet, magenta, with a red fringe on the loudest
 // It also lights the world a little: `colour` and `strength` (see `light`) are what the scene's lights, ground and pond take on.
 import * as THREE from 'three';
-import { SONG_RH, SONG_LH } from './notes.js?v=20261024203405';
+import { SONG_RH, SONG_LH } from './notes.js?v=20261024204345';
 
 const PAL = [[0.25, 1.0, 0.45], [0.12, 0.92, 0.78], [0.35, 0.55, 1.0], [0.72, 0.38, 1.0], [1.0, 0.3, 0.78], [1.0, 0.32, 0.42]];       // green, teal, blue, violet, magenta, red
 const WARM_PAL = [[1.0, 0.88, 0.34], [1.0, 0.68, 0.22], [1.0, 0.46, 0.15], [1.0, 0.3, 0.12], [0.95, 0.2, 0.18], [1.0, 0.62, 0.3]];       // yellow, amber, orange, red-orange, red, soft orange
