@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024213520';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024213520';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024213520';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024213520';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024213520';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024213520';
-import { createNeon } from './golfneon.js?v=20261024213520';
-import { createFx } from './golffx.js?v=20261024213520';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024213520';
-import { buildDecor } from './golfdecor.js?v=20261024213520';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024213520';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024215312';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024215312';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024215312';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024215312';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024215312';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024215312';
+import { createNeon } from './golfneon.js?v=20261024215312';
+import { createFx } from './golffx.js?v=20261024215312';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024215312';
+import { buildDecor } from './golfdecor.js?v=20261024215312';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024215312';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -140,7 +140,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     lights().forEach((l, i) => { if (lightHome[i]) l.position.copy(lightHome[i]); });
     sky?.shadowReset(); sky?.setLampKey(null); decors = []; vises = []; holes = []; holeGroup = null; vis = null; hole = null; ready = false;
   }
-  const setRise = (i, k) => { vises[i].group.scale.y = Math.max(0.001, k); world.carve.set(k, i); if (decors[i]) decors[i].group.visible = k > 0.92; const on = k > 0.92; if (lamps && shown[i] !== on) { shown[i] = on; lamps.showHole(i, on); } };
+  const setRise = (i, k) => { vises[i].group.scale.y = Math.max(0.001, k); world.carve.set(k, i); { const c = toWorld(sites[i], holes[i].cup.x, holes[i].cup.z); world.carve.setHole(i, c.x, c.z, k > 0.95 ? CUP_R * 0.92 + 0.03 : 0); } if (decors[i]) decors[i].group.visible = k > 0.92; const on = k > 0.92; if (lamps && shown[i] !== on) { shown[i] = on; lamps.showHole(i, on); } };
   const UVC = new THREE.Color('#8a4dff');
   const lights = () => world.lampLights?.() ?? [];
   function assignLights(i) {                               // the village's real lights stand in for the lamps near the hole in play
@@ -535,7 +535,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
           }
         } else if (st.mode === 'aim') { stepBall(balls[0], hole, ctx, dt, ev); collect(); }
         if (st.mode === 'sink') {
-          sinkT += dt; const s = clamp01(sinkT / 0.5), m = ballMeshes[0]; m.scale.setScalar(1 - 0.75 * s); m.position.set(hole.cup.x, 0.2 - 0.5 * s + BALL_R * (1 - s), hole.cup.z); m.visible = true; hamster.visible = false;
+          sinkT += dt; const s = clamp01(sinkT / 0.5), m = ballMeshes[0]; m.scale.setScalar(1 - 0.75 * s); m.position.set(hole.cup.x, 0.2 - 1.2 * s + BALL_R * (1 - s), hole.cup.z); m.visible = true; hamster.visible = false;
           if (s >= 1) { m.visible = false; ballShadows[0].visible = false; finishHole(); }
         } else if (st.mode === 'done') { if (st.t > 1.7) beginTravel(st.hole + 1); }
         else { placeBalls(); ballMeshes[0].scale.setScalar(1); }

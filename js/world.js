@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024213520';
-import { auroraColour } from './aurora.js?v=20261024213520';
+import { PAL } from './palette.js?v=20261024215312';
+import { auroraColour } from './aurora.js?v=20261024215312';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261024213520';
+} from './houses.js?v=20261024215312';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -700,7 +700,9 @@ export function buildWorld(scene, sections, opts = {}) {
   const terrainWind = { uWindTime: { value: 0 }, uDay: { value: 1 } };   // grass sway (desktop) and cloud shadows
   // Big soft cloud shadows drifting across the land by day: the same moving noise the clouds suggest, painted
   // straight into the terrain colour (no shadow maps, no geometry).
+  const terrainHoles = { value: Array.from({ length: 9 }, () => new THREE.Vector3(0, 0, 0)) };       // the mini-golf's cups: round holes cut right through the ground ([x, z, radius], radius 0 = none)
   const addCloudShadows = (sh) => {
+    sh.uniforms.uHoles = terrainHoles;
     sh.uniforms.uShadowT = terrainWind.uWindTime;
     sh.uniforms.uShadowDay = terrainWind.uDay; sh.uniforms.uAurora = auroraU;
     sh.vertexShader = sh.vertexShader
@@ -708,13 +710,14 @@ export function buildWorld(scene, sections, opts = {}) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; varying vec3 vCWPos;
+uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
 float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
 float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * csN(p); p = p * 2.03 + vec2(4.1, 7.3); a *= 0.5; } return s; }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uAurora * 0.1;')
       .replace('#include <color_fragment>', `#include <color_fragment>
+for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, uHoles[hk].xy) < uHoles[hk].z) discard; }
 {
   vec2 cp = vCWPos.xz * 0.02 - vec2(uShadowT * 0.07, 0.0);   // patches ~50 units across, drifting +x (the sky clouds' direction) at ~3.5 units/s   // drifts about 5 units a second
   float cn = csF(cp) * 0.7 + csF(cp * 2.1 + 11.0 - vec2(uShadowT * 0.03, 0.0)) * 0.3;
@@ -915,6 +918,8 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       for (const i of seen) { const pt = carveS.paint.get(i); col[i * 3] += (pt.r - col[i * 3]) * pt.a; col[i * 3 + 1] += (pt.g - col[i * 3 + 1]) * pt.a; col[i * 3 + 2] += (pt.b - col[i * 3 + 2]) * pt.a; }
       geo.attributes.color.needsUpdate = true;
     },
+    /** Cut (or close) hole `i` of the mini-golf's cups through the ground: centre (x, z), `r` radius (0 to close it). */
+    setHole(i, x, z, r) { terrainHoles.value[i].set(x, z, r); },
     /** The height of the ground right now (levelled or not), read from the mesh. */
     groundNow(x, z) {
       const fx = (x - gridX0) / gridDx, fz = (z - gridZ0) / gridDz;
@@ -932,6 +937,7 @@ float csF(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a
       carve.set(0);
       for (const c of carveS.cells) { c.m.instanceMatrix.array.set(c.orig); c.m.instanceMatrix.needsUpdate = true; }
       for (const g of carveS.houses) g.visible = true;
+      for (const hv of terrainHoles.value) hv.set(0, 0, 0);
       carveS.cells = []; carveS.houses = []; carveS.verts = []; carveS.sites = []; carveS.on = false;
     },
   };

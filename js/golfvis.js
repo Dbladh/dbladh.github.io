@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024213520';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024213520';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261024213520';
-import { THEME_BORDER } from './golfscenery.js?v=20261024213520';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024213520';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261024215312';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261024215312';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261024215312';
+import { THEME_BORDER } from './golfscenery.js?v=20261024215312';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261024215312';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -118,6 +118,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const rock = new THREE.Color('#8d8579'), deep = new THREE.Color('#4a4239'), plank = new THREE.Color('#e0a868'), feats = h.feats || [];
   let R = h.ribbon;
   if (feats.length || h.sands.length) { const R2 = []; for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, a0 = R[i], b0 = R[i + 1]; R2.push([0, 1, 2, 3, 4].map((j) => (j === 4 && (a0[4] < 0 || b0[4] < 0) ? a0[4] : a0[j] + (b0[j] - a0[j]) * t))); } R2.push(R[R.length - 1]); R = R2; }
+  const nearCup = (vi) => Math.hypot(pos[vi * 3] - h.cup.x, pos[vi * 3 + 2] - h.cup.z) < 1.0;
   for (let i = 0; i < R.length; i++) {
     const row = R[i], stripe = (row[4] < 0 ? i < R.length / 2 ? -1 : 1e3 : Math.floor(row[4] / 1.5)) & 1;
     for (let c = 0; c <= COLS; c++) {
@@ -132,6 +133,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     if (i > 0) for (let c = 0; c < COLS; c++) {
       const b0 = (i - 1) * (COLS + 1) + c, a0 = b0 + 1, d0 = b0 + COLS + 1, e0 = d0 + 1;
       if ((hts[b0] + hts[a0] + hts[d0] + hts[e0]) / 4 < -0.6 && Math.max(hts[b0], hts[a0], hts[d0], hts[e0]) < -0.3) continue;                    // (nothing to draw over a chasm)
+      if (nearCup(b0) || nearCup(a0) || nearCup(d0) || nearCup(e0)) continue;                                                   // (the hole is cut out of the green: a round patch fills in round it)
       idx.push(b0, d0, a0, a0, d0, e0);
     }
   }
@@ -157,9 +159,30 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     disposables.push(board.geometry); sg.add(post, board); sg.rotation.y = Math.atan2(-tx, -tz) + Math.PI; sg.rotation.y = Math.atan2(-tx, -tz); g.add(sg); }
   // tee, cup and flag
   const tee = new THREE.Mesh(G.disc, M.white); tee.scale.set(0.55, 1, 0.55); tee.position.set(h.ball.x, 0.06, h.ball.z); g.add(tee);
-  const cupMesh = new THREE.Mesh(G.disc, M.cup); cupMesh.position.set(h.cup.x, 0.07, h.cup.z); cupMesh.scale.set(CUP_R * 0.92, 1, CUP_R * 0.92); g.add(cupMesh);
+  // the hole: a round opening cut in the green (a patch of turf round it, see the fairway), a steel rim, a dark shaft going down and a floor; one group so the mega-cup power-up can widen the rim
+  const cupMesh = new THREE.Group(); cupMesh.position.set(h.cup.x, Math.max(0, hillH(h, h.cup.x, h.cup.z)), h.cup.z); cupMesh.scale.set(CUP_R * 0.92, 1, CUP_R * 0.92); g.add(cupMesh);
+  { const RING = [1.0, 1.12, 1.4, 1.9, 2.8], SEG = 40, cx = h.cup.x, cz = h.cup.z, pp = [], pu = [], pc = [], pi = [], col0 = c1.clone().lerp(c2, 0.5);
+    for (const rr of RING) for (let k = 0; k < SEG; k++) { const a = (k / SEG) * 6.2832, x = cx + Math.cos(a) * rr * CUP_R * 0.92, z = cz + Math.sin(a) * rr * CUP_R * 0.92; pp.push(x, hillH(h, x, z) + 0.032 + (rr < 1.15 ? 0.012 : 0), z); pu.push(x * 0.4, z * 0.4); pc.push(col0.r, col0.g, col0.b); }
+    for (let r = 0; r < RING.length - 1; r++) for (let k = 0; k < SEG; k++) { const a0 = r * SEG + k, b0 = r * SEG + ((k + 1) % SEG), a1 = (r + 1) * SEG + k, b1 = (r + 1) * SEG + ((k + 1) % SEG); pi.push(a0, b0, a1, b0, b1, a1); }
+    const pg = track(new THREE.BufferGeometry()); pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2)); pg.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3)); pg.setIndex(pi); pg.computeVertexNormals();
+    const patch = new THREE.Mesh(pg, M.grass); patch.receiveShadow = true; patch.material = M.grass; g.add(patch);
+    const rim = new THREE.Mesh(track(new THREE.TorusGeometry(1.0, 0.08, 8, 32)), metal('#d5dbe3')); rim.rotation.x = Math.PI / 2; rim.position.y = 0.05; cupMesh.add(rim);
+    const wall = new THREE.Mesh(track(new THREE.CylinderGeometry(1.0, 0.96, 1.0, 28, 1, true)), new THREE.MeshBasicMaterial({ color: '#0b0d10', side: THREE.BackSide })); wall.position.y = -0.46; cupMesh.add(wall);
+    const floor = new THREE.Mesh(G.disc, new THREE.MeshBasicMaterial({ color: '#020304' })); floor.scale.set(0.96, 1, 0.96); floor.position.y = -0.95; cupMesh.add(floor); }
   const flag = new THREE.Group(); flag.position.set(h.cup.x, 0, h.cup.z);
-  flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.6), M.flag); disposables.push(fl.geometry); fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);
+  flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); flag.add(sph(M.pole, 0.07, 0.07, 0.07, 0, 2.42, 0));
+  const flGeo = new THREE.PlaneGeometry(0.95, 0.6, 14, 5), flMat = new THREE.MeshLambertMaterial({ color: '#ef5b4d', emissive: '#6a2018', side: THREE.DoubleSide }), fl = new THREE.Mesh(flGeo, flMat), flBase = flGeo.attributes.position.array.slice(); disposables.push(flGeo, flMat); fl.castShadow = true; fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);
+  const fph = h.cup.x * 1.3 + h.cup.z;                       // the flag ripples in the wind: a wave runs along it from the pole, bigger towards the free end, with gusts that lift it
+  updaters.push((heroT, t) => {
+    const p = flGeo.attributes.position, gust = 0.7 + 0.3 * Math.sin(t * 0.45 + fph) + 0.25 * Math.sin(t * 1.3);
+    for (let i = 0; i < p.count; i++) {
+      const bx = flBase[i * 3], by = flBase[i * 3 + 1], k = (bx + 0.475) / 0.95, amp = 0.2 * k * gust;
+      p.setZ(i, amp * Math.sin(k * 6.5 - t * 5.2 + fph) + 0.05 * k * Math.sin(by * 9 + t * 3.3));
+      p.setY(i, by - 0.09 * k * k * gust + 0.03 * k * Math.sin(k * 5 - t * 4 + fph));
+      p.setX(i, bx - 0.05 * k * k * gust);
+    }
+    p.needsUpdate = true; flGeo.computeVertexNormals();
+  });
   // posts, bumpers, sand
   for (const p of h.posts) { g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z)); }                    // (painted warning bands: this is something the ball hits)
   for (const p of h.bumpers) {
