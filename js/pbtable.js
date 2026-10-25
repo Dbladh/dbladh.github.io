@@ -1,5 +1,5 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a rectangular playfield with a round top, the funnel and two flippers, the drain, slingshots, pop bumpers and the cup.
-export const TILT_PUTT1 = 3.4, TILT_PIN = 4.6, TAU_PUTT1 = 7, TAU_PIN = 9, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17;
+export const TILT_PUTT1 = 3.4, TILT_PIN = 4.6, TAU_PUTT1 = 18, TAU_PIN = 24, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17;
 
 // The table, in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom, x = -15, the round top at x = 15).
 export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 12.6, z: 0 }, pivX: -12.0, pivZ: 1.78 };
@@ -25,8 +25,9 @@ export function prepareTable(hole) {
   for (let x = x0; x <= x1 + 1e-6; x += 2.5) for (let z = -6.9; z <= 6.9; z += 2.3) if (Math.abs(z) <= tableHalf(x) + 0.4) shape.push([x, z, 2.4]);
   for (let x = x0; x <= x1; x += 1) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 1) poly.push([x, -tableHalf(x)]);
   const path = []; for (let x = -13; x <= 13; x += 1) path.push({ x, z: 0 });
-  const bumpers = [], P = [[-0.5, 3.4], [4.5, 4.6], [8.5, 3.0]]; for (const [x, z] of P) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
-  Object.assign(hole, { walls, bumpers, posts: [], ponds: [], rivers: [], sands: [], pads: [], boosts: [], rails: [], barriers: [], doors: [], cage: null, feats: [], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
+  const bumpers = [{ x: 9.0, z: 0, r: 0.9 }], P = [[-0.5, 3.4], [4.5, 4.6], [8.5, 3.0]]; for (const [x, z] of P) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
+  const posts = []; for (const s of [-1, 1]) { posts.push({ x: 10.4, z: s * 1.9, r: 0.32 }, { x: 11.6, z: s * 3.6, r: 0.32 }); }               // (the guards in front of the cup: no straight shot, no easy hole in one)
+  Object.assign(hole, { walls, bumpers, posts, ponds: [], rivers: [], sands: [], pads: [], boosts: [], rails: [], barriers: [], doors: [], cage: null, feats: [], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
     tee: { ...TABLE.tee }, ball: { ...TABLE.tee }, cup: { ...TABLE.cup }, bounds: { cx: 0, cz: 0, hx: 15, hz: 7 }, par: 3 });
   const tee = { x: TABLE.pivX + 1.35, z: 0 }, L = (u, lat) => ({ x: tee.x + u, z: lat });         // (u = 0 at the line the flippers' tips reach, as the flipper bot and the drain test expect)
   const flips = [], ang = (phi) => phi;
