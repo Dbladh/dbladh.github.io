@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024225848';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024230649';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -64,7 +64,7 @@ export function shoot(ball, dx, dz, power, turbo) {
   ball.vx = (dx / l) * v; ball.vz = (dz / l) * v; ball.rest = false; ball.still = 0;
 }
 
-function collideSeg(b, ax, az, bx, bz, e, ev) {
+function collideSeg(b, ax, az, bx, bz, e, ev, kick = 0) {
   const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
   let t = l2 > 0 ? ((b.x - ax) * dx + (b.z - az) * dz) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
   const ox = b.x - (ax + dx * t), oz = b.z - (az + dz * t), d2 = ox * ox + oz * oz;
@@ -83,7 +83,7 @@ function collideCircle(b, cx, cz, r, e, ev, vcx, vcz) {
   const d = Math.sqrt(d2) || 1e-6, nx = dx / d, nz = dz / d;
   b.x = cx + nx * rr; b.z = cz + nz * rr;
   const vn = (b.vx - vcx) * nx + (b.vz - vcz) * nz;
-  if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vz -= (1 + e) * vn * nz; if (-vn > ev.post) ev.post = -vn; }
+  if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vz -= (1 + e) * vn * nz; if (-vn > ev.post) { ev.post = -vn; ev.hx = cx; ev.hz = cz; ev.hr = r; } }
 }
 /** Is (x, z) inside the flat polygon [x0, z0, x1, z1, ...]? */
 export function inPoly(poly, x, z) {
@@ -156,7 +156,7 @@ const dist2 = (b, x, z) => { const dx = b.x - x, dz = b.z - z; return dx * dx + 
  * fx (a special moment: 1 teleport, 2 cannon loads, 3 cannon fires, 4 loop entered, 5 geyser kick).
  */
 export function stepBall(b, hole, ctx, dt, ev) {
-  ev.wall = 0; ev.post = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
+  ev.wall = 0; ev.post = 0; ev.hr = 0; ev.kick = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
   if (b.holed || b.sunk) return;
   const n = Math.max(1, Math.ceil(dt / STEP)), h = dt / n, W = hole.walls, hero = hole.hero, ghost = ctx.ghost;
   const fric = FRICTION * (ctx.turbo ? 0.55 : 1) * (ctx.drive ? 0.6 : 1) * (ctx.fricK === undefined ? 1 : ctx.fricK), maxV = ctx.turbo ? MAX_V * 1.35 : ctx.drive ? 9 : MAX_V;
@@ -213,7 +213,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       }
     }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
-    for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev); }
+    for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev, w[8] || 0); }
     if (hole.boosts && !b.air) for (const o of hole.boosts) { if (o.powered && ctx.gateT <= 0) continue; const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
     if (b.padCool > 0) b.padCool -= h;
     if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = 5.0; b.padCool = 0.6; ev.fx = 6; }

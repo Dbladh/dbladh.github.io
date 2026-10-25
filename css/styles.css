@@ -929,3 +929,7 @@ body.scene-mode .bike-hint { display: block; }
 
 .pb-enter { position: fixed; left: 16px; bottom: 16px; z-index: 20; padding: 10px 16px; border: 0; border-radius: 999px; background: #d94f4f; color: #fff; font: 600 14px/1 inherit; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .pb-enter[hidden] { display: none; }
+
+.pb-pop { position: fixed; z-index: 25; pointer-events: none; transform: translate(-50%, -50%); font: 800 22px/1 inherit; color: #ffe27a; text-shadow: 0 2px 0 #7a3b00, 0 0 12px rgba(255,200,60,.8); animation: pbpop .9s ease-out forwards; }
+.pb-pop.c2 { font-size: 26px; color: #ffb84a; } .pb-pop.c3 { font-size: 30px; color: #ff8a3c; } .pb-pop.c4 { font-size: 34px; color: #ff5f5f; } .pb-pop.c5 { font-size: 40px; color: #ff4fa0; }
+@keyframes pbpop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.25); } 100% { opacity: 0; transform: translate(-50%, -210%) scale(1); } }

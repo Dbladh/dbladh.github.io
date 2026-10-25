@@ -1,5 +1,5 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a rectangular playfield with a round top, the funnel and two flippers, the drain, slingshots, pop bumpers and the cup.
-export const TILT_PUTT1 = 3.4, TILT_PIN = 4.6, TAU_PUTT1 = 18, TAU_PIN = 24, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17;
+export const TILT_PUTT1 = 3.4, TILT_PIN = 4.6, TAU_PUTT1 = 18, TAU_PIN = 24, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5;
 
 // The table, in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom, x = -15, the round top at x = 15).
 export const TABLE = { x0: -15, x1: 15, W: 7, arcX: 8, tee: { x: -4.5, z: 0 }, cup: { x: 12.6, z: 0 }, pivX: -12.0, pivZ: 1.78 };
@@ -7,7 +7,7 @@ const tableHalf = (x) => (x > TABLE.arcX ? Math.sqrt(Math.max(0, TABLE.W * TABLE
 
 /** Turn `hole` (any generated hole, used only for its seed and defaults) into a pinball playfield: a rectangle with a round top, a funnel down to two flippers and a drain, two slingshots, pop bumpers and the cup at the top. Sets hole.tiltDir. Returns { ux, uz, nx, nz, tee, L(u, lat), flips, rails, tris, bottom }. */
 export function prepareTable(hole) {
-  const { x0, x1, W, arcX } = TABLE, funnel = {}, walls = [], rails = [], seg = (a, b) => { walls.push([a[0], a[1], b[0], b[1], 0, 0]); rails.push([{ x: a[0], z: a[1] }, { x: b[0], z: b[1] }]); };
+  const { x0, x1, W, arcX } = TABLE, funnel = {}, walls = [], rails = [], seg = (a, b, kick = 0) => { walls.push(kick ? [a[0], a[1], b[0], b[1], 0, 0, 0, 0, kick] : [a[0], a[1], b[0], b[1], 0, 0]); rails.push([{ x: a[0], z: a[1] }, { x: b[0], z: b[1] }]); };
   const T = (x, z) => [x, z], poly = [];
   const FR = -Math.PI / 2 - 0.45;                                                  // (the flipper at rest points down and in: its direction on the +z side is (dx, dz); the funnel wall is that line moved up by the flipper's radius and run back to the side wall)
   for (const s of [-1, 1]) {
@@ -19,15 +19,15 @@ export function prepareTable(hole) {
   const ARC = 16; let prev = T(arcX, -W);                              // the round top
   for (let k = 1; k <= ARC; k++) { const t = (k / ARC - 0.5) * Math.PI, q = T(arcX + Math.cos(t) * W, Math.sin(t) * W); seg(prev, q); prev = q; }
   const tris = [];                                                     // the slingshots: a triangle above each funnel, its long side facing the middle
-  for (const s of [-1, 1]) { const tr = [T(-5.0, s * 5.6), T(-9.0, s * 5.6), T(-9.0, s * 3.0)]; tris.push(tr); for (let k = 0; k < 3; k++) seg(tr[k], tr[(k + 1) % 3]); }
+  for (const s of [-1, 1]) { const tr = [T(-5.0, s * 5.6), T(-9.0, s * 5.6), T(-9.0, s * 3.0)]; tris.push(tr); for (let k = 0; k < 3; k++) seg(tr[k], tr[(k + 1) % 3], k === 2 ? SLING_KICK : 0); }
   const ribbon = [], shape = [];
   for (let x = x0; x <= x1 + 1e-6; x += 0.5) { const w = tableHalf(x); ribbon.push([x, w, x, -w, x - x0]); }
   for (let x = x0; x <= x1 + 1e-6; x += 2.5) for (let z = -6.9; z <= 6.9; z += 2.3) if (Math.abs(z) <= tableHalf(x) + 0.4) shape.push([x, z, 2.4]);
   for (let x = x0; x <= x1; x += 1) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 1) poly.push([x, -tableHalf(x)]);
   const path = []; for (let x = -13; x <= 13; x += 1) path.push({ x, z: 0 });
   const bumpers = [{ x: 9.0, z: 0, r: 0.9 }], P = [[-0.5, 3.4], [4.5, 4.6], [8.5, 3.0]]; for (const [x, z] of P) for (const s of [-1, 1]) bumpers.push({ x, z: z * s, r: 0.7 });
-  const posts = []; for (const s of [-1, 1]) { posts.push({ x: 10.4, z: s * 1.9, r: 0.32 }, { x: 11.6, z: s * 3.6, r: 0.32 }); }               // (the guards in front of the cup: no straight shot, no easy hole in one)
-  Object.assign(hole, { walls, bumpers, posts, ponds: [], rivers: [], sands: [], pads: [], boosts: [], rails: [], barriers: [], doors: [], cage: null, feats: [], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
+  const targets = [-2.4, 0, 2.4].map((z) => ({ x: 5.2, z, r: 0.28 })), posts = [...targets]; for (const s of [-1, 1]) { posts.push({ x: 10.4, z: s * 1.9, r: 0.32 }, { x: 11.6, z: s * 3.6, r: 0.32 }); }               // (the guards in front of the cup: no straight shot, no easy hole in one)
+  Object.assign(hole, { walls, bumpers, posts, targets, ponds: [], rivers: [], sands: [], pads: [], boosts: [], rails: [], barriers: [], doors: [], cage: null, feats: [], recipes: [], hills: [], pickups: [], hero: null, path, widths: path.map(() => 3), ribbon, shape, outline: poly,
     tee: { ...TABLE.tee }, ball: { ...TABLE.tee }, cup: { ...TABLE.cup }, bounds: { cx: 0, cz: 0, hx: 15, hz: 7 }, par: 3 });
   const tee = { x: TABLE.pivX + 1.35, z: 0 }, L = (u, lat) => ({ x: tee.x + u, z: lat });         // (u = 0 at the line the flippers' tips reach, as the flipper bot and the drain test expect)
   const flips = [], ang = (phi) => phi;
