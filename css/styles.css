@@ -926,3 +926,6 @@ body.scene-mode .bike-hint { display: block; }
 .pb-tilt { position: absolute; right: 16px; top: 50%; width: 22px; height: 120px; transform: translateY(-50%); border-radius: 12px; background: rgba(24, 20, 44, 0.55); overflow: hidden; display: flex; flex-direction: column-reverse; align-items: center; }
 .pb-tilt i { display: block; width: 100%; background: linear-gradient(#ffd23f, #ff6a3d); height: 0; }
 .pb-tilt span { position: absolute; bottom: -18px; font-size: 0.6rem; letter-spacing: 0.1em; color: #fff; opacity: 0.8; }
+
+.pb-enter { position: fixed; left: 16px; bottom: 16px; z-index: 20; padding: 10px 16px; border: 0; border-radius: 999px; background: #d94f4f; color: #fff; font: 600 14px/1 inherit; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.pb-enter[hidden] { display: none; }
