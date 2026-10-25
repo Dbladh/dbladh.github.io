@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024234345';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261024235539';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;

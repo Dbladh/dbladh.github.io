@@ -70,7 +70,7 @@ export function prepareTable(hole) {
   }
   const boosts = [{ x: 1.9, z: 0, ux: 1, uz: 0, len: 1.2, wid: 1.2 }];
   const bumpers = [{ x: -0.8, z: 3.1, r: 0.6 }, { x: 0.8, z: 1.7, r: 0.55 }, { x: 0.8, z: -1.7, r: 0.55 }];
-  const elevated = [{ x: 6.5, z: 1.15, r: 0.4 }, { x: 6.5, z: -1.15, r: 0.4 }];                                // (two bumpers on the deck in front of the cup, a narrow gap between them: added to the physics, drawn by the game at deck height)
+  const elevated = [{ x: 6.5, z: 2.0, r: 0.4 }, { x: 6.5, z: -2.0, r: 0.4 }];                                // (two bumpers on the deck in front of the cup, a narrow gap between them: added to the physics, drawn by the game at deck height)
   const targets = [-1.9, 1.9].map((z) => ({ x: -2.0, z, r: 0.28 })), posts = [...targets];
   const cover = { x: TABLE.cup.x, z: TABLE.cup.z, r: 0.55 };                                                    // (the plate over the cup: in the physics while the cup is closed)
   const spinner = { x: -0.8, z: -3.1, len: 0.85, rad: 0.1 };

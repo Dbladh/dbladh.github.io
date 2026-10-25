@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024234345';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024234345';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024234345';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024234345';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024234345';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024234345';
-import { createNeon } from './golfneon.js?v=20261024234345';
-import { createFx } from './golffx.js?v=20261024234345';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024234345';
-import { buildDecor } from './golfdecor.js?v=20261024234345';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024234345';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024235539';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024235539';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024235539';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024235539';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024235539';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024235539';
+import { createNeon } from './golfneon.js?v=20261024235539';
+import { createFx } from './golffx.js?v=20261024235539';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024235539';
+import { buildDecor } from './golfdecor.js?v=20261024235539';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024235539';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
