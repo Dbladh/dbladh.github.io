@@ -3,12 +3,12 @@
 // slowly flattens until the ball stops, you putt again, and if that misses too the table tilts up into pinball: the ball rolls down, bumpers and obstacles knock it about, the flippers keep it
 // in play, until the tilt has flattened or it drains (a stroke) or drops in the cup.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024223441';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024223441';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024223441';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261024223441';
-import { courseMonth } from './monthseed.js?v=20261024223441';
-import { prepareTable, stepFlips, isDrained, TILT_PUTT1, TILT_PIN, TAU_PUTT1, TAU_PIN, FLIP_RAD } from './pbtable.js?v=20261024223441';
+import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024224007';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024224007';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024224007';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261024224007';
+import { courseMonth } from './monthseed.js?v=20261024224007';
+import { prepareTable, stepFlips, isDrained, TILT_PUTT1, TILT_PIN, TAU_PUTT1, TAU_PIN, FLIP_RAD } from './pbtable.js?v=20261024224007';
 
 const HOLE_INDEX = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const SUB = 4;
@@ -121,6 +121,10 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
     if (st.kind === 'putt1') ctx.tilt = TILT_PUTT1 * Math.exp(-(st.mode === 'roll' ? st.rollT : 0) / TAU_PUTT1);
     else if (st.kind === 'putt') ctx.tilt = 0;
     else { st.pinT = (st.pinT || 0) + dt; ctx.tilt = TILT_PIN * Math.min(1, st.pinT / 0.3) * Math.exp(-st.pinT / TAU_PIN); }
+    if (group) {                                                          // (the cup end rises, pivoting about the tee: the table is seen to tilt)
+      group.rotation.x = Math.min(0.3, ctx.tilt * 0.06); group.position.set(SITE.x, Y + 0.06, SITE.z); group.updateMatrix();
+      const t = toWorld(SITE, hole.tee.x, hole.tee.z), w = tmpV.set(hole.tee.x, 0, hole.tee.z).applyMatrix4(group.matrix); group.position.add(tmpV.set(t.x - w.x, Y + 0.06 - w.y, t.z - w.z));
+    }
     elTilt.firstChild.style.height = `${Math.round(100 * Math.min(1, ctx.tilt / TILT_PIN))}%`;
   }
   function pointsFor() { return st.flipT > st.clock - 5 ? 150 : Math.max(100, 400 - 100 * (st.strokes - 1)) + (st.strokes === 1 ? 300 : 0); }
