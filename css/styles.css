@@ -927,8 +927,15 @@ body.scene-mode .bike-hint { display: block; }
 .pb-tilt i { display: block; width: 100%; background: linear-gradient(#ffd23f, #ff6a3d); height: 0; }
 .pb-tilt span { position: absolute; bottom: -18px; font-size: 0.6rem; letter-spacing: 0.1em; color: #fff; opacity: 0.8; }
 
-.pb-enter { position: fixed; left: 16px; bottom: 16px; z-index: 20; padding: 10px 16px; border: 0; border-radius: 999px; background: #d94f4f; color: #fff; font: 600 14px/1 inherit; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-.pb-enter[hidden] { display: none; }
+
+.mode-pick { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(8,10,20,.55); backdrop-filter: blur(4px); }
+.mode-pick[hidden] { display: none; }
+.mode-card { width: min(92vw, 380px); padding: 22px; border-radius: 22px; background: #fff8ea; color: #2a1c0c; box-shadow: 0 18px 50px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 12px; }
+.mode-card h2 { margin: 0 0 4px; font: 800 22px/1.1 inherit; }
+.mode-card button { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 16px; border: 0; border-radius: 16px; background: #ffd23f; color: #2a1c0c; cursor: pointer; font: inherit; }
+.mode-card button[data-g="pinball"] { background: #e8594b; color: #fff; }
+.mode-card button b { font: 800 18px/1.1 inherit; } .mode-card button span { font: 500 13px/1.3 inherit; opacity: .85; }
+.mode-card .mode-x { background: transparent; text-align: center; padding: 8px; font: 600 14px/1 inherit; opacity: .7; }
 
 .pb-pop { position: fixed; z-index: 25; pointer-events: none; transform: translate(-50%, -50%); font: 800 22px/1 inherit; color: #ffe27a; text-shadow: 0 2px 0 #7a3b00, 0 0 12px rgba(255,200,60,.8); animation: pbpop .9s ease-out forwards; }
 .pb-pop.c2 { font-size: 26px; color: #ffb84a; } .pb-pop.c3 { font-size: 30px; color: #ff8a3c; } .pb-pop.c4 { font-size: 34px; color: #ff5f5f; } .pb-pop.c5 { font-size: 40px; color: #ff4fa0; }

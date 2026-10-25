@@ -2,12 +2,12 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024235539';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024235539';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024235539';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261024235539';
-import { courseMonth } from './monthseed.js?v=20261024235539';
-import { prepareTable, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261024235539';
+import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261024235800';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024235800';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261024235800';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261024235800';
+import { courseMonth } from './monthseed.js?v=20261024235800';
+import { prepareTable, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261024235800';
 
 const HOLE_INDEX = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const SUB = 4, LAMPS = ['ramp', 'spin', 'tgt'], LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS' };

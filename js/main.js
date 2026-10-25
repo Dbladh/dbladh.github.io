@@ -1,14 +1,14 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261024235539';
-import { buildWorld } from './world.js?v=20261024235539';
-import { createSky } from './sky.js?v=20261024235539';
-import { createDOF } from './dof.js?v=20261024235539';
-import { createRide } from './ride.js?v=20261024235539';
-import { createGame } from './bikegame.js?v=20261024235539';
-import { createAurora, setWarm } from './aurora.js?v=20261024235539';
-import { createAudio, pickFlicker } from './audio.js?v=20261024235539';
+import { PAL } from './palette.js?v=20261024235800';
+import { buildWorld } from './world.js?v=20261024235800';
+import { createSky } from './sky.js?v=20261024235800';
+import { createDOF } from './dof.js?v=20261024235800';
+import { createRide } from './ride.js?v=20261024235800';
+import { createGame } from './bikegame.js?v=20261024235800';
+import { createAurora, setWarm } from './aurora.js?v=20261024235800';
+import { createAudio, pickFlicker } from './audio.js?v=20261024235800';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -574,14 +574,19 @@ function start() {
     const want = on && !seen.dial && !dialOn && !reduceMotion && hintClock > 8 ? Math.max(0, Math.sin(Math.PI * Math.min(1, (hintClock % 20) / 6))) : 0;
     hintSun += (want - hintSun) * (1 - Math.exp(-dt * 3)); sky.setHint(hintSun);
   }
-  const pbBtn = document.createElement('button'); pbBtn.type = 'button'; pbBtn.className = 'pb-enter'; pbBtn.textContent = 'Try Pinball Golf'; pbBtn.hidden = true;   // (entry to the pinball slice, until the windmill gets a mode choice)
-  pbBtn.addEventListener('click', (e) => { e.stopPropagation(); playPinball(); }); document.body.appendChild(pbBtn);
+  // the windmill asks which game: the mini-golf course or the pinball table
+  const modeBox = document.createElement('div'); modeBox.className = 'mode-pick'; modeBox.hidden = true;
+  modeBox.innerHTML = '<div class="mode-card"><h2>Windmill games</h2><button type="button" data-g="golf"><b>Mini-golf</b><span>Nine holes round the windmill</span></button><button type="button" data-g="pinball"><b>Pinball Golf</b><span>Putt the skill shot, flip, light the lamps, sink the cup</span></button><button type="button" class="mode-x" data-g="">Not now</button></div>';
+  document.body.appendChild(modeBox);
+  const pickMode = () => { if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return; modeBox.hidden = false; };
+  modeBox.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b || e.target === modeBox) { modeBox.hidden = true; if (b?.dataset.g === 'golf') playGolf(); else if (b?.dataset.g === 'pinball') playPinball(); } e.stopPropagation(); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modeBox.hidden) modeBox.hidden = true; });
   async function playGolf() {
     if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261024235539');
+        const mod = await import('./golf.js?v=20261024235800');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -595,7 +600,7 @@ function start() {
     golfLoading = true;
     try {
       if (!pinball) {
-        const mod = await import('./pinball.js?v=20261024235539');
+        const mod = await import('./pinball.js?v=20261024235800');
         pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
         pinball.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -678,7 +683,7 @@ function start() {
     const id = pick(e);
     if (id) { goTo(id); return; }
     if (openId) return;
-    if (windmillHit(e)) { playGolf(); return; }
+    if (windmillHit(e)) { pickMode(); return; }
     const hi = world.houseAt(ray);                                           // a hidden extra: click a house and it plays a song, faint and far away
     if (hi >= 0) toggleHouseSong(hi);
   });
@@ -996,7 +1001,7 @@ function start() {
       songRoll = D.roll * D.env;
     }
     camera.lookAt(look); camera.rotation.z += songRoll;
-    const gT = performance.now(); pbBtn.hidden = active !== 'home' || !!openId || busy(); game?.update(dt, camera); golf?.update(dt, camera); pinball?.update(dt, camera); secT('game', gT);
+    const gT = performance.now(); game?.update(dt, camera); golf?.update(dt, camera); pinball?.update(dt, camera); secT('game', gT);
     {                                                                          // the aurora dances to the song (and lights the world while it does)
       const playing = songHouse >= 0 && audio.songPlaying;
       const st = playing ? audio.songTime() : -1;
