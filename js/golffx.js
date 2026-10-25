@@ -17,9 +17,22 @@ export function createFx(lowEnd = false) {
   const MAX_SAND = 240, MAX_DUST = 40, sands = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), sandMat, MAX_SAND), dusts = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), dustMat, MAX_DUST);
   for (const im of [sands, dusts]) { im.frustumCulled = false; im.renderOrder = 4; for (let i = 0; i < im.count; i++) im.setMatrixAt(i, zero); group.add(im); }
   const S = Array.from({ length: MAX_SAND }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s: 0.04, floor: 0 })), U = Array.from({ length: MAX_DUST }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0, life: 1, s: 0.3 }));
-  const fogMat = new THREE.MeshBasicMaterial({ color: '#b7a5ff', transparent: true, opacity: 0.11, depthWrite: false, fog: true }), MAX_FOG = 70, fogs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), fogMat, MAX_FOG);
-  fogs.frustumCulled = false; fogs.renderOrder = 4; for (let i = 0; i < MAX_FOG; i++) fogs.setMatrixAt(i, zero); group.add(fogs);
-  const F = Array.from({ length: MAX_FOG }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vz: 0, t: 0, life: 1, s: 0.5 })); let fCur = 0, accF = 0;
+  // the ghost's fog: soft, cloudy billboards (a smoky texture that turns slowly, fading in and out), not solid shapes
+  const smokeTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); let sd = 7; const r = () => { sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0; return sd / 4294967296; };
+    for (let i = 0; i < 26; i++) { const px = 64 + (r() - 0.5) * 60, py = 64 + (r() - 0.5) * 60, rad = 14 + r() * 26, g = x.createRadialGradient(px, py, 0, px, py, rad); g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); }
+    x.globalCompositeOperation = 'destination-in'; const m = x.createRadialGradient(64, 64, 4, 64, 64, 64); m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(0.55, 'rgba(0,0,0,0.7)'); m.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = m; x.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const MAX_FOG = 80, fogGeo = new THREE.PlaneGeometry(1, 1), aRot = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FOG), 1), aAlpha = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FOG), 1);
+  fogGeo.setAttribute('aRot', aRot); fogGeo.setAttribute('aAlpha', aAlpha);
+  const fogMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: smokeTex }, uColor: { value: new THREE.Color('#b9a8ff') } },
+    vertexShader: 'attribute float aRot; attribute float aAlpha; varying vec2 vUv; varying float vA; void main() { vUv = uv; vA = aAlpha; vec4 mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0); float sz = length(instanceMatrix[0].xyz); float c = cos(aRot), s = sin(aRot); vec2 p = position.xy * sz; mv.xy += vec2(p.x * c - p.y * s, p.x * s + p.y * c); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform sampler2D uMap; uniform vec3 uColor; varying vec2 vUv; varying float vA; void main() { float a = texture2D(uMap, vUv).a * vA; if (a < 0.003) discard; gl_FragColor = vec4(uColor, a); }',
+  });
+  const fogs = new THREE.InstancedMesh(fogGeo, fogMat, MAX_FOG); fogs.frustumCulled = false; fogs.renderOrder = 4; for (let i = 0; i < MAX_FOG; i++) fogs.setMatrixAt(i, zero); group.add(fogs);
+  const F = Array.from({ length: MAX_FOG }, () => ({ on: false, x: 0, y: 0, z: 0, vx: 0, vz: 0, t: 0, life: 1, s: 0.5, rot: 0, spin: 0 })); let fCur = 0, accF = 0;
   let sCur = 0, uCur = 0, accS = 0;
   let dCur = 0, mCur = 0, rCur = 0, acc = 0, accM = 0;
   const rnd = Math.random, k = lowEnd ? 0.55 : 1;
@@ -38,8 +51,8 @@ export function createFx(lowEnd = false) {
     },
     /** An eerie low fog drifting round (x, y, z) within `radius` (the ghost power-up). */
     ghostFog(x, y, z, radius, dt) {
-      accF += dt * 14 * k;
-      while (accF >= 1) { accF -= 1; const a = rnd() * 6.283, d = Math.sqrt(rnd()) * radius, p = F[fCur]; fCur = (fCur + 1) % MAX_FOG; p.on = true; p.x = x + Math.cos(a) * d; p.z = z + Math.sin(a) * d; p.y = y + 0.1 + rnd() * 0.5; p.vx = (rnd() - 0.5) * 0.35; p.vz = (rnd() - 0.5) * 0.35; p.t = 0; p.life = 1.8 + rnd() * 1.4; p.s = 0.55 + rnd() * 0.6; }
+      accF += dt * 11 * k;
+      while (accF >= 1) { accF -= 1; const a = rnd() * 6.283, d = Math.sqrt(rnd()) * radius, p = F[fCur]; fCur = (fCur + 1) % MAX_FOG; p.on = true; p.x = x + Math.cos(a) * d; p.z = z + Math.sin(a) * d; p.y = y + 0.1 + rnd() * 0.5; p.vx = (rnd() - 0.5) * 0.35; p.vz = (rnd() - 0.5) * 0.35; p.t = 0; p.life = 2.4 + rnd() * 1.8; p.s = 1.0 + rnd() * 1.0; p.rot = rnd() * 6.28; p.spin = (rnd() - 0.5) * 0.5; }
     },
     /** Sand thrown up by a ball ploughing through a pit at (x, y, z) moving (vx, vz). */
     sand(x, y, z, vx, vz, dt) {
@@ -90,13 +103,14 @@ export function createFx(lowEnd = false) {
         m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s, s * 0.7, s)); dusts.setMatrixAt(i, m);
       }
       for (let i = 0; i < MAX_FOG; i++) {
-        const p = F[i]; if (!p.on) continue; any = true; p.t += dt;
-        if (p.t >= p.life) { p.on = false; fogs.setMatrixAt(i, zero); continue; }
-        p.x += p.vx * dt; p.z += p.vz * dt; p.y += 0.12 * dt; const u = p.t / p.life, s = p.s * (0.6 + 0.7 * u) * Math.sin(Math.PI * Math.min(1, u * 1.1)) ** 0.5;
-        m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s, s * 0.45, s)); fogs.setMatrixAt(i, m);
+        const p = F[i]; if (!p.on) { aAlpha.array[i] = 0; continue; } any = true; p.t += dt;
+        if (p.t >= p.life) { p.on = false; fogs.setMatrixAt(i, zero); aAlpha.array[i] = 0; continue; }
+        p.x += p.vx * dt; p.z += p.vz * dt; p.y += 0.1 * dt; p.rot += p.spin * dt; const u = p.t / p.life, env = Math.sin(Math.PI * u), s2 = p.s * (0.7 + 0.6 * u);
+        m.compose(v.set(p.x, p.y, p.z), q.identity(), sc.set(s2, s2, s2)); fogs.setMatrixAt(i, m); aAlpha.array[i] = 0.55 * env * env; aRot.array[i] = p.rot;
       }
+      aAlpha.needsUpdate = true; aRot.needsUpdate = true;
       if (any) { fogs.instanceMatrix.needsUpdate = true; sands.instanceMatrix.needsUpdate = true; dusts.instanceMatrix.needsUpdate = true; drops.instanceMatrix.needsUpdate = true; mists.instanceMatrix.needsUpdate = true; }
     },
-    dispose() { fogs.geometry.dispose(); fogMat.dispose(); sands.geometry.dispose(); dusts.geometry.dispose(); sandMat.dispose(); dustMat.dispose(); drops.geometry.dispose(); mists.geometry.dispose(); ringGeo.dispose(); dropMat.dispose(); mistMat.dispose(); for (const r of rings) r.mat.dispose(); },
+    dispose() { fogGeo.dispose(); fogMat.dispose(); smokeTex.dispose(); sands.geometry.dispose(); dusts.geometry.dispose(); sandMat.dispose(); dustMat.dispose(); drops.geometry.dispose(); mists.geometry.dispose(); ringGeo.dispose(); dropMat.dispose(); mistMat.dispose(); for (const r of rings) r.mat.dispose(); },
   };
 }

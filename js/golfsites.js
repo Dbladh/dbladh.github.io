@@ -1,7 +1,7 @@
 // Where the nine holes of a month's course lie on the landscape around the windmill. Pure data and maths (no THREE), deterministic like golfgen.js.
 // The ground is fixed (only the plants and houses are random per visit), so the candidate sites were found once by sampling it: gentle spots clear of the signs, the pond and the windmill.
 // Each month picks nine of them, an order that makes a short tour, and a heading (one of eight, in 45 degree steps) for every hole; some face the windmill so that it stands in the background.
-import { mulberry32 } from './golfhero.js?v=20261024172414';
+import { mulberry32 } from './golfhero.js?v=20261024192239';
 
 export const WINDMILL = { x: -23, z: -92 };
 export const SITES = [[-42, -70], [-50, -100], [0, -100], [-80, -94], [6, -144], [-72, -64], [-60, -140], [-26, -164], [-104, -76], [-92, -122], [-56, -170]];
