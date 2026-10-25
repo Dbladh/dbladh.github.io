@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024205959';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024205959';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024205959';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024205959';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024205959';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024205959';
-import { createNeon } from './golfneon.js?v=20261024205959';
-import { createFx } from './golffx.js?v=20261024205959';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261024205959';
-import { buildDecor } from './golfdecor.js?v=20261024205959';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024205959';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261024210129';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261024210129';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261024210129';
+import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261024210129';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261024210129';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261024210129';
+import { createNeon } from './golfneon.js?v=20261024210129';
+import { createFx } from './golffx.js?v=20261024210129';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261024210129';
+import { buildDecor } from './golfdecor.js?v=20261024210129';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261024210129';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -132,6 +132,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     dots.parent?.remove(dots); hamster.parent?.remove(hamster);
     for (const v of vises) { scene.remove(v.group); v.dispose(); }
     for (const d of decors) { scene.remove(d.group); d.dispose(); }
+    occ.pieces.clear(); occ.list = []; occ.hole = -1;
     if (neon) { neon.reset(); neon = null; }
     if (scenery) { scene.remove(scenery.group); scenery.dispose(); scenery = null; }
     if (fxs) { scene.remove(fxs.group); fxs.dispose(); fxs = null; }
@@ -460,7 +461,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
           cam.pos.copy(camera.position); cam.look.copy(trip.look);
           if (st.mode === 'finale') showScore(); else { startHole(trip.to); cam.pos.copy(camera.position); cam.look.copy(trip.look); }
         }
-        updateScenery(dt); updateHud();
+        updateScenery(dt); updateOcclusion(dt); updateHud();
         return true;
       }
       if (st.mode === 'replay') { replayStep(dt); }
@@ -536,12 +537,45 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         if (hamster.visible) { const b = balls[0], sp = Math.hypot(b.vx, b.vz); hamster.userData.run(st.holeT, sp); if (sp > 0.3) hamster.userData.hm.rotation.y = Math.atan2(b.vx, b.vz); }
         st.gateOpen = ctx.gateT > 0; vis.update(st.holeT, st.holeT, dt, st);
       }
-      updateScenery(dt);
+      updateScenery(dt); updateOcclusion(dt);
       updateHud();
       return true;
     },
   };
   const toastOff = () => { elToast.classList.remove('show'); };
+  // ---------- things between the camera and the ball turn see-through ----------
+  const occ = { ray: new THREE.Raycaster(), pieces: new Map(), list: [], from: new THREE.Vector3(), to: new THREE.Vector3(), dir: new THREE.Vector3(), tick: 0, hole: -1 };
+  const pieceOf = (o, roots) => { while (o && !roots.includes(o.parent)) o = o.parent; return o; };
+  function occlusionTargets() {                            // the meshes that may hide the ball: every piece of the hole in play and of the scenery (not the green, the water, the balls or the effects)
+    occ.list = []; occ.hole = st.hole; const roots = [holeGroup, scenery && scenery.group].filter(Boolean);
+    for (const root of roots) for (const piece of root.children) {
+      if (piece === ballMeshes[0] || ballMeshes.includes(piece) || ballShadows.includes(piece) || piece === dots || piece === hamster) continue;
+      piece.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry && o.material && !o.material.transparent && !o.material.uniforms && o.material !== M.grass && o.material !== M.cup && o.material !== M.white && o.geometry !== G.disc && !(o.material.vertexColors)) { o.userData.piece = piece; occ.list.push(o); } });
+    }
+  }
+  const fadeMat = (piece, m, store) => { let c = store.get(m); if (!c) { c = m.clone(); c.transparent = true; c.depthWrite = false; store.set(m, c); } return c; };
+  function updateOcclusion(dt) {
+    if (!holeGroup || !balls.length || !['aim', 'roll', 'hamster', 'sink', 'done', 'replay'].includes(st.mode)) { if (occ.pieces.size) fadeAll(dt, true); return; }
+    if (occ.hole !== st.hole || !occ.list.length) occlusionTargets();
+    const hits = new Set();
+    if ((occ.tick++ & 1) === 0) {
+      const b = balls[0], p = wp(b.x, Math.max(b.y, 0) + 0.3, b.z); occ.to.copy(p); occ.from.copy(camera.position); occ.dir.subVectors(occ.to, occ.from); const dist = occ.dir.length(); occ.dir.normalize();
+      occ.ray.set(occ.from, occ.dir); occ.ray.near = 0.2; occ.ray.far = Math.max(0, dist - 0.45);
+      for (const h of occ.ray.intersectObjects(occ.list, false)) hits.add(h.object.userData.piece);
+      for (const [piece, f] of occ.pieces) f.target = hits.has(piece) ? 1 : 0;
+      for (const piece of hits) if (!occ.pieces.has(piece)) { if (ghostOn && vis && piece === vis.heroRoot) continue; occ.pieces.set(piece, { k: 0, target: 1, meshes: [], mats: new Map() }); }
+    }
+    fadeAll(dt, false);
+  }
+  function fadeAll(dt, force) {
+    for (const [piece, f] of occ.pieces) {
+      if (force) f.target = 0;
+      f.k += (f.target - f.k) * Math.min(1, dt * 9);
+      if (!f.meshes.length) piece.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.material && !o.material.uniforms && !Array.isArray(o.material)) f.meshes.push([o, o.material]); });
+      if (f.k > 0.02) for (const [o, m] of f.meshes) { if (o.material === m || o.material.userData.fade) { const c = fadeMat(piece, m, f.mats); c.userData.fade = true; c.opacity = 1 - 0.78 * f.k; o.material = c; o.castShadow = o.castShadow; } }
+      else if (f.target === 0) { for (const [o, m] of f.meshes) if (o.material.userData && o.material.userData.fade) o.material = m; occ.pieces.delete(piece); }
+    }
+  }
   function updateScenery(dt) {                             // the holes next to the one in play keep moving (the rest stand still)
     for (const j of [st.hole - 1, st.hole + 1]) if (vises[j]) vises[j].update(st.idle, st.idle, dt, st);
   }
