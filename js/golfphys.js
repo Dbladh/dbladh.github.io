@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026213426';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026220027';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -42,8 +42,8 @@ function laneH(L, x, z) {
   }
   if (bover > 0) best = Math.max(blat - L.w, bover) + L.w;                      // (the ends are cut square, not rounded)
   const ex = best - L.w; if (ex > L.edge) return 0;
-  const k = L.ramp > 0 ? Math.min(1, Math.max(0, (bs - L.s0) / L.ramp)) : 1;
-  return L.H * k * k * (3 - 2 * k) * (ex <= 0 ? 1 : 1 - sm(ex / L.edge));
+  const k = L.ramp > 0 ? Math.min(1, Math.max(0, (bs - L.s0) / L.ramp)) : 1, kd = L.down ? Math.min(1, Math.max(0, (L.len - bs) / L.down)) : 1;       // (a bridge rises, then falls away again)
+  return L.H * k * k * (3 - 2 * k) * kd * kd * (3 - 2 * kd) * (ex <= 0 ? 1 : 1 - sm(ex / L.edge));
 }
 function lanesH(hole, x, z) { let m = 0; for (const L of hole.lanes) { const v = laneH(L, x, z); if (v > m) m = v; } return m; }
 export function hillH(hole, x, z) {
@@ -234,6 +234,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       }
     }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
+    if (hole.ghosts && !ghost) for (const g of hole.ghosts) if (((tt + g.phase) % g.period) / g.period < g.duty) collideSeg(b, g.ax, g.az, g.bx, g.bz, 0.5, ev);        // (a ghost wall is solid for part of every period, then fades away)
     for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev, w[8] || 0); }
     if (hole.boosts && !b.air) for (const o of hole.boosts) { if (o.powered && ctx.gateT <= 0) continue; const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
     if (b.padCool > 0) b.padCool -= h;
@@ -263,6 +264,14 @@ export function stepBall(b, hole, ctx, dt, ev) {
           const ph = hero.w * tt + m.ph, off = hero.A * Math.sin(ph), v = hero.A * hero.w * Math.cos(ph);
           collideCircle(b, hero.x + ux * m.du + hero.nx * off, hero.z + uz * m.du + hero.nz * off, hero.rad, 0.95, ev, hero.nx * v, hero.nz * v);
         }
+      } else if (hero.type === 'slider') {                    // sliding walls: blocks that run across the lane (three round pieces each)
+        for (const m of hero.paddles) {
+          const ph = hero.w * tt + m.ph, off = hero.A * Math.sin(ph), v = hero.A * hero.w * Math.cos(ph);
+          for (const k of [-0.8, 0, 0.8]) collideCircle(b, hero.x + ux * m.du + hero.nx * (off + k), hero.z + uz * m.du + hero.nz * (off + k), hero.rad, 0.9, ev, hero.nx * v, hero.nz * v);
+        }
+      } else if (hero.type === 'bridge') {                    // a moat under an arched deck: off the deck the ball is in the water
+        const rx = b.x - hero.x, rz = b.z - hero.z, a = rx * ux + rz * uz, lat = rx * hero.nx + rz * hero.nz;
+        if (!b.air && Math.abs(a) < hero.moatHalf && Math.abs(lat) < hero.hw + 0.35 && hillH(hole, b.x, b.z) < 0.2) { b.sunk = true; ev.splash = true; return; }
       } else if (hero.type === 'geyser') {
         const k = (tt + hero.phase) / hero.period, idx = Math.floor(k), fr = k - idx, dx = b.x - hero.x, dz = b.z - hero.z, d2 = dx * dx + dz * dz;
         if (fr > 0.84 && d2 < hero.r * hero.r && b.gk !== idx) {

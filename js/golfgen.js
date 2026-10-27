@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026213426';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026213426';
-import { aceSearch } from './golface.js?v=20261026213426';
-import { BAKED } from './golfbake.js?v=20261026213426';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026220027';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026220027';
+import { aceSearch } from './golface.js?v=20261026220027';
+import { BAKED } from './golfbake.js?v=20261026220027';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -28,7 +28,8 @@ const smoothstep01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 export const SHAPES = ['straight', 'dogleg', 'wide', 'sbend', 'chicane', 'zigzag', 'arc'];
 const SHAPE_POOLS = [['straight', 'dogleg', 'sbend', 'arc', 'zigzag'], ['dogleg', 'sbend', 'zigzag', 'arc', 'chicane', 'wide'], ['chicane', 'wide', 'zigzag', 'arc', 'straight', 'dogleg']];   // (holes 1-3, 4-6, 7-9)
 /** Which shape each of the nine holes has this month: drawn without repeats from a pool per tier, shuffled with the course seed. */
-export const SHAPES_BAKED = true;                           // (set to true once golfbake.js has been worked out with the shapes: until then a month's course keeps the zigzag, and only random courses, which are searched for anyway, use them)
+export const SHAPES_BAKED = true;
+export const MORE_BAKED = false;                            // (the sliding-wall and bridge heroes, ghost walls and fork islands: random courses only until golfbake.js has been worked out with them)
 export function shapeOrder(cs, all = SHAPES_BAKED) {
   if (!all) return Array(9).fill('zigzag');
   const r = mulberry32((cs + 0x2f1d3a7) >>> 0), out = [];
@@ -228,14 +229,14 @@ function addPatches(out, rr, surface, S, magnets = [], tunnels = []) {
   if (S.index >= 1 && rr() < 0.4) {                                           // a tunnel: an arched roof over a straight stretch (the ball rolls under it)
     for (let tries = 0; tries < 100; tries++) {
       const ci = 8 + ((rr() * (N - 20)) | 0), i1 = Math.min(N - 8, ci + 7), mid = (ci + i1) >> 1;
-      if (sAt[ci] < 5 || sAt[i1] > length - 5 || tx[ci] * tx[i1] + tz[ci] * tz[i1] < 0.95 || ![ci, mid, i1].every((i) => free(cl[i].x, cl[i].z, -1.3))) continue;
+      if (sAt[ci] < 5 || sAt[i1] > length - 5 || tx[ci] * tx[i1] + tz[ci] * tz[i1] < 0.95 || Math.hypot(cl[mid].x - S.hero.x, cl[mid].z - S.hero.z) < 5.6 || ![ci, mid, i1].every((i) => free(cl[i].x, cl[i].z, -1.3))) continue;
       tunnels.push({ x: q(cl[mid].x), z: q(cl[mid].z), ux: tx[mid], uz: tz[mid], len: Math.hypot(cl[i1].x - cl[ci].x, cl[i1].z - cl[ci].z), hw: w[mid] }); keep.push({ x: cl[mid].x, z: cl[mid].z, r: 3.2 }); break;
     }
   }
   if (S.index >= 2 && rr() < 0.45) {                                          // a magnet beside the lane, pulling the ball in (or, now and then, pushing it away)
     for (let tries = 0; tries < 60; tries++) {
       const ci = 8 + ((rr() * (N - 17)) | 0), side = rr() < 0.5 ? 1 : -1, lat = side * (w[ci] - 0.55), x = cl[ci].x - tz[ci] * lat, z = cl[ci].z + tx[ci] * lat;
-      if (sAt[ci] < 5 || sAt[ci] > length - 5 || !free(x, z, 0.2)) continue;
+      if (sAt[ci] < 5 || sAt[ci] > length - 5 || Math.hypot(x - S.hero.x, z - S.hero.z) < 4.2 || !free(x, z, 0.2)) continue;
       magnets.push({ x: q(x), z: q(z), r: 2.7, pull: rr() < 0.8 ? 3.6 : -3.6 }); keep.push({ x, z, r: 2.2 }); break;
     }
   }
@@ -285,6 +286,15 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   const bulges = [];
   for (let v = 1; v < nLegs; v++) if (r() < 0.5) bulges.push({ s: sAt[apex[v]], amt: 0.7 + r() * 0.6, sp: cut[v] * 0.95 });
   const sHero = (sAt[heroLo] + sAt[heroHi]) / 2, heroHalf = (NEED[type] || 8) / 2 + 0.5;
+  let islandI = -1;                                                         // a fork island (ext.more): the corridor swells on a straight stretch and a lens of rock splits the way (its own generator, so the rest of the hole is unchanged)
+  if (ext && ext.more && index >= 3) {
+    const r3 = mulberry32((seed ^ 0x5bd1e995) >>> 0);
+    if (r3() < 0.3) for (let t = 0; t < 40; t++) {
+      const ci = 9 + ((r3() * (N - 18)) | 0), s0 = sAt[ci]; if (Math.abs(s0 - sHero) < heroHalf + 4.5 || s0 < 7 || s0 > length - 7) continue;
+      const dx = cl[ci + 4].x - cl[ci - 4].x, dz = cl[ci + 4].z - cl[ci - 4].z, l = Math.hypot(dx, dz) || 1; if (l < (sAt[ci + 4] - sAt[ci - 4]) * 0.985) continue;
+      bulges.push({ s: s0, amt: 1.8, sp: 3.4 }); islandI = ci; break;
+    }
+  }
   const w = [];
   for (let i = 0; i < N; i++) {
     const s = sAt[i], e = Math.min(s, length - s);
@@ -337,7 +347,7 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   for (const wl of hero.walls) walls.push(wl);
   const heroSegs = hero.walls.map((wl) => [wl[0], wl[1], wl[2], wl[3]]);
   const tee = cl[0], cup = cl[N - 1], ball = { x: tee.x + tx[0] * 0.8, z: tee.z + tz[0] * 0.8 };
-  const REACH_OF = { windmill: 1.8, alligator: 2.1, turntable: 2.0, pendulum: 2.4, geyser: 1.6, cannon: 1.4, teleport: 1.2, drawbridge: 2.0, loop: 4.4 };      // (how far a hero's parts reach from its centre)
+  const REACH_OF = { windmill: 1.8, alligator: 2.1, turntable: 2.0, pendulum: 2.4, geyser: 1.6, cannon: 1.4, teleport: 1.2, drawbridge: 2.0, loop: 4.4, slider: 2.2, bridge: 2.4 };      // (how far a hero's parts reach from its centre)
   { const hx = type === 'teleport' ? hero.a.x : hero.x, hz = type === 'teleport' ? hero.a.z : hero.z, reach = type === 'teleport' ? 0.9 : REACH_OF[type] || 2; if (Math.hypot(hx - ball.x, hz - ball.z) < reach + 1.7) return null; }      // (the ball never starts beside the obstacle)
   const keep = [{ x: hero.x, z: hero.z, r: type === 'teleport' ? hl * 0.4 : type === 'loop' ? hl * 0.5 : 3.2 }];       // places the other features keep clear of
   keep.push({ x: ball.x, z: ball.z, r: 2.6 }, { x: cup.x, z: cup.z, r: 1.8 });
@@ -421,6 +431,7 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   }
   if (feats.some((f) => f.t === 'gap') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [], segsAll())) { for (let i = feats.length - 1; i >= 0; i--) if (feats[i].t === 'gap' || feats[i].t === 'jump') feats.splice(i, 1); }      // (a canyon never leaves the pits as the only way past)
   // gentle hills along the corridor, kept clear of the tee, the cup and the hero (they only bump up, so the fairway sits flush on the lawn)
+  const hillsFrom = keep.length;                                            // (the gentle hills reserve a lot of room but do not matter to what the extras need)
   const nHills = type === 'loop' ? 0 : 2 + (index > 1 ? 1 : 0) + (index > 4 ? 1 : 0);
   const hillOk = (x, zz, rad) => { for (const k of keep) { const dx = x - k.x, dz = zz - k.z; if (Math.sqrt(dx * dx + dz * dz) < rad * 0.9 + k.r * 0.4) return false; } return true; };
   for (let k = 0; k < nHills; k++) {
@@ -430,6 +441,8 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
       hills.push({ x: q(p.x), z: q(p.z), r: rad, h: Math.round(h * 10) / 10 }); keep.push({ x: p.x, z: p.z, r: rad * 0.8 }); break;
     }
   }
+  const hillsTo = keep.length;
+  const freeX = (x, zz, m) => { for (let k = 0; k < keep.length; k++) { if (k >= hillsFrom && k < hillsTo) continue; const kk = keep[k], dx = x - kk.x, dz = zz - kk.z; if (Math.sqrt(dx * dx + dz * dz) < kk.r + m) return false; } return true; };
   // posts, bumpers and sand
   for (const li of [0, legs.length - 1]) {
     if (r() < 0.5) { const p = onLeg(li, 0.4 + r() * 0.2, (r() < 0.5 ? 1 : -1) * 0.95); if (free(p.x, p.z, 1.0)) { posts.push({ x: q(p.x), z: q(p.z), r: 0.45 }); keep.push({ x: p.x, z: p.z, r: 0.6 }); } }
@@ -461,11 +474,32 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   for (const sc of secrets) pickups.push(sc);                // (the secret coins of the machines)
   const patches = [], magnets = [], tunnels = [];
-  if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free, keep }, magnets, tunnels);
+  if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free: freeX, keep, hero }, magnets, tunnels);
+
+  // the second set of extras (ext.more): ghost walls and (see the widths above) a fork island, each drawn from their own generator
+  const ghosts = [], islands = [];
+  if (ext && ext.more) {
+    const r2 = mulberry32((seed ^ 0x2b7e1516) >>> 0);
+    const stretch = (n, margin, tries = 400) => {                          // a straight stretch of n centre-line points, clear of everything
+      for (let t = 0; t < tries; t++) {
+        const ci = 8 + ((r2() * (N - 16 - n)) | 0), i1 = ci + n, mid = (ci + i1) >> 1; if (i1 > N - 8 || sAt[ci] < 5 || sAt[i1] > length - 5) continue;
+        if (tx[ci] * tx[i1] + tz[ci] * tz[i1] < 0.94 || ![ci, mid, i1].every((i) => freeX(cl[i].x, cl[i].z, margin))) continue;
+        return { ci, i1, mid };
+      }
+      return null;
+    };
+    if (index >= 1 && r2() < (ext.theme === 'haunted' ? 0.85 : 0.1)) {     // a ghost wall: solid for part of every period
+      const st = stretch(4, -0.2); if (st) { const m = st.mid, period = 3 + r2() * 1.5; ghosts.push({ ax: cl[m].x + tz[m] * (w[m] + 0.05), az: cl[m].z - tx[m] * (w[m] + 0.05), bx: cl[m].x - tz[m] * (w[m] + 0.05), bz: cl[m].z + tx[m] * (w[m] + 0.05), period, phase: r2() * period, duty: 0.55 }); keep.push({ x: cl[m].x, z: cl[m].z, r: 2.0 }); }
+    }
+    if (islandI >= 0) {                                                    // the lens of rock in the swollen stretch
+      const c = islandI, n = 14, poly = []; for (let k = 0; k < n; k++) { const t = (k / n) * 6.2832, lx = 2.0 * Math.cos(t), lz = 0.9 * Math.sin(t); poly.push(cl[c].x + tx[c] * lx - tz[c] * lz, cl[c].z + tz[c] * lx + tx[c] * lz); }
+      for (let k = 0; k < n; k++) walls.push([poly[k * 2], poly[k * 2 + 1], poly[((k + 1) % n) * 2], poly[((k + 1) % n) * 2 + 1], 0, 0]); islands.push({ x: cl[c].x, z: cl[c].z, poly }); keep.push({ x: cl[c].x, z: cl[c].z, r: 3.6 });
+    }
+  }
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, ghosts, islands, lanes: hero.lane ? [hero.lane] : [], dense: !!hero.lane, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
   for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
     const res = proveRecipe(H, rec);
     if (res.pass < (rec.minPass || 3)) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; rec.necessity = necessityOf(H, rec); }
