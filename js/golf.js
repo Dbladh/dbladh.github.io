@@ -5,17 +5,17 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261026203519';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026203519';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026203519';
-import { courseMonth, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026203519';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026203519';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026203519';
-import { createNeon } from './golfneon.js?v=20261026203519';
-import { createFx } from './golffx.js?v=20261026203519';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261026203519';
-import { buildDecor } from './golfdecor.js?v=20261026203519';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026203519';
+import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261026204121';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026204121';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026204121';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026204121';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026204121';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026204121';
+import { createNeon } from './golfneon.js?v=20261026204121';
+import { createFx } from './golffx.js?v=20261026204121';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261026204121';
+import { buildDecor } from './golfdecor.js?v=20261026204121';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026204121';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -416,7 +416,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     start(homeCam) {
       if (st.mode !== 'off') return;
       if (!ballMeshes.length) buildBits();
-      Object.assign(st, courseMonth());                    // (the same course for everyone, all month)
+      Object.assign(st, { random: 0 }, golfCourse());                    // (the same course for everyone, all month)
       st.seed = courseSeed(st.year, st.month); st.order = heroOrder(st.seed); st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.shots = []; st.playT = 0; st.idle = 0;
       home.pos.copy(homeCam.pos); home.look.copy(homeCam.look); flyFrom.pos.copy(homeCam.pos); flyFrom.look.copy(homeCam.look);
       setBoards(false); buildCourse(); overviewAll(trip);

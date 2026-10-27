@@ -1,14 +1,15 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261026204121';
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261026203519';
-import { buildWorld } from './world.js?v=20261026203519';
-import { createSky } from './sky.js?v=20261026203519';
-import { createDOF } from './dof.js?v=20261026203519';
-import { createRide } from './ride.js?v=20261026203519';
-import { createGame } from './bikegame.js?v=20261026203519';
-import { createAurora, setWarm } from './aurora.js?v=20261026203519';
-import { createAudio, pickFlicker } from './audio.js?v=20261026203519';
+import { PAL } from './palette.js?v=20261026204121';
+import { buildWorld } from './world.js?v=20261026204121';
+import { createSky } from './sky.js?v=20261026204121';
+import { createDOF } from './dof.js?v=20261026204121';
+import { createRide } from './ride.js?v=20261026204121';
+import { createGame } from './bikegame.js?v=20261026204121';
+import { createAurora, setWarm } from './aurora.js?v=20261026204121';
+import { createAudio, pickFlicker } from './audio.js?v=20261026204121';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -576,17 +577,29 @@ function start() {
   }
   // the windmill asks which game: the mini-golf course or the pinball table
   const modeBox = document.createElement('div'); modeBox.className = 'mode-pick'; modeBox.hidden = true;
-  modeBox.innerHTML = '<div class="mode-card"><h2>Windmill games</h2><button type="button" data-g="golf"><b>Mini-golf</b><span>Nine holes round the windmill</span></button><button type="button" data-g="pinball"><b>Pinball Golf</b><span>Putt the skill shot, flip, light the lamps, sink the cup</span></button><button type="button" class="mode-x" data-g="">Not now</button></div>';
+  modeBox.innerHTML = '<div class="mode-card"><h2>Windmill games</h2><button type="button" data-g="golf"><b>Mini-golf</b><span>Nine holes round the windmill</span></button><button type="button" data-g="pinball"><b>Pinball Golf</b><span>Putt the skill shot, flip, light the lamps, sink the cup</span></button>' +
+    '<div class="mode-seed"><span data-k="seed"></span><div><button type="button" data-g="seedtoggle"></button><button type="button" data-g="shuffle">Shuffle</button></div></div><button type="button" class="mode-x" data-g="">Not now</button></div>';
   document.body.appendChild(modeBox);
-  const pickMode = () => { if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return; modeBox.hidden = false; };
-  modeBox.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b || e.target === modeBox) { modeBox.hidden = true; if (b?.dataset.g === 'golf') playGolf(); else if (b?.dataset.g === 'pinball') playPinball(); } e.stopPropagation(); });
+  const seedEl = modeBox.querySelector('[data-k="seed"]'), seedBtn = modeBox.querySelector('[data-g="seedtoggle"]'), shuffleBtn = modeBox.querySelector('[data-g="shuffle"]');
+  try { const c = +sessionStorage.getItem('golf.seed'); if (c > 0) setRandomCourse(c); } catch (err) { /* (no storage: the monthly course) */ }
+  const seedUI = () => {                                                       // which course both mini-golf games play: the month's, or a random one
+    const code = randomCourseCode(); seedEl.textContent = code ? `Course: Random #${code}` : `Course: ${monthLabel(courseMonth())}`; seedBtn.textContent = code ? 'Back to monthly' : 'Random course'; shuffleBtn.hidden = !code;
+    try { if (code) sessionStorage.setItem('golf.seed', String(code)); else sessionStorage.removeItem('golf.seed'); } catch (err) { /* (ignore) */ }
+  };
+  const pickMode = () => { if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return; seedUI(); modeBox.hidden = false; };
+  modeBox.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); e.stopPropagation();
+    if (b?.dataset.g === 'seedtoggle') { setRandomCourse(randomCourseCode() ? 0 : newRandomCode()); seedUI(); return; }
+    if (b?.dataset.g === 'shuffle') { setRandomCourse(newRandomCode()); seedUI(); return; }
+    if (b || e.target === modeBox) { modeBox.hidden = true; if (b?.dataset.g === 'golf') playGolf(); else if (b?.dataset.g === 'pinball') playPinball(); }
+  });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modeBox.hidden) modeBox.hidden = true; });
   async function playGolf() {
     if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261026203519');
+        const mod = await import('./golf.js?v=20261026204121');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -600,7 +613,7 @@ function start() {
     golfLoading = true;
     try {
       if (!pinball) {
-        const mod = await import('./pinball.js?v=20261026203519');
+        const mod = await import('./pinball.js?v=20261026204121');
         pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
         pinball.onQuit = () => { ride?.reset(); riseName(); };
       }
