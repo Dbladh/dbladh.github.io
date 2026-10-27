@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026212800';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026212800';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261026212800';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026212800';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026212800';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026212905';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026212905';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261026212905';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026212905';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026212905';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -276,14 +276,14 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const addBank = (x, z, sz) => rocks.push([x, z, sz, wr() * 6.28]);
   for (const r of h.rivers) {
     const rv = riverGeometry(r.a, r.b, r.hw, h.seed ^ 0x51, 0.09), flowLen = Math.hypot(r.b.x - r.a.x, r.b.z - r.a.z) || 1;
-    track(rv.geo); const wm = waterMaterial(look, (r.b.x - r.a.x) / flowLen, (r.b.z - r.a.z) / flowLen, 1.1); disposables.push(wm);
+    track(rv.geo); const wm = waterMaterial(look, (r.b.x - r.a.x) / flowLen, (r.b.z - r.a.z) / flowLen, 1.1, TH0.hazard === 'lava' ? 1 : 0); disposables.push(wm);
     const m = new THREE.Mesh(rv.geo, wm); m.renderOrder = 2; g.add(m);
     const bg = track(rv.geo.clone()); const bp = bg.attributes.position; for (let i = 0; i < bp.count; i++) bp.setY(i, 0.07);
     g.add(new THREE.Mesh(bg, bed));
     for (const side of [rv.left, rv.right]) for (let i = 0; i < side.length; i++) for (let k = 0; k < 2; k++) { const j = Math.min(side.length - 1, i + k * 0.5), p0 = side[i], p1 = side[Math.min(side.length - 1, i + 1)], t = k * 0.5; addBank(p0[0] + (p1[0] - p0[0]) * t + (wr() - 0.5) * 0.1, p0[1] + (p1[1] - p0[1]) * t + (wr() - 0.5) * 0.1, 0.26 + wr() * 0.2); }
   }
   for (const p of h.ponds) {
-    const pg = track(pondGeometry(p.poly, 0.09)), wm = waterMaterial(look, 0, 0, 0); disposables.push(wm);
+    const pg = track(pondGeometry(p.poly, 0.09)), wm = waterMaterial(look, 0, 0, 0, TH0.hazard === 'lava' ? 1 : 0); disposables.push(wm);
     const m = new THREE.Mesh(pg, wm); m.renderOrder = 2; g.add(m);
     const bg = track(pondGeometry(p.poly, 0.07)); g.add(new THREE.Mesh(bg, bed));
     const n = p.poly.length / 2; for (let i = 0; i < n; i++) { const x = p.poly[i * 2], z = p.poly[i * 2 + 1], dx = x - p.x, dz = z - p.z, l = Math.hypot(dx, dz) || 1; for (let k = 0; k < 2; k++) addBank(x + (dx / l) * (0.05 + k * 0.1) + (wr() - 0.5) * 0.14, z + (dz / l) * (0.05 + k * 0.1) + (wr() - 0.5) * 0.14, 0.3 + wr() * 0.22); }

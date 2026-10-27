@@ -1,11 +1,11 @@
 // Water for the mini-golf: the same soft cartoon look as the village pond (sky reflection, shallows that go light, glints, foam at the edge, the same day/night and aurora), drawn on
 // irregular shapes: blob-shaped ponds and winding rivers that visibly flow. The sky colours and the clock are the village pond's own uniforms (world.waterLook), so the two always match.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261026212800';
+import { mulberry32 } from './golfhero.js?v=20261026212905';
 
 /** A water material. `flow` is the direction the water runs (world x, z; zero for still water) and `speed` how fast. */
-export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
-  const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uFlow: { value: new THREE.Vector2(flowX, flowZ) }, uSpeed: { value: speed }, uNeon: { value: 0 } }]);
+export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0, tint = 0) {
+  const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uFlow: { value: new THREE.Vector2(flowX, flowZ) }, uSpeed: { value: speed }, uNeon: { value: 0 }, uTint: { value: tint } }]);
   for (const k of ['uTime', 'uDay', 'uHorizon', 'uSkyTop', 'uAurora']) u[k] = look[k];      // (shared with the pond, so they stay live)
   return new THREE.ShaderMaterial({
     uniforms: u, fog: true, transparent: true, side: THREE.DoubleSide, depthWrite: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
@@ -18,7 +18,7 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      uniform float uTime, uDay, uSpeed, uNeon; uniform vec3 uHorizon, uSkyTop, uAurora; uniform vec2 uFlow;
+      uniform float uTime, uDay, uSpeed, uNeon, uTint; uniform vec3 uHorizon, uSkyTop, uAurora; uniform vec2 uFlow;
       varying vec3 vW; varying float vD;
       #include <fog_pars_fragment>
       vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
@@ -51,7 +51,14 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0) {
         float shore = 1.0 - smoothstep(0.0, 0.2, depth);
         float fn = 0.5 + 0.5 * sin(dot(p, vec2(5.0, 3.5)) + uTime * 0.8) * sin(dot(p, vec2(-3.5, 5.5)) - uTime * 0.6);
         col = mix(col, lin(vec3(0.97, 0.99, 1.0)) * (0.4 + 0.6 * uDay), shore * smoothstep(0.2, 0.6, fn + 0.35) * 0.85);
-        gl_FragColor = vec4(col, mix(0.8, 0.95, smoothstep(0.0, 0.4, depth)));
+        if (uTint > 1.5) {                                                // frozen: pale ice with white cracks
+          float cr = smoothstep(0.93, 1.0, abs(sin(dot(p, vec2(2.3, 1.1)) + sin(dot(p, vec2(-1.2, 2.6))) * 1.4)) * abs(sin(dot(p, vec2(-1.7, 2.0)) + 1.3)));
+          col = mix(vec3(0.62, 0.8, 0.95) * (0.6 + 0.4 * uDay), vec3(1.0), 0.25 + 0.75 * cr);
+        } else if (uTint > 0.5) {                                         // lava: glowing orange with a darker crust drifting over it
+          float w1 = 0.5 + 0.5 * sin(p.x * 2.4 + uTime * 0.6) * sin(p.y * 2.1 - uTime * 0.45), crust = smoothstep(0.62, 0.85, 0.5 + 0.5 * sin(p.x * 3.1 - p.y * 2.3 + uTime * 0.3 + sin(p.y * 1.7) * 1.5));
+          col = mix(vec3(1.0, 0.26, 0.04), vec3(1.0, 0.74, 0.2), w1); col = mix(col, vec3(0.22, 0.06, 0.04), crust * 0.65);
+        }
+        gl_FragColor = vec4(col, uTint > 0.5 ? 1.0 : mix(0.8, 0.95, smoothstep(0.0, 0.4, depth)));
         #include <fog_fragment>
       }`,
   });
