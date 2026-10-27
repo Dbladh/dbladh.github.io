@@ -5,7 +5,7 @@
 //   node tools/golf/check.mjs --months 36 --bot
 //   node tools/golf/check.mjs --only 2026-12:5   one hole (month 12, hole index 5), verbose
 import { readFileSync } from 'node:fs';
-import { makeHole, courseSeed, holeSeed, heroOrder, HOLES, laneExists } from '../../js/golfgen.js';
+import { makeHole, courseSeed, holeSeed, heroOrder, shapeOrder, HOLES, laneExists } from '../../js/golfgen.js';
 import { newBall, newCtx, shoot, stepBall } from '../../js/golfphys.js';
 import { playHole, routeOf } from './bot.mjs';
 import { aceSearch } from '../../js/golface.js';
@@ -61,8 +61,8 @@ function sane(h) {
 const recipeStats = {}, rows = [], t0 = Date.now(), groups = { hero: {}, feat: {} };
 const bump = (g, k, field) => { const o = (g[k] ||= { n: 0, bad: 0, botFail: 0, strokes: 0, botN: 0 }); o[field]++; return o; };
 function runHole(year, month, i) {
-  const cs = courseSeed(year, month), type = heroOrder(cs)[i], seed = holeSeed(cs, i), h = makeHole(seed, i, type), problems = structure(h);
-  if (hashOf(h) !== hashOf(makeHole(seed, i, type))) problems.push('not deterministic');
+  const cs = courseSeed(year, month), type = heroOrder(cs)[i], shp = shapeOrder(cs)[i], seed = holeSeed(cs, i), h = makeHole(seed, i, type, shp), problems = structure(h);
+  if (hashOf(h) !== hashOf(makeHole(seed, i, type, shp))) problems.push('not deterministic');
   if (!sane(h)) problems.push('a stroke went non-finite or out of the hole');
   if (!penEscape(h)) problems.push('a ball inside the cage cannot get out');
   if (ACE) { const rt = routeOf(h), t = rt[Math.min(3, rt.length - 1)]; if (!aceSearch(h, [], Math.atan2(t.z - h.ball.z, t.x - h.ball.x), 4000)) problems.push('no hole in one found (4000 strokes tried)'); }
@@ -83,7 +83,7 @@ if (opt('tune', false)) {                                  // sweep the numbers 
     const [kind, field] = key.split('.'), keep = TUNING[kind][field]; console.log(`\n${key} (current ${keep})`);
     for (const v of grids[key]) {
       TUNING[kind][field] = v; let placed = 0, forg = 0, nec = 0, drop = 0;
-      for (let m = 1; m <= months; m++) { const cs = courseSeed(YEAR, m), order = heroOrder(cs); for (let i = 2; i < HOLES; i++) { const h = makeHole(holeSeed(cs, i), i, order[i]); for (const x of h.recipes) if (x.kind === kind) { placed++; forg += x.forgiveness; nec += x.necessity; } for (const l of h.recipeLog) if (l.kind === kind) drop++; } }
+      for (let m = 1; m <= months; m++) { const cs = courseSeed(YEAR, m), order = heroOrder(cs), shp = shapeOrder(cs); for (let i = 2; i < HOLES; i++) { const h = makeHole(holeSeed(cs, i), i, order[i], shp[i]); for (const x of h.recipes) if (x.kind === kind) { placed++; forg += x.forgiveness; nec += x.necessity; } for (const l of h.recipeLog) if (l.kind === kind) drop++; } }
       console.log(`  ${field} = ${String(v).padEnd(4)} placed ${String(placed).padStart(3)}  forgiveness ${placed ? (forg / placed * 100).toFixed(0) : '-'}%  machine needed ${placed ? (nec / placed * 100).toFixed(0) : '-'}%  dropped ${drop}`);
     }
     TUNING[kind][field] = keep;

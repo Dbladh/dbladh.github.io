@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026204121';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026204121';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261026204121';
-import { THEME_BORDER } from './golfscenery.js?v=20261026204121';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026204121';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026211546';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026211546';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261026211546';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026211546';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026211546';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -59,11 +59,9 @@ function getRock() {
   if (!rockGeo) { rockGeo = new THREE.IcosahedronGeometry(0.5, 1); const p = rockGeo.attributes.position, rr = mulberry32(99), seen = new Map(); for (let i = 0; i < p.count; i++) { const k = `${p.getX(i).toFixed(3)}|${p.getY(i).toFixed(3)}|${p.getZ(i).toFixed(3)}`; let f = seen.get(k); if (!f) { f = 0.82 + rr() * 0.36; seen.set(k, f); } p.setXYZ(i, p.getX(i) * f, p.getY(i) * f, p.getZ(i) * f); } rockGeo.computeVertexNormals(); }
   return rockGeo;
 }
-const BRICKS = ['#d3694a', '#bd5a3e', '#dc7d58', '#ad5039', '#c96348', '#c9a58a'], ROCKS = ['#a39d92', '#b8b1a3', '#8c8780', '#b0a698', '#c4bba8', '#968d7f'];
-const WOODS = ['#ffffff', '#f0dcc0', '#e0c49c', '#ffe9cc'];
 /** The low wall round the edge of the hole: bricks, boulders or planks (by the hole's seed), in instanced meshes. */
 function buildBorder(h, g, disposables) {
-  const style = THEME_BORDER[h.theme] || ['brick', 'stone', 'wood'][(h.seed >>> 4) % 3], r = mulberry32(h.seed ^ 0x5bd1e995), O = h.outline, segs = h.walls.filter((w) => w[4]);
+  const TH = themeOf(h.theme), style = TH.border, r = mulberry32(h.seed ^ 0x5bd1e995), O = h.outline, segs = h.walls.filter((w) => w[4]);
   let area = 0; for (let i = 0; i < O.length; i++) { const a = O[i], b = O[(i + 1) % O.length]; area += a[0] * b[1] - b[0] * a[1]; }
   const sgn = area > 0 ? 1 : -1, col = new THREE.Color();
   const make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; g.add(m); disposables.push(m); return m; };
@@ -75,17 +73,17 @@ function buildBorder(h, g, disposables) {
   };
   if (style === 'brick') {
     const c0 = make(G.box, GM.brick, segs.length), c1 = make(G.box, GM.brick, segs.length), cap = make(G.box, GM.stone, segs.length);
-    segs.forEach((w, i) => { place(c0, i, w, 0, 0.15, 1, 0.3, 0.4, 0, BRICKS); place(c1, i, w, 0, 0.45, 1, 0.3, 0.4, 0.3, BRICKS); place(cap, i, w, -0.03, 0.65, 1, 0.1, 0.5, 0, ['#e8dcc6', '#ddd0b8']); });
+    segs.forEach((w, i) => { place(c0, i, w, 0, 0.15, 1, 0.3, 0.4, 0, TH.pal); place(c1, i, w, 0, 0.45, 1, 0.3, 0.4, 0.3, TH.pal); place(cap, i, w, -0.03, 0.65, 1, 0.1, 0.5, 0, ['#e8dcc6', '#ddd0b8']); });
     for (const m of [c0, c1, cap]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   } else if (style === 'stone') {
     getRock();
     const mat = GM.lam(GM.tex.stone, '#ffffff', { flatShading: true }); disposables.push(mat);
     const rocks = make(rockGeo, mat, segs.length), top = make(rockGeo, mat, segs.length);
-    segs.forEach((w, i) => { const hgt = 0.55 + r() * 0.3; place(rocks, i, w, 0.05, hgt * 0.4, 1.7, hgt, 0.7 + r() * 0.2, (r() - 0.5) * 0.3, ROCKS, (r() - 0.5) * 0.3); place(top, i, w, 0.15, 0.62 + r() * 0.12, 1.1, 0.4 + r() * 0.2, 0.55, (r() - 0.5) * 0.5, ROCKS, (r() - 0.5) * 0.4); });
+    segs.forEach((w, i) => { const hgt = 0.55 + r() * 0.3; place(rocks, i, w, 0.05, hgt * 0.4, 1.7, hgt, 0.7 + r() * 0.2, (r() - 0.5) * 0.3, TH.pal, (r() - 0.5) * 0.3); place(top, i, w, 0.15, 0.62 + r() * 0.12, 1.1, 0.4 + r() * 0.2, 0.55, (r() - 0.5) * 0.5, ROCKS, (r() - 0.5) * 0.4); });
     for (const m of [rocks, top]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   } else {
     const p0 = make(G.box, GM.wood, segs.length), p1 = make(G.box, GM.wood, segs.length), posts = make(G.box, GM.darkwood, Math.ceil(segs.length / 5));
-    segs.forEach((w, i) => { place(p0, i, w, 0, 0.15, 1, 0.3, 0.32, 0, WOODS); place(p1, i, w, 0, 0.47, 1, 0.3, 0.32, 0, WOODS); });
+    segs.forEach((w, i) => { place(p0, i, w, 0, 0.15, 1, 0.3, 0.32, 0, TH.pal); place(p1, i, w, 0, 0.47, 1, 0.3, 0.32, 0, TH.pal); });
     let n = 0; segs.forEach((w, i) => { if (i % 5 === 0 && n < posts.count) { _m.compose(_v.set(w[0] + ((sgn * (w[3] - w[1])) / (Math.hypot(w[2] - w[0], w[3] - w[1]) || 1)) * 0.18, 0.4, w[1] + ((-sgn * (w[2] - w[0])) / (Math.hypot(w[2] - w[0], w[3] - w[1]) || 1)) * 0.18), _q.identity(), _s.set(0.28, 0.85, 0.28)); posts.setMatrixAt(n, _m); posts.setColorAt(n++, col.set('#ffffff')); } });
     posts.count = n;
     for (const m of [p0, p1, posts]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
@@ -110,12 +108,12 @@ function wireVisual(h, g, a, b, updaters, disposables) {
 }
 /** The meshes for hole `h`. Returns { group, update(heroT, t, dt, state), pickups, cupMesh, flag, dispose() }. */
 export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
-  skin(lowEnd);
+  skin(lowEnd); const TH0 = themeOf(h.theme);
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
   // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised and lowered by the terrain (hills, berms, platforms, ramps, canyons)
-  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color('#78e075'), c2 = new THREE.Color('#68d06b'), COLS = h.cols || 16, crest = new THREE.Color('#b6f58a'), shade = new THREE.Color('#3f9a55'), tmp = new THREE.Color();
-  const rock = new THREE.Color('#8d8579'), deep = new THREE.Color('#4a4239'), plank = new THREE.Color('#e0a868'), feats = h.feats || [];
+  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color(TH0.fair[0]), c2 = new THREE.Color(TH0.fair[1]), COLS = h.cols || 16, crest = new THREE.Color(TH0.fair[2]), shade = new THREE.Color(TH0.fair[3]), tmp = new THREE.Color();
+  const rock = new THREE.Color(TH0.rock), deep = new THREE.Color('#4a4239'), plank = new THREE.Color('#e0a868'), feats = h.feats || [];
   let R = h.ribbon;
   if (feats.length || h.sands.length || h.dense) { const R2 = []; for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, a0 = R[i], b0 = R[i + 1]; R2.push([0, 1, 2, 3, 4].map((j) => (j === 4 && (a0[4] < 0 || b0[4] < 0) ? a0[4] : a0[j] + (b0[j] - a0[j]) * t))); } R2.push(R[R.length - 1]); R = R2; }
   const nearCup = (vi) => Math.hypot(pos[vi * 3] - h.cup.x, pos[vi * 3 + 2] - h.cup.z) < 1.0;
@@ -242,7 +240,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); bar.position.y = 0.3 - 0.8 * open; plate.position.y = 0.06 - 0.03 * open; plate.material = open > 0.5 ? paint('#6dff9a') : paint('#ffd23f'); });
   }
   for (const s of h.sands) {                                 // a sand pit: a rough patch of sand with a darker, damp rim and a few pebbles
-    const sg = track(pondGeometry(s.poly, 0)), spp = sg.attributes.position; for (let i = 0; i < spp.count; i++) spp.setY(i, hillH(h, spp.getX(i), spp.getZ(i)) + 0.07); sg.computeVertexNormals(); const sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, '#ffffff', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); sm.receiveShadow = true; g.add(sm);
+    const sg = track(pondGeometry(s.poly, 0)), spp = sg.attributes.position; for (let i = 0; i < spp.count; i++) spp.setY(i, hillH(h, spp.getX(i), spp.getZ(i)) + 0.07); sg.computeVertexNormals(); const sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, TH0.sand, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); sm.receiveShadow = true; g.add(sm);
     const lip = track(pondGeometry(s.poly.map((v, i) => (i % 2 ? s.z : s.x) + (v - (i % 2 ? s.z : s.x)) * 1.12), 0)), lpp = lip.attributes.position; for (let i = 0; i < lpp.count; i++) lpp.setY(i, hillH(h, lpp.getX(i), lpp.getZ(i)) + 0.04); lip.computeVertexNormals(); const lm = new THREE.Mesh(lip, GM.lam(GM.tex.sand, '#c9b27a', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); lm.receiveShadow = true; g.add(lm);
   }
   // water: ponds (irregular, with boulders round the bank and a pebbly bed) and rivers (winding, flowing, with boulder banks), all in the village pond's own water look

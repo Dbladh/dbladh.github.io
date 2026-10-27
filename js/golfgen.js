@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026204121';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026204121';
-import { aceSearch } from './golface.js?v=20261026204121';
-import { BAKED } from './golfbake.js?v=20261026204121';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026211546';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026211546';
+import { aceSearch } from './golface.js?v=20261026211546';
+import { BAKED } from './golfbake.js?v=20261026211546';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -21,6 +21,57 @@ const SPACING = 0.6, CUT_MAX = 2.6;                       // distance between ce
 const C15 = 0.9659258262890683, S15 = 0.25881904510252074;     // cos and sin of 15 degrees: arcs are built by turning by this a fixed number of times, so no trig is needed
 const CAP_STEPS = 6;
 const smoothstep01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+// ---- the shapes of a hole's centre line ----
+// A hole's corridor follows one of a few shape families (so a course is not nine Ls): a straight run, a dogleg, an S, a zigzag across the lawn, a hairpin, a sweeping arc, a staircase and a ring round an
+// island. Each family is a list of legs (a turn in 15 degree steps, then a length) walked from the start; the rounded bends, the widths, the walls and everything else are built from that as before.
+export const SHAPES = ['straight', 'dogleg', 'sbend', 'zigzag', 'hairpin', 'arc', 'ring'];
+const SHAPE_POOLS = [['straight', 'dogleg', 'sbend', 'arc', 'zigzag'], ['dogleg', 'sbend', 'zigzag', 'arc', 'hairpin'], ['hairpin', 'ring', 'zigzag', 'arc', 'straight', 'dogleg']];   // (holes 1-3, 4-6, 7-9)
+/** Which shape each of the nine holes has this month: drawn without repeats from a pool per tier, shuffled with the course seed. */
+export const SHAPES_BAKED = false;                           // (set to true once golfbake.js has been worked out with the shapes: until then a month's course keeps the zigzag, and only random courses, which are searched for anyway, use them)
+export function shapeOrder(cs, all = SHAPES_BAKED) {
+  if (!all) return Array(9).fill('zigzag');
+  const r = mulberry32((cs + 0x2f1d3a7) >>> 0), out = [];
+  for (let t = 0; t < 3; t++) {
+    const pool = SHAPE_POOLS[t].filter((s) => !out.includes(s)), all = SHAPE_POOLS[t].slice();
+    for (let k = 0; k < 3; k++) { const from = pool.length ? pool : all.filter((s) => !out.slice(-2).includes(s)); const i = (r() * from.length) | 0, pick = from[i]; out.push(pick); if (pool.length) pool.splice(i, 1); }
+  }
+  return out;
+}
+const DIRS = (() => { const d = []; let c = 1, s = 0; for (let i = 0; i < 24; i++) { d.push([c, s]); const nc = c * C15 - s * S15; s = s * C15 + c * S15; c = nc; } return d; })();      // (24 headings, 15 degrees apart, by repeated turning: no trig)
+const CUT_BY = { straight: 0, dogleg: 2.8, sbend: 1.6, zigzag: CUT_MAX, hairpin: 3.0, arc: 1.5, ring: 1.6 };
+const MIN_DOT = { hairpin: 0.2, dogleg: 0.0, ring: 0.2 };       // (a gentle bend has the legs' directions close; the sharpest allowed is about 90 degrees)
+/** Walk legs [[turn, length], ...] from the origin at heading `k0` and centre the result. Returns the path ([{ x, z }]) or null if it strays too far from the middle. */
+function walkLegs(k0, legs) {
+  let k = k0, x = 0, z = 0; const pts = [{ x, z }];
+  for (const [turn, len] of legs) { k = (k + turn + 48) % 24; x += DIRS[k][0] * len; z += DIRS[k][1] * len; pts.push({ x, z }); }
+  let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9; for (const p of pts) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z); }
+  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2, out = pts.map((p) => ({ x: q(p.x - cx), z: q(p.z - cz) }));
+  for (const p of out) if (p.x * p.x + p.z * p.z > REACH * REACH) return null;
+  return out;
+}
+/** The centre line for `shape`: { path, minDot, cutMax }. `need` is the straight run the hero wants. */
+function makePath(r, index, type, shape, force) {
+  if (force) return { path: [{ x: -END_X, z: 0 }, { x: END_X, z: 0 }], minDot: 0.18, cutMax: CUT_MAX };
+  const need = NEED[type] || 8, cutMax = CUT_BY[shape] ?? CUT_MAX, minDot = MIN_DOT[shape] ?? 0.18, long = need + 2 * cutMax + 0.6;
+  if (shape === 'zigzag') {                                // the first kind of hole, across the lawn with one to three bends (drawn in exactly the old order, so the baked months still hold)
+    const bends = index < 2 ? 1 + (r() < 0.4 ? 1 : 0) : 1 + (r() < 0.5 ? 1 : 0) + (index > 5 && r() < 0.2 ? 1 : 0), xs = [-END_X];
+    for (let k = 1; k <= bends; k++) xs.push(q(-END_X + ((2 * END_X) * k) / (bends + 1) + (r() - 0.5) * (bends === 1 ? 4 : 2.2)));
+    xs.push(END_X);
+    let sign = r() < 0.5 ? 1 : -1, z = q((r() * 2 - 1) * 4.5); const path = [];
+    for (let i = 0; i < xs.length; i++) { if (i > 0) { z = q(clamp(z + sign * (3.5 + r() * 3.5), -6.5, 6.5)); sign = -sign; } if (xs[i] * xs[i] + z * z > REACH * REACH) return null; path.push({ x: xs[i], z }); }
+    return { path, minDot, cutMax };
+  }
+  const sgn = r() < 0.5 ? 1 : -1, k0 = (r() * 24) | 0, rng = (a, b) => a + r() * (b - a), L = (a, b) => Math.max(a, Math.min(b, rng(a, b)));
+  let legs;
+  if (shape === 'straight') legs = [[0, Math.min(23, Math.max(rng(16, 22.5), need + 3))]];
+  else if (shape === 'dogleg') { legs = [[0, rng(7, 12)], [sgn * (3 + ((r() * 2) | 0)), rng(7, 12)]]; const i = r() < 0.5 ? 0 : 1; legs[i][1] = Math.max(long, legs[i][1]); }
+  else if (shape === 'sbend') { const t = 1 + ((r() * 2) | 0); legs = [[0, rng(5.8, 7)], [sgn * t, long + r() * 1.5], [-sgn * t, rng(5.8, 7)]]; }
+  else if (shape === 'hairpin') { legs = [[0, rng(11, 12.5)], [sgn * 4, rng(7, 7.6)], [sgn * 4, rng(7, 7.6)], [sgn * 4, rng(11, 12.5)]]; const i = r() < 0.5 ? 0 : 3; legs[i][1] = Math.max(long, legs[i][1]); }
+  else if (shape === 'arc') { const t = 1 + ((r() * 2) | 0); legs = [[0, rng(5.8, 7)], [sgn * t, long + r() * 1.5], [sgn * t, rng(5.8, 7)]]; }
+  else if (shape === 'ring') { legs = []; for (let i = 0; i < 6; i++) legs.push([i ? sgn * 3 : 0, rng(6, 6.8)]); legs[(1 + r() * 4) | 0][1] = long; }
+  const path = walkLegs(k0, legs); return path ? { path, minDot, cutMax } : null;
+}
 
 /** The seed of a whole course: the same for everyone in a given month (`month` is 1 to 12). */
 export function courseSeed(year, month) {
@@ -102,13 +153,16 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 /** The seed of attempt number `a` for a hole. */
 const attemptSeed = (seed, a) => (seed + Math.imul(a, 0x9e3779b1)) >>> 0;
+/** The shape tried at attempt `a`: the one the course asked for for the first 40 attempts, then simpler ones that the hero is sure to fit (so every hole is always found). */
+const FALLBACK = { straight: ['zigzag'], dogleg: ['zigzag', 'straight'], zigzag: ['dogleg', 'straight'] };
+const attemptShape = (shape, a) => { const chain = [shape, ...(FALLBACK[shape] || ['dogleg', 'zigzag', 'straight'])]; return chain[Math.min(chain.length - 1, (a / 40) | 0)]; };
 /**
  * Find the layout of hole `index` the slow way: try neighbouring sub-seeds until one is valid and has a hole in one (see holeInOnePossible). Returns { h, attempt, drop } where `drop` says
  * whether the bonuses had to be taken off. The results for the coming years are worked out ahead of time (tools/golf/bake.mjs) and kept in golfbake.js, so the game does not have to search.
  */
-export function findHole(seed, index, type = 'windmill') {
+export function findHole(seed, index, type = 'windmill', shape = 'zigzag') {
   for (let attempt = 0; attempt < 120; attempt++) {
-    const h = build(attemptSeed(seed, attempt), index, type, false); if (!h) continue;
+    const h = build(attemptSeed(seed, attempt), index, type, false, attemptShape(shape, attempt)); if (!h) continue;
     const res = holeInOnePossible(h); if (res) return { h, attempt, drop: res === 2 };
   }
   for (let attempt = 0; attempt < 40; attempt++) {         // (it should never come to this) a plain straight hole
@@ -116,11 +170,13 @@ export function findHole(seed, index, type = 'windmill') {
   }
   throw new Error('no valid mini-golf hole');
 }
+/** Just build one attempt (for the shape sheet and tests): a hole or null. */
+export const buildAttempt = (seed, index, type, shape) => build(seed, index, type, false, shape);
 /** Make hole number `index` (0-based) with hero `type` (from the baked answer when there is one, else by searching). */
-export function makeHole(seed, index, type = 'windmill') {
+export function makeHole(seed, index, type = 'windmill', shape = 'zigzag') {
   const baked = BAKED[`${seed}.${index}`];
-  if (baked !== undefined) { const h = build(attemptSeed(seed, baked >> 1), index, type, false); if (h) { if (baked & 1) dropBonuses(h); return h; } }
-  return findHole(seed, index, type).h;
+  if (baked !== undefined) { const h = build(attemptSeed(seed, baked >> 1), index, type, false, attemptShape(shape, baked >> 1)); if (h) { if (baked & 1) dropBonuses(h); return h; } }
+  return findHole(seed, index, type, shape).h;
 }
 
 /** Take the bonuses that need a trick (the secret coin, the caged orb) off a hole: they stay only where one stroke can collect them and still hole out. */
@@ -146,19 +202,9 @@ function capRows(c, tx, tz, hw, dir) {
   return rows;
 }
 
-function build(seed, index, type, force) {
-  const r = mulberry32(seed);
-  const bends = force ? 0 : index < 2 ? 1 + (r() < 0.4 ? 1 : 0) : 1 + (r() < 0.5 ? 1 : 0) + (index > 5 && r() < 0.2 ? 1 : 0);      // (fewer bends from hole 3: longer straight runs leave room for the machines)
-  const xs = [-END_X];
-  for (let k = 1; k <= bends; k++) xs.push(q(-END_X + ((2 * END_X) * k) / (bends + 1) + (r() - 0.5) * (bends === 1 ? 4 : 2.2)));
-  xs.push(END_X);
-  let sign = r() < 0.5 ? 1 : -1, z = force ? 0 : q((r() * 2 - 1) * 4.5);
-  const path = [];
-  for (let i = 0; i < xs.length; i++) {
-    if (i > 0 && !force) { z = q(clamp(z + sign * (3.5 + r() * 3.5), -6.5, 6.5)); sign = -sign; }
-    if (xs[i] * xs[i] + z * z > REACH * REACH) return null;
-    path.push({ x: xs[i], z });
-  }
+function build(seed, index, type, force, family = 'zigzag') {
+  const r = mulberry32(seed), PP = makePath(r, index, type, family, force); if (!PP) return null;
+  const path = PP.path, MIN_DOT_ = PP.minDot, CUT_ = PP.cutMax;
   const dirs = [], nLegs = path.length - 1;
   let length = 0;
   for (let i = 0; i < nLegs; i++) {
@@ -166,10 +212,10 @@ function build(seed, index, type, force) {
     if (l < 5.5) return null;
     dirs.push({ x: dx / l, z: dz / l, l });
   }
-  for (let i = 0; i < dirs.length - 1; i++) if (dirs[i].x * dirs[i + 1].x + dirs[i].z * dirs[i + 1].z < 0.18) return null;
+  for (let i = 0; i < dirs.length - 1; i++) if (dirs[i].x * dirs[i + 1].x + dirs[i].z * dirs[i + 1].z < MIN_DOT_) return null;
   // each bend is rounded: it cuts `cut` off both of the legs that meet there and a curve is drawn through the corner
   const cut = [0];
-  for (let i = 1; i < nLegs; i++) cut.push(Math.min(CUT_MAX, 0.4 * Math.min(dirs[i - 1].l, dirs[i].l)));
+  for (let i = 1; i < nLegs; i++) cut.push(Math.min(CUT_, 0.4 * Math.min(dirs[i - 1].l, dirs[i].l)));
   cut.push(0);
   const legs = dirs.map((d, i) => { const s = { x: path[i].x + d.x * cut[i], z: path[i].z + d.z * cut[i] }, l = d.l - cut[i] - cut[i + 1]; return { sx: s.x, sz: s.z, ex: s.x + d.x * l, ez: s.z + d.z * l, x: d.x, z: d.z, l }; });
   let hi = 0; for (let i = 1; i < legs.length; i++) if (legs[i].l > legs[hi].l) hi = i;

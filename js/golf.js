@@ -5,17 +5,18 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, HOLES } from './golfgen.js?v=20261026204121';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026204121';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026204121';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026204121';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026204121';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026204121';
-import { createNeon } from './golfneon.js?v=20261026204121';
-import { createFx } from './golffx.js?v=20261026204121';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261026204121';
-import { buildDecor } from './golfdecor.js?v=20261026204121';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026204121';
+import { courseSeed, holeSeed, makeHole, heroOrder, shapeOrder, HOLES } from './golfgen.js?v=20261026211546';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026211546';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026211546';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026211546';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026211546';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026211546';
+import { themeOrder } from './golfthemes.js?v=20261026211546';
+import { createNeon } from './golfneon.js?v=20261026211546';
+import { createFx } from './golffx.js?v=20261026211546';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261026211546';
+import { buildDecor } from './golfdecor.js?v=20261026211546';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026211546';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -86,7 +87,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function buildCourse() {
     disposeCourse();
     fxs = createFx(lowEnd); scene.add(fxs.group);
-    holes = []; for (let i = 0; i < HOLES; i++) holes.push(makeHole(holeSeed(st.seed, i), i, st.order[i]));
+    holes = []; for (let i = 0; i < HOLES; i++) holes.push(makeHole(holeSeed(st.seed, i), i, st.order[i], st.shapes[i]));
+    { const themes = themeOrder(st.seed); holes.forEach((h, i) => { h.theme = themes[i]; }); }       // (the themes are dealt out like the heroes: nine of the ten, none twice)
     chals = holes.map((h, i) => makeChallenge(h, i, holeSeed(st.seed, i)));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
     const digs = holes.map((h, i) => [...h.sands.map((sd) => { const c = toWorld(sites[i], sd.x, sd.z); return { x: c.x, z: c.z, r: sd.r * 1.19 * 0.95, depth: 0.34 }; }), ...(h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
@@ -417,7 +419,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       if (st.mode !== 'off') return;
       if (!ballMeshes.length) buildBits();
       Object.assign(st, { random: 0 }, golfCourse());                    // (the same course for everyone, all month)
-      st.seed = courseSeed(st.year, st.month); st.order = heroOrder(st.seed); st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.shots = []; st.playT = 0; st.idle = 0;
+      st.seed = courseSeed(st.year, st.month); st.order = heroOrder(st.seed); st.shapes = shapeOrder(st.seed, !!st.random || undefined); st.scores = []; st.par = []; st.pts = []; st.chalDone = []; st.shots = []; st.playT = 0; st.idle = 0;
       home.pos.copy(homeCam.pos); home.look.copy(homeCam.look); flyFrom.pos.copy(homeCam.pos); flyFrom.look.copy(homeCam.look);
       setBoards(false); buildCourse(); overviewAll(trip);
       document.body.classList.add('game-mode'); hud.hidden = false; elScore.hidden = true;
