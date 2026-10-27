@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026222749';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026222853';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -234,11 +234,19 @@ export function stepBall(b, hole, ctx, dt, ev) {
       }
     }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
+    if (hole.gates1 && !ghost) for (const g of hole.gates1) {            // a one-way gate: the ball goes through forwards, but cannot come back
+      const rx = b.x - g.x, rz = b.z - g.z, f = rx * g.ux + rz * g.uz, c = rx * g.nx + rz * g.nz, vf = b.vx * g.ux + b.vz * g.uz;
+      if (Math.abs(c) < g.hw && f > 0 && f < BALL_R + 0.04 && vf < 0) { b.x += g.ux * (BALL_R + 0.04 - f); b.z += g.uz * (BALL_R + 0.04 - f); b.vx -= 1.4 * vf * g.ux; b.vz -= 1.4 * vf * g.uz; if (-vf > ev.wall) ev.wall = -vf; }
+    }
+    if (hole.rollers && !ghost) for (const m of hole.rollers) {                  // a roller (the tumbleweed): a ball-sized thing that rolls to and fro across the lane
+      const ph = m.w * tt + m.ph, off = m.A * Math.sin(ph), v = m.A * m.w * Math.cos(ph);
+      collideCircle(b, m.x + m.nx * off, m.z + m.nz * off, m.rad, 0.95, ev, m.nx * v, m.nz * v);
+    }
     if (hole.ghosts && !ghost) for (const g of hole.ghosts) if (((tt + g.phase) % g.period) / g.period < g.duty) collideSeg(b, g.ax, g.az, g.bx, g.bz, 0.5, ev);        // (a ghost wall is solid for part of every period, then fades away)
     for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev, w[8] || 0); }
     if (hole.boosts && !b.air) for (const o of hole.boosts) { if (o.powered && ctx.gateT <= 0) continue; const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
     if (b.padCool > 0) b.padCool -= h;
-    if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = 5.0; b.padCool = 0.6; ev.fx = 6; }
+    if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (dist2(b, o.x, o.z) < o.r * o.r) { b.air = true; b.vy = o.tramp ? 7.4 : 5.0; if (o.tramp) { b.vx += o.ux * 2.6; b.vz += o.uz * 2.6; } b.padCool = 0.6; ev.fx = 6; }
     if (ctx.gateT > 0) ctx.gateT -= h;
     hole.cover = ctx.gateT > 0 ? 1 : 0;                 // (a retractable bridge covers its canyon while the button's time lasts)
     if (hole.feats && !b.air) for (const f of hole.feats) if (f.bridge) { const rx = b.x - f.x, rz = b.z - f.z, s2 = rx * f.ux + rz * f.uz, c2 = rx * f.nx + rz * f.nz; if (Math.abs(s2) < f.len / 2 + 0.5 && c2 > f.c0 && c2 < f.c1 && ctx.gateT > 0) ctx.gateT = Math.max(ctx.gateT, 0.8); }       // (a bridge stays out while a ball is on it)
@@ -267,7 +275,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       } else if (hero.type === 'slider') {                    // sliding walls: blocks that run across the lane (three round pieces each)
         for (const m of hero.paddles) {
           const ph = hero.w * tt + m.ph, off = hero.A * Math.sin(ph), v = hero.A * hero.w * Math.cos(ph);
-          for (const k of [-0.8, 0, 0.8]) collideCircle(b, hero.x + ux * m.du + hero.nx * (off + k), hero.z + uz * m.du + hero.nz * (off + k), hero.rad, 0.9, ev, hero.nx * v, hero.nz * v);
+          for (const k of [-0.45, 0, 0.45]) collideCircle(b, hero.x + ux * m.du + hero.nx * (off + k), hero.z + uz * m.du + hero.nz * (off + k), hero.rad, 0.9, ev, hero.nx * v, hero.nz * v);
         }
       } else if (hero.type === 'bridge') {                    // a moat under an arched deck: off the deck the ball is in the water
         const rx = b.x - hero.x, rz = b.z - hero.z, a = rx * ux + rz * uz, lat = rx * hero.nx + rz * hero.nz;

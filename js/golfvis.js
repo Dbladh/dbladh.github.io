@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026222749';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026222749';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261026222749';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026222749';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026222749';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026222853';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026222853';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261026222853';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026222853';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026222853';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -184,8 +184,9 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   // posts, bumpers, sand
   for (const p of h.posts) { g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z)); }                    // (painted warning bands: this is something the ball hits)
   for (const p of h.bumpers) {
-    const b = cyl(M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z), ph = p.x * 3 + p.z; g.add(b); g.add(cap); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
-    updaters.push((heroT, t) => { const k = 1 + 0.05 * Math.sin(t * 4 + ph); b.scale.set(p.r * k, 0.8, p.r * k); cap.scale.set(p.r * 1.05 * k, 0.12, p.r * 1.05 * k); });          // (bumpers breathe a little: they are alive)
+    const BL = { candy: ['#ff5f9e', 'sph'], haunted: ['#ff8a2a', 'sph'], ice: ['#7cc8ff', 'cyl'], space: ['#8a63ff', 'cyl'], volcano: ['#ff5a1a', 'cyl'], desert: ['#d98a3d', 'cyl'] }[h.theme], round = BL && BL[1] === 'sph', ph = p.x * 3 + p.z;      // (the bumpers take the theme's look: gumdrops, pumpkins, ice posts, crystal domes)
+    const b = round ? new THREE.Mesh(G.sph, BL ? paint(BL[0]) : M.bumper) : cyl(BL ? paint(BL[0]) : M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z); if (round) { b.position.set(p.x, 0.45, p.z); cap.visible = false; } g.add(b); g.add(cap); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
+    updaters.push((heroT, t) => { const k = 1 + 0.05 * Math.sin(t * 4 + ph); if (round) b.scale.set(p.r * 1.05 * k, 0.7 * k, p.r * 1.05 * k); else b.scale.set(p.r * k, 0.8, p.r * k); cap.scale.set(p.r * 1.05 * k, 0.12, p.r * 1.05 * k); });          // (bumpers breathe a little: they are alive)
   }
   // boost strips (moving chevrons), bounce pads, and the cage round one orb with its button and gate
   const chev = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d'); x.fillStyle = '#12304a'; x.fillRect(0, 0, 128, 64); x.strokeStyle = '#ffe14a'; x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round'; for (let i = 0; i < 2; i++) { const ox = 18 + i * 56; x.beginPath(); x.moveTo(ox, 10); x.lineTo(ox + 26, 32); x.lineTo(ox, 54); x.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; })();
@@ -204,8 +205,8 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (const [x, z, y] of [[R.ax, R.az, 0.45], [R.bx, R.bz, 0.45]]) { const ring = torus(cyan, 0.55, 0.07, x, y, z, 0, Math.atan2(R.ux, R.uz) + Math.PI / 2, 0); g.add(ring); const pad = cyl(paint('#16405a'), 0.6, 0.05, x, 0.04, z); g.add(pad); updaters.push((heroT, t) => { ring.scale.setScalar(1 + 0.06 * Math.sin(t * 5 + x)); }); }
   }
   for (const o of h.pads || []) {
-    const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint('#ff4fb3'), o.r * 0.8, 0.06, 0, 0.13, 0); gp.add(top); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2)); g.add(gp);
-    updaters.push((heroT, t) => { const k = 1 + 0.08 * Math.sin(t * 5 + o.x); top.scale.set(o.r * 0.8 * k, 0.06, o.r * 0.8 * k); });
+    const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), o.r * 0.8, 0.06, 0, o.tramp ? 0.3 : 0.13, 0); gp.add(top); if (o.tramp) for (let i = 0; i < 4; i++) gp.add(torus(paint('#c9d1e0'), o.r * 0.55, 0.035, 0, 0.1 + i * 0.05, 0, Math.PI / 2)); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2)); g.add(gp);
+    updaters.push((heroT, t) => { const k = 1 + 0.08 * Math.sin(t * 5 + o.x); top.scale.set(o.r * 0.8 * k, 0.06, o.r * 0.8 * k); if (o.tramp) top.position.y = 0.3 + 0.06 * Math.sin(t * 6 + o.z); });
   }
   // the walls and gates of the machines: low fences (the ball can be vaulted over them), tall walls, gates that sink when the button is pressed, and the buttons
   for (const b of h.barriers || []) {
@@ -268,6 +269,17 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (const sd of [-1, 1]) { const pm = new THREE.Mesh(track(new THREE.BoxGeometry(0.6, 1.0, 0.6)), stone); pm.position.set(sd * (tn.len / 2), 0.5, 0); tg.add(pm); }
     const roofMat = new THREE.MeshLambertMaterial({ color: TH0.rock, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }); disposables.push(roofMat);
     const roof = new THREE.Mesh(track(new THREE.CylinderGeometry(R, R, tn.len, 16, 1, true)), roofMat); roof.rotation.z = Math.PI / 2; tg.add(roof); g.add(tg);        // (the lower half is under the lawn)
+  }
+  for (const gt of h.gates1 || []) {                           // a one-way gate: two posts and a flap of arrows pointing the way
+    const gy = Math.max(0, hillH(h, gt.x, gt.z)), gg = new THREE.Group(); gg.position.set(gt.x, gy, gt.z); gg.rotation.y = Math.atan2(-gt.uz, gt.ux);
+    for (const sd of [-1, 1]) gg.add(cyl(paint('#3a62c9'), 0.12, 1.1, 0, 0.55, sd * (gt.hw + 0.1)));
+    const fm = new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }); disposables.push(fm); const flap = new THREE.Mesh(track(new THREE.PlaneGeometry(gt.hw * 2, 0.55)), fm); flap.rotation.y = Math.PI / 2; flap.position.y = 0.5; gg.add(flap);
+    for (let k = -1; k <= 1; k++) { const ar = new THREE.Mesh(track(new THREE.ConeGeometry(0.2, 0.45, 3)), paint('#7dffb0')); ar.rotation.z = -Math.PI / 2; ar.position.set(0.02, 0.06, k * gt.hw * 0.55); gg.add(ar); }
+    g.add(gg);
+  }
+  for (const rl of h.rollers || []) {                          // a tumbleweed: a tangle of brown twigs that rolls across the lane
+    const ball = new THREE.Mesh(track(new THREE.IcosahedronGeometry(1, 1)), new THREE.MeshLambertMaterial({ color: '#a8743a', flatShading: true })); disposables.push(ball.material); ball.scale.setScalar(rl.rad * 1.15); g.add(ball);
+    updaters.push((heroT) => { const ph = rl.w * heroT + rl.ph, off = rl.A * Math.sin(ph), gy = Math.max(0, hillH(h, rl.x, rl.z)); ball.position.set(rl.x + rl.nx * off, gy + rl.rad, rl.z + rl.nz * off); ball.rotation.x = heroT * 3 * Math.sign(Math.cos(ph) || 1); ball.rotation.y = heroT; });
   }
   for (const gw of h.ghosts || []) {                           // a ghost wall: a violet curtain that is solid for part of every period and fades away between
     const len = Math.hypot(gw.bx - gw.ax, gw.bz - gw.az), mat = new THREE.MeshBasicMaterial({ color: '#b98cff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }); disposables.push(mat);
@@ -470,7 +482,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     for (const m of hr.paddles) {
       w.add(rbox(metal('#6c7480'), 0.28, 0.08, (hw + 0.25) * 2, m.du, 0.04, 0, 0.02));
       for (const sd of [-1, 1]) w.add(rbox(metal('#3c6fd8'), 0.4, 0.9, 0.4, m.du, 0.45, sd * (hw + 0.4), 0.06));
-      const blk = new THREE.Group(); blk.add(rbox(paint('#e5483f'), 0.6, 0.85, 2.5, 0, 0, 0, 0.1)); blk.add(rbox(paint('#ffffff'), 0.62, 0.2, 2.52, 0, 0.18, 0, 0.04)); blk.add(rbox(paint('#ffffff'), 0.62, 0.2, 2.52, 0, -0.18, 0, 0.04)); blk.children.forEach((c) => { c.castShadow = true; }); w.add(blk);
+      const blk = new THREE.Group(); blk.add(rbox(paint('#e5483f'), 0.6, 0.85, 1.8, 0, 0, 0, 0.1)); blk.add(rbox(paint('#ffffff'), 0.62, 0.2, 1.82, 0, 0.18, 0, 0.04)); blk.add(rbox(paint('#ffffff'), 0.62, 0.2, 1.82, 0, -0.18, 0, 0.04)); blk.children.forEach((c) => { c.castShadow = true; }); w.add(blk);
       updaters.push((heroT) => { blk.position.set(m.du, 0.45, hr.A * Math.sin(hr.w * heroT + m.ph)); });
     }
   } else if (hr.type === 'bridge') {                       // a moat under a wooden arched bridge with rails

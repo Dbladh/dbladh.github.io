@@ -64,7 +64,7 @@ export function buildHero(type, f, r) {
   } else if (type === 'drawbridge') {                     // a moat across the lane with a bridge that goes up and down
     Object.assign(hero, { half: 1.5, period: q(4 + r() * 1.5), phase: r(), up: 0.4 });
   } else if (type === 'slider') {                         // two blocks that run across the lane in turn
-    const ph = r() * 3; Object.assign(hero, { A: hw - 1.4, w: 1.5 + r() * 0.6, rad: 0.5, paddles: [{ du: -1.5, ph }, { du: 1.5, ph: ph + 3.1416 }] });
+    const ph = r() * 3; Object.assign(hero, { A: hw - 1.0, w: 0.95 + r() * 0.45, rad: 0.45, paddles: [{ du: -1.5, ph }, { du: 1.5, ph: ph + 3.1416 }] });
   } else if (type === 'bridge') {                         // a moat across the lane with a narrow arched deck over it, rails along the deck
     const H = hw + 0.3, pts = []; hero.moatHalf = 1.7; hero.deckW = 0.85;
     hero.moat = { x: mid.x, z: mid.z, poly: [at(mid, -1.7, H), at(mid, 1.7, H), at(mid, 1.7, -H), at(mid, -1.7, -H)].flatMap((p) => [p.x, p.z]) }; hero.moat.r = Math.hypot(1.7, H) + 0.3;

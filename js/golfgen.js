@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026222749';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026222749';
-import { aceSearch } from './golface.js?v=20261026222749';
-import { BAKED } from './golfbake.js?v=20261026222749';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026222853';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026222853';
+import { aceSearch } from './golface.js?v=20261026222853';
+import { BAKED } from './golfbake.js?v=20261026222853';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -477,7 +477,7 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free: freeX, keep, hero }, magnets, tunnels);
 
   // the second set of extras (ext.more): ghost walls and (see the widths above) a fork island, each drawn from their own generator
-  const ghosts = [], islands = [];
+  const ghosts = [], islands = [], gates1 = [], rollers = [];
   if (ext && ext.more) {
     const r2 = mulberry32((seed ^ 0x2b7e1516) >>> 0);
     const stretch = (n, margin, tries = 400) => {                          // a straight stretch of n centre-line points, clear of everything
@@ -491,6 +491,15 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
     if (index >= 1 && r2() < (ext.theme === 'haunted' ? 0.85 : 0.1)) {     // a ghost wall: solid for part of every period
       const st = stretch(4, -0.2); if (st) { const m = st.mid, period = 3 + r2() * 1.5; ghosts.push({ ax: cl[m].x + tz[m] * (w[m] + 0.05), az: cl[m].z - tx[m] * (w[m] + 0.05), bx: cl[m].x - tz[m] * (w[m] + 0.05), bz: cl[m].z + tx[m] * (w[m] + 0.05), period, phase: r2() * period, duty: 0.55 }); keep.push({ x: cl[m].x, z: cl[m].z, r: 2.0 }); }
     }
+    if (index >= 1 && r2() < 0.25) {                                       // a one-way gate across the lane: forwards only
+      const st = stretch(3, -0.2); if (st) { const m = st.mid; gates1.push({ x: q(cl[m].x), z: q(cl[m].z), ux: tx[m], uz: tz[m], nx: -tz[m], nz: tx[m], hw: w[m] }); keep.push({ x: cl[m].x, z: cl[m].z, r: 1.6 }); }
+    }
+    if (index >= 2 && r2() < 0.25) {                                       // a trampoline pad: it launches the ball up and on along the lane
+      const st = stretch(3, 0.3); if (st) { const m = st.mid; pads.push({ x: q(cl[m].x), z: q(cl[m].z), r: 0.8, tramp: true, ux: tx[m], uz: tz[m] }); keep.push({ x: cl[m].x, z: cl[m].z, r: 2.4 }); }
+    }
+    if (index >= 1 && r2() < (ext.theme === 'desert' ? 0.7 : 0.08)) {      // a tumbleweed rolling to and fro across the lane
+      const st = stretch(5, 0.2); if (st) { const m = st.mid; rollers.push({ x: q(cl[m].x), z: q(cl[m].z), ux: tx[m], uz: tz[m], nx: -tz[m], nz: tx[m], A: w[m] - 0.95, w: 1.1 + r2() * 0.5, ph: r2() * 6, rad: 0.45 }); keep.push({ x: cl[m].x, z: cl[m].z, r: 2.6 }); }
+    }
     if (islandI >= 0) {                                                    // the lens of rock in the swollen stretch
       const c = islandI, n = 14, poly = []; for (let k = 0; k < n; k++) { const t = (k / n) * 6.2832, lx = 2.0 * Math.cos(t), lz = 0.9 * Math.sin(t); poly.push(cl[c].x + tx[c] * lx - tz[c] * lz, cl[c].z + tz[c] * lx + tx[c] * lz); }
       for (let k = 0; k < n; k++) walls.push([poly[k * 2], poly[k * 2 + 1], poly[((k + 1) % n) * 2], poly[((k + 1) % n) * 2 + 1], 0, 0]); islands.push({ x: cl[c].x, z: cl[c].z, poly }); keep.push({ x: cl[c].x, z: cl[c].z, r: 3.6 });
@@ -499,7 +508,7 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, ghosts, islands, lanes: hero.lane ? [hero.lane] : [], dense: !!hero.lane, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, ghosts, islands, gates1, rollers, lanes: hero.lane ? [hero.lane] : [], dense: !!hero.lane, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
   for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
     const res = proveRecipe(H, rec);
     if (res.pass < (rec.minPass || 3)) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; rec.necessity = necessityOf(H, rec); }
