@@ -2,12 +2,12 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261025000055';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261025000055';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261025000055';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261025000055';
-import { courseMonth } from './monthseed.js?v=20261025000055';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261025000055';
+import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261026203257';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026203257';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261026203257';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261026203257';
+import { courseMonth } from './monthseed.js?v=20261026203257';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261026203257';
 
 const HOLE_INDEX = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMPS = ['ramp', 'spin', 'tgt'], LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS' };
@@ -82,14 +82,18 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; disposables.push(tex);
     const art = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 2 * W).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); art.position.set(0, 0.05, 0); disposables.push(art.geometry, art.material); group.add(art);
     const red = new THREE.MeshLambertMaterial({ color: '#bd5a3e' }), cream = new THREE.MeshLambertMaterial({ color: '#e8dcc6' }); disposables.push(red, cream);
-    for (const [a, b] of frame.rails) {                                                // the rails: planks like the mini-golf's border, in short pieces that follow the ground up the ramps
-      const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(L / 0.6));
-      for (let i = 0; i < n; i++) {
-        const x0_ = a.x + (dx * i) / n, z0_ = a.z + (dz * i) / n, x1_ = a.x + (dx * (i + 1)) / n, z1_ = a.z + (dz * (i + 1)) / n, h0 = hillH(hole, x0_, z0_), h1 = hillH(hole, x1_, z1_), l = L / n, pitch = Math.atan2(h1 - h0, l);
-        for (const [mat, y, h, w] of [[M.rail, 0.25, 0.5, 0.3], [cream, 0.54, 0.08, 0.36]]) {
-          const m = new THREE.Mesh(G.box, mat); m.scale.set(l + 0.06, h, w); m.position.set((x0_ + x1_) / 2, (h0 + h1) / 2 + y, (z0_ + z1_) / 2); m.rotation.order = 'YZX'; m.rotation.set(0, Math.atan2(-dz, dx), pitch); m.castShadow = mat === M.rail; group.add(m);
+    {                                                                              // the rails: planks like the mini-golf's border, in short pieces that follow the ground up the ramps (two instanced meshes, not hundreds)
+      const pieces = [], eul = new THREE.Euler(0, 0, 0, 'YZX'), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), mm = new THREE.Matrix4();
+      for (const [a, b] of frame.rails) {
+        const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(L / 0.6));
+        for (let i = 0; i < n; i++) {
+          const x0_ = a.x + (dx * i) / n, z0_ = a.z + (dz * i) / n, x1_ = a.x + (dx * (i + 1)) / n, z1_ = a.z + (dz * (i + 1)) / n, h0 = hillH(hole, x0_, z0_), h1 = hillH(hole, x1_, z1_);
+          pieces.push([(x0_ + x1_) / 2, (h0 + h1) / 2, (z0_ + z1_) / 2, Math.atan2(-dz, dx), Math.atan2(h1 - h0, L / n), L / n]);
         }
       }
+      const plank = new THREE.InstancedMesh(G.box, M.rail, pieces.length), capm = new THREE.InstancedMesh(G.box, cream, pieces.length); plank.castShadow = true; plank.frustumCulled = capm.frustumCulled = false;
+      pieces.forEach((p, i) => { eul.set(0, p[3], p[4]); q.setFromEuler(eul); plank.setMatrixAt(i, mm.compose(ps.set(p[0], p[1] + 0.25, p[2]), q, sc.set(p[5] + 0.06, 0.5, 0.3))); capm.setMatrixAt(i, mm.compose(ps.set(p[0], p[1] + 0.54, p[2]), q, sc.set(p[5] + 0.06, 0.08, 0.36))); });
+      plank.instanceMatrix.needsUpdate = capm.instanceMatrix.needsUpdate = true; group.add(plank, capm); disposables.push(plank, capm);
     }
     { const rg = new THREE.RingGeometry(1.0, 1.12, 48).rotateX(-Math.PI / 2), rg2 = new THREE.RingGeometry(0.7, 0.8, 40).rotateX(-Math.PI / 2), wm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); disposables.push(rg, rg2, wm);
       for (const g of [rg, rg2]) { const m = new THREE.Mesh(g, wm); m.position.set(hole.cup.x, hillH(hole, hole.cup.x, hole.cup.z) + 0.07, hole.cup.z); group.add(m); } }          // (painted rings round the hole on the deck)
@@ -106,13 +110,14 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
     const O = 0.85, edge = [];
     for (let i = 0; i < hole.outline.length; i++) edge.push([hole.outline[i], hole.outline[(i + 1) % hole.outline.length]]);
     const cap = new THREE.MeshLambertMaterial({ color: '#e8dcc6' }); disposables.push(cap);
-    for (const [a, b] of edge) {
-      const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz); if (l < 1e-3) continue;
+    const segs = edge.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-3), stone = new THREE.InstancedMesh(G.box, M.stone, segs.length), tops = new THREE.InstancedMesh(G.box, cap, segs.length), mm = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
+    segs.forEach(([a, b], i) => {
+      const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz);
       let nx = dz / l, nz = -dx / l; const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; if (nx * mx + nz * mz < 0) { nx = -nx; nz = -nz; }        // (the outward side)
-      const H = 1.1 + (mx - TABLE.x0) * 0.17, m = new THREE.Mesh(G.box, M.stone), t = new THREE.Mesh(G.box, cap);
-      m.scale.set(l + 0.12, H, 0.9); m.position.set(mx + nx * (O + 0.45), H / 2, mz + nz * (O + 0.45)); m.rotation.y = Math.atan2(-dz, dx); m.castShadow = m.receiveShadow = true;
-      t.scale.set(l + 0.14, 0.14, 1.1); t.position.set(m.position.x, H + 0.07, m.position.z); t.rotation.y = m.rotation.y; wall.add(m, t);
-    }
+      const H = 1.1 + (mx - TABLE.x0) * 0.17, px = mx + nx * (O + 0.45), pz = mz + nz * (O + 0.45); q.setFromAxisAngle(up0, Math.atan2(-dz, dx));
+      stone.setMatrixAt(i, mm.compose(ps.set(px, H / 2, pz), q, sc.set(l + 0.12, H, 0.9))); tops.setMatrixAt(i, mm.compose(ps.set(px, H + 0.07, pz), q, sc.set(l + 0.14, 0.14, 1.1)));
+    });
+    stone.castShadow = stone.receiveShadow = true; stone.frustumCulled = tops.frustumCulled = false; stone.instanceMatrix.needsUpdate = tops.instanceMatrix.needsUpdate = true; wall.add(stone, tops); disposables.push(stone, tops);
   }
   function disposeTable() {
     if (wall) { scene.remove(wall); wall = null; }
