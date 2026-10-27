@@ -2,12 +2,12 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261026220920';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026220920';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261026220920';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261026220920';
-import { golfCourse, monthKey } from './monthseed.js?v=20261026220920';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261026220920';
+import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261026222749';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026222749';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261026222749';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261026222749';
+import { golfCourse, monthKey } from './monthseed.js?v=20261026222749';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261026222749';
 
 const HOLE_INDEX = 3, COMBO_NEED = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
@@ -178,7 +178,7 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
     if (!drag || st.mode !== 'aim') { dots.count = 0; elPower.classList.remove('show'); return; }
     const a = aimInfo(drag), l = Math.hypot(a.dx, a.dz) || 1, n = a.power < 0.05 ? 0 : Math.round(3 + a.power * 12), y = hillH(hole, ball.x, ball.z) + 0.25, m = new THREE.Matrix4();
     elPower.classList.add('show'); elPower.firstChild.style.width = `${Math.round(a.power * 100)}%`;
-    for (let i = 0; i < n; i++) { m.makeTranslation(ball.x + (a.dx / l) * (0.7 + i * 0.62), y, ball.z + (a.dz / l) * (0.7 + i * 0.62)); dots.setMatrixAt(i, m); }
+    for (let i = 0; i < n; i++) { const dx = ball.x + (a.dx / l) * (0.7 + i * 0.62), dz = ball.z + (a.dz / l) * (0.7 + i * 0.62); m.makeTranslation(dx, Math.max(0, hillH(hole, dx, dz)) + 0.25, dz); dots.setMatrixAt(i, m); }
     dots.count = n; dots.instanceMatrix.needsUpdate = true;
   }
   const onDown = (e) => {

@@ -5,18 +5,18 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261026220920';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026220920';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026220920';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026220920';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026220920';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026220920';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261026220920';
-import { createNeon } from './golfneon.js?v=20261026220920';
-import { createFx } from './golffx.js?v=20261026220920';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261026220920';
-import { buildDecor } from './golfdecor.js?v=20261026220920';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026220920';
+import { courseSeed, holeSeed, makeHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261026222749';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026222749';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026222749';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026222749';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026222749';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026222749';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261026222749';
+import { createNeon } from './golfneon.js?v=20261026222749';
+import { createFx } from './golffx.js?v=20261026222749';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261026222749';
+import { buildDecor } from './golfdecor.js?v=20261026222749';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026222749';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -301,7 +301,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     const a = aimInfo(drag), l = Math.hypot(a.dx, a.dz) || 1, b = balls[0];
     elPower.classList.add('show'); elPower.firstChild.style.width = `${Math.round(a.power * 100)}%`;
     const n = a.power < 0.05 ? 0 : Math.round(3 + a.power * 12), y = hillH(hole, b.x, b.z) + 0.2;
-    for (let i = 0; i < n; i++) { tmpM.makeTranslation(b.x + (a.dx / l) * (0.7 + i * 0.62), y, b.z + (a.dz / l) * (0.7 + i * 0.62)); dots.setMatrixAt(i, tmpM); }
+    for (let i = 0; i < n; i++) { const dx = b.x + (a.dx / l) * (0.7 + i * 0.62), dz = b.z + (a.dz / l) * (0.7 + i * 0.62); tmpM.makeTranslation(dx, Math.max(0, hillH(hole, dx, dz)) + 0.2, dz); dots.setMatrixAt(i, tmpM); }          // (each dash sits on the ground under it, so the line climbs hills and ramps)
     dots.count = n; dots.instanceMatrix.needsUpdate = true;
   }
   function fire(a) {
@@ -424,7 +424,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261026220920', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261026222749', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, HOLES); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: HOLES });
