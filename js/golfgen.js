@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026212257';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026212257';
-import { aceSearch } from './golface.js?v=20261026212257';
-import { BAKED } from './golfbake.js?v=20261026212257';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026212800';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026212800';
+import { aceSearch } from './golface.js?v=20261026212800';
+import { BAKED } from './golfbake.js?v=20261026212800';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -206,7 +206,7 @@ function capRows(c, tx, tz, hw, dir) {
 
 /** Surface patches of a hole (ice, mud, caramel, quicksand, a conveyor belt): strips across the corridor or an oval pit, placed on a straight stretch clear of everything else, drawn with their own generator so they never change the rest of a hole. */
 const SURFACE = { ice: { fric: 0.1 }, mud: { fric: 2.2 }, caramel: { fric: 2.8 }, quicksand: { fric: 1.8, pull: 2.4 }, conveyor: { fric: 0.8, push: 3.2 } };
-function addPatches(out, rr, surface, S) {
+function addPatches(out, rr, surface, S, magnets = [], tunnels = []) {
   const { cl, w, tx, tz, N, sAt, length, free, keep } = S, want = [];
   if (S.index >= 1 && surface && SURFACE[surface]) want.push(surface);
   if (S.index >= 3 && rr() < 0.35) want.push('conveyor');
@@ -223,6 +223,20 @@ function addPatches(out, rr, surface, S) {
       for (let i = 0; i < poly.length; i += 2) rad = Math.max(rad, Math.hypot(poly[i] - cx, poly[i + 1] - cz));
       const fwd = rr() < 0.7 ? 1 : -1, P = { kind, poly, x: cx, z: cz, r: rad + 0.3, ux: tx[mid] * fwd, uz: tz[mid] * fwd, ...SURFACE[kind] };
       out.push(P); keep.push({ x: cx, z: cz, r: rad + 0.8 }); break;
+    }
+  }
+  if (S.index >= 1 && rr() < 0.4) {                                           // a tunnel: an arched roof over a straight stretch (the ball rolls under it)
+    for (let tries = 0; tries < 100; tries++) {
+      const ci = 8 + ((rr() * (N - 20)) | 0), i1 = Math.min(N - 8, ci + 7), mid = (ci + i1) >> 1;
+      if (sAt[ci] < 5 || sAt[i1] > length - 5 || tx[ci] * tx[i1] + tz[ci] * tz[i1] < 0.95 || ![ci, mid, i1].every((i) => free(cl[i].x, cl[i].z, -1.3))) continue;
+      tunnels.push({ x: q(cl[mid].x), z: q(cl[mid].z), ux: tx[mid], uz: tz[mid], len: Math.hypot(cl[i1].x - cl[ci].x, cl[i1].z - cl[ci].z), hw: w[mid] }); keep.push({ x: cl[mid].x, z: cl[mid].z, r: 3.2 }); break;
+    }
+  }
+  if (S.index >= 2 && rr() < 0.45) {                                          // a magnet beside the lane, pulling the ball in (or, now and then, pushing it away)
+    for (let tries = 0; tries < 60; tries++) {
+      const ci = 8 + ((rr() * (N - 17)) | 0), side = rr() < 0.5 ? 1 : -1, lat = side * (w[ci] - 0.55), x = cl[ci].x - tz[ci] * lat, z = cl[ci].z + tx[ci] * lat;
+      if (sAt[ci] < 5 || sAt[ci] > length - 5 || !free(x, z, 0.2)) continue;
+      magnets.push({ x: q(x), z: q(z), r: 2.7, pull: rr() < 0.8 ? 3.6 : -3.6 }); keep.push({ x, z, r: 2.2 }); break;
     }
   }
 }
@@ -446,12 +460,12 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll());
   while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   for (const sc of secrets) pickups.push(sc);                // (the secret coins of the machines)
-  const patches = [];
-  if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free, keep });
+  const patches = [], magnets = [], tunnels = [];
+  if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free, keep }, magnets, tunnels);
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  const H = { recipeLog, rails, barriers, doors, recipes, patches, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
   for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
     const res = proveRecipe(H, rec);
     if (res.pass < (rec.minPass || 3)) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; rec.necessity = necessityOf(H, rec); }

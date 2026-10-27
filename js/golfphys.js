@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026212257';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026212800';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -207,6 +207,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; if (ctx.tilt && hole.tiltDir) { b.vx += hole.tiltDir.x * ctx.tilt * h; b.vz += hole.tiltDir.z * ctx.tilt * h; } }
     const pt = b.air ? null : patchAt(hole, b);                         // (a patch of ice, mud, caramel, quicksand or a conveyor under the ball)
     if (pt) { if (pt.pull) { const cx = pt.x - b.x, cz = pt.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1; b.vx += (cx / cd) * pt.pull * h; b.vz += (cz / cd) * pt.pull * h; } if (pt.push) { b.vx += pt.ux * pt.push * h; b.vz += pt.uz * pt.push * h; } }
+    if (hole.magnets && !b.air) for (const m of hole.magnets) { const dx = m.x - b.x, dz = m.z - b.z, d2 = dx * dx + dz * dz; if (d2 < m.r * m.r && d2 > 0.04) { const d = Math.sqrt(d2), k = (m.pull * (1 - d / m.r) * h) / d; b.vx += dx * k; b.vz += dz * k; } }        // (a magnet pulls the ball in (or, with a negative pull, pushes it away))
     if (!b.air) for (const rv of hole.rivers) {
       const dx = rv.b.x - rv.a.x, dz = rv.b.z - rv.a.z, l2 = dx * dx + dz * dz; let t = ((b.x - rv.a.x) * dx + (b.z - rv.a.z) * dz) / l2; if (t < -0.05 || t > 1.05) continue;
       t = t < 0 ? 0 : t > 1 ? 1 : t; const px = rv.a.x + dx * t - b.x, pz = rv.a.z + dz * t - b.z;

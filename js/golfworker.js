@@ -1,7 +1,7 @@
 // Builds a mini-golf course off the main thread. A course nobody has worked out ahead of time (a random one) has to be searched for, which can take seconds; here it happens in the background
 // while the page stays smooth. golf.js starts this worker, shows the progress, and uses the holes it sends back.
-import { holeSeed, makeHole } from './golfgen.js?v=20261026212257';
-import { themeOf } from './golfthemes.js?v=20261026212257';
+import { holeSeed, makeHole } from './golfgen.js?v=20261026212800';
+import { themeOf } from './golfthemes.js?v=20261026212800';
 
 onmessage = (e) => {
   const { seed, order, shapes, themes, fx, n } = e.data;
