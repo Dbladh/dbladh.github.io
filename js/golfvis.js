@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026222853';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026222853';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261026222853';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026222853';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026222853';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026223523';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026223523';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261026223523';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026223523';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026223523';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -263,18 +263,20 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const rings = [0, 1, 2].map((i) => { const m = new THREE.Mesh(track(new THREE.RingGeometry(0.95, 1.0, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: mg.pull > 0 ? '#ff6a5f' : '#6aa8ff', transparent: true, opacity: 0.5, depthWrite: false })); disposables.push(m.material); m.position.set(mg.x, gy + 0.08, mg.z); g.add(m); return m; });
     updaters.push((heroT) => { rings.forEach((m, i) => { let k = ((heroT * 0.5 + i / 3) % 1); if (mg.pull > 0) k = 1 - k; m.scale.setScalar(0.2 + k * mg.r); m.material.opacity = 0.55 * Math.sin(k * Math.PI); }); });
   }
-  for (const tn of h.tunnels || []) {                          // a tunnel: stone arches and a see-through roof over a straight stretch
-    const gy = Math.max(0, hillH(h, tn.x, tn.z)), R = Math.min(2.0, tn.hw - 0.15), tg = new THREE.Group(); tg.position.set(tn.x, gy, tn.z); tg.rotation.y = Math.atan2(-tn.uz, tn.ux); const stone = stoneTint(TH0.rock, true);
-    const nR = Math.max(2, Math.round(tn.len / 1.1)), rib = track(new THREE.TorusGeometry(R, 0.16, 8, 16, Math.PI)); for (let i = 0; i < nR; i++) { const m = new THREE.Mesh(rib, stone); m.rotation.y = Math.PI / 2; m.position.set(-tn.len / 2 + (tn.len * i) / (nR - 1), 0.02, 0); m.castShadow = true; tg.add(m); }
-    for (const sd of [-1, 1]) { const pm = new THREE.Mesh(track(new THREE.BoxGeometry(0.6, 1.0, 0.6)), stone); pm.position.set(sd * (tn.len / 2), 0.5, 0); tg.add(pm); }
-    const roofMat = new THREE.MeshLambertMaterial({ color: TH0.rock, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }); disposables.push(roofMat);
-    const roof = new THREE.Mesh(track(new THREE.CylinderGeometry(R, R, tn.len, 16, 1, true)), roofMat); roof.rotation.z = Math.PI / 2; tg.add(roof); g.add(tg);        // (the lower half is under the lawn)
+  for (const tn of h.tunnels || []) {                          // a tunnel: stone arches and a see-through roof over a straight stretch, every piece standing on the ground under it
+    const R = Math.min(2.0, tn.hw - 0.15), yaw = Math.atan2(-tn.uz, tn.ux), stone = stoneTint(TH0.rock, true), at = (lx) => [tn.x + tn.ux * lx, tn.z + tn.uz * lx];
+    const nR = Math.max(2, Math.round(tn.len / 1.1)), rib = track(new THREE.TorusGeometry(R, 0.16, 8, 16, Math.PI)), roofMat = new THREE.MeshLambertMaterial({ color: TH0.rock, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }); disposables.push(roofMat);
+    const seg = tn.len / (nR - 1), roofGeo = track(new THREE.CylinderGeometry(R, R, seg + 0.05, 16, 1, true));
+    for (let i = 0; i < nR; i++) { const [x, z] = at(-tn.len / 2 + seg * i), m = new THREE.Mesh(rib, stone); m.rotation.y = yaw + Math.PI / 2; m.position.set(x, Math.max(0, hillH(h, x, z)) + 0.02, z); m.castShadow = true; g.add(m);
+      if (i < nR - 1) { const [rx, rz] = at(-tn.len / 2 + seg * (i + 0.5)), roof = new THREE.Mesh(roofGeo, roofMat); roof.rotation.set(0, yaw, Math.PI / 2); roof.position.set(rx, Math.max(0, hillH(h, rx, rz)), rz); g.add(roof); } }
+    for (const sd of [-1, 1]) { const [x, z] = at(sd * (tn.len / 2)), pm = new THREE.Mesh(track(new THREE.BoxGeometry(0.6, 1.0, 0.6)), stone); pm.position.set(x, Math.max(0, hillH(h, x, z)) + 0.5, z); pm.rotation.y = yaw; g.add(pm); }
   }
   for (const gt of h.gates1 || []) {                           // a one-way gate: two posts and a flap of arrows pointing the way
-    const gy = Math.max(0, hillH(h, gt.x, gt.z)), gg = new THREE.Group(); gg.position.set(gt.x, gy, gt.z); gg.rotation.y = Math.atan2(-gt.uz, gt.ux);
-    for (const sd of [-1, 1]) gg.add(cyl(paint('#3a62c9'), 0.12, 1.1, 0, 0.55, sd * (gt.hw + 0.1)));
+    const gh = (x, z) => Math.max(0, hillH(h, x, z)), px = [gt.x + gt.nx * (gt.hw + 0.1), gt.z + gt.nz * (gt.hw + 0.1)], qx = [gt.x - gt.nx * (gt.hw + 0.1), gt.z - gt.nz * (gt.hw + 0.1)];
+    for (const [x, z] of [px, qx]) g.add(cyl(paint('#3a62c9'), 0.12, 1.1, x, gh(x, z) + 0.55, z));
+    const base = Math.max(gh(gt.x, gt.z), gh(px[0], px[1]), gh(qx[0], qx[1])), gg = new THREE.Group(); gg.position.set(gt.x, base, gt.z); gg.rotation.y = Math.atan2(-gt.uz, gt.ux);
     const fm = new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }); disposables.push(fm); const flap = new THREE.Mesh(track(new THREE.PlaneGeometry(gt.hw * 2, 0.55)), fm); flap.rotation.y = Math.PI / 2; flap.position.y = 0.5; gg.add(flap);
-    for (let k = -1; k <= 1; k++) { const ar = new THREE.Mesh(track(new THREE.ConeGeometry(0.2, 0.45, 3)), paint('#7dffb0')); ar.rotation.z = -Math.PI / 2; ar.position.set(0.02, 0.06, k * gt.hw * 0.55); gg.add(ar); }
+    for (let k = -1; k <= 1; k++) { const ar = new THREE.Mesh(track(new THREE.ConeGeometry(0.2, 0.45, 3)), paint('#7dffb0')); ar.rotation.z = -Math.PI / 2; ar.position.set(0.02, 0.08, k * gt.hw * 0.55); gg.add(ar); }
     g.add(gg);
   }
   for (const rl of h.rollers || []) {                          // a tumbleweed: a tangle of brown twigs that rolls across the lane
@@ -283,14 +285,15 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   }
   for (const gw of h.ghosts || []) {                           // a ghost wall: a violet curtain that is solid for part of every period and fades away between
     const len = Math.hypot(gw.bx - gw.ax, gw.bz - gw.az), mat = new THREE.MeshBasicMaterial({ color: '#b98cff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }); disposables.push(mat);
-    const m = new THREE.Mesh(track(new THREE.PlaneGeometry(len, 1.4)), mat); m.position.set((gw.ax + gw.bx) / 2, Math.max(0, hillH(h, (gw.ax + gw.bx) / 2, (gw.az + gw.bz) / 2)) + 0.75, (gw.az + gw.bz) / 2); m.rotation.y = Math.atan2(-(gw.bz - gw.az), gw.bx - gw.ax); g.add(m);
-    for (const [x, z] of [[gw.ax, gw.az], [gw.bx, gw.bz]]) g.add(cyl(paint('#4a4258'), 0.12, 1.6, x, 0.8, z));
+    const m = new THREE.Mesh(track(new THREE.PlaneGeometry(len, 1.4)), mat); m.position.set((gw.ax + gw.bx) / 2, Math.max(0, hillH(h, gw.ax, gw.az), hillH(h, gw.bx, gw.bz), hillH(h, (gw.ax + gw.bx) / 2, (gw.az + gw.bz) / 2)) + 0.75, (gw.az + gw.bz) / 2); m.rotation.y = Math.atan2(-(gw.bz - gw.az), gw.bx - gw.ax); g.add(m);
+    for (const [x, z] of [[gw.ax, gw.az], [gw.bx, gw.bz]]) g.add(cyl(paint('#4a4258'), 0.12, 1.6, x, Math.max(0, hillH(h, x, z)) + 0.8, z));
     updaters.push((heroT) => { const on = ((heroT + gw.phase) % gw.period) / gw.period < gw.duty; mat.opacity += ((on ? 0.65 : 0.1) - mat.opacity) * 0.15; });
   }
-  for (const is of h.islands || []) {                          // a fork island: a lens of boulders with a mound of lawn on top
-    const n = is.poly.length / 2, rm = stoneTint(TH0.rock, true);
-    for (let k = 0; k < n; k++) { const m = new THREE.Mesh(getRock(), rm); m.scale.set(0.8, 0.9, 0.8); m.position.set(is.poly[k * 2], 0.4, is.poly[k * 2 + 1]); m.rotation.y = k * 1.7; m.castShadow = true; g.add(m); }
-    const mound = new THREE.Mesh(G.cyl, new THREE.MeshLambertMaterial({ color: TH0.fair[1] })); disposables.push(mound.material); const dx = is.poly[0] - is.x, dz = is.poly[1] - is.z; mound.scale.set(1.9, 0.3, 0.85); mound.position.set(is.x, 0.1, is.z); mound.rotation.y = -Math.atan2(dz, dx); g.add(mound);
+  for (const is of h.islands || []) {                          // a fork island: a lens of boulders with a mound of lawn on top, each piece on the ground under it
+    const n = is.poly.length / 2, rm = stoneTint(TH0.rock, true); let top = 0;
+    for (let k = 0; k < n; k++) { const x = is.poly[k * 2], z = is.poly[k * 2 + 1], y = Math.max(0, hillH(h, x, z)); top = Math.max(top, y); const m = new THREE.Mesh(getRock(), rm); m.scale.set(0.8, 0.9, 0.8); m.position.set(x, y + 0.35, z); m.rotation.y = k * 1.7; m.castShadow = true; g.add(m); }
+    top = Math.max(top, hillH(h, is.x, is.z));
+    const mound = new THREE.Mesh(G.cyl, new THREE.MeshLambertMaterial({ color: TH0.fair[1] })); disposables.push(mound.material); const dx = is.poly[0] - is.x, dz = is.poly[1] - is.z; mound.scale.set(1.9, 0.3, 0.85); mound.position.set(is.x, top + 0.12, is.z); mound.rotation.y = -Math.atan2(dz, dx); g.add(mound);
   }
   // water: ponds (irregular, with boulders round the bank and a pebbly bed) and rivers (winding, flowing, with boulder banks), all in the village pond's own water look
   const wr = mulberry32(h.seed ^ 0x9e3779b1), bed = GM.lam(GM.tex.stone, '#c4b48f'); disposables.push(bed);
