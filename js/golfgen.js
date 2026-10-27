@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026211546';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026211546';
-import { aceSearch } from './golface.js?v=20261026211546';
-import { BAKED } from './golfbake.js?v=20261026211546';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026212123';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026212123';
+import { aceSearch } from './golface.js?v=20261026212123';
+import { BAKED } from './golfbake.js?v=20261026212123';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -25,8 +25,8 @@ const smoothstep01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 // ---- the shapes of a hole's centre line ----
 // A hole's corridor follows one of a few shape families (so a course is not nine Ls): a straight run, a dogleg, an S, a zigzag across the lawn, a hairpin, a sweeping arc, a staircase and a ring round an
 // island. Each family is a list of legs (a turn in 15 degree steps, then a length) walked from the start; the rounded bends, the widths, the walls and everything else are built from that as before.
-export const SHAPES = ['straight', 'dogleg', 'sbend', 'zigzag', 'hairpin', 'arc', 'ring'];
-const SHAPE_POOLS = [['straight', 'dogleg', 'sbend', 'arc', 'zigzag'], ['dogleg', 'sbend', 'zigzag', 'arc', 'hairpin'], ['hairpin', 'ring', 'zigzag', 'arc', 'straight', 'dogleg']];   // (holes 1-3, 4-6, 7-9)
+export const SHAPES = ['straight', 'dogleg', 'wide', 'sbend', 'chicane', 'zigzag', 'arc'];
+const SHAPE_POOLS = [['straight', 'dogleg', 'sbend', 'arc', 'zigzag'], ['dogleg', 'sbend', 'zigzag', 'arc', 'chicane', 'wide'], ['chicane', 'wide', 'zigzag', 'arc', 'straight', 'dogleg']];   // (holes 1-3, 4-6, 7-9)
 /** Which shape each of the nine holes has this month: drawn without repeats from a pool per tier, shuffled with the course seed. */
 export const SHAPES_BAKED = false;                           // (set to true once golfbake.js has been worked out with the shapes: until then a month's course keeps the zigzag, and only random courses, which are searched for anyway, use them)
 export function shapeOrder(cs, all = SHAPES_BAKED) {
@@ -39,8 +39,8 @@ export function shapeOrder(cs, all = SHAPES_BAKED) {
   return out;
 }
 const DIRS = (() => { const d = []; let c = 1, s = 0; for (let i = 0; i < 24; i++) { d.push([c, s]); const nc = c * C15 - s * S15; s = s * C15 + c * S15; c = nc; } return d; })();      // (24 headings, 15 degrees apart, by repeated turning: no trig)
-const CUT_BY = { straight: 0, dogleg: 2.8, sbend: 1.6, zigzag: CUT_MAX, hairpin: 3.0, arc: 1.5, ring: 1.6 };
-const MIN_DOT = { hairpin: 0.2, dogleg: 0.0, ring: 0.2 };       // (a gentle bend has the legs' directions close; the sharpest allowed is about 90 degrees)
+const CUT_BY = { straight: 0, dogleg: 2.8, wide: 3.6, sbend: 1.6, chicane: 2.4, zigzag: CUT_MAX, arc: 1.5 };
+const MIN_DOT = { dogleg: 0.0, wide: -0.1 };       // (a gentle bend has the legs' directions close; the sharpest allowed is about 90 degrees)
 /** Walk legs [[turn, length], ...] from the origin at heading `k0` and centre the result. Returns the path ([{ x, z }]) or null if it strays too far from the middle. */
 function walkLegs(k0, legs) {
   let k = k0, x = 0, z = 0; const pts = [{ x, z }];
@@ -67,9 +67,9 @@ function makePath(r, index, type, shape, force) {
   if (shape === 'straight') legs = [[0, Math.min(23, Math.max(rng(16, 22.5), need + 3))]];
   else if (shape === 'dogleg') { legs = [[0, rng(7, 12)], [sgn * (3 + ((r() * 2) | 0)), rng(7, 12)]]; const i = r() < 0.5 ? 0 : 1; legs[i][1] = Math.max(long, legs[i][1]); }
   else if (shape === 'sbend') { const t = 1 + ((r() * 2) | 0); legs = [[0, rng(5.8, 7)], [sgn * t, long + r() * 1.5], [-sgn * t, rng(5.8, 7)]]; }
-  else if (shape === 'hairpin') { legs = [[0, rng(11, 12.5)], [sgn * 4, rng(7, 7.6)], [sgn * 4, rng(7, 7.6)], [sgn * 4, rng(11, 12.5)]]; const i = r() < 0.5 ? 0 : 3; legs[i][1] = Math.max(long, legs[i][1]); }
+  else if (shape === 'wide') { legs = [[0, rng(7, 12)], [sgn * 5, rng(7, 12)]]; const i = r() < 0.5 ? 0 : 1; legs[i][1] = Math.max(long, legs[i][1]); }
+  else if (shape === 'chicane') { legs = [[0, rng(6, 8)], [sgn * 3, long + r()], [-sgn * 3, rng(6, 8)]]; }
   else if (shape === 'arc') { const t = 1 + ((r() * 2) | 0); legs = [[0, rng(5.8, 7)], [sgn * t, long + r() * 1.5], [sgn * t, rng(5.8, 7)]]; }
-  else if (shape === 'ring') { legs = []; for (let i = 0; i < 6; i++) legs.push([i ? sgn * 3 : 0, rng(6, 6.8)]); legs[(1 + r() * 4) | 0][1] = long; }
   const path = walkLegs(k0, legs); return path ? { path, minDot, cutMax } : null;
 }
 
@@ -160,9 +160,9 @@ const attemptShape = (shape, a) => { const chain = [shape, ...(FALLBACK[shape] |
  * Find the layout of hole `index` the slow way: try neighbouring sub-seeds until one is valid and has a hole in one (see holeInOnePossible). Returns { h, attempt, drop } where `drop` says
  * whether the bonuses had to be taken off. The results for the coming years are worked out ahead of time (tools/golf/bake.mjs) and kept in golfbake.js, so the game does not have to search.
  */
-export function findHole(seed, index, type = 'windmill', shape = 'zigzag') {
+export function findHole(seed, index, type = 'windmill', shape = 'zigzag', ext = null) {
   for (let attempt = 0; attempt < 120; attempt++) {
-    const h = build(attemptSeed(seed, attempt), index, type, false, attemptShape(shape, attempt)); if (!h) continue;
+    const h = build(attemptSeed(seed, attempt), index, type, false, attemptShape(shape, attempt), ext); if (!h) continue;
     const res = holeInOnePossible(h); if (res) return { h, attempt, drop: res === 2 };
   }
   for (let attempt = 0; attempt < 40; attempt++) {         // (it should never come to this) a plain straight hole
@@ -173,10 +173,10 @@ export function findHole(seed, index, type = 'windmill', shape = 'zigzag') {
 /** Just build one attempt (for the shape sheet and tests): a hole or null. */
 export const buildAttempt = (seed, index, type, shape) => build(seed, index, type, false, shape);
 /** Make hole number `index` (0-based) with hero `type` (from the baked answer when there is one, else by searching). */
-export function makeHole(seed, index, type = 'windmill', shape = 'zigzag') {
+export function makeHole(seed, index, type = 'windmill', shape = 'zigzag', ext = null) {
   const baked = BAKED[`${seed}.${index}`];
-  if (baked !== undefined) { const h = build(attemptSeed(seed, baked >> 1), index, type, false, attemptShape(shape, baked >> 1)); if (h) { if (baked & 1) dropBonuses(h); return h; } }
-  return findHole(seed, index, type, shape).h;
+  if (baked !== undefined) { const h = build(attemptSeed(seed, baked >> 1), index, type, false, attemptShape(shape, baked >> 1), ext); if (h) { if (baked & 1) dropBonuses(h); return h; } }
+  return findHole(seed, index, type, shape, ext).h;
 }
 
 /** Take the bonuses that need a trick (the secret coin, the caged orb) off a hole: they stay only where one stroke can collect them and still hole out. */
@@ -202,7 +202,29 @@ function capRows(c, tx, tz, hw, dir) {
   return rows;
 }
 
-function build(seed, index, type, force, family = 'zigzag') {
+/** Surface patches of a hole (ice, mud, caramel, quicksand, a conveyor belt): strips across the corridor or an oval pit, placed on a straight stretch clear of everything else, drawn with their own generator so they never change the rest of a hole. */
+const SURFACE = { ice: { fric: 0.1 }, mud: { fric: 2.2 }, caramel: { fric: 2.8 }, quicksand: { fric: 1.8, pull: 2.4 }, conveyor: { fric: 0.8, push: 3.2 } };
+function addPatches(out, rr, surface, S) {
+  const { cl, w, tx, tz, N, sAt, length, free, keep } = S, want = [];
+  if (S.index >= 1 && surface && SURFACE[surface]) want.push(surface);
+  if (S.index >= 3 && rr() < 0.35) want.push('conveyor');
+  if (surface === 'ice' && S.index >= 4 && rr() < 0.5) want.push('ice');
+  for (const kind of want) {
+    for (let tries = 0; tries < 80; tries++) {
+      const ci = 7 + ((rr() * (N - 16)) | 0), len = 2.4 + rr() * 1.8, i1 = Math.min(N - 8, ci + Math.round(len / SPACING)), mid = (ci + i1) >> 1;
+      if (sAt[ci] < 4.5 || sAt[i1] > length - 4.5) continue;
+      if (tx[ci] * tx[i1] + tz[ci] * tz[i1] < 0.94) continue;                 // (a straight stretch)
+      if (![ci, mid, i1].every((i) => free(cl[i].x, cl[i].z, 0.1))) continue;
+      let poly = [], cx = cl[mid].x, cz = cl[mid].z, rad = 0;
+      if (kind === 'quicksand') { const lat = (rr() - 0.5) * 0.9; cx = cl[mid].x - tz[mid] * lat; cz = cl[mid].z + tx[mid] * lat; poly = sandPoly(0, q(cx), q(cz), 1.35, tx[mid], tz[mid], S.seed ^ 0x6b43a9b5); }
+      else { const L = [], R = []; for (let i = ci; i <= i1; i++) { const ww = w[i] - 0.2; L.push(cl[i].x - tz[i] * ww, cl[i].z + tx[i] * ww); R.unshift(cl[i].x + tz[i] * ww, cl[i].z - tx[i] * ww); } poly = [...L, ...R]; }
+      for (let i = 0; i < poly.length; i += 2) rad = Math.max(rad, Math.hypot(poly[i] - cx, poly[i + 1] - cz));
+      const fwd = rr() < 0.7 ? 1 : -1, P = { kind, poly, x: cx, z: cz, r: rad + 0.3, ux: tx[mid] * fwd, uz: tz[mid] * fwd, ...SURFACE[kind] };
+      out.push(P); keep.push({ x: cx, z: cz, r: rad + 0.8 }); break;
+    }
+  }
+}
+function build(seed, index, type, force, family = 'zigzag', ext = null) {
   const r = mulberry32(seed), PP = makePath(r, index, type, family, force); if (!PP) return null;
   const path = PP.path, MIN_DOT_ = PP.minDot, CUT_ = PP.cutMax;
   const dirs = [], nLegs = path.length - 1;
@@ -422,10 +444,12 @@ function build(seed, index, type, force, family = 'zigzag') {
   const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll());
   while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   for (const sc of secrets) pickups.push(sc);                // (the secret coins of the machines)
+  const patches = [];
+  if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free, keep });
   const par = Math.max(2, Math.min(5, 2 + Math.floor(length / 16)));
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
-  const H = { recipeLog, rails, barriers, doors, recipes, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  const H = { recipeLog, rails, barriers, doors, recipes, patches, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
   for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
     const res = proveRecipe(H, rec);
     if (res.pass < (rec.minPass || 3)) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; rec.necessity = necessityOf(H, rec); }

@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026211546';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026211546';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261026211546';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026211546';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026211546';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026212123';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026212123';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261026212123';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026212123';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026212123';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -242,6 +242,18 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   for (const s of h.sands) {                                 // a sand pit: a rough patch of sand with a darker, damp rim and a few pebbles
     const sg = track(pondGeometry(s.poly, 0)), spp = sg.attributes.position; for (let i = 0; i < spp.count; i++) spp.setY(i, hillH(h, spp.getX(i), spp.getZ(i)) + 0.07); sg.computeVertexNormals(); const sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, TH0.sand, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); sm.receiveShadow = true; g.add(sm);
     const lip = track(pondGeometry(s.poly.map((v, i) => (i % 2 ? s.z : s.x) + (v - (i % 2 ? s.z : s.x)) * 1.12), 0)), lpp = lip.attributes.position; for (let i = 0; i < lpp.count; i++) lpp.setY(i, hillH(h, lpp.getX(i), lpp.getZ(i)) + 0.04); lip.computeVertexNormals(); const lm = new THREE.Mesh(lip, GM.lam(GM.tex.sand, '#c9b27a', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); lm.receiveShadow = true; g.add(lm);
+  }
+  for (const pt of h.patches || []) {                          // surface patches: ice (glassy blue), mud, caramel, quicksand (a dark swirl) and conveyor belts (moving chevrons)
+    const geo = track(pondGeometry(pt.poly, 0)), pp = geo.attributes.position; for (let i = 0; i < pp.count; i++) pp.setY(i, hillH(h, pp.getX(i), pp.getZ(i)) + 0.065);
+    let mat;
+    if (pt.kind === 'conveyor') {
+      const tx = chev.clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; disposables.push(tx); const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (pp.getX(i) * pt.ux + pp.getZ(i) * pt.uz) / 1.6, (-pp.getX(i) * pt.uz + pp.getZ(i) * pt.ux) / 1.6);
+      mat = new THREE.MeshBasicMaterial({ map: tx, color: '#9bd4ff', transparent: true, opacity: 0.95, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
+    } else {
+      const look = { ice: ['#bfe6ff', 0.8], mud: ['#6b4a2e', 0.95], caramel: ['#d9902f', 0.92], quicksand: ['#b98b4a', 0.95] }[pt.kind] || ['#999999', 0.9];
+      mat = new THREE.MeshLambertMaterial({ color: look[0], transparent: true, opacity: look[1], polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, emissive: pt.kind === 'ice' ? '#2a4a6a' : pt.kind === 'caramel' ? '#4a2a08' : '#000000' });
+    }
+    disposables.push(mat); const m = new THREE.Mesh(geo, mat); m.renderOrder = 1; m.receiveShadow = true; g.add(m);
   }
   // water: ponds (irregular, with boulders round the bank and a pebbly bed) and rivers (winding, flowing, with boulder banks), all in the village pond's own water look
   const wr = mulberry32(h.seed ^ 0x9e3779b1), bed = GM.lam(GM.tex.stone, '#c4b48f'); disposables.push(bed);

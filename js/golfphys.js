@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026211546';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261026212123';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -131,6 +131,8 @@ export function collideFlippers(b, flips) {
   return hard;
 }
 /** Is the ball in a sand pit? */
+/** The surface patch under the ball (ice, mud, caramel, quicksand, a conveyor belt), or null: { kind, poly, x, z, r, fric (a friction multiplier), pull (towards its centre), push, ux, uz (along it) }. */
+export function patchAt(hole, b) { if (hole.patches) for (const p of hole.patches) if (dist2(b, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, b.x, b.z)) return p; return null; }
 export function inSand(hole, b) { for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r * 1.45 && inPoly(s.poly, b.x, b.z)) return true; return false; }
 /** The push needed to take the ball clear of whatever it overlaps that a ghost passes through (hero walls, posts, bumpers): adds to (out.x, out.z) and returns whether it overlaps. */
 function overlapPush(b, hole, out) {
@@ -203,6 +205,8 @@ export function stepBall(b, hole, ctx, dt, ev) {
     }
     // slopes, rivers, the turntable, the power-ups
     if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; if (ctx.tilt && hole.tiltDir) { b.vx += hole.tiltDir.x * ctx.tilt * h; b.vz += hole.tiltDir.z * ctx.tilt * h; } }
+    const pt = b.air ? null : patchAt(hole, b);                         // (a patch of ice, mud, caramel, quicksand or a conveyor under the ball)
+    if (pt) { if (pt.pull) { const cx = pt.x - b.x, cz = pt.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1; b.vx += (cx / cd) * pt.pull * h; b.vz += (cz / cd) * pt.pull * h; } if (pt.push) { b.vx += pt.ux * pt.push * h; b.vz += pt.uz * pt.push * h; } }
     if (!b.air) for (const rv of hole.rivers) {
       const dx = rv.b.x - rv.a.x, dz = rv.b.z - rv.a.z, l2 = dx * dx + dz * dz; let t = ((b.x - rv.a.x) * dx + (b.z - rv.a.z) * dz) / l2; if (t < -0.05 || t > 1.05) continue;
       t = t < 0 ? 0 : t > 1 ? 1 : t; const px = rv.a.x + dx * t - b.x, pz = rv.a.z + dz * t - b.z;
@@ -212,7 +216,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (ctx.drive) { b.vx += b.ax * h; b.vz += b.az * h; }
     let sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (ctx.homing && sp > 0.8) { const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz); if (cd > 0.05 && cd < 6 && (b.vx * cx + b.vz * cz) / (sp * cd) > 0.5) { const k = (9 * (1 - cd / 6) * h) / cd; b.vx += cx * k; b.vz += cz * k; } }
-    let f = b.air ? 0 : fric; if (!b.air && inSand(hole, b)) f *= 3.2;
+    let f = b.air ? 0 : fric; if (!b.air && inSand(hole, b)) f *= 3.2; if (pt) f *= pt.fric;
     sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (sp > 0 && f > 0) { const ns = Math.max(0, sp - f * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; }
     if (sp > maxV) { const k = maxV / sp; b.vx *= k; b.vz *= k; }
@@ -291,8 +295,8 @@ export function stepBall(b, hole, ctx, dt, ev) {
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);
   _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
   if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
-  const tiltPull = ctx.tilt || 0, grip = FRICTION * (inSand(hole, b) ? 3.2 : 1);                        // (sand holds the ball on a slope that would roll it on grass)
-  const calm = !b.loop && !b.rail && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive;
+  const ptc = patchAt(hole, b), tiltPull = ctx.tilt || 0, grip = FRICTION * (inSand(hole, b) ? 3.2 : 1) * (ptc ? ptc.fric : 1);                        // (sand holds the ball on a slope that would roll it on grass)
+  const calm = !b.loop && !b.rail && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive && !(ptc && (ptc.push || ptc.pull));
   if (s < 0.07 && slope + tiltPull < grip * 0.9 && calm) b.still += dt; else b.still = 0;
   if (s < 0.2 && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
   if (b.still > 0.3 || b.dawdle > 1.5) { b.rest = true; b.vx = b.vz = 0; b.dawdle = 0; }
