@@ -1,15 +1,15 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261026212123';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261026212257';
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261026212123';
-import { buildWorld } from './world.js?v=20261026212123';
-import { createSky } from './sky.js?v=20261026212123';
-import { createDOF } from './dof.js?v=20261026212123';
-import { createRide } from './ride.js?v=20261026212123';
-import { createGame } from './bikegame.js?v=20261026212123';
-import { createAurora, setWarm } from './aurora.js?v=20261026212123';
-import { createAudio, pickFlicker } from './audio.js?v=20261026212123';
+import { PAL } from './palette.js?v=20261026212257';
+import { buildWorld } from './world.js?v=20261026212257';
+import { createSky } from './sky.js?v=20261026212257';
+import { createDOF } from './dof.js?v=20261026212257';
+import { createRide } from './ride.js?v=20261026212257';
+import { createGame } from './bikegame.js?v=20261026212257';
+import { createAurora, setWarm } from './aurora.js?v=20261026212257';
+import { createAudio, pickFlicker } from './audio.js?v=20261026212257';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -594,17 +594,23 @@ function start() {
     if (b || e.target === modeBox) { modeBox.hidden = true; if (b?.dataset.g === 'golf') playGolf(); else if (b?.dataset.g === 'pinball') playPinball(); }
   });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modeBox.hidden) modeBox.hidden = true; });
+  const loadBox = document.createElement('div'); loadBox.className = 'mode-load'; loadBox.hidden = true; document.body.appendChild(loadBox);
   async function playGolf() {
     if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return;
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261026212123');
+        const mod = await import('./golf.js?v=20261026212257');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
     } catch (err) { console.warn('mini-golf could not load', err); return; } finally { golfLoading = false; }
     if (active !== 'home' || openId || game?.active) return;
+    if (golf.needsPrepare?.()) {                                                    // a random course is searched for in a worker: say so, and wait for it
+      golfLoading = true; loadBox.hidden = false; loadBox.textContent = 'Building the course…';
+      try { await golf.prepare((n, of) => { loadBox.textContent = `Building the course… ${n}/${of}`; }); } finally { golfLoading = false; loadBox.hidden = true; }
+      if (active !== 'home' || openId || game?.active) return;
+    }
     stopSong(); audio.unlock(); audio.autoOn(); ride?.reset();
     golf.start({ pos: camera.position.clone(), look: look.clone() });
   }
@@ -613,7 +619,7 @@ function start() {
     golfLoading = true;
     try {
       if (!pinball) {
-        const mod = await import('./pinball.js?v=20261026212123');
+        const mod = await import('./pinball.js?v=20261026212257');
         pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
         pinball.onQuit = () => { ride?.reset(); riseName(); };
       }

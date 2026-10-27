@@ -972,3 +972,6 @@ body.scene-mode .bike-hint { display: block; }
 .mode-card .mode-seed button[hidden] { display: none; }
 
 .pb-card .pb-lamps, .pb-card .pb-nudge, .pb-card .pb-flip, .pb-card .pb-q { display: none; }
+
+.mode-load { position: fixed; left: 50%; bottom: 14%; transform: translateX(-50%); z-index: 61; padding: 12px 20px; border-radius: 999px; background: rgba(20,24,34,.88); color: #fff; font: 700 15px/1 inherit; box-shadow: 0 6px 22px rgba(0,0,0,.4); }
+.mode-load[hidden] { display: none; }

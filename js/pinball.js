@@ -2,12 +2,12 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder } from './golfgen.js?v=20261026212123';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026212123';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261026212123';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261026212123';
-import { golfCourse, monthKey } from './monthseed.js?v=20261026212123';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261026212123';
+import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261026212257';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026212257';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261026212257';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261026212257';
+import { golfCourse, monthKey } from './monthseed.js?v=20261026212257';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261026212257';
 
 const HOLE_INDEX = 3, COMBO_NEED = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
@@ -49,7 +49,7 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   const tgRed = new THREE.MeshLambertMaterial({ color: '#e8594b' }), tgWhite = new THREE.MeshLambertMaterial({ color: '#fff6e0' });
   function buildTable() {
     const mo = golfCourse(), cs = courseSeed(mo.year, mo.month), type = heroOrder(cs)[HOLE_INDEX];
-    hole = makeHole(holeSeed(cs, HOLE_INDEX), HOLE_INDEX, type);
+    hole = plainHole(holeSeed(cs, HOLE_INDEX), HOLE_INDEX, type);
     const q = new URLSearchParams(location.search), HD = HOLES[st.holeIdx], li = q.has('layout') ? +q.get('layout') : (mo.month - 1 + HD.shift) % LAYOUTS.length, mir = q.has('mirror') ? q.get('mirror') === '1' : (Math.floor((mo.month - 1) / LAYOUTS.length) === 1) !== (st.holeIdx === 1);      // (the table changes with the month and the hole)
     frame = prepareTable(hole, li, mir); flips = frame.flips; st.layout = LAYOUTS[li % LAYOUTS.length].name; hole.par = HD.par; pops = hole.bumpers.slice(); st.litBumps.clear();
     const toW = (x, z) => toWorld(SITE, x, z), shape = hole.shape.map((p) => { const w = toW(p[0], p[1]); return [w.x, w.z, p[2] + MARGIN]; });

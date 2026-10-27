@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026212123';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026212123';
-import { aceSearch } from './golface.js?v=20261026212123';
-import { BAKED } from './golfbake.js?v=20261026212123';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026212257';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026212257';
+import { aceSearch } from './golface.js?v=20261026212257';
+import { BAKED } from './golfbake.js?v=20261026212257';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -172,6 +172,8 @@ export function findHole(seed, index, type = 'windmill', shape = 'zigzag', ext =
 }
 /** Just build one attempt (for the shape sheet and tests): a hole or null. */
 export const buildAttempt = (seed, index, type, shape) => build(seed, index, type, false, shape);
+/** A plain straight hole, found at once (no hole-in-one search): for things that only want a hole's defaults, like the pinball table. */
+export function plainHole(seed, index, type = 'windmill') { for (let a = 0; a < 60; a++) { const h = build(attemptSeed(seed, a), index, type, true); if (h) return h; } throw new Error('no plain hole'); }
 /** Make hole number `index` (0-based) with hero `type` (from the baked answer when there is one, else by searching). */
 export function makeHole(seed, index, type = 'windmill', shape = 'zigzag', ext = null) {
   const baked = BAKED[`${seed}.${index}`];

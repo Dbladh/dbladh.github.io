@@ -5,18 +5,18 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, shapeOrder, SHAPES_BAKED, HOLES } from './golfgen.js?v=20261026212123';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026212123';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026212123';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026212123';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026212123';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026212123';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261026212123';
-import { createNeon } from './golfneon.js?v=20261026212123';
-import { createFx } from './golffx.js?v=20261026212123';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261026212123';
-import { buildDecor } from './golfdecor.js?v=20261026212123';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026212123';
+import { courseSeed, holeSeed, makeHole, heroOrder, shapeOrder, SHAPES_BAKED, HOLES } from './golfgen.js?v=20261026212257';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261026212257';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261026212257';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261026212257';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261026212257';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261026212257';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261026212257';
+import { createNeon } from './golfneon.js?v=20261026212257';
+import { createFx } from './golffx.js?v=20261026212257';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261026212257';
+import { buildDecor } from './golfdecor.js?v=20261026212257';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261026212257';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -83,12 +83,14 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     hamster = buildHamster(); hamster.visible = false;
   }
 
+  let prebuilt = null;
   // ---------- the course: all nine holes at once ----------
   function buildCourse() {
     disposeCourse();
     fxs = createFx(lowEnd); scene.add(fxs.group);
     { const themes = themeOrder(st.seed), fx = !!st.random || SHAPES_BAKED;            // (the themes are dealt out like the heroes: nine of the ten, none twice; the new surfaces come with them for random courses, and for the months once they are baked)
-      holes = []; for (let i = 0; i < HOLES; i++) { const h = makeHole(holeSeed(st.seed, i), i, st.order[i], st.shapes[i], fx ? { surface: themeOf(themes[i]).surface } : null); h.theme = themes[i]; holes.push(h); } }
+      holes = prebuilt && prebuilt.key === st.seed + ':' + (fx ? 1 : 0) ? prebuilt.holes : null; prebuilt = null;           // (a random course comes ready-made from the worker)
+      if (!holes) { holes = []; for (let i = 0; i < HOLES; i++) { const h = makeHole(holeSeed(st.seed, i), i, st.order[i], st.shapes[i], fx ? { surface: themeOf(themes[i]).surface } : null); h.theme = themes[i]; holes.push(h); } } }
     chals = holes.map((h, i) => makeChallenge(h, i, holeSeed(st.seed, i)));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
     const digs = holes.map((h, i) => [...h.sands.map((sd) => { const c = toWorld(sites[i], sd.x, sd.z); return { x: c.x, z: c.z, r: sd.r * 1.19 * 0.95, depth: 0.34 }; }), ...(h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
@@ -415,6 +417,20 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     jump(i) { if (ready && st.mode !== 'off' && st.mode !== 'exit' && st.mode !== 'enter') { elScore.hidden = true; startHole(i); framing(); cam.pos.copy(frame.pos); cam.look.copy(frame.look); } },
     /** Debug: the live state. */
     get debug() { return { st, hole, holes, sites, Ys, balls, ev, frame, cam, fx, ctx, vis }; },
+    /** Does the course about to be played have to be searched for (a random one)? Then it is built in a worker first: `prepare(progress)` resolves when it is ready (or at once if it cannot be). */
+    needsPrepare() { return !!golfCourse().random; },
+    prepare(progress) {
+      const c = golfCourse(), seed = courseSeed(c.year, c.month), fx = !!c.random || SHAPES_BAKED, order = heroOrder(seed), shapes = shapeOrder(seed, fx || undefined), themes = themeOrder(seed);
+      return new Promise((resolve) => {
+        let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
+        try {
+          w = new Worker(new URL('./golfworker.js?v=20261026212257', import.meta.url), { type: 'module' });
+          w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, HOLES); };
+          w.onerror = () => done();
+          w.postMessage({ seed, order, shapes, themes, fx, n: HOLES });
+        } catch (err) { done(); }
+      });
+    },
     start(homeCam) {
       if (st.mode !== 'off') return;
       if (!ballMeshes.length) buildBits();
