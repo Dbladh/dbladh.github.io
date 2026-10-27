@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026220027';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026220027';
-import { aceSearch } from './golface.js?v=20261026220027';
-import { BAKED } from './golfbake.js?v=20261026220027';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261026220920';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261026220920';
+import { aceSearch } from './golface.js?v=20261026220920';
+import { BAKED } from './golfbake.js?v=20261026220920';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -29,7 +29,7 @@ export const SHAPES = ['straight', 'dogleg', 'wide', 'sbend', 'chicane', 'zigzag
 const SHAPE_POOLS = [['straight', 'dogleg', 'sbend', 'arc', 'zigzag'], ['dogleg', 'sbend', 'zigzag', 'arc', 'chicane', 'wide'], ['chicane', 'wide', 'zigzag', 'arc', 'straight', 'dogleg']];   // (holes 1-3, 4-6, 7-9)
 /** Which shape each of the nine holes has this month: drawn without repeats from a pool per tier, shuffled with the course seed. */
 export const SHAPES_BAKED = true;
-export const MORE_BAKED = false;                            // (the sliding-wall and bridge heroes, ghost walls and fork islands: random courses only until golfbake.js has been worked out with them)
+export const MORE_BAKED = true;                            // (the sliding-wall and bridge heroes, ghost walls and fork islands: random courses only until golfbake.js has been worked out with them)
 export function shapeOrder(cs, all = SHAPES_BAKED) {
   if (!all) return Array(9).fill('zigzag');
   const r = mulberry32((cs + 0x2f1d3a7) >>> 0), out = [];

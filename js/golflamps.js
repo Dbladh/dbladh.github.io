@@ -2,7 +2,7 @@
 // and, switched on by `update(night)`, a soft cone of light, a pool of light on the ground and a glow round the bulb. A few real point lights (borrowed from the village) light the
 // holes near the one in play (see golf.js).
 import * as THREE from 'three';
-import { toWorld } from './golfsites.js?v=20261026220027';
+import { toWorld } from './golfsites.js?v=20261026220920';
 
 const POST_H = 3.0, ARM = 1.7;
 const radial = (stops) => {
