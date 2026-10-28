@@ -1,7 +1,7 @@
 // Water for the mini-golf: the same soft cartoon look as the village pond (sky reflection, shallows that go light, glints, foam at the edge, the same day/night and aurora), drawn on
 // irregular shapes: blob-shaped ponds and winding rivers that visibly flow. The sky colours and the clock are the village pond's own uniforms (world.waterLook), so the two always match.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261027202545';
+import { mulberry32 } from './golfhero.js?v=20261027202836';
 
 /** A water material. `flow` is the direction the water runs (world x, z; zero for still water) and `speed` how fast. */
 export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0, tint = 0) {
@@ -48,6 +48,8 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0, tint = 0) {
           col += lin(vec3(0.95, 0.99, 1.0)) * st * (0.25 + 0.2 * uDay) * (1.0 - 0.4 * depth);
         }
         col += vec3(0.05, 0.62, 0.7) * uNeon * (0.3 + 0.7 * depth) * (0.8 + 0.4 * band);
+        float cau = abs(sin(dot(p, vec2(3.1, 1.7)) + uTime * 0.7 + sin(dot(p, vec2(-1.9, 2.8)) + uTime * 0.5) * 1.6)) * abs(sin(dot(p, vec2(-2.2, 3.4)) - uTime * 0.6 + sin(dot(p, vec2(2.7, 1.3)) - uTime * 0.4) * 1.4));
+        col += lin(vec3(0.7, 1.0, 0.95)) * smoothstep(0.78, 1.0, 1.0 - cau) * (1.0 - smoothstep(0.1, 0.7, depth)) * (0.1 + 0.25 * uDay);     // caustics dancing over the shallows
         float shore = 1.0 - smoothstep(0.0, 0.2, depth);
         float fn = 0.5 + 0.5 * sin(dot(p, vec2(5.0, 3.5)) + uTime * 0.8) * sin(dot(p, vec2(-3.5, 5.5)) - uTime * 0.6);
         col = mix(col, lin(vec3(0.97, 0.99, 1.0)) * (0.4 + 0.6 * uDay), shore * smoothstep(0.2, 0.6, fn + 0.35) * 0.85);
@@ -57,6 +59,9 @@ export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0, tint = 0) {
         } else if (uTint > 0.5) {                                         // lava: glowing orange with a darker crust drifting over it
           float w1 = 0.5 + 0.5 * sin(p.x * 2.4 + uTime * 0.6) * sin(p.y * 2.1 - uTime * 0.45), crust = smoothstep(0.62, 0.85, 0.5 + 0.5 * sin(p.x * 3.1 - p.y * 2.3 + uTime * 0.3 + sin(p.y * 1.7) * 1.5));
           col = mix(vec3(1.0, 0.26, 0.04), vec3(1.0, 0.74, 0.2), w1); col = mix(col, vec3(0.22, 0.06, 0.04), crust * 0.65);
+          float vein = smoothstep(0.9, 1.0, abs(sin(p.x * 4.3 + sin(p.y * 3.1 + uTime * 0.5) * 1.5)) * abs(sin(p.y * 3.7 - p.x * 1.9 + uTime * 0.4)));
+          col += vec3(1.0, 0.7, 0.25) * vein * crust * 0.9;                // glowing cracks in the crust
+          col = mix(col, vec3(1.0, 0.85, 0.35), (1.0 - smoothstep(0.0, 0.12, depth)) * 0.55);   // a white-hot rim at the bank
         }
         gl_FragColor = vec4(col, uTint > 0.5 ? 1.0 : mix(0.8, 0.95, smoothstep(0.0, 0.4, depth)));
         #include <fog_fragment>
