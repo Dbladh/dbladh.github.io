@@ -6,10 +6,10 @@
 //    away the bike appears to ride along a clean section of hillside.
 //  - Trees, pines and bushes (instanced) and two layers of hazy hills fill in the new ground.
 import * as THREE from 'three';
-import { createTrail } from './trail.js?v=20261027203701';
-import { KINDS, buildObstacle } from './obstacles.js?v=20261027203701';
-import { PAL } from './palette.js?v=20261027203701';
-import { heightAt as terrainAt } from './world.js?v=20261027203701';
+import { createTrail } from './trail.js?v=20261027203800';
+import { KINDS, buildObstacle } from './obstacles.js?v=20261027203800';
+import { PAL } from './palette.js?v=20261027203800';
+import { heightAt as terrainAt } from './world.js?v=20261027203800';
 
 export const XT = 189.6;          // where the real terrain hands over to the generated ground
 const DX = 0.5;                 // lane resolution

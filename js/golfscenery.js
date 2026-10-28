@@ -1,17 +1,18 @@
 // The scenery round and between the holes: a landmark or two for each hole's theme (a pirate ship, jungle palms, a castle, crystals, a garden fountain) and scattered pieces of the park
 // (statues, fountains, benches, parasols, ponds, palms). Everything is placed with a seeded generator on the real ground, away from every corridor.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261027203701';
-import { golfMaterials } from './golfmat.js?v=20261027203701';
-import { waterMaterial, pondGeometry } from './golfwater.js?v=20261027203701';
-import { SITES, WINDMILL } from './golfsites.js?v=20261027203701';
+import { mulberry32 } from './golfhero.js?v=20261027203800';
+import { golfMaterials } from './golfmat.js?v=20261027203800';
+import { waterMaterial, pondGeometry } from './golfwater.js?v=20261027203800';
+import { SITES, WINDMILL } from './golfsites.js?v=20261027203800';
+import { isLow } from './golfquality.js?v=20261027203800';
 
-import { THEMES as THEME_DATA, THEME_NAMES } from './golfthemes.js?v=20261027203701';
+import { THEMES as THEME_DATA, THEME_NAMES } from './golfthemes.js?v=20261027203800';
 export const THEMES = Object.keys(THEME_DATA);
 export { THEME_NAMES };
 
 const paints = new Map();
-const paint = (hex, neon) => { const k = hex + (neon || ''); let m = paints.get(k); if (!m) { m = new THREE.MeshLambertMaterial({ color: hex }); if (neon) m.userData.neon = neon; paints.set(k, m); } return m; };
+const paint = (hex, neon) => { const k = hex + (neon || ''); let m = paints.get(k); if (!m) { m = isLow() ? new THREE.MeshLambertMaterial({ color: hex }) : new THREE.MeshStandardMaterial({ color: hex, roughness: 0.55, envMapIntensity: 0.4 }); if (neon) m.userData.neon = neon; paints.set(k, m); } return m; };
 const geos = {
   box: new THREE.BoxGeometry(1, 1, 1), cyl: new THREE.CylinderGeometry(1, 1, 1, 12), cone: new THREE.ConeGeometry(1, 1, 8), sph: new THREE.SphereGeometry(1, 12, 9), oct: new THREE.OctahedronGeometry(1, 0), torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
   hull: (() => { const g = new THREE.BoxGeometry(1, 1, 1, 4, 1, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); if (y < 0) p.setZ(i, p.getZ(i) * (0.55 + 0.45 * (1 - Math.abs(x) * 1.0))); if (x > 0.2) p.setZ(i, p.getZ(i) * (1 - (x - 0.2) * 1.0)); if (x > 0.3 && y > 0) p.setY(i, y + (x - 0.3) * 0.7); } g.computeVertexNormals(); return g; })(),
@@ -72,6 +73,19 @@ Object.assign(themed, {
 { const baseSpace = themed.space, baseCastle = themed.castle;
   themed.space = (GM, r, ctx) => { const g = baseSpace(GM, r, ctx), u = pieces.ufo(GM); u.position.set(0, 1.2, -2.5); u.scale.setScalar(1.3); g.add(u); return g; };
   themed.castle = (GM, r, ctx) => { const g = baseCastle(GM, r, ctx); for (let i = 0; i < 4; i++) { const b = pieces.banner(GM, r), t = pieces.torch(GM); b.position.set(-4.5 + i * 3, 0, 2.2); t.position.set(-3 + i * 3, 0, 2.4); g.add(b, t); } return g; }; }
+
+{ // high tier: extra parts on each landmark (barrels and a flag on the ship, a gate and flags on the castle, a lava glow and smoke on the volcano, lit windows on the manor, ...)
+  const extra = {
+    pirate: (GM, g) => { const wd = GM.lam(GM.tex.wood, '#8a5a38'); for (let i = 0; i < 3; i++) part(g, geos.cyl, wd, -3.6 + i * 0.5, 0.35, 1.9 + (i % 2) * 0.3, 0.22, 0.5, 0.22); part(g, geos.box, paint('#1b1b24'), 0.3, 4.9, 0, 0.04, 0.7, 1.0); part(g, geos.torus, paint('#6a4a2a'), 0, 1.5, 1.3, 0.3, 0.3, 0.3); },
+    castle: (GM, g) => { const st = GM.lam(GM.tex.stone, '#c9c4d6'); for (let k = 0; k < 9; k++) part(g, geos.box, st, -2.6 + k * 0.65, 3.35, 0.0, 0.4, 0.4, 0.4); part(g, geos.box, paint('#3a2a1e'), 0, 0.9, 1.3, 1.1, 1.8, 0.15); part(g, geos.cyl, glow('#ffd37a'), 0, 2.6, 1.32, 0.2, 0.2, 0.1); },
+    volcano: (GM, g) => { const sm = paint('#6a6068'); for (let i = 0; i < 4; i++) part(g, geos.sph, sm, 0.2 * i, 5.8 + i * 0.7, 0, 0.5 + i * 0.18, 0.4 + i * 0.12, 0.5 + i * 0.18); for (let k = 0; k < 3; k++) part(g, geos.cone, glow('#ff7a2a'), Math.cos(k * 2.1) * 1.2, 3.2, Math.sin(k * 2.1) * 1.2, 0.2, 2.2, 0.2).rotation.z = Math.cos(k * 2.1) * 0.5; },
+    haunted: (GM, g) => { const gl = glow('#ffd86a'); for (let k = -1; k <= 1; k += 2) part(g, geos.box, gl, k * 1.2, 1.9, 1.33, 0.5, 0.7, 0.05); part(g, geos.sph, glow('#9dffd0'), 2.6, 1.2, 0.8, 0.25, 0.35, 0.25); for (let k = 0; k < 6; k++) part(g, geos.cone, paint('#2d2638'), -2 + k * 0.8, 0.45, 2.6, 0.06, 0.9, 0.06); },
+    ice: (GM, g) => { for (let k = 0; k < 6; k++) part(g, geos.box, paint('#e6f2ff'), -0.9 + (k % 3) * 0.9, 0.3 + Math.floor(k / 3) * 0.6, 3.0, 0.8, 0.5, 0.5); },
+    candy: (GM, g) => { for (let k = 0; k < 6; k++) part(g, geos.sph, paint(['#ff5f9e', '#ffd23f', '#5fd0ff'][k % 3]), -1.5 + k * 0.6, 0.2, 2.6, 0.22, 0.2, 0.22); },
+    desert: (GM, g) => { const st = GM.lam(GM.tex.stone, '#e0b878'); for (let k = 0; k < 4; k++) part(g, geos.box, st, 5.0, 0.3 + k * 0.0, -1 + k * 0.9, 0.9, 0.5, 0.7); },
+  };
+  for (const k of Object.keys(extra)) { const base = themed[k]; themed[k] = (GM, r, ctx) => { const g = base(GM, r, ctx); if (!isLow()) extra[k](GM, g); return g; }; }
+}
 
 /**
  * Build all the scenery. `plan` is [{ site, hole, theme }] per hole; `shapes` the world-space outlines ([x, z, w] points) of every hole, `ground(x, z)` the real height, `look` the pond's water look.
