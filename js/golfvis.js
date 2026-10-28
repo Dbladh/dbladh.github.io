@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027203800';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027203800';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027203800';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027203800';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027203800';
-import { isLow } from './golfquality.js?v=20261027203800';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261027205913';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027205913';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027205913';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027205913';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027205913';
+import { isLow } from './golfquality.js?v=20261027205913';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -219,11 +219,14 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (let i = 3; i <= 13; i += 5) { const p = pts[i]; g.add(rbox(rm, 0.1, p.y, 0.1, p.x, p.y / 2, p.z, 0.02)); }
     for (const [x, z, y] of [[R.ax, R.az, 0.45], [R.bx, R.bz, 0.45]]) { const ring = torus(cyan, 0.55, 0.07, x, y, z, 0, Math.atan2(R.ux, R.uz) + Math.PI / 2, 0); g.add(ring); const pad = cyl(paint('#16405a'), 0.6, 0.05, x, 0.04, z); g.add(pad); updaters.push((heroT, t) => { ring.scale.setScalar(1 + 0.06 * Math.sin(t * 5 + x)); }); }
   }
-  for (const o of h.pads || []) {
-    const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), o.r * 0.8, 0.06, 0, o.tramp ? 0.3 : 0.13, 0); gp.add(top); if (o.tramp) for (let i = 0; i < 4; i++) gp.add(torus(paint('#c9d1e0'), o.r * 0.55, 0.035, 0, 0.1 + i * 0.05, 0, Math.PI / 2)); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2));
-    if (!isLow()) for (let i = 0; i < 10; i++) { const a = (i / 10) * 6.2832; gp.add(cyl(metal('#c9ced6'), 0.05, 0.05, Math.cos(a) * o.r * 1.02, 0.12, Math.sin(a) * o.r * 1.02)); }      // high tier: bolt heads round the base
+  for (const o of h.pads || []) {                              // a launch pad or trampoline: a wide bar across the lane (about 70% of it), easy to hit
+    const bar = triggerBar(h, o), W2 = bar.half * 2, gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.rotation.y = Math.atan2(-bar.uz, bar.ux);
+    gp.add(rbox(paint('#2b2b3a'), bar.len + 0.2, 0.1, W2 + 0.2, 0, 0.06, 0, 0.03)); const top = rbox(paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), bar.len, 0.07, W2, 0, o.tramp ? 0.2 : 0.13, 0, 0.03); gp.add(top);
+    for (const sd of [-1, 1]) gp.add(rbox(paint('#ffe14a'), bar.len + 0.12, 0.05, 0.08, 0, 0.17, sd * (bar.half + 0.02), 0.01));
+    for (let k = 0; k < 3; k++) { const ch = cone(paint('#ffffff'), 0.2, 0.12, 3, -bar.len / 2 + 0.18 + k * 0.3, o.tramp ? 0.27 : 0.2, 0); ch.rotation.z = -Math.PI / 2; ch.scale.set(1, 1, Math.min(2.2, bar.half * 0.7)); gp.add(ch); }
+    if (!isLow()) for (let k = 0; k < Math.round(W2 / 0.6); k++) for (const ex of [-1, 1]) gp.add(cyl(metal('#c9ced6'), 0.05, 0.05, ex * (bar.len / 2 + 0.08), 0.12, -bar.half + 0.3 + k * 0.6));      // high tier: bolt heads along the ends
     g.add(gp);
-    updaters.push((heroT, t) => { const k = 1 + 0.08 * Math.sin(t * 5 + o.x); top.scale.set(o.r * 0.8 * k, 0.06, o.r * 0.8 * k); if (o.tramp) top.position.y = 0.3 + 0.06 * Math.sin(t * 6 + o.z); });
+    updaters.push((heroT, t) => { const k = 1 + 0.06 * Math.sin(t * 5 + o.x); top.scale.y = k; if (o.tramp) top.position.y = 0.2 + 0.05 * Math.sin(t * 6 + o.z); });
   }
   // the walls and gates of the machines: low fences (the ball can be vaulted over them), tall walls, gates that sink when the button is pressed, and the buttons
   for (const b of h.barriers || []) {
@@ -246,7 +249,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       wireVisual(h, g, dr.button, { x: (dr.gate[0] + dr.gate[2]) / 2, z: (dr.gate[1] + dr.gate[3]) / 2 }, updaters, disposables);
     }
     for (const dr of (h.doors || []).filter((d) => !d.gate)) { const kb = `${dr.button.x}|${dr.button.z}`; if (!buttons.has(kb)) buttons.set(kb, dr.button); if (dr.wireTo) wireVisual(h, g, dr.button, dr.wireTo, updaters, disposables); }
-    const plates = []; for (const bt of buttons.values()) { const btn = new THREE.Group(); btn.position.set(bt.x, hillH(h, bt.x, bt.z), bt.z); const plate = cyl(paint('#ffd23f'), bt.r, 0.08, 0, 0.06, 0); btn.add(cyl(paint('#2b2b3a'), bt.r * 1.15, 0.06, 0, 0.04, 0), plate, torus(paint('#ffffff'), bt.r * 0.55, 0.04, 0, 0.11, 0, Math.PI / 2)); g.add(btn); plates.push(plate); }
+    const plates = []; for (const bt of buttons.values()) { const { btn, plate } = buttonBar(h, bt); g.add(btn); plates.push(plate); }
     if (gates.length) { let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); for (const b of gates) b.position.y = 0.45 - 1.0 * open; for (const p of plates) { p.position.y = 0.06 - 0.03 * open; p.material = open > 0.5 ? paint('#6dff9a') : paint('#ffd23f'); } }); }
   }
   if (h.cage) {
@@ -254,7 +257,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (const sd of cg.sides) { const dx = sd[2] - sd[0], dz = sd[3] - sd[1], l = Math.hypot(dx, dz); const rail = rbox(wd, l, 0.1, 0.07, 0, 0, 0, 0.02); rail.position.set((sd[0] + sd[2]) / 2, 0.42, (sd[1] + sd[3]) / 2); rail.rotation.y = Math.atan2(-dz, dx); g.add(rail); const rail2 = rail.clone(); rail2.position.y = 0.2; g.add(rail2); g.add(rbox(wd, 0.1, 0.55, 0.1, sd[2], 0.27, sd[3], 0.02)); }
     const gdx = cg.gate[2] - cg.gate[0], gdz = cg.gate[3] - cg.gate[1], gl = Math.hypot(gdx, gdz), gate = new THREE.Group(); gate.position.set((cg.gate[0] + cg.gate[2]) / 2, 0, (cg.gate[1] + cg.gate[3]) / 2); gate.rotation.y = Math.atan2(-gdz, gdx);
     const bar = rbox(metal('#e5483f'), gl, 0.5, 0.1, 0, 0.3, 0, 0.03); gate.add(bar); for (const e of [-1, 1]) gate.add(rbox(metal('#ffffff'), 0.1, 0.6, 0.12, e * gl / 2, 0.3, 0, 0.02)); g.add(gate);
-    const btn = new THREE.Group(); btn.position.set(cg.button.x, hillH(h, cg.button.x, cg.button.z), cg.button.z); const plate = cyl(paint('#ffd23f'), cg.button.r, 0.08, 0, 0.06, 0); btn.add(cyl(paint('#2b2b3a'), cg.button.r * 1.15, 0.06, 0, 0.04, 0), plate, torus(paint('#ffffff'), cg.button.r * 0.55, 0.04, 0, 0.11, 0, Math.PI / 2)); g.add(btn);
+    const { btn, plate } = buttonBar(h, cg.button); g.add(btn);
     let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); bar.position.y = 0.3 - 0.8 * open; plate.position.y = 0.06 - 0.03 * open; plate.material = open > 0.5 ? paint('#6dff9a') : paint('#ffd23f'); });
   }
   for (const s of h.sands) {                                 // a sand pit: a rough patch of sand with a darker, damp rim and a few pebbles
@@ -395,6 +398,14 @@ let roofG = null; const roofGeo = () => roofG || (roofG = new THREE.ConeGeometry
 const cone = (m, r, h, seg, x, y, z) => { const o = new THREE.Mesh(coneGeo(r, h, seg), m); o.position.set(x, y, z); return o; };
 const coneCache = new Map(); const coneGeo = (r, h, seg) => { const k = `${r}|${h}|${seg}`; let g = coneCache.get(k); if (!g) { g = new THREE.ConeGeometry(r, h, seg); coneCache.set(k, g); } return g; };
 const torus = (m, R, t, x, y, z, rx = 0, ry = 0, rz = 0) => { const k = `t${R}|${t}`; let g = coneCache.get(k); if (!g) { g = new THREE.TorusGeometry(R, t, 6, 20); coneCache.set(k, g); } const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); return o; };
+
+/** A gate button: a wide yellow bar across the lane (see `triggerBar`), with a dark frame and white arrows; `plate` is the part that sinks when it is pressed. */
+function buttonBar(h, bt) {
+  const bar = triggerBar(h, bt), W2 = bar.half * 2, btn = new THREE.Group(); btn.position.set(bt.x, hillH(h, bt.x, bt.z), bt.z); btn.rotation.y = Math.atan2(-bar.uz, bar.ux);
+  const plate = rbox(paint('#ffd23f'), bar.len, 0.08, W2, 0, 0.06, 0, 0.03); btn.add(rbox(paint('#2b2b3a'), bar.len + 0.2, 0.06, W2 + 0.2, 0, 0.04, 0, 0.03), plate);
+  for (let k = 0; k < Math.max(2, Math.round(W2 / 0.8)); k++) btn.add(rbox(paint('#ffffff'), bar.len * 0.5, 0.02, 0.1, 0, 0.11, -bar.half + 0.3 + k * Math.min(0.8, (W2 - 0.6) / Math.max(1, Math.round(W2 / 0.8) - 1)), 0.01));
+  return { btn, plate };
+}
 
 function heroVisual(hr, track, updaters, ctx = {}) {
   const w = new THREE.Group(); w.position.set(hr.x, 0, hr.z); w.rotation.y = Math.atan2(-hr.uz, hr.ux);       // local x runs along the leg, local z across it
