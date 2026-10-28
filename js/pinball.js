@@ -2,12 +2,13 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027203146';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027203146';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261027203146';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261027203146';
-import { golfCourse, monthKey } from './monthseed.js?v=20261027203146';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027203146';
+import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027203244';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027203244';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261027203244';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261027203244';
+import { isLow } from './golfquality.js?v=20261027203244';
+import { golfCourse, monthKey } from './monthseed.js?v=20261027203244';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027203244';
 
 const HOLE_INDEX = 3, COMBO_NEED = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
@@ -57,11 +58,11 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
     vis = buildHoleVisual(hole, { lowEnd, look: world.waterLook }); group = vis.group; group.rotation.y = (SITE.k * Math.PI) / 4; group.position.set(SITE.x, Y + 0.06, SITE.z); group.scale.set(1, 0.001, 1); scene.add(group);
     const deckY = hillH(hole, hole.cup.x, hole.cup.z);
     if (vis.flag) vis.flag.position.y = deckY;                                                                    // (the cup is on the raised deck)
-    for (const b of hole.elevated) { hole.bumpers.push(b); const y0 = hillH(hole, b.x, b.z), bm = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 20), M.bumper), cp = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 20), M.white); disposables.push(bm.geometry, cp.geometry); bm.scale.set(b.r, 0.8, b.r); bm.position.set(b.x, y0 + 0.4, b.z); cp.scale.set(b.r * 1.05, 0.12, b.r * 1.05); cp.position.set(b.x, y0 + 0.62, b.z); bm.castShadow = true; group.add(bm, cp); }
-    const barM = new THREE.MeshLambertMaterial({ color: '#e8594b' }), capM = new THREE.MeshLambertMaterial({ color: '#fff6e0' }); disposables.push(barM, capM);
+    for (const b of hole.elevated) { hole.bumpers.push(b); const y0 = hillH(hole, b.x, b.z), bm = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 20), M.bumper), cp = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 20), M.white); disposables.push(bm.geometry, cp.geometry); bm.scale.set(b.r, 0.8, b.r); bm.position.set(b.x, y0 + 0.4, b.z); cp.scale.set(b.r * 1.05, 0.12, b.r * 1.05); cp.position.set(b.x, y0 + 0.62, b.z); bm.castShadow = true; group.add(bm, cp); if (!isLow()) { const rg = new THREE.Mesh(new THREE.TorusGeometry(b.r * 1.02, 0.07, 8, 24), new THREE.MeshStandardMaterial({ color: '#dfe4ec', metalness: 1, roughness: 0.2, envMapIntensity: 1.2 })); disposables.push(rg.geometry, rg.material); rg.rotation.x = Math.PI / 2; rg.position.set(b.x, y0 + 0.78, b.z); group.add(rg); } }
+    const hiQ = !isLow(), barM = hiQ ? new THREE.MeshStandardMaterial({ color: '#e8594b', roughness: 0.35, envMapIntensity: 0.6 }) : new THREE.MeshLambertMaterial({ color: '#e8594b' }), capM = hiQ ? new THREE.MeshStandardMaterial({ color: '#fff6e0', roughness: 0.35, envMapIntensity: 0.6 }) : new THREE.MeshLambertMaterial({ color: '#fff6e0' }), chromeM = hiQ ? new THREE.MeshStandardMaterial({ color: '#dfe4ec', metalness: 1, roughness: 0.18, envMapIntensity: 1.2 }) : null; if (chromeM) disposables.push(chromeM); disposables.push(barM, capM);
     flipMeshes = flips.map((f) => {
       const g = new THREE.Group(), bar = new THREE.Mesh(G.box, barM), c0 = new THREE.Mesh(G.sph, capM), c1 = new THREE.Mesh(G.sph, barM);
-      bar.scale.set(f.len, 0.3, f.rad * 2); bar.position.x = f.len / 2; c0.scale.setScalar(f.rad * 1.5); c1.scale.setScalar(f.rad * 1.1); c1.position.x = f.len; g.add(bar, c0, c1); g.position.set(f.px, 0.22, f.pz); bar.castShadow = c0.castShadow = c1.castShadow = true; group.add(g); return g;
+      bar.scale.set(f.len, 0.3, f.rad * 2); bar.position.x = f.len / 2; c0.scale.setScalar(f.rad * 1.5); c1.scale.setScalar(f.rad * 1.1); c1.position.x = f.len; g.add(bar, c0, c1); if (chromeM) { const pin = new THREE.Mesh(G.sph, chromeM); pin.scale.setScalar(f.rad * 0.7); pin.position.y = 0.2; g.add(pin); const rub = new THREE.Mesh(G.box, capM); rub.scale.set(f.len * 0.9, 0.12, f.rad * 2.2); rub.position.set(f.len / 2, -0.12, 0); g.add(rub); } g.position.set(f.px, 0.22, f.pz); bar.castShadow = c0.castShadow = c1.castShadow = true; group.add(g); return g;
     });
     dressTable();
     // the spinner: a bar turning freely about its middle (two arms for the physics)
@@ -78,7 +79,8 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
     tgMeshes = hole.targets.map((t) => { const g = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 14), tgRed), top = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 14), tgWhite); disposables.push(body.geometry, top.geometry); body.scale.set(t.r, 0.75, t.r); body.position.y = 0.375; top.scale.set(t.r * 1.02, 0.12, t.r * 1.02); top.position.y = 0.78; g.add(body, top); g.position.set(t.x, 0, t.z); body.castShadow = true; group.add(g); return g; });
     { const rg = new THREE.RingGeometry(0.75, 1, 40).rotateX(-Math.PI / 2); disposables.push(rg); pulses = Array.from({ length: 12 }, () => { const mt = new THREE.MeshBasicMaterial({ color: '#fff2a8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); disposables.push(mt); const m = new THREE.Mesh(rg, mt); m.visible = false; group.add(m); return { m, t: 9, r: 1 }; }); }
     buildGuides(deckY); buildChips();
-    ballMesh = new THREE.Mesh(G.ball, M.ball.clone()); ballMesh.castShadow = true; group.add(ballMesh);
+    ballMesh = new THREE.Mesh(G.ball, M.ball.clone());
+    if (!isLow()) { const bm = ballMesh.material, ch = new THREE.MeshStandardMaterial({ color: '#e8ecf2', metalness: 1, roughness: 0.14, envMapIntensity: 1.3 }); ch.userData = bm.userData; ballMesh.material = ch; }        // high tier: a polished steel ball that reflects the sky ballMesh.castShadow = true; group.add(ballMesh);
     { const tg = new THREE.SphereGeometry(1, 8, 6), tm = new THREE.MeshBasicMaterial({ color: '#fff2a8', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }); disposables.push(tg, tm); trailMesh = new THREE.InstancedMesh(tg, tm, TRAIL); trailMesh.count = 0; trailMesh.frustumCulled = false; group.add(trailMesh); trail.length = 0; }
     dots = new THREE.InstancedMesh(G.dot, M.dot, 16); dots.count = 0; dots.frustumCulled = false; group.add(dots);
     { const c = toW(hole.cup.x, hole.cup.z); world.carve.setHole(0, c.x, c.z, CUP_R * 0.92 + 0.03); }
