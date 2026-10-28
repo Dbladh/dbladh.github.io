@@ -1,11 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202836';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202836';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202836';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202836';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202836';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202944';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202944';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202944';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202944';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202944';
+import { isLow } from './golfquality.js?v=20261027202944';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -382,7 +383,7 @@ function rboxGeo(sx, sy, sz, b = 0.05) {                   // a box with softly 
   rboxCache.set(key, g); return g;
 }
 const rbox = (m, sx, sy, sz, x, y, z, b = 0.05) => { const o = new THREE.Mesh(rboxGeo(sx, sy, sz, b), m); o.position.set(x, y, z); return o; };
-const paint = (hex) => { let m = paintCache.get(hex); if (!m) { m = new THREE.MeshLambertMaterial({ color: hex }); paintCache.set(hex, m); } return m; };           // flat toy paint
+const paint = (hex) => { let m = paintCache.get(hex); if (!m) { m = isLow() ? new THREE.MeshLambertMaterial({ color: hex }) : new THREE.MeshStandardMaterial({ color: hex, roughness: 0.5, metalness: 0, envMapIntensity: 0.45 }); paintCache.set(hex, m); } return m; };           // toy paint: flat on the low tier, softly glossy on the high one
 const metal = (hex) => { const k = 'm' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.metal, hex); paintCache.set(k, m); } return m; };      // painted metal
 const woodTint = (hex) => { const k = 'w' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.wood, hex); paintCache.set(k, m); } return m; };
 const stoneTint = (hex, flat) => { const k = 's' + hex + flat; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.stone, hex, flat ? { flatShading: true } : {}); paintCache.set(k, m); } return m; };
@@ -401,6 +402,12 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       w.add(rbox(white, H * 2 + 0.12, 0.16, wd + 0.12, 0, 0.1, s * mid, 0.04)); w.add(rbox(white, H * 2 + 0.12, 0.16, wd + 0.12, 0, 3.1, s * mid, 0.04));
       for (let k = 0; k < 4; k++) w.add(rbox(white, 0.04, 3.0, 0.04, -H - 0.01, 1.55, s * (lat0 + 0.2 + k * (wd - 0.4) / 3), 0.01));                    // board lines on the front
       w.add(rbox(paint('#fff6d6'), 0.07, 0.8, 0.7, -H - 0.03, 2.0, s * mid, 0.03)); w.add(rbox(white, 0.09, 0.9, 0.08, -H - 0.04, 2.0, s * mid, 0.02)); w.add(rbox(white, 0.09, 0.08, 0.8, -H - 0.04, 2.0, s * mid, 0.02));
+    }
+    if (!isLow()) for (const s of [-1, 1]) {                                          // high tier: a stone foundation, shutters, a window box and a lantern
+      w.add(rbox(stoneTint('#b9b4a8'), H * 2 + 0.3, 0.3, wd + 0.3, 0, 0.1, s * mid, 0.06));
+      for (const sd of [-1, 1]) w.add(rbox(red, 0.06, 0.8, 0.22, -H - 0.05, 2.0, s * mid + sd * 0.46, 0.02));
+      w.add(rbox(woodTint('#8a5a38'), 0.14, 0.2, 0.7, -H - 0.1, 1.5, s * mid, 0.03));
+      for (let k = 0; k < 3; k++) w.add(sph(paint(['#ff6fa3', '#ffd23f', '#ffffff'][k]), 0.09, 0.09, 0.09, -H - 0.12, 1.66, s * mid + (k - 1) * 0.22));
     }
     w.add(rbox(blue, H * 2, 1.3, lat0 * 2 + 0.2, 0, 1.95, 0, 0.07)); w.add(rbox(white, H * 2 + 0.12, 0.14, lat0 * 2 + 0.3, 0, 1.3, 0, 0.04));
     const roof = new THREE.Mesh(roofGeo(), woodTint('#7d8aa0')); roof.position.y = 3.1; roof.scale.set((H + 0.5) * 1.4142, 1.2, (lat1 + 0.7) * 1.4142); roof.castShadow = true; w.add(roof);
@@ -422,6 +429,11 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       w.add(sph(paint('#ffffff'), 0.46, 0.46, 0.46, ex, 2.0, ez)); w.add(sph(paint('#1b1320'), 0.22, 0.24, 0.22, ex - 0.33, 2.02, ez - s * 0.04)); w.add(sph(paint('#ffffff'), 0.07, 0.07, 0.07, ex - 0.43, 2.12, ez - s * 0.1));
       w.add(sph(green, 0.48, 0.2, 0.48, ex + 0.04, 2.36, ez)); w.add(sph(green2, 0.09, 0.07, 0.09, -H + 0.12, 1.45, s * (lat0 + 1.0)));
     }
+    if (!isLow()) for (const s of [-1, 1]) {                                          // high tier: nostrils, a row of scale bumps and claws on the front
+      w.add(sph(paint('#2f6b2a'), 0.07, 0.05, 0.09, -H - 0.02, 1.62, s * 0.35));
+      for (let k = 0; k < 6; k++) w.add(sph(green2, 0.17, 0.1, 0.17, -H + 1.2 + k * 0.45, 1.5, s * (lat0 + 0.4 + (k % 2) * 0.35)));
+      for (let k = 0; k < 3; k++) { const cw = cone(toothM, 0.05, 0.2, 4, -H - 0.1, 0.12, s * (lat0 + 0.4 + k * 0.28)); cw.rotation.z = Math.PI / 2; w.add(cw); }
+    }
     w.add(rbox(green, H * 2, 0.7, lat0 * 2 + 0.1, 0, 1.55, 0, 0.12)); w.add(rbox(redM, H * 2 - 0.2, 0.05, lat0 * 2 - 0.1, 0.02, 1.17, 0, 0.01));
     for (let k = 0; k < 7; k++) { const t = cone(toothM, 0.085, 0.3, 4, -H + 0.16, 1.03, -0.84 + k * 0.28); t.rotation.x = Math.PI; w.add(t); }
     const lower = new THREE.Group(); lower.position.set(-H + 0.35, 0.4, 0); lower.add(rbox(green2, 0.7, 0.8, lat0 * 2 + 0.1, 0, 0, 0, 0.1)); lower.add(rbox(redM, 0.5, 0.05, lat0 * 2 - 0.1, 0, 0.42, 0, 0.01));
@@ -432,6 +444,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     const disc = new THREE.Group(), R = hr.r; disc.add(cyl(stoneTint('#b9b4a8'), R, 0.14, 0, 0.1, 0));
     for (let k = 0; k < 6; k++) { const sc = new THREE.Mesh(track(new THREE.CircleGeometry(R * 0.97, 12, (k * Math.PI) / 3, Math.PI / 6)), k % 2 ? paint('#e5483f') : paint('#fff8e8')); sc.rotation.x = -Math.PI / 2; sc.position.y = 0.18; disc.add(sc); }
     for (let k = 0; k < 3; k++) { const ln = rbox(paint('#ffd44a'), R * 2 * 0.96, 0.02, 0.06, 0, 0.2, 0, 0.005); ln.rotation.y = (k * Math.PI) / 3; disc.add(ln); }
+    if (!isLow()) for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; disc.add(cyl(metal('#c9ced6'), 0.07, 0.06, Math.cos(a) * R * 0.9, 0.2, Math.sin(a) * R * 0.9)); }      // high tier: bolt heads round the rim
     disc.add(cyl(metal('#9aa3ad'), 0.22, 0.3, 0, 0.3, 0)); disc.add(sph(paint('#ffd44a'), 0.12, 0.12, 0.12, 0, 0.5, 0)); w.add(disc);
     const rim = torus(stoneTint('#a9a396', true), R + 0.05, 0.13, 0, 0.17, 0, Math.PI / 2); rim.castShadow = true; w.add(rim);
     updaters.push((heroT) => { disc.rotation.y = -hr.omega * heroT; });
@@ -440,6 +453,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     hr.hammers.forEach((m) => {
       w.add(rbox(blue, 0.3, 0.3, (hw + 0.5) * 2, m.du, 3.5, 0, 0.06));                                   // an arch over each hammer: a bar across the lane on two legs, the chain hangs from a ring on the bar
       for (const sd of [-1, 1]) { w.add(rbox(blue, 0.3, 3.6, 0.3, m.du, 1.75, sd * (hw + 0.45), 0.06)); w.add(rbox(blue, 0.9, 0.16, 0.55, m.du, 0.1, sd * (hw + 0.45), 0.04)); }
+      if (!isLow()) for (const sd of [-1, 1]) { const br = rbox(blue, 0.18, 1.1, 0.12, m.du, 3.0, sd * (hw + 0.2), 0.03); br.rotation.x = sd * 0.8; w.add(br); w.add(cyl(metal('#c9ced6'), 0.09, 0.08, m.du, 3.5, sd * (hw + 0.45))); }       // high tier: corner braces and bolt heads
       w.add(torus(yel, 0.13, 0.05, m.du, 3.32, 0, 0, Math.PI / 2)); w.add(rbox(blue, 0.12, 0.2, 0.12, m.du, 3.36, 0, 0.02));
       const head = new THREE.Group(), body = cyl(padM, hr.rad, 0.9, 0, 0, 0); head.add(body); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, 0.18, 0)); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, -0.2, 0)); head.add(torus(blue, 0.12, 0.05, 0, 0.5, 0, Math.PI / 2)); w.add(head);
       const links = []; for (let i = 0; i < 9; i++) { const lk = torus(yel, 0.11, 0.035, 0, 0, 0); lk.scale.set(1, 1.5, 1); w.add(lk); links.push(lk); }
