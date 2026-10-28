@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261027213744';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027213744';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027213744';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027213744';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027213744';
-import { isLow } from './golfquality.js?v=20261027213744';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261027214133';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027214133';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027214133';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027214133';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027214133';
+import { isLow } from './golfquality.js?v=20261027214133';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -203,10 +203,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   });
   // posts, bumpers, sand
   for (const p of h.posts) { g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z)); }                    // (painted warning bands: this is something the ball hits)
+  const bumperParts = new Map();                              // (each bumper's body and cap: the pinball table lights them when hit)
   for (const p of h.bumpers) {
     const BL = { candy: ['#ff5f9e', 'sph'], haunted: ['#ff8a2a', 'sph'], ice: ['#7cc8ff', 'cyl'], space: ['#8a63ff', 'cyl'], volcano: ['#ff5a1a', 'cyl'], desert: ['#d98a3d', 'cyl'] }[h.theme], round = BL && BL[1] === 'sph', ph = p.x * 3 + p.z;      // (the bumpers take the theme's look: gumdrops, pumpkins, ice posts, crystal domes)
-    const b = round ? new THREE.Mesh(G.sph, BL ? paint(BL[0]) : M.bumper) : cyl(BL ? paint(BL[0]) : M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z); if (round) { b.position.set(p.x, 0.45, p.z); cap.visible = false; } g.add(b); g.add(cap); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
-    updaters.push((heroT, t) => { const k = 1 + 0.05 * Math.sin(t * 4 + ph); if (round) b.scale.set(p.r * 1.05 * k, 0.7 * k, p.r * 1.05 * k); else b.scale.set(p.r * k, 0.8, p.r * k); cap.scale.set(p.r * 1.05 * k, 0.12, p.r * 1.05 * k); });          // (bumpers breathe a little: they are alive)
+    const b = round ? new THREE.Mesh(G.sph, BL ? paint(BL[0]) : M.bumper) : cyl(BL ? paint(BL[0]) : M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z); if (round) { b.position.set(p.x, 0.45, p.z); cap.visible = false; } g.add(b); g.add(cap); bumperParts.set(p, { b, cap }); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
+    updaters.push((heroT, t) => { const k = (1 + 0.05 * Math.sin(t * 4 + ph)) * (1 + (p.pop || 0)); if (round) b.scale.set(p.r * 1.05 * k, 0.7 * k, p.r * 1.05 * k); else b.scale.set(p.r * k, 0.8, p.r * k); cap.scale.set(p.r * 1.05 * k, 0.12, p.r * 1.05 * k); });          // (bumpers breathe a little: they are alive)
   }
   // boost strips (moving chevrons), bounce pads, and the cage round one orb with its button and gate
   const chev = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d'); x.fillStyle = '#12304a'; x.fillRect(0, 0, 128, 64); x.strokeStyle = '#ffe14a'; x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round'; for (let i = 0; i < 2; i++) { const ox = 18 + i * 56; x.beginPath(); x.moveTo(ox, 10); x.lineTo(ox + 26, 32); x.lineTo(ox, 54); x.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; })();
@@ -378,7 +379,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   g.children.forEach((o) => { if (o.isMesh && (o.material === M.post || o.material === M.bumper || o.material === M.white)) ghosted.push([o, o.material]); });
   return {
     setGhost(on) { if (on === ghostOn) return; ghostOn = on; for (const [o, m] of ghosted) { o.material = on ? ghostOf(m) : m; o.castShadow = !on; } },
-    heroRoot, group: g, pickups, cupMesh, flag,
+    heroRoot, group: g, pickups, cupMesh, flag, bumperParts,
     update(heroT, t, dt, st) { for (const u of updaters) u(heroT, t, dt, st); },
     dispose() { for (const d of disposables) d.dispose?.(); g.traverse((o) => { if (o.material && o.material !== M.rail && o.material.map === undefined) { /* shared materials are kept */ } }); },
   };

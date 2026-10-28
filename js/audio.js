@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261027213744';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261027214133';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -511,6 +511,9 @@ export function createAudio({ base = 'audio/' } = {}) {
       else if (kind === 'post') { if (!gate('gpost', 0.05)) return; tone(880 + 300 * v, 0.1, { type: 'sine', gain: 0.05 + 0.05 * v, dest: soft }); }
       else if (kind === 'pbbump') { if (!gate('gpbb', 0.04)) return; tone(420 + 70 * v, 0.14, { type: 'triangle', gain: 0.1, slide: 520, dest: soft }); tone(1180 + 110 * v, 0.1, { type: 'sine', gain: 0.05, delay: 0.02, dest: soft }); }
       else if (kind === 'pbkick') { if (!gate('gpbk', 0.05)) return; tone(170, 0.08, { type: 'square', gain: 0.07, slide: 70, dest: soft }); swoosh(0.08, 3200, 900, { gain: 0.06, q: 0.7 }); }
+      else if (kind === 'pbtarget') { if (!gate('gpbt', 0.05)) return; tone(620 + 90 * v, 0.1, { type: 'square', gain: 0.07, slide: -240, dest: soft }); tone(1480, 0.08, { type: 'sine', gain: 0.05, delay: 0.03, dest: soft }); }
+      else if (kind === 'pbspin') { if (!gate('gpbs', 0.06)) return; tone(900 + 160 * v, 0.04, { type: 'triangle', gain: 0.045, dest: soft }); }
+      else if (kind === 'pbunlock') { [392, 523, 659, 784, 1047, 1319].forEach((f, i) => { tone(f, 0.34, { type: 'triangle', gain: 0.085, delay: i * 0.07, dest: soft }); tone(f * 2.01, 0.2, { type: 'sine', gain: 0.03, delay: i * 0.07 + 0.02, dest: soft }); }); swoosh(0.5, 500, 3600, { gain: 0.07, q: 0.8 }); }
       else if (kind === 'pbflip') { if (!gate('gpbf', 0.05)) return; tone(260, 0.05, { type: 'square', gain: 0.05, slide: 120, dest: soft }); }
       else if (kind === 'pbdrain') { tone(300, 0.5, { type: 'sawtooth', gain: 0.07, slide: 70, dest: soft }); }
       else if (kind === 'cup') { tone(330, 0.2, { type: 'sine', gain: 0.1, slide: 180, dest: soft }); tone(247, 0.3, { type: 'sine', gain: 0.08, delay: 0.1, dest: soft }); }

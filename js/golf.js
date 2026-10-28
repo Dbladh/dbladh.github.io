@@ -5,20 +5,20 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261027213744';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027213744';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027213744';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261027213744';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261027213744';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261027213744';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261027213744';
-import { createNeon } from './golfneon.js?v=20261027213744';
-import { createFx } from './golffx.js?v=20261027213744';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261027213744';
-import { buildDecor } from './golfdecor.js?v=20261027213744';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261027213744';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261027213744';
-import { createTable } from './pinball.js?v=20261027213744';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261027214133';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027214133';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027214133';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261027214133';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261027214133';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261027214133';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261027214133';
+import { createNeon } from './golfneon.js?v=20261027214133';
+import { createFx } from './golffx.js?v=20261027214133';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261027214133';
+import { buildDecor } from './golfdecor.js?v=20261027214133';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261027214133';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261027214133';
+import { createTable } from './pinball.js?v=20261027214133';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -88,7 +88,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     }
     dots = new THREE.InstancedMesh(G.dot, M.dot, 16); dots.count = 0; dots.frustumCulled = false;
     hamster = buildHamster(); hamster.visible = false;
-    table = createTable({ scene, camera, renderer, world, audio, hud, say, onSunk: () => { if (st.mode === 'table') finishHole(); }, els: { banner: elBanner, toast: elToast, power: elPower, nudge: $('nudge'), lamps: $('lamps'), help: elHelp, msg: elChal, flip: hud.querySelector('.pb-flip') } });
+    table = createTable({ scene, camera, renderer, world, audio, hud, say, fx: () => fxs, onSunk: () => { if (st.mode === 'table') finishHole(); }, els: { banner: elBanner, toast: elToast, power: elPower, nudge: $('nudge'), lamps: $('lamps'), help: elHelp, msg: elChal, flip: hud.querySelector('.pb-flip') } });
   }
 
   let prebuilt = null;
@@ -455,7 +455,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261027213744', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261027214133', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
