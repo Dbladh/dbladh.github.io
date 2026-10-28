@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027214846';
-import { toWorld, YAWS } from './golfsites.js?v=20261027214846';
-import { M, G } from './golfvis.js?v=20261027214846';
-import { isLow } from './golfquality.js?v=20261027214846';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027214846';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027215314';
+import { toWorld, YAWS } from './golfsites.js?v=20261027215314';
+import { M, G } from './golfvis.js?v=20261027215314';
+import { isLow } from './golfquality.js?v=20261027215314';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027215314';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) { /* (no haptics here) */ } };      // (a short buzz on phones that can)
@@ -66,8 +66,8 @@ export function createTable(env) {
     { const cm = new THREE.MeshLambertMaterial({ color: '#c24a41' }); disposables.push(cm); coverMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 28), cm); disposables.push(coverMesh.geometry); coverMesh.scale.set(hole.cover.r * 1.05, 0.12, hole.cover.r * 1.05); coverMesh.position.set(hole.cup.x, deckY + 0.1, hole.cup.z); group.add(coverMesh);
       const rgm = new THREE.MeshBasicMaterial({ color: '#ff6a5f', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), rgg = new THREE.RingGeometry(0.7, 1.0, 40).rotateX(-Math.PI / 2); disposables.push(rgm, rgg); coverRing = new THREE.Mesh(rgg, rgm); coverRing.position.set(hole.cup.x, deckY + 0.12, hole.cup.z); group.add(coverRing);
       const bg = new THREE.CylinderGeometry(0.55, 0.9, 7, 20, 1, true), bmat = new THREE.MeshBasicMaterial({ color: '#9dffc8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); disposables.push(bg, bmat);
-      { const rg = new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2); disposables.push(rg);                         // the deck rollovers: a light where each ramp comes up onto the deck; roll over all three for a bonus
-        rolls = [0, 2, 3].map((li) => { const L = hole.lanes[li], p = L.pts[L.pts.length - 1], mt = new THREE.MeshBasicMaterial({ color: '#6b6f2a', transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); disposables.push(mt); const m = new THREE.Mesh(rg, mt); m.position.set(p[0], hillH(hole, p[0], p[1]) + 0.09, p[1]); group.add(m); return { x: p[0], z: p[1], m, lit: false }; }); }
+      { const rg = new THREE.CircleGeometry(0.58, 28).rotateX(-Math.PI / 2); disposables.push(rg);                         // the deck rollovers: a light where each ramp comes up onto the deck; roll over all three for a bonus
+        rolls = [0, 2, 3].map((li) => { const L = hole.lanes[li], p = L.pts[L.pts.length - 1], mt = new THREE.MeshBasicMaterial({ color: '#e0b43a', transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); disposables.push(mt); const m = new THREE.Mesh(rg, mt); m.position.set(p[0], hillH(hole, p[0], p[1]) + 0.09, p[1]); group.add(m); return { x: p[0], z: p[1], m, lit: false }; }); }
       beam = new THREE.Mesh(bg, bmat); beam.position.set(hole.cup.x, deckY + 3.5, hole.cup.z); beam.visible = false; group.add(beam); }
     { const dg = new THREE.CircleGeometry(0.62, 32).rotateX(-Math.PI / 2), rg = new THREE.RingGeometry(0.62, 0.8, 40).rotateX(-Math.PI / 2), gg = new THREE.RingGeometry(0.9, 1.12, 40).rotateX(-Math.PI / 2); disposables.push(dg, rg, gg);
       spots = hole.saucers; spotMeshes = spots.map((sp) => {                                    // (a lock saucer: a hole in the ground with a white rim; it is dark and glowing while the ball is in play)
@@ -294,7 +294,7 @@ export function createTable(env) {
     if (aimIdle - dt < 9) say(elToast, st.locked ? 'Drag back to putt out of the lock' : 'Drag back and let go to shoot', 2200, 'toast');
     const m = new THREE.Matrix4(), n = 8, k = (aimIdle * 3) % 1; for (let i = 0; i < n; i++) { m.makeTranslation(ball.x + (0.8 + i * 0.62 + k * 0.3), Math.max(0, hillH(hole, ball.x + 0.8 + i * 0.62, ball.z)) + 0.25, ball.z); dots.setMatrixAt(i, m); } dots.count = n; dots.instanceMatrix.needsUpdate = true;
   }
-  function updateRolls() { const pl = 0.5 + 0.5 * Math.sin(st.clock * 5); for (const r of rolls) { r.m.material.color.set(r.lit ? '#ffe14a' : '#6b6f2a'); r.m.material.opacity = r.lit ? 0.95 : 0.55 + 0.25 * pl; r.m.scale.setScalar(r.lit ? 1.15 : 1); } }
+  function updateRolls() { const pl = 0.5 + 0.5 * Math.sin(st.clock * 5); for (const r of rolls) { r.m.material.color.set(r.lit ? '#ffffb0' : '#e0b43a'); r.m.material.opacity = r.lit ? 1 : 0.6 + 0.3 * pl; r.m.scale.setScalar(r.lit ? 1.3 : 0.9 + 0.12 * pl); } }
   function celebrate(events, big = false) { celeb = { t: 0, events: events.slice().sort((a, b) => a.at - b.at), big }; if (big) beam.visible = true; }
   function updateCelebration(dt) {
     if (celeb) { celeb.t += dt; while (celeb.events.length && celeb.events[0].at <= celeb.t) celeb.events.shift().fn(); if (!celeb.events.length && celeb.t > 1.6) celeb = null; }
