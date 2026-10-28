@@ -2,13 +2,14 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027214518';
-import { toWorld, YAWS } from './golfsites.js?v=20261027214518';
-import { M, G } from './golfvis.js?v=20261027214518';
-import { isLow } from './golfquality.js?v=20261027214518';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027214518';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027214840';
+import { toWorld, YAWS } from './golfsites.js?v=20261027214840';
+import { M, G } from './golfvis.js?v=20261027214840';
+import { isLow } from './golfquality.js?v=20261027214840';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027214840';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
+const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) { /* (no haptics here) */ } };      // (a short buzz on phones that can)
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -24,7 +25,7 @@ export function createTable(env) {
   const objs = () => cfg.objs;
   // ---------- parts that light up when hit: each has its own cloned materials, a flash that dies away (and may be held lit) and an optional squash ----------
   const flashers = [], partOf = new Map(), slingFs = [], tmpW = new THREE.Vector3(), COMBO_COL = ['#ffcf3a', '#ffcf3a', '#ff9a2e', '#ff5a3c', '#ff4fb3', '#ff4fb3'];
-  let spinF = null, celeb = null, beam = null, cupY = 0;
+  let spinF = null, celeb = null, beam = null, cupY = 0, rolls = [], aimIdle = 0;
   function addFlasher(meshes, col, scaleFn) {
     const mats = []; for (const m of meshes) { m.material = m.material.clone(); disposables.push(m.material); if (m.material.emissive) mats.push(m.material); }
     const F = { mats, f: 0, hold: 0, col: new THREE.Color(col), scaleFn }; flashers.push(F); return F;
@@ -47,7 +48,7 @@ export function createTable(env) {
   /** Dress the prepared `spec.hole` (its visual `spec.vis`, placed at `spec.site` on ground of height `spec.Y`, played with `spec.cfg` = { objs, tilt, par, nudges }) as the pinball table. */
   function attach(spec) {
     ({ hole, vis, frame, site, Y, cfg } = spec); group = vis.group; flips = frame.flips; pops = hole.bumpers.slice(); st.litBumps.clear(); resetState();
-    flashers.length = 0; partOf.clear(); slingFs.length = 0; spinF = null; celeb = null; beam = null;
+    flashers.length = 0; partOf.clear(); slingFs.length = 0; spinF = null; celeb = null; beam = null; rolls = [];
     for (const b of pops) { const bp = vis.bumperParts?.get(b); if (bp) partOf.set(b, addFlasher([bp.b, bp.cap], '#ffcf3a', (k) => { b.pop = 0.2 * k; })); }
     const deckY = hillH(hole, hole.cup.x, hole.cup.z); cupY = deckY;
     if (vis.flag) vis.flag.position.y = deckY;                                                                    // (the cup is on the raised deck)
@@ -65,6 +66,8 @@ export function createTable(env) {
     { const cm = new THREE.MeshLambertMaterial({ color: '#c24a41' }); disposables.push(cm); coverMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 28), cm); disposables.push(coverMesh.geometry); coverMesh.scale.set(hole.cover.r * 1.05, 0.12, hole.cover.r * 1.05); coverMesh.position.set(hole.cup.x, deckY + 0.1, hole.cup.z); group.add(coverMesh);
       const rgm = new THREE.MeshBasicMaterial({ color: '#ff6a5f', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), rgg = new THREE.RingGeometry(0.7, 1.0, 40).rotateX(-Math.PI / 2); disposables.push(rgm, rgg); coverRing = new THREE.Mesh(rgg, rgm); coverRing.position.set(hole.cup.x, deckY + 0.12, hole.cup.z); group.add(coverRing);
       const bg = new THREE.CylinderGeometry(0.55, 0.9, 7, 20, 1, true), bmat = new THREE.MeshBasicMaterial({ color: '#9dffc8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); disposables.push(bg, bmat);
+      { const rg = new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2); disposables.push(rg);                         // the deck rollovers: a light where each ramp comes up onto the deck; roll over all three for a bonus
+        rolls = [0, 2, 3].map((li) => { const L = hole.lanes[li], p = L.pts[L.pts.length - 1], mt = new THREE.MeshBasicMaterial({ color: '#6b6f2a', transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); disposables.push(mt); const m = new THREE.Mesh(rg, mt); m.position.set(p[0], hillH(hole, p[0], p[1]) + 0.09, p[1]); group.add(m); return { x: p[0], z: p[1], m, lit: false }; }); }
       beam = new THREE.Mesh(bg, bmat); beam.position.set(hole.cup.x, deckY + 3.5, hole.cup.z); beam.visible = false; group.add(beam); }
     { const dg = new THREE.CircleGeometry(0.62, 32).rotateX(-Math.PI / 2), rg = new THREE.RingGeometry(0.62, 0.8, 40).rotateX(-Math.PI / 2), gg = new THREE.RingGeometry(0.9, 1.12, 40).rotateX(-Math.PI / 2); disposables.push(dg, rg, gg);
       spots = hole.saucers; spotMeshes = spots.map((sp) => {                                    // (a lock saucer: a hole in the ground with a white rim; it is dark and glowing while the ball is in play)
@@ -139,12 +142,12 @@ export function createTable(env) {
   function dispose() {                                      // (the hole's group and visual belong to the host)
     if (wall) { scene.remove(wall); wall = null; }
     for (const d of disposables.splice(0)) d.dispose?.();
-    flashers.length = 0; partOf.clear(); slingFs.length = 0; spinF = beam = celeb = null;
+    flashers.length = 0; partOf.clear(); slingFs.length = 0; spinF = beam = celeb = null; rolls = [];
     if (!group) return; ballMesh.material.dispose(); dots.dispose(); group = vis = hole = ball = ballMesh = dots = null; flips = []; flipMeshes = []; spin = spinMesh = coverMesh = coverRing = trailMesh = null; tgDown.clear(); trail.length = 0; slowK = 1; st.mode = 'off';
   }
   function restart() {                                     // the same table again from the first ball (the hole is played another time)
     resetState(); resetTargets(); if (!hole.posts.includes(hole.cover)) hole.posts.push(hole.cover); ctx.cupR = 0; ctx.homing = false; coverK = 1; trail.length = 0; slowK = 1; shake = 0; drag = null; flipHeld = false; dots.count = 0; sinkT = 0; ballMesh.scale.setScalar(1);
-    teeBall(); st.mode = 'aim'; showLamps(); celeb = null; for (const F of flashers) { F.hold = 0; F.f = 0; F.col.set('#ffffff'); } coverMesh.position.y = cupY + 0.1; coverMesh.rotation.y = 0;
+    teeBall(); st.mode = 'aim'; showLamps(); celeb = null; for (const r of rolls) r.lit = false; for (const F of flashers) { F.hold = 0; F.f = 0; F.col.set('#ffffff'); } coverMesh.position.y = cupY + 0.1; coverMesh.rotation.y = 0;
   }
   function resetState() { Object.assign(st, { balls: 0, pts: 0, combo: 0, lastHit: -99, flipT: -99, spins: 0, lamps: {}, open: false, clock: 0 }); st.litBumps.clear(); }
 
@@ -198,12 +201,13 @@ export function createTable(env) {
     if (e.button > 0 || e.target?.closest?.('.golf-quit, .golf-score, .pb-nudge, .pb-q, .pb-help')) return false;
     if (e.target?.closest?.('.pb-flip')) { flipHeld = true; e.preventDefault(); return true; }
     if (st.mode === 'aim') { drag = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY }; e.preventDefault(); return true; }
-    if (st.mode === 'play') { flipHeld = true; e.preventDefault(); return true; }
+    if (st.mode === 'play') { sideHolds.set(e.pointerId, e.clientX < (renderer.domElement.clientWidth || innerWidth) / 2 ? 'L' : 'R'); e.preventDefault(); return true; }       // (a press on the left of the screen swings the left flipper, on the right the right one; two thumbs work)
     return false;
   };
   const onMove = (e) => { if (drag) { drag.x = e.clientX; drag.y = e.clientY; updateAim(); } };
   const onUp = () => {
-    flipHeld = false; if (!drag) return; const d = drag; drag = null; updateAim(); if (st.mode !== 'aim') return;
+    if (e && e.pointerId !== undefined) sideHolds.delete(e.pointerId); else sideHolds.clear();
+    if (!drag) return; const d = drag; drag = null; updateAim(); if (st.mode !== 'aim') return;
     const a = aimInfo(d); if (a.power < 0.06) return;
     if (elHelp) elHelp.hidden = true; const fromTee = !st.locked; if (fromTee) st.balls++;
     st.mode = 'play'; st.shotT = 0; st.skill = fromTee; st.locked = null; setSpots(true); shoot(ball, a.dx, a.dz, Math.pow(a.power, 1.05), false); audio?.golf?.('putt', a.power);
@@ -213,6 +217,7 @@ export function createTable(env) {
   }
   const onKey = (e) => {
     if (e.code === 'Space') { flipHeld = e.type === 'keydown'; e.preventDefault(); }
+    else if (e.code === 'KeyZ' || e.code === 'ArrowLeft' || e.code === 'Slash' || e.code === 'KeyM' || e.code === 'ArrowRight') { const id = e.code === 'KeyZ' || e.code === 'ArrowLeft' ? 'kL' : 'kR'; if (e.type === 'keydown') sideHolds.set(id, id === 'kL' ? 'L' : 'R'); else sideHolds.delete(id); e.preventDefault(); }
     else if ((e.key === 'n' || e.key === 'N' || e.key === 'Shift') && e.type === 'keydown' && !e.repeat) nudge();
   };
   btnFlip?.addEventListener('pointerdown', (e) => { flipHeld = true; e.preventDefault(); e.stopPropagation(); }); btnFlip?.addEventListener('pointerup', () => { flipHeld = false; }); btnFlip.addEventListener('pointerleave', () => { flipHeld = false; });
@@ -251,7 +256,7 @@ export function createTable(env) {
   // ---------- the action: scoring with a combo, floating points, rings that flash where the ball hit ----------
   function resetTargets() { for (const t of tgDown) if (!hole.posts.includes(t)) hole.posts.push(t); tgDown.clear(); tgAll = 0; }
   function knockTarget(t) {
-    hole.posts.splice(hole.posts.indexOf(t), 1); tgDown.add(t); addScore(200, t.x, t.z, 0.5); audio?.golf?.('pbtarget', st.combo / 5); shake = 0.1; hitPart(partOf.get(t), 1, '#ffffff'); sparksAt(t.x, t.z, 0.6, '#ff8a7a', 14);
+    hole.posts.splice(hole.posts.indexOf(t), 1); tgDown.add(t); addScore(200, t.x, t.z, 0.5); audio?.golf?.('pbtarget', st.combo / 5); shake = 0.1; hitPart(partOf.get(t), 1, '#ffffff'); sparksAt(t.x, t.z, 0.6, '#ff8a7a', 14); buzz(14);
     if (tgDown.size === hole.targets.length) { tgAll = st.clock; lamp('tgt'); }
   }
   function updateTargets(dt) {
@@ -259,7 +264,7 @@ export function createTable(env) {
     hole.targets.forEach((t, i) => { const g = tgMeshes[i], want = tgDown.has(t) ? -0.9 : 0; g.position.y += (want - g.position.y) * Math.min(1, dt * 14); });
   }
   function lamp(k) {                                       // a lamp is lit for the rest of the hole; all three open the cup
-    if (st.lamps[k] || !objs().includes(k)) return; st.lamps[k] = true; st.pts += 300; popup('+300', hole.cup.x - 2.2, 0, 4); audio?.golf?.('pickup'); say(elBanner, `${LAMP_TEXT[k]} LIT!`, 1400, 'banner'); showLamps(true); pulse(hole.cup.x, hole.cup.z, 1.2); shake = 0.12;
+    if (st.lamps[k] || !objs().includes(k)) return; st.lamps[k] = true; st.pts += 300; popup('+300', hole.cup.x - 2.2, 0, 4); audio?.golf?.('pickup'); buzz(35); say(elBanner, `${LAMP_TEXT[k]} LIT!`, 1400, 'banner'); showLamps(true); pulse(hole.cup.x, hole.cup.z, 1.2); shake = 0.12;
     if (k === 'spin') { spinF.hold = 0.55; hitPart(spinF, 1, '#7dffb0'); spinF.col.set('#7dffb0'); sparksAt(hole.spinner.x, hole.spinner.z, 0.7, '#7dffb0', 24); pulse(hole.spinner.x, hole.spinner.z, 1.6); }
     else if (k === 'tgt') for (const t of hole.targets) { const F = partOf.get(t); F.hold = 0.5; F.col.set('#7dffb0'); sparksAt(t.x, t.z, 0.7, '#7dffb0', 14); pulse(t.x, t.z, 0.9); }
     else if (k === 'ramp') { const L = hole.lanes[0]; for (const i of [0, 2, 4, 6]) { const p = L.pts[Math.min(L.pts.length - 1, i * 3)]; setTimeout(() => group && pulse(p[0], p[1], 1.3), i * 70); } sparksAt(hole.cup.x - 1, 0, 1.2, '#7dffb0', 20); }
@@ -268,7 +273,7 @@ export function createTable(env) {
   }
   function openCup() {
     st.open = true; const i = hole.posts.indexOf(hole.cover); if (i >= 0) hole.posts.splice(i, 1); ctx.cupR = CUP_R * 1.8; ctx.homing = true; showLamps(true); flashScreen();
-    say(elBanner, 'CUP OPEN! Sink it!', 2400, 'banner'); audio?.golf?.('pbunlock'); shake = 0.5; pulse(hole.cup.x, hole.cup.z, 1.8);
+    say(elBanner, 'CUP OPEN! Sink it!', 2400, 'banner'); audio?.golf?.('pbunlock'); buzz([60, 40, 60, 40, 140]); shake = 0.5; pulse(hole.cup.x, hole.cup.z, 1.8);
     const burst = (n) => sparksAt(hole.cup.x, hole.cup.z, cupY + 0.6, ['#7dffb0', '#ffd23f', '#ffffff', '#6ec8ff'][n % 4], 36);                    // (the unlock: the cover is thrown off, a beam rises from the cup and the whole table lights up in a chase)
     const ev2 = [{ at: 0, fn: () => burst(0) }, { at: 0.2, fn: () => { burst(1); pulse(hole.cup.x, hole.cup.z, 2.4); } }, { at: 0.45, fn: () => burst(2) }, { at: 0.7, fn: () => burst(3) }];
     [...pops, ...hole.targets, ...slingFs.map((q) => ({ F: q.F, x: q.x, z: q.z }))].forEach((o, i) => ev2.push({ at: 0.15 + i * 0.1, fn: () => { hitPart(o.F || partOf.get(o), 1, '#7dffb0'); pulse(o.x, o.z, 1.1); } }));
@@ -279,6 +284,17 @@ export function createTable(env) {
     coverMesh.position.y = cupY + 0.1 + (1 - coverK) * 2.2; coverMesh.rotation.y += dt * 14 * (1 - coverK);                       // (thrown up and spinning as it goes)
     const pl = 0.5 + 0.5 * Math.sin(st.clock * 6); coverRing.material.color.set(st.open ? '#7dffb0' : '#ff6a5f'); coverRing.material.opacity = (st.open ? 0.5 : 0.3) + 0.4 * pl * (st.open ? 1 : 0.6); coverRing.scale.setScalar(1 + 0.2 * pl);
   }
+  function rollOver(r) {
+    r.lit = true; st.pts += 150; popup('+150', r.x, r.z, 2); pulse(r.x, r.z, 1.0); sparksAt(r.x, r.z, 0.4, '#ffe14a', 12); audio?.golf?.('pbtarget', 0.6); buzz(12);
+    if (rolls.every((q) => q.lit)) { st.pts += 500; popup('DECK BONUS +500', hole.cup.x - 1.5, 0, 5); say(elToast, 'Deck complete! +500', 1500, 'toast'); audio?.golf?.('pickup'); for (const q of rolls) { pulse(q.x, q.z, 1.5); sparksAt(q.x, q.z, 0.5, '#ffe14a', 22); } setTimeout(() => { for (const q of rolls) q.lit = false; }, 700); }
+  }
+  function updateIdleHint(dt) {                                // a player who has not shot for a while is shown the way: a toast and a line of dashes up the table
+    if (st.mode !== 'aim' || drag) { if (aimIdle >= 9 && !drag) dots.count = 0; aimIdle = 0; return; }
+    aimIdle += dt; if (aimIdle < 9) return;
+    if (aimIdle - dt < 9) say(elToast, st.locked ? 'Drag back to putt out of the lock' : 'Drag back and let go to shoot', 2200, 'toast');
+    const m = new THREE.Matrix4(), n = 8, k = (aimIdle * 3) % 1; for (let i = 0; i < n; i++) { m.makeTranslation(ball.x + (0.8 + i * 0.62 + k * 0.3), Math.max(0, hillH(hole, ball.x + 0.8 + i * 0.62, ball.z)) + 0.25, ball.z); dots.setMatrixAt(i, m); } dots.count = n; dots.instanceMatrix.needsUpdate = true;
+  }
+  function updateRolls() { const pl = 0.5 + 0.5 * Math.sin(st.clock * 5); for (const r of rolls) { r.m.material.color.set(r.lit ? '#ffe14a' : '#6b6f2a'); r.m.material.opacity = r.lit ? 0.95 : 0.55 + 0.25 * pl; r.m.scale.setScalar(r.lit ? 1.15 : 1); } }
   function celebrate(events, big = false) { celeb = { t: 0, events: events.slice().sort((a, b) => a.at - b.at), big }; if (big) beam.visible = true; }
   function updateCelebration(dt) {
     if (celeb) { celeb.t += dt; while (celeb.events.length && celeb.events[0].at <= celeb.t) celeb.events.shift().fn(); if (!celeb.events.length && celeb.t > 1.6) celeb = null; }
@@ -313,7 +329,9 @@ export function createTable(env) {
   }
   // ---------- running ----------
   let lastHeld = false;
-  function stepFlippers(h) { if (flipHeld !== lastHeld) { lastHeld = flipHeld; if (flipHeld) audio?.golf?.('pbflip'); } stepFlips(flips, flipHeld, h); flips.forEach((f, i) => { flipMeshes[i].rotation.y = -f.a; }); }
+  const sideHolds = new Map(), sideHeld = (f) => flipHeld || [...sideHolds.values()].includes(f.sl ? 'L' : 'R');
+  function flipSides() { camera.updateMatrixWorld(); group.updateWorldMatrix(true, false); for (const f of flips) f.sl = tmpW.set(f.px, 0, f.pz).applyMatrix4(group.matrixWorld).project(camera).x < 0; }       // (which half of the screen each flipper is on)
+  function stepFlippers(h) { const any = flipHeld || sideHolds.size > 0; if (any !== lastHeld) { lastHeld = any; if (any) { audio?.golf?.('pbflip'); buzz(8); } } stepFlips(flips, sideHeld, h); flips.forEach((f, i) => { flipMeshes[i].rotation.y = -f.a; }); }
   function leanTable() {                                    // the cup end rises, pivoting about the bottom edge: the table is seen to lean (and to shake when nudged)
     group.rotation.order = 'YXZ'; group.rotation.y = (site.k * Math.PI) / 4; group.rotation.x = 0; group.rotation.z = 0.115 * (ctx.tilt / 3.4) + (shake > 0 ? (Math.random() - 0.5) * 0.02 * Math.min(1, shake * 4) : 0); group.position.set(site.x, Y + 0.06, site.z); group.updateMatrix();
     const t = toWorld(site, frame.bottom.x, frame.bottom.z), w = tmpV.set(frame.bottom.x, 0, frame.bottom.z).applyMatrix4(group.matrix); group.position.add(tmpV.set(t.x - w.x, Y + 0.06 - w.y, t.z - w.z));
@@ -337,17 +355,18 @@ export function createTable(env) {
         const tg = hole.targets.find((t) => t.x === ev.hx && t.z === ev.hz);
         if (tg) knockTarget(tg);
         else if (ev.hx === hole.cover.x && ev.hz === hole.cover.z) { audio?.golf?.('wall', 0.8); shake = 0.12; if (!st.open && st.clock - (st.coverSay || -9) > 4) { st.coverSay = st.clock; say(elBanner, `CUP LOCKED: light ${objs().map((k) => LAMP_TEXT[k]).join(', ')}`, 2600, 'banner'); } }
-        else if (hole.bumpers.some((b) => b.x === ev.hx && b.z === ev.hz)) { addScore(100, ev.hx, ev.hz, ev.hr); shake = 0.16; { const hb = hole.bumpers.find((b) => b.x === ev.hx && b.z === ev.hz); hitPart(partOf.get(hb), 1, COMBO_COL[Math.min(5, st.combo)]); sparksAt(ev.hx, ev.hz, 0.8, COMBO_COL[Math.min(5, st.combo)], 10 + 4 * st.combo); } audio?.golf?.('pbbump', st.combo); const pb = pops.find((b) => b.x === ev.hx && b.z === ev.hz); if (pb && !st.litBumps.has(pb)) { st.litBumps.add(pb); pulse(pb.x, pb.z, 1.1); if (st.litBumps.size === pops.length) lamp('bump'); } }
+        else if (hole.bumpers.some((b) => b.x === ev.hx && b.z === ev.hz)) { addScore(100, ev.hx, ev.hz, ev.hr); shake = 0.16; { const hb = hole.bumpers.find((b) => b.x === ev.hx && b.z === ev.hz); hitPart(partOf.get(hb), 1, COMBO_COL[Math.min(5, st.combo)]); sparksAt(ev.hx, ev.hz, 0.8, COMBO_COL[Math.min(5, st.combo)], 10 + 4 * st.combo); buzz(10); } audio?.golf?.('pbbump', st.combo); const pb = pops.find((b) => b.x === ev.hx && b.z === ev.hz); if (pb && !st.litBumps.has(pb)) { st.litBumps.add(pb); pulse(pb.x, pb.z, 1.1); if (st.litBumps.size === pops.length) lamp('bump'); } }
         else { addScore(25, ev.hx, ev.hz, ev.hr); audio?.golf?.('post', Math.min(1, ev.post / 12)); }
       }
-      if (ev.kick) { addScore(20, ev.kx, ev.kz, 0.9); shake = 0.09; audio?.golf?.('pbkick'); let sf = null, sd = 1e9; for (const q of slingFs) { const d = Math.hypot(q.x - ev.kx, q.z - ev.kz); if (d < sd) { sd = d; sf = q; } } if (sf) { hitPart(sf.F, 1, '#ffd23f'); sparksAt(ev.kx, ev.kz, 0.5, '#ffd23f', 8); } }
+      if (ev.kick) { addScore(20, ev.kx, ev.kz, 0.9); shake = 0.09; audio?.golf?.('pbkick'); let sf = null, sd = 1e9; for (const q of slingFs) { const d = Math.hypot(q.x - ev.kx, q.z - ev.kz); if (d < sd) { sd = d; sf = q; } } if (sf) { hitPart(sf.F, 1, '#ffd23f'); sparksAt(ev.kx, ev.kz, 0.5, '#ffd23f', 8); buzz(12); } }
       if (ev.wall > 1.5) audio?.golf?.('wall', Math.min(1, ev.wall / 12));
       if (ev.holed) { st.mode = 'sink'; sinkT = 0; return; }
       if (drained()) {
         if (st.shotT < SAVE_TIME && st.skill) { st.balls--; say(elBanner, 'BALL SAVED!', 1600, 'banner'); } else { say(elToast, 'Ball lost', 1400, 'toast'); }
-        audio?.golf?.('pbdrain'); teeBall(); st.mode = 'aim'; return;
+        audio?.golf?.('pbdrain'); buzz(60); teeBall(); st.mode = 'aim'; return;
       }
     }
+    if (!ball.air && ball.y > PLAT_H * 0.8) for (const r of rolls) if (!r.lit && Math.hypot(ball.x - r.x, ball.z - r.z) < 0.75) rollOver(r);
     if (!ball.air && ball.y > PLAT_H * 0.9) { lamp('ramp'); if (st.skill && st.shotT < 6 && !st.skillDone) { st.skillDone = true; st.pts += 500; popup('SKILL SHOT +500', hole.cup.x - 3, 0, 5); } }
     if (!ball.air && Math.hypot(ball.vx, ball.vz) < 7.5 && st.shotT > 0.6) { for (const sp of spots) if (Math.hypot(ball.x - sp.x, ball.z - sp.z) < 0.45) { lockBall(sp); return; } }
     if (ball.rest) { st.stuckT += dt; if (st.stuckT > 1.2) { st.stuckT = 0; ball.rest = false; ball.still = 0; ball.dawdle = 0; ball.vx += 3; ball.vz += (Math.random() - 0.5) * 2; } } else st.stuckT = 0;       // (a ball that comes to rest in play is knocked on)
@@ -367,6 +386,7 @@ export function createTable(env) {
   }
   /** Move the table on by `dt`: the ball, flippers, spinner, lamps and the HUD chips (not the camera). */
   function tick(dt) {
+    flipSides();
     const toCup = st.mode === 'play' && st.open && ball.y > PLAT_H * 0.8 && Math.hypot(hole.cup.x - ball.x, hole.cup.z - ball.z) < 2.0 && Math.hypot(ball.vx, ball.vz) > 4 && (ball.vx * (hole.cup.x - ball.x) + ball.vz * (hole.cup.z - ball.z)) > 0;        // (slow motion as a ball heads for the open cup)
     slowK += ((toCup ? 0.5 : 1) - slowK) * (1 - Math.exp(-dt * 12));
     if (st.mode === 'play') runBall(dt * slowK);
@@ -380,7 +400,7 @@ export function createTable(env) {
       if (s >= 1) { ball.x = sp.x; ball.z = sp.z; ball.vx = ball.vz = 0; ball.rest = true; ball.still = 0; ball.air = false; ball.y = hillH(hole, sp.x, sp.z); st.locked = sp; st.mode = 'aim'; ballMesh.scale.setScalar(1); }
     } else stepFlippers(dt);
     if (st.mode !== 'sink' && st.mode !== 'card' && st.mode !== 'lock') { place(); ballMesh.scale.setScalar(1); const sp = Math.hypot(ball.vx, ball.vz); if (sp > 0.05) { tmpV.set(-ball.vz, 0, ball.vx).normalize(); ballMesh.rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); } }
-    updateTrail(dt); spinMesh.rotation.y = -spin.a; vis.update(ctx.t, ctx.t, dt, st); updatePulses(dt); updateFlash(dt); updateCelebration(dt); updateTargets(dt); updateSpots(dt); updateCover(dt); updateGuides(dt); updateHud();
+    updateTrail(dt); spinMesh.rotation.y = -spin.a; vis.update(ctx.t, ctx.t, dt, st); updatePulses(dt); updateRolls(); updateIdleHint(dt); updateFlash(dt); updateCelebration(dt); updateTargets(dt); updateSpots(dt); updateCover(dt); updateGuides(dt); updateHud();
   }
   /** The camera for this frame (behind the ball while aiming, high above while in play, with the shake of a nudge), and the table's lean. */
   function frameCamera(dt) {
@@ -393,7 +413,7 @@ export function createTable(env) {
     get group() { return group; }, get wall() { return wall; }, get focusDistance() { return 24; },
     poseCamera: (out, dt) => camPose(out, dt), resetCamera() { cam.mix = 0; cam.init = false; }, holdCamera() { cam.init = false; },
     setRise(k) { group.scale.y = Math.max(0.001, k); wall.scale.y = group.scale.y; },
-    setFlip(v) { flipHeld = v; }, input: { down: onDown, move: onMove, up: onUp, key: onKey },
+    setFlip(v) { flipHeld = v; if (!v) sideHolds.clear(); }, input: { down: onDown, move: onMove, up: onUp, key: onKey },
     get debug() { return { st, hole, ball, ctx, flips, spin, lamp, openCup }; },
   };
 }

@@ -1,7 +1,7 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a compact playfield with a round top. At the bottom two flippers, a drain and two slingshots; above them
 // the tee (the skill shot is a golf putt), pop bumpers, a spinner, drop targets and two lock saucers; a straight ramp and two winding ramps climb to a raised deck with the cup, which stays covered
 // until the table's three lamps are lit. Everything is in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom).
-import { mulberry32 } from './golfhero.js?v=20261027214518';
+import { mulberry32 } from './golfhero.js?v=20261027214840';
 export const TILT = 3.4, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, SPIN_NEED = 8, SAVE_TIME = 8;
 
 export const TABLE = { x0: -10, x1: 10, W: 5.5, arcX: 4.5, tee: { x: -4.6, z: 0 }, cup: { x: 7.4, z: 0 }, pivX: -7.4, pivZ: 1.78, pocketX: -9.8 };
@@ -134,10 +134,10 @@ export function prepareTable(hole, layout = 0, mirror = false, seed = null) {
   hole.saucers = SAUCERS.map(([x, z]) => ({ x, z })).filter((p) => clearShot(hole, p, hole.cup));          // (lock saucers: a ball that drops in is held for an aimed putt; each has a clear shot to the cup)
   return { ux: 1, uz: 0, nx: 0, nz: 1, tee, L, flips, rails, tris, bottom: { x: x0, z: 0 } };
 }
-/** Swing the flippers towards up (`held`) or rest for `h` seconds. */
+/** Swing the flippers towards up (`held`: true, or a function of the flipper saying whether its own side is held) or rest for `h` seconds. */
 export function stepFlips(flips, held, h) {
   for (const f of flips) {
-    const target = held ? f.upA : f.restA, d0 = target - f.a, d = Math.atan2(Math.sin(d0), Math.cos(d0)), mv = Math.max(-FLIP_SPEED * h, Math.min(FLIP_SPEED * h, d)); f.a += mv; f.w = mv / h;
+    const target = (typeof held === 'function' ? held(f) : held) ? f.upA : f.restA, d0 = target - f.a, d = Math.atan2(Math.sin(d0), Math.cos(d0)), mv = Math.max(-FLIP_SPEED * h, Math.min(FLIP_SPEED * h, d)); f.a += mv; f.w = mv / h;
   }
 }
 /** Has the ball gone down the drain? */
