@@ -2,13 +2,13 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027203244';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027203244';
-import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261027203244';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261027203244';
-import { isLow } from './golfquality.js?v=20261027203244';
-import { golfCourse, monthKey } from './monthseed.js?v=20261027203244';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027203244';
+import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027203541';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027203541';
+import { toWorld, MARGIN, BLEND } from './golfsites.js?v=20261027203541';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261027203541';
+import { isLow } from './golfquality.js?v=20261027203541';
+import { golfCourse, monthKey } from './monthseed.js?v=20261027203541';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027203541';
 
 const HOLE_INDEX = 3, COMBO_NEED = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
@@ -88,9 +88,17 @@ export function createPinball(scene, camera, renderer, world, { audio = null, re
   }
   // the look of the playfield: the putting green with painted arrows, wooden rails, red slingshots, the drain
   function dressTable() {
-    const { x0, x1, W } = TABLE, cw = 1024, ch = Math.round((cw * 2 * W) / (x1 - x0)), cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const c = cv.getContext('2d'), X = (x) => ((x - x0) / (x1 - x0)) * cw, Z = (z) => ((z + W) / (2 * W)) * ch;
+    const { x0, x1, W } = TABLE, cw = isLow() ? 1024 : 2048, ch = Math.round((cw * 2 * W) / (x1 - x0)), cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const c = cv.getContext('2d'), X = (x) => ((x - x0) / (x1 - x0)) * cw, Z = (z) => ((z + W) / (2 * W)) * ch;
     c.clearRect(0, 0, cw, ch); c.save(); c.beginPath(); hole.outline.forEach((p, i) => (i ? c.lineTo(X(p[0]), Z(p[1])) : c.moveTo(X(p[0]), Z(p[1])))); c.closePath(); c.clip();
     c.fillStyle = 'rgba(255,255,255,0.5)'; for (let k = 0; k < 3; k++) { const x = X(-3.2 + k * 1.7); c.beginPath(); c.moveTo(x + 34, Z(0)); c.lineTo(x - 18, Z(0) - 28); c.lineTo(x - 7, Z(0)); c.lineTo(x - 18, Z(0) + 28); c.closePath(); c.fill(); }   // (arrows pointing up the table)
+    if (!isLow()) {                                                                // high tier: printed inserts under the parts, like the art on a real playfield
+      const U = cw / (x1 - x0), star = (x, y, r, fill) => { c.beginPath(); for (let k = 0; k < 10; k++) { const a = (k / 10) * 6.2832 - 1.5708, rr = k % 2 ? r * 0.45 : r; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } c.closePath(); c.fillStyle = fill; c.fill(); c.lineWidth = r * 0.08; c.strokeStyle = 'rgba(255,255,255,0.8)'; c.stroke(); };
+      for (const b of hole.bumpers) { const x = X(b.x), y = Z(b.z); c.lineWidth = U * 0.07; c.strokeStyle = 'rgba(255,210,63,0.55)'; c.setLineDash([U * 0.18, U * 0.12]); c.beginPath(); c.arc(x, y, U * (b.r + 0.55), 0, 6.2832); c.stroke(); c.setLineDash([]); c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = U * 0.04; c.beginPath(); c.arc(x, y, U * (b.r + 0.3), 0, 6.2832); c.stroke(); }
+      for (const t of hole.targets) star(X(t.x), Z(t.z), U * 0.55, 'rgba(232,89,75,0.55)');
+      star(X(hole.spinner.x), Z(hole.spinner.z), U * 1.05, 'rgba(255,210,63,0.45)');
+      for (const sp of hole.saucers) { c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(X(sp.x), Z(sp.z), U * 0.95, 0, 6.2832); c.fill(); c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = U * 0.05; c.stroke(); }
+      for (const l of hole.lanes) { c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = U * 0.1; c.beginPath(); l.pts.forEach((q, i) => (i ? c.lineTo(X(q[0]), Z(q[1])) : c.moveTo(X(q[0]), Z(q[1])))); c.stroke(); }
+    }
     c.restore();
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; disposables.push(tex);
     const art = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 2 * W).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); art.position.set(0, 0.05, 0); disposables.push(art.geometry, art.material); group.add(art);
