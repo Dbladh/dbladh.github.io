@@ -1,12 +1,12 @@
 // The home-scene easter egg: now and then a dirt bike rides across the hills (left to right), follows the ground,
 // jumps off crests, and sometimes throws a backflip. Clicking it starts the game (see bikegame.js).
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261027212419';
-import { heightAt } from './world.js?v=20261027212419';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261027212419';
-import { createTracks } from './tracks.js?v=20261027212419';
-import { createDirt } from './dirt.js?v=20261027212419';
-import { createPuffs } from './puffs.js?v=20261027212419';
+import { PAL } from './palette.js?v=20261027213744';
+import { heightAt } from './world.js?v=20261027213744';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261027213744';
+import { createTracks } from './tracks.js?v=20261027213744';
+import { createDirt } from './dirt.js?v=20261027213744';
+import { createPuffs } from './puffs.js?v=20261027213744';
 
 const SCALE = 1.15;          // the bike is small on screen from the overview, so the toy is drawn bigger than life
 const SPEED = 9;            // world units per second
