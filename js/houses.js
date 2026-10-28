@@ -3,7 +3,7 @@
 // so the same seed always builds the same village. `mergeByMaterial` then collapses each house into a
 // handful of draw calls.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261027202944';
+import { PAL } from './palette.js?v=20261027203146';
 
 // ---------------------------------------------------------------- small helpers
 

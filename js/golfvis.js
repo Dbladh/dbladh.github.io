@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202944';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202944';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202944';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202944';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202944';
-import { isLow } from './golfquality.js?v=20261027202944';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027203146';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027203146';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027203146';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027203146';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027203146';
+import { isLow } from './golfquality.js?v=20261027203146';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -498,6 +498,11 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       const wheel = new THREE.Group(); wheel.position.set(-0.1, 0.5, s * 0.66); wheel.add(torus(woodTint('#8a5a30'), 0.46, 0.07, 0, 0, 0)); wheel.add(torus(iron, 0.52, 0.03, 0, 0, 0)); { const hub = cyl(brass, 0.12, 0.14, 0, 0, 0); hub.rotation.x = Math.PI / 2; wheel.add(hub); }
       for (let k = 0; k < 6; k++) { const sp = rbox(woodTint('#a87040'), 0.07, 0.9, 0.07, 0, 0, 0, 0.015); sp.rotation.z = (k * Math.PI) / 6; wheel.add(sp); } w.add(wheel);
     }
+    if (!isLow()) {                                         // high tier: a muzzle flare, a lit fuse and a pyramid of cannonballs
+      barrel.add(torus(iron, 0.46, 0.09, 1.78, 0, 0, 0, Math.PI / 2)); barrel.add(torus(brass, 0.41, 0.05, 0.9, 0, 0, 0, Math.PI / 2));
+      barrel.add(sph(new THREE.MeshBasicMaterial({ color: '#ff9a2a' }), 0.05, 0.05, 0.05, -0.62, 0.46, 0));
+      for (const [bx, bz, by] of [[-0.9, 0.55, 0.12], [-0.9, 0.85, 0.12], [-0.9, 0.7, 0.3]]) w.add(sph(iron, 0.12, 0.12, 0.12, bx, by, bz));
+    }
     updaters.push((heroT) => { barrel.rotation.y = -hr.wobble * Math.sin(heroT * 1.3); });
   } else if (hr.type === 'teleport') {                     // a warp zone: two swirling portals either side of a rockery
     const swirl = (c) => { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const x = cv.getContext('2d'); x.translate(64, 64); const gr = x.createRadialGradient(0, 0, 0, 0, 0, 62); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.35, c); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.beginPath(); x.arc(0, 0, 62, 0, 7); x.fill();
@@ -506,6 +511,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       const gp = new THREE.Group(); gp.position.set(p.x - hr.x, 0, p.z - hr.z); gp.add(cyl(stoneTint('#6c7480'), 0.8, 0.14, 0, 0.07, 0));
       const dm = new THREE.MeshBasicMaterial({ map: swirl(c), transparent: true, depthWrite: false }); (ctx.disposables || []).push(dm); const disc = new THREE.Mesh(G.disc, dm); disc.scale.set(0.68, 1, 0.68); disc.position.y = 0.17; gp.add(disc);
       gp.add(torus(new THREE.MeshBasicMaterial({ color: c }), 0.7, 0.07, 0, 0.17, 0, Math.PI / 2));
+      if (!isLow()) for (let k = 0; k < 8; k++) { const a = (k / 8) * 6.2832; gp.add(rbox(stoneTint('#8a93a0'), 0.16, 0.22, 0.16, Math.cos(a) * 0.95, 0.12, Math.sin(a) * 0.95, 0.02)); }      // high tier: standing stones round the portal
       const beam = new THREE.Mesh(track(new THREE.CylinderGeometry(0.62, 0.62, 1.7, 20, 1, true)), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })); (ctx.disposables || []).push(beam.material); beam.position.y = 0.95; gp.add(beam);
       updaters.push((heroT) => { disc.rotation.y = heroT * (c === '#ff9a2a' ? 2.4 : -2.4); beam.material.opacity = 0.16 + 0.08 * Math.sin(heroT * 4); }); w.add(gp);
     }
@@ -518,6 +524,10 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       w.add(rbox(metal('#6c7480'), 0.28, 0.08, (hw + 0.25) * 2, m.du, 0.04, 0, 0.02));
       for (const sd of [-1, 1]) w.add(rbox(metal('#3c6fd8'), 0.4, 0.9, 0.4, m.du, 0.45, sd * (hw + 0.4), 0.06));
       const blk = new THREE.Group(); blk.add(rbox(paint('#e5483f'), 0.6, 0.85, 1.8, 0, 0, 0, 0.1)); blk.add(rbox(paint('#ffffff'), 0.62, 0.2, 1.82, 0, 0.18, 0, 0.04)); blk.add(rbox(paint('#ffffff'), 0.62, 0.2, 1.82, 0, -0.18, 0, 0.04)); blk.children.forEach((c) => { c.castShadow = true; }); w.add(blk);
+      if (!isLow()) {                                       // high tier: yellow hazard stripes on the block ends and a rivet row on the posts
+        for (const sd of [-1, 1]) blk.add(rbox(paint('#ffd23f'), 0.64, 0.5, 0.16, 0, 0, sd * 0.82, 0.01));
+        for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) w.add(sph(metal('#c9ced6'), 0.05, 0.05, 0.05, m.du + 0.2, 0.2 + k * 0.25, sd * (hw + 0.4)));
+      }
       updaters.push((heroT) => { blk.position.set(m.du, 0.45, hr.A * Math.sin(hr.w * heroT + m.ph)); });
     }
   } else if (hr.type === 'bridge') {                       // a moat under a wooden arched bridge with rails
@@ -525,6 +535,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     const pg = track(pondGeometry([-1.7, hw + 0.3, 1.7, hw + 0.3, 1.7, -(hw + 0.3), -1.7, -(hw + 0.3)], 0.09)), wm = waterMaterial(ctx.look, 0, 0, 0, 0); (ctx.disposables || []).push(wm); const pool = new THREE.Mesh(pg, wm); pool.renderOrder = 2; w.add(pool);
     for (let k = 0; k < 15; k++) {
       const a0 = -3 + k * 0.4, a1 = a0 + 0.4, y0 = yAt(a0), y1 = yAt(a1), pl = rbox(wood, 0.44, 0.09, 1.8, (a0 + a1) / 2, (y0 + y1) / 2 + 0.07, 0, 0.02); pl.rotation.z = Math.atan2(y1 - y0, 0.4); pl.receiveShadow = true; w.add(pl);
+      if (!isLow() && k % 7 === 0) for (const sd of [-1, 1]) w.add(sph(new THREE.MeshBasicMaterial({ color: '#ffe9a8' }), 0.1, 0.12, 0.1, a0, yAt(a0) + 0.68, sd * 0.9));      // high tier: a glowing lantern on the end posts
       if (a0 > -1.75 && a1 < 1.75) for (const sd of [-1, 1]) { const rl = rbox(dark, 0.44, 0.1, 0.1, (a0 + a1) / 2, (y0 + y1) / 2 + 0.5, sd * 0.9, 0.02); rl.rotation.z = Math.atan2(y1 - y0, 0.4); w.add(rl); if (k % 2 === 0) w.add(rbox(dark, 0.12, 0.5, 0.12, a0, y0 + 0.3, sd * 0.9, 0.02)); }
     }
   } else if (hr.type === 'drawbridge') {                   // a little castle gate: a moat, round towers and a wooden bridge that lifts
@@ -536,6 +547,10 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     const stone = stoneTint('#b9b4a8'), roofM = paint('#d24a45');
     for (const e of [-1, 1]) w.add(rbox(stone, 0.5, 0.05, W * 2, e * (H + 0.35), 0.03, 0, 0.01));        // (flat paving at each end of the moat: nothing stands in the lane)
     for (const s of [-1, 1]) for (const e of [-1, 1]) { const tx = e * (H + 0.2), tz = s * (hw + 0.95); w.add(cyl(stone, 0.55, 2.3, tx, 1.15, tz)); w.add(cone(roofM, 0.75, 0.9, 8, tx, 2.75, tz)); w.add(rbox(paint('#2a2a33'), 0.1, 0.4, 0.2, tx, 1.5, tz - s * 0.5, 0.02)); w.add(cone(paint('#ffd23f'), 0.05, 0.3, 4, tx, 3.35, tz)); }
+    if (!isLow()) for (const s of [-1, 1]) for (const e of [-1, 1]) {                    // high tier: battlement teeth and a banner on each tower
+      const tx = e * (H + 0.2), tz = s * (hw + 0.95); for (let k = 0; k < 6; k++) { const a = (k / 6) * 6.2832; w.add(rbox(stone, 0.2, 0.22, 0.2, tx + Math.cos(a) * 0.5, 2.4, tz + Math.sin(a) * 0.5, 0.02)); }
+      w.add(rbox(paint(e > 0 ? '#e5483f' : '#3c6fd8'), 0.04, 0.5, 0.3, tx, 3.2, tz + 0.18, 0.01));
+    }
     const pivot = new THREE.Group(); pivot.position.set(H, 0.18, 0); pivot.add(rbox(woodTint('#ffffff'), H * 2, 0.14, hw * 2 - 0.2, -H, 0, 0, 0.03));
     for (const s of [-1, 1]) pivot.add(rbox(woodTint('#8a5a30'), H * 2, 0.22, 0.1, -H, 0.16, s * (hw - 0.15), 0.02));
     for (let k = 0; k < 6; k++) pivot.add(rbox(woodTint('#8a5a30'), 0.06, 0.04, hw * 2 - 0.3, -0.15 - k * (H * 2 - 0.3) / 5, 0.09, 0, 0.01)); w.add(pivot);
@@ -548,6 +563,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
     for (let i = 2; i < 48; i += 3) { const p = pts[i], q2 = pts[Math.min(48, i + 1)], strut = rbox(steel, 0.07, 0.07, 1.2, p.x, p.y, 0, 0.015); strut.rotation.z = Math.atan2(q2.y - p.y, q2.x - p.x); w.add(strut); }
     for (let i = 4; i < 48; i += 8) { const p = pts[i]; if (p.y > 0.3) { w.add(rbox(steel, 0.12, p.y, 0.12, p.x, p.y / 2, 0.55, 0.02)); w.add(rbox(steel, 0.12, p.y, 0.12, p.x, p.y / 2, -0.55, 0.02)); } w.add(rbox(steel, 0.3, 0.08, 1.4, p.x, 0.04, 0, 0.02)); }
     const ramp = rbox(woodTint('#ffe0b0'), 1.7, 0.1, hr.track * 2, -hr.L / 2 - 0.8, 0.12, 0, 0.03); ramp.rotation.z = 0.2; w.add(ramp);
+    if (!isLow()) for (let k = 0; k < 3; k++) { const ch = cone(paint('#ffd23f'), 0.2, 0.14, 3, -hr.L / 2 - 1.3 + k * 0.45, 0.24 + k * 0.09, 0); ch.rotation.z = -Math.PI / 2; ch.scale.set(1, 1, 1); w.add(ch); }      // high tier: arrows on the ramp
     for (const s of [-1, 1]) { const lw = hw + 0.3 - hr.track, zc = s * (hr.track + lw / 2); w.add(rbox(paint('#e5483f'), hr.L, 0.6, lw, 0, 0.3, zc, 0.07)); w.add(rbox(paint('#ffffff'), hr.L + 0.04, 0.12, lw + 0.04, 0, 0.64, zc, 0.03)); }
   }
   return w;
