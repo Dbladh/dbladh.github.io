@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261027211515';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261027211515';
-import { aceSearch } from './golface.js?v=20261027211515';
-import { BAKED } from './golfbake.js?v=20261027211515';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261027212419';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261027212419';
+import { aceSearch } from './golface.js?v=20261027212419';
+import { BAKED } from './golfbake.js?v=20261027212419';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -220,7 +220,7 @@ function addPatches(out, rr, surface, S, magnets = [], tunnels = []) {
       if (![ci, mid, i1].every((i) => free(cl[i].x, cl[i].z, 0.1))) continue;
       let poly = [], cx = cl[mid].x, cz = cl[mid].z, rad = 0;
       if (kind === 'quicksand') { const lat = (rr() - 0.5) * 0.9; cx = cl[mid].x - tz[mid] * lat; cz = cl[mid].z + tx[mid] * lat; poly = sandPoly(0, q(cx), q(cz), 1.35, tx[mid], tz[mid], S.seed ^ 0x6b43a9b5); }
-      else { const L = [], R = []; for (let i = ci; i <= i1; i++) { const ww = w[i] - 0.2; L.push(cl[i].x - tz[i] * ww, cl[i].z + tx[i] * ww); R.unshift(cl[i].x + tz[i] * ww, cl[i].z - tx[i] * ww); } poly = [...L, ...R]; }
+      else { const L = [], R = []; for (let i = ci; i <= i1; i++) { const t = (i - ci) / Math.max(1, i1 - ci), ww = w[i] - 0.2, fat = kind === 'conveyor' ? 1 : Math.sqrt(Math.sin(Math.PI * (0.06 + 0.88 * t))) * 0.82 + 0.18, sh = kind === 'conveyor' ? 0 : 0.16 * ww * Math.sin(6.2832 * t + ci), a = Math.max(0.3, ww * fat + sh), b = Math.max(0.3, ww * fat - sh); L.push(cl[i].x - tz[i] * a, cl[i].z + tx[i] * a); R.unshift(cl[i].x + tz[i] * b, cl[i].z - tx[i] * b); } poly = [...L, ...R]; }      // (ice, mud and caramel are lens-shaped, wider in the middle and a little off-centre, not strips; a conveyor stays a belt)
       for (let i = 0; i < poly.length; i += 2) rad = Math.max(rad, Math.hypot(poly[i] - cx, poly[i + 1] - cz));
       const fwd = rr() < 0.7 ? 1 : -1, P = { kind, poly, x: cx, z: cz, r: rad + 0.3, ux: tx[mid] * fwd, uz: tz[mid] * fwd, ...SURFACE[kind] };
       out.push(P); keep.push({ x: cx, z: cz, r: rad + 0.8 }); break;

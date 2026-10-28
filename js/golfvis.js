@@ -1,13 +1,18 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261027211515';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027211515';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027211515';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027211515';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027211515';
-import { isLow } from './golfquality.js?v=20261027211515';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261027212419';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027212419';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027212419';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027212419';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027212419';
+import { isLow } from './golfquality.js?v=20261027212419';
 
+/** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
+function softPoly(poly, rounds = 2) {
+  let p = poly; for (let r = 0; r < rounds; r++) { const n = p.length / 2, o = []; for (let i = 0; i < n; i++) { const j = (i + 1) % n, ax = p[i * 2], az = p[i * 2 + 1], bx = p[j * 2], bz = p[j * 2 + 1]; o.push(ax * 0.75 + bx * 0.25, az * 0.75 + bz * 0.25, ax * 0.25 + bx * 0.75, az * 0.25 + bz * 0.75); } p = o; }
+  return p;
+}
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
   grass: new THREE.MeshLambertMaterial({ vertexColors: true }), rail: mat('#c88b55'), post: mat('#e8594b'), bumper: mat('#ff9a3c'), white: new THREE.MeshBasicMaterial({ color: '#ffffff' }),
@@ -261,11 +266,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     let open = 0; updaters.push((heroT, t, dt, st) => { open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 6); bar.position.y = 0.3 - 0.8 * open; plate.position.y = 0.06 - 0.03 * open; plate.material = open > 0.5 ? paint('#6dff9a') : paint('#ffd23f'); });
   }
   for (const s of h.sands) {                                 // a sand pit: a rough patch of sand with a darker, damp rim and a few pebbles
-    const sg = track(pondGeometry(s.poly, 0)), spp = sg.attributes.position; for (let i = 0; i < spp.count; i++) spp.setY(i, hillH(h, spp.getX(i), spp.getZ(i)) + 0.07); sg.computeVertexNormals(); const sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, TH0.sand, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); sm.receiveShadow = true; g.add(sm);
-    const lip = track(pondGeometry(s.poly.map((v, i) => (i % 2 ? s.z : s.x) + (v - (i % 2 ? s.z : s.x)) * 1.12), 0)), lpp = lip.attributes.position; for (let i = 0; i < lpp.count; i++) lpp.setY(i, hillH(h, lpp.getX(i), lpp.getZ(i)) + 0.04); lip.computeVertexNormals(); const lm = new THREE.Mesh(lip, GM.lam(GM.tex.sand, '#c9b27a', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); lm.receiveShadow = true; g.add(lm);
+    const sPoly = softPoly(s.poly), sg = track(pondGeometry(sPoly, 0)), spp = sg.attributes.position; for (let i = 0; i < spp.count; i++) spp.setY(i, hillH(h, spp.getX(i), spp.getZ(i)) + 0.07); sg.computeVertexNormals(); const sm = new THREE.Mesh(sg, GM.lam(GM.tex.sand, TH0.sand, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); sm.receiveShadow = true; g.add(sm);
+    const lip = track(pondGeometry(sPoly.map((v, i) => (i % 2 ? s.z : s.x) + (v - (i % 2 ? s.z : s.x)) * 1.12), 0)), lpp = lip.attributes.position; for (let i = 0; i < lpp.count; i++) lpp.setY(i, hillH(h, lpp.getX(i), lpp.getZ(i)) + 0.04); lip.computeVertexNormals(); const lm = new THREE.Mesh(lip, GM.lam(GM.tex.sand, '#c9b27a', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); lm.receiveShadow = true; g.add(lm);
   }
   for (const pt of h.patches || []) {                          // surface patches: ice (glassy blue), mud, caramel, quicksand (a dark swirl) and conveyor belts (moving chevrons)
-    const geo = track(pondGeometry(pt.poly, 0)), pp = geo.attributes.position; for (let i = 0; i < pp.count; i++) pp.setY(i, hillH(h, pp.getX(i), pp.getZ(i)) + 0.065);
+    const geo = track(pondGeometry(softPoly(pt.poly), 0)), pp = geo.attributes.position; for (let i = 0; i < pp.count; i++) pp.setY(i, hillH(h, pp.getX(i), pp.getZ(i)) + 0.065);
     let mat;
     if (pt.kind === 'conveyor') {
       const tx = chev.clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; disposables.push(tx); const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (pp.getX(i) * pt.ux + pp.getZ(i) * pt.uz) / 1.6, (-pp.getX(i) * pt.uz + pp.getZ(i) * pt.ux) / 1.6);
