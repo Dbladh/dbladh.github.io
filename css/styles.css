@@ -975,3 +975,4 @@ body.scene-mode .bike-hint { display: block; }
 
 .mode-load { position: fixed; left: 50%; bottom: 14%; transform: translateX(-50%); z-index: 61; padding: 12px 20px; border-radius: 999px; background: rgba(20,24,34,.88); color: #fff; font: 700 15px/1 inherit; box-shadow: 0 6px 22px rgba(0,0,0,.4); }
 .mode-load[hidden] { display: none; }
+@media (max-height: 620px), (max-width: 560px) { .pb-lamps { top: 56%; gap: 5px; } .pb-lamps i { min-width: 0; padding: 6px 9px; } .pb-lamps i small { display: none; } .pb-lamps i b { font-size: 11px; } .pb-help { top: 96px; } }

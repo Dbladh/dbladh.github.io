@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261026223523';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261026223523';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261026223523';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261026223523';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261026223523';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202201';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202201';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202201';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202201';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202201';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -32,6 +32,17 @@ function emojiSprite(type) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; emojiTex[type] = t;
   }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex[type], transparent: true, depthWrite: false })); s.scale.setScalar(1.15); return s;
+}
+let clothTex = null;
+function flagCloth() {                                     // the flag's cloth: red with a darker hem on the pole side, a faint weave and a white ring
+  if (!clothTex) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 80; const x = c.getContext('2d');
+    x.fillStyle = '#ef5b4d'; x.fillRect(0, 0, 128, 80); x.strokeStyle = 'rgba(120,20,10,0.16)'; x.lineWidth = 1; for (let i = -80; i < 128; i += 4) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 80, 80); x.stroke(); }
+    x.strokeStyle = 'rgba(255,255,255,0.12)'; for (let i = 0; i < 128; i += 4) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i - 80, 80); x.stroke(); }
+    x.fillStyle = '#c8392e'; x.fillRect(0, 0, 12, 80); x.fillStyle = 'rgba(255,255,255,0.9)'; x.beginPath(); x.arc(70, 40, 20, 0, 7); x.fill(); x.fillStyle = '#ef5b4d'; x.beginPath(); x.arc(70, 40, 13, 0, 7); x.fill();
+    clothTex = new THREE.CanvasTexture(c); clothTex.colorSpace = THREE.SRGBColorSpace; clothTex.anisotropy = 4;
+  }
+  return clothTex;
 }
 let waterTex = null;
 function water() {                                         // a soft striped texture that is scrolled to make the water flow
@@ -71,8 +82,9 @@ function buildBorder(h, g, disposables) {
     _m.compose(_v.set((w[0] + w[2]) / 2 + ox * (thick / 2 + off) + ux * shift, y + hy, (w[1] + w[3]) / 2 + oz * (thick / 2 + off) + uz * shift), _q, _s.set(l * lenK + 0.07, hgt, thick));
     mesh.setMatrixAt(i, _m); col.set(palette[(r() * palette.length) | 0]); col.offsetHSL(0, 0, (r() - 0.5) * 0.05); mesh.setColorAt(i, col);
   };
+  const BEV = G.box;                                                                               // (the bricks and planks keep the plain box: the normal maps carry their chamfers, and thousands of bevelled boxes would be far too heavy)
   if (style === 'brick') {
-    const c0 = make(G.box, GM.brick, segs.length), c1 = make(G.box, GM.brick, segs.length), cap = make(G.box, GM.stone, segs.length);
+    const c0 = make(BEV, GM.brick, segs.length), c1 = make(BEV, GM.brick, segs.length), cap = make(BEV, GM.stone, segs.length);
     segs.forEach((w, i) => { place(c0, i, w, 0, 0.15, 1, 0.3, 0.4, 0, TH.pal); place(c1, i, w, 0, 0.45, 1, 0.3, 0.4, 0.3, TH.pal); place(cap, i, w, -0.03, 0.65, 1, 0.1, 0.5, 0, ['#e8dcc6', '#ddd0b8']); });
     for (const m of [c0, c1, cap]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   } else if (style === 'stone') {
@@ -82,7 +94,7 @@ function buildBorder(h, g, disposables) {
     segs.forEach((w, i) => { const hgt = 0.55 + r() * 0.3; place(rocks, i, w, 0.05, hgt * 0.4, 1.7, hgt, 0.7 + r() * 0.2, (r() - 0.5) * 0.3, TH.pal, (r() - 0.5) * 0.3); place(top, i, w, 0.15, 0.62 + r() * 0.12, 1.1, 0.4 + r() * 0.2, 0.55, (r() - 0.5) * 0.5, ROCKS, (r() - 0.5) * 0.4); });
     for (const m of [rocks, top]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   } else {
-    const p0 = make(G.box, GM.wood, segs.length), p1 = make(G.box, GM.wood, segs.length), posts = make(G.box, GM.darkwood, Math.ceil(segs.length / 5));
+    const p0 = make(BEV, GM.wood, segs.length), p1 = make(BEV, GM.wood, segs.length), posts = make(BEV, GM.darkwood, Math.ceil(segs.length / 5));
     segs.forEach((w, i) => { place(p0, i, w, 0, 0.15, 1, 0.3, 0.32, 0, TH.pal); place(p1, i, w, 0, 0.47, 1, 0.3, 0.32, 0, TH.pal); });
     let n = 0; segs.forEach((w, i) => { if (i % 5 === 0 && n < posts.count) { _m.compose(_v.set(w[0] + ((sgn * (w[3] - w[1])) / (Math.hypot(w[2] - w[0], w[3] - w[1]) || 1)) * 0.18, 0.4, w[1] + ((-sgn * (w[2] - w[0])) / (Math.hypot(w[2] - w[0], w[3] - w[1]) || 1)) * 0.18), _q.identity(), _s.set(0.28, 0.85, 0.28)); posts.setMatrixAt(n, _m); posts.setColorAt(n++, col.set('#ffffff')); } });
     posts.count = n;
@@ -157,6 +169,8 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     disposables.push(board.geometry); sg.add(post, board); sg.rotation.y = Math.atan2(-tx, -tz) + Math.PI; sg.rotation.y = Math.atan2(-tx, -tz); g.add(sg); }
   // tee, cup and flag
   const tee = new THREE.Mesh(G.disc, M.white); tee.scale.set(0.55, 1, 0.55); tee.position.set(h.ball.x, 0.06, h.ball.z); g.add(tee);
+  { const p0 = h.path[0], p1 = h.path[Math.min(3, h.path.length - 1)], l = Math.hypot(p1.x - p0.x, p1.z - p0.z) || 1, nx = -(p1.z - p0.z) / l, nz = (p1.x - p0.x) / l;       // the tee markers: a red and a blue peg either side of the ball
+    for (const [sd, col] of [[-1, '#e8594b'], [1, '#4d8fe0']]) { const px = h.ball.x + nx * 0.85 * sd, pz = h.ball.z + nz * 0.85 * sd, y = hillH(h, px, pz); g.add(cyl(paint(col), 0.06, 0.34, px, y + 0.17, pz)); g.add(sph(paint(col), 0.1, 0.1, 0.1, px, y + 0.36, pz)); g.add(cyl(paint('#ffffff'), 0.075, 0.04, px, y + 0.05, pz)); } }
   // the hole: a round opening cut in the green (a patch of turf round it, see the fairway), a steel rim, a dark shaft going down and a floor; one group so the mega-cup power-up can widen the rim
   const cupMesh = new THREE.Group(); cupMesh.position.set(h.cup.x, Math.max(0, hillH(h, h.cup.x, h.cup.z)), h.cup.z); cupMesh.scale.set(CUP_R * 0.92, 1, CUP_R * 0.92); g.add(cupMesh);
   { const RING = [1.0, 1.12, 1.4, 1.9, 2.8], SEG = 40, cx = h.cup.x, cz = h.cup.z, pp = [], pu = [], pc = [], pi = [], col0 = c1.clone().lerp(c2, 0.5);
@@ -168,8 +182,8 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const wall = new THREE.Mesh(track(new THREE.CylinderGeometry(1.0, 0.96, 1.0, 28, 1, true)), new THREE.MeshBasicMaterial({ color: '#0b0d10', side: THREE.BackSide })); wall.position.y = -0.46; cupMesh.add(wall);
     const floor = new THREE.Mesh(G.disc, new THREE.MeshBasicMaterial({ color: '#020304' })); floor.scale.set(0.96, 1, 0.96); floor.position.y = -0.95; cupMesh.add(floor); }
   const flag = new THREE.Group(); flag.position.set(h.cup.x, 0, h.cup.z);
-  flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); flag.add(sph(M.pole, 0.07, 0.07, 0.07, 0, 2.42, 0));
-  const flGeo = new THREE.PlaneGeometry(0.95, 0.6, 14, 5), flMat = new THREE.MeshLambertMaterial({ color: '#ef5b4d', emissive: '#6a2018', side: THREE.DoubleSide }), fl = new THREE.Mesh(flGeo, flMat), flBase = flGeo.attributes.position.array.slice(); disposables.push(flGeo, flMat); fl.castShadow = true; fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);
+  flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); flag.add(sph(M.pole, 0.07, 0.07, 0.07, 0, 2.42, 0)); flag.add(cyl(metal('#d5dbe3'), 0.075, 0.1, 0, 0.05, 0)); flag.add(cyl(paint('#ef5b4d'), 0.047, 0.3, 0, 2.15, 0)); flag.add(cone(metal('#d5dbe3'), 0.05, 0.16, 8, 0, 2.55, 0));          // (a base ring, a red band, a ball and a spike finial)
+  const flGeo = new THREE.PlaneGeometry(0.95, 0.6, 14, 5), flMat = new THREE.MeshLambertMaterial({ color: '#ffffff', map: flagCloth(), emissive: '#6a2018', side: THREE.DoubleSide }), fl = new THREE.Mesh(flGeo, flMat), flBase = flGeo.attributes.position.array.slice(); disposables.push(flGeo, flMat); fl.castShadow = true; fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);
   const fph = h.cup.x * 1.3 + h.cup.z;                       // the flag ripples in the wind: a wave runs along it from the pole, bigger towards the free end, with gusts that lift it
   updaters.push((heroT, t) => {
     const p = flGeo.attributes.position, gust = 0.7 + 0.3 * Math.sin(t * 0.45 + fph) + 0.25 * Math.sin(t * 1.3);

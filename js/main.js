@@ -1,15 +1,16 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261026223523';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261027202201';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261027202201';
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261026223523';
-import { buildWorld } from './world.js?v=20261026223523';
-import { createSky } from './sky.js?v=20261026223523';
-import { createDOF } from './dof.js?v=20261026223523';
-import { createRide } from './ride.js?v=20261026223523';
-import { createGame } from './bikegame.js?v=20261026223523';
-import { createAurora, setWarm } from './aurora.js?v=20261026223523';
-import { createAudio, pickFlicker } from './audio.js?v=20261026223523';
+import { PAL } from './palette.js?v=20261027202201';
+import { buildWorld } from './world.js?v=20261027202201';
+import { createSky } from './sky.js?v=20261027202201';
+import { createDOF } from './dof.js?v=20261027202201';
+import { createRide } from './ride.js?v=20261027202201';
+import { createGame } from './bikegame.js?v=20261027202201';
+import { createAurora, setWarm } from './aurora.js?v=20261027202201';
+import { createAudio, pickFlicker } from './audio.js?v=20261027202201';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -169,6 +170,7 @@ function start() {
   // Weaker machines get fewer real lights (each one costs every pixel).
   const forced = new URLSearchParams(location.search).get('detail'); // ?detail=high|low, handy for testing
   const lowEnd = forced ? forced === 'low' : (navigator.hardwareConcurrency || 4) <= 4 || matchMedia('(max-width: 700px)').matches;
+  initQuality(lowEnd);                                                                        // (how much detail the golf games are drawn with: the device's default, or the saved choice from the windmill menu)
 
   // Two layers so the sun, moon, stars and clouds sit *behind* the big title while the
   // hills stay in front of it: #sky (below the text) and #scene (above the text).
@@ -578,18 +580,21 @@ function start() {
   // the windmill asks which game: the mini-golf course or the pinball table
   const modeBox = document.createElement('div'); modeBox.className = 'mode-pick'; modeBox.hidden = true;
   modeBox.innerHTML = '<div class="mode-card"><h2>Windmill games</h2><button type="button" data-g="golf"><b>Mini-golf</b><span>Nine holes round the windmill</span></button><button type="button" data-g="pinball"><b>Pinball Golf</b><span>Putt the skill shot, flip, light the lamps, sink the cup</span></button>' +
-    '<div class="mode-seed"><span data-k="seed"></span><div><button type="button" data-g="seedtoggle"></button><button type="button" data-g="shuffle">Shuffle</button></div></div><button type="button" class="mode-x" data-g="">Not now</button></div>';
+    '<div class="mode-seed"><span data-k="seed"></span><div><button type="button" data-g="seedtoggle"></button><button type="button" data-g="shuffle">Shuffle</button></div></div><div class="mode-seed"><span data-k="gfx"></span><div><button type="button" data-g="gfxtoggle"></button></div></div><button type="button" class="mode-x" data-g="">Not now</button></div>';
   document.body.appendChild(modeBox);
   const seedEl = modeBox.querySelector('[data-k="seed"]'), seedBtn = modeBox.querySelector('[data-g="seedtoggle"]'), shuffleBtn = modeBox.querySelector('[data-g="shuffle"]');
   try { const c = +sessionStorage.getItem('golf.seed'); if (c > 0) setRandomCourse(c); } catch (err) { /* (no storage: the monthly course) */ }
+  const gfxEl = modeBox.querySelector('[data-k="gfx"]'), gfxBtn = modeBox.querySelector('[data-g="gfxtoggle"]');
+  const gfxUI = () => { gfxEl.textContent = `Graphics: ${isLow() ? 'Low' : 'High'}`; gfxBtn.textContent = isLow() ? 'Switch to High' : 'Switch to Low'; };
   const seedUI = () => {                                                       // which course both mini-golf games play: the month's, or a random one
     const code = randomCourseCode(); seedEl.textContent = code ? `Course: Random #${code}` : `Course: ${monthLabel(courseMonth())}`; seedBtn.textContent = code ? 'Back to monthly' : 'Random course'; shuffleBtn.hidden = !code;
     try { if (code) sessionStorage.setItem('golf.seed', String(code)); else sessionStorage.removeItem('golf.seed'); } catch (err) { /* (ignore) */ }
   };
-  const pickMode = () => { if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return; seedUI(); modeBox.hidden = false; };
+  const pickMode = () => { if (golf?.active || pinball?.active || golfLoading || game?.active || starting || active !== 'home' || openId) return; seedUI(); gfxUI(); modeBox.hidden = false; };
   modeBox.addEventListener('click', (e) => {
     const b = e.target.closest('button'); e.stopPropagation();
     if (b?.dataset.g === 'seedtoggle') { setRandomCourse(randomCourseCode() ? 0 : newRandomCode()); seedUI(); return; }
+    if (b?.dataset.g === 'gfxtoggle') { saveQuality(isLow() ? 'high' : 'low'); location.reload(); return; }          // (the textures and materials are built once, so the page starts again with the other tier)
     if (b?.dataset.g === 'shuffle') { setRandomCourse(newRandomCode()); seedUI(); return; }
     if (b || e.target === modeBox) { modeBox.hidden = true; if (b?.dataset.g === 'golf') playGolf(); else if (b?.dataset.g === 'pinball') playPinball(); }
   });
@@ -600,7 +605,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261026223523');
+        const mod = await import('./golf.js?v=20261027202201');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -619,7 +624,7 @@ function start() {
     golfLoading = true;
     try {
       if (!pinball) {
-        const mod = await import('./pinball.js?v=20261026223523');
+        const mod = await import('./pinball.js?v=20261027202201');
         pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
         pinball.onQuit = () => { ride?.reset(); riseName(); };
       }

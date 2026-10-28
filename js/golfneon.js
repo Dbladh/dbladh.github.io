@@ -23,7 +23,7 @@ export function createNeon() {
         const ms = Array.isArray(o.material) ? o.material : [o.material];
         for (const mt of ms) {
           if (!mt) continue;
-          if (mt.isMeshLambertMaterial) { if (mt.map && !mt.emissiveMap && !mt.vertexColors) { mt.emissiveMap = mt.map; mt.needsUpdate = true; } mats.add(mt); }
+          if (mt.isMeshLambertMaterial || mt.isMeshStandardMaterial) { if (mt.map && !mt.emissiveMap && !mt.vertexColors) { mt.emissiveMap = mt.map; mt.needsUpdate = true; } mats.add(mt); }
           else if (mt.uniforms && mt.uniforms.uNeon) mats.add(mt);
         }
       });
