@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027203541';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027203541';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027203541';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027203541';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027203541';
-import { isLow } from './golfquality.js?v=20261027203541';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027203701';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027203701';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027203701';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027203701';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027203701';
+import { isLow } from './golfquality.js?v=20261027203701';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -220,7 +220,9 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (const [x, z, y] of [[R.ax, R.az, 0.45], [R.bx, R.bz, 0.45]]) { const ring = torus(cyan, 0.55, 0.07, x, y, z, 0, Math.atan2(R.ux, R.uz) + Math.PI / 2, 0); g.add(ring); const pad = cyl(paint('#16405a'), 0.6, 0.05, x, 0.04, z); g.add(pad); updaters.push((heroT, t) => { ring.scale.setScalar(1 + 0.06 * Math.sin(t * 5 + x)); }); }
   }
   for (const o of h.pads || []) {
-    const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), o.r * 0.8, 0.06, 0, o.tramp ? 0.3 : 0.13, 0); gp.add(top); if (o.tramp) for (let i = 0; i < 4; i++) gp.add(torus(paint('#c9d1e0'), o.r * 0.55, 0.035, 0, 0.1 + i * 0.05, 0, Math.PI / 2)); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2)); g.add(gp);
+    const gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.add(cyl(paint('#2b2b3a'), o.r * 1.1, 0.1, 0, 0.06, 0)); const top = cyl(paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), o.r * 0.8, 0.06, 0, o.tramp ? 0.3 : 0.13, 0); gp.add(top); if (o.tramp) for (let i = 0; i < 4; i++) gp.add(torus(paint('#c9d1e0'), o.r * 0.55, 0.035, 0, 0.1 + i * 0.05, 0, Math.PI / 2)); gp.add(torus(paint('#ffe14a'), o.r * 0.95, 0.04, 0, 0.14, 0, Math.PI / 2));
+    if (!isLow()) for (let i = 0; i < 10; i++) { const a = (i / 10) * 6.2832; gp.add(cyl(metal('#c9ced6'), 0.05, 0.05, Math.cos(a) * o.r * 1.02, 0.12, Math.sin(a) * o.r * 1.02)); }      // high tier: bolt heads round the base
+    g.add(gp);
     updaters.push((heroT, t) => { const k = 1 + 0.08 * Math.sin(t * 5 + o.x); top.scale.set(o.r * 0.8 * k, 0.06, o.r * 0.8 * k); if (o.tramp) top.position.y = 0.3 + 0.06 * Math.sin(t * 6 + o.z); });
   }
   // the walls and gates of the machines: low fences (the ball can be vaulted over them), tall walls, gates that sink when the button is pressed, and the buttons
@@ -278,7 +280,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   for (const mg of h.magnets || []) {                          // a magnet: a red and white horseshoe on the ground with rings that pulse towards (or away from) it
     const gy = Math.max(0, hillH(h, mg.x, mg.z)), red = metal('#e5483f'), wht = metal('#f2f2f6'), hs = new THREE.Group(); hs.position.set(mg.x, gy, mg.z);
     const arc = new THREE.Mesh(track(new THREE.TorusGeometry(0.62, 0.17, 8, 16, Math.PI)), red); arc.rotation.x = Math.PI / 2; arc.position.y = 0.55; hs.add(arc);
-    for (const sd of [-1, 1]) { hs.add(cyl(red, 0.17, 0.55, sd * 0.62, 0.28, 0)); hs.add(cyl(wht, 0.18, 0.14, sd * 0.62, 0.07, 0)); } g.add(hs);
+    for (const sd of [-1, 1]) { hs.add(cyl(red, 0.17, 0.55, sd * 0.62, 0.28, 0)); hs.add(cyl(wht, 0.18, 0.14, sd * 0.62, 0.07, 0)); if (!isLow()) for (let k = 0; k < 3; k++) hs.add(torus(metal('#c8803a'), 0.19, 0.035, sd * 0.62, 0.22 + k * 0.1, 0, Math.PI / 2)); } g.add(hs);      // (high tier: copper coils on the legs)
     const rings = [0, 1, 2].map((i) => { const m = new THREE.Mesh(track(new THREE.RingGeometry(0.95, 1.0, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: mg.pull > 0 ? '#ff6a5f' : '#6aa8ff', transparent: true, opacity: 0.5, depthWrite: false })); disposables.push(m.material); m.position.set(mg.x, gy + 0.08, mg.z); g.add(m); return m; });
     updaters.push((heroT) => { rings.forEach((m, i) => { let k = ((heroT * 0.5 + i / 3) % 1); if (mg.pull > 0) k = 1 - k; m.scale.setScalar(0.2 + k * mg.r); m.material.opacity = 0.55 * Math.sin(k * Math.PI); }); });
   }
@@ -287,12 +289,13 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const nR = Math.max(2, Math.round(tn.len / 1.1)), rib = track(new THREE.TorusGeometry(R, 0.16, 8, 16, Math.PI)), roofMat = new THREE.MeshLambertMaterial({ color: TH0.rock, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }); disposables.push(roofMat);
     const seg = tn.len / (nR - 1), roofGeo = track(new THREE.CylinderGeometry(R, R, seg + 0.05, 16, 1, true));
     for (let i = 0; i < nR; i++) { const [x, z] = at(-tn.len / 2 + seg * i), m = new THREE.Mesh(rib, stone); m.rotation.y = yaw + Math.PI / 2; m.position.set(x, Math.max(0, hillH(h, x, z)) + 0.02, z); m.castShadow = true; g.add(m);
+      if (!isLow() && i % 2 === 0) { const ks = rbox(stoneTint('#d3cdbd'), 0.3, 0.3, 0.34, 0, R + 0.1, 0, 0.03); ks.position.set(x, Math.max(0, hillH(h, x, z)) + R + 0.1, z); ks.rotation.y = yaw + Math.PI / 2; g.add(ks); }      // high tier: a keystone at the crown of every other arch
       if (i < nR - 1) { const [rx, rz] = at(-tn.len / 2 + seg * (i + 0.5)), roof = new THREE.Mesh(roofGeo, roofMat); roof.rotation.set(0, yaw, Math.PI / 2); roof.position.set(rx, Math.max(0, hillH(h, rx, rz)), rz); g.add(roof); } }
     for (const sd of [-1, 1]) { const [x, z] = at(sd * (tn.len / 2)), pm = new THREE.Mesh(track(new THREE.BoxGeometry(0.6, 1.0, 0.6)), stone); pm.position.set(x, Math.max(0, hillH(h, x, z)) + 0.5, z); pm.rotation.y = yaw; g.add(pm); }
   }
   for (const gt of h.gates1 || []) {                           // a one-way gate: two posts and a flap of arrows pointing the way
     const gh = (x, z) => Math.max(0, hillH(h, x, z)), px = [gt.x + gt.nx * (gt.hw + 0.1), gt.z + gt.nz * (gt.hw + 0.1)], qx = [gt.x - gt.nx * (gt.hw + 0.1), gt.z - gt.nz * (gt.hw + 0.1)];
-    for (const [x, z] of [px, qx]) g.add(cyl(paint('#3a62c9'), 0.12, 1.1, x, gh(x, z) + 0.55, z));
+    for (const [x, z] of [px, qx]) { g.add(cyl(paint('#3a62c9'), 0.12, 1.1, x, gh(x, z) + 0.55, z)); if (!isLow()) { g.add(sph(new THREE.MeshBasicMaterial({ color: '#9dffc4' }), 0.12, 0.12, 0.12, x, gh(x, z) + 1.16, z)); g.add(torus(metal('#c9ced6'), 0.14, 0.03, x, gh(x, z) + 0.2, z, Math.PI / 2)); } }
     const base = Math.max(gh(gt.x, gt.z), gh(px[0], px[1]), gh(qx[0], qx[1])), gg = new THREE.Group(); gg.position.set(gt.x, base, gt.z); gg.rotation.y = Math.atan2(-gt.uz, gt.ux);
     const fm = new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }); disposables.push(fm); const flap = new THREE.Mesh(track(new THREE.PlaneGeometry(gt.hw * 2, 0.55)), fm); flap.rotation.y = Math.PI / 2; flap.position.y = 0.5; gg.add(flap);
     for (let k = -1; k <= 1; k++) { const ar = new THREE.Mesh(track(new THREE.ConeGeometry(0.2, 0.45, 3)), paint('#7dffb0')); ar.rotation.z = -Math.PI / 2; ar.position.set(0.02, 0.08, k * gt.hw * 0.55); gg.add(ar); }
@@ -300,6 +303,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   }
   for (const rl of h.rollers || []) {                          // a tumbleweed: a tangle of brown twigs that rolls across the lane
     const ball = new THREE.Mesh(track(new THREE.IcosahedronGeometry(1, 1)), new THREE.MeshLambertMaterial({ color: '#a8743a', flatShading: true })); disposables.push(ball.material); ball.scale.setScalar(rl.rad * 1.15); g.add(ball);
+    if (!isLow()) { const tw = paint('#7a5428'); for (let k = 0; k < 3; k++) { const r = new THREE.Mesh(track(new THREE.TorusGeometry(1.08, 0.05, 5, 18)), tw); r.rotation.set(k * 1.05, k * 0.7, k * 0.4); ball.add(r); } }      // high tier: twigs looping over the tangle
     updaters.push((heroT) => { const ph = rl.w * heroT + rl.ph, off = rl.A * Math.sin(ph), gy = Math.max(0, hillH(h, rl.x, rl.z)); ball.position.set(rl.x + rl.nx * off, gy + rl.rad, rl.z + rl.nz * off); ball.rotation.x = heroT * 3 * Math.sign(Math.cos(ph) || 1); ball.rotation.y = heroT; });
   }
   for (const gw of h.ghosts || []) {                           // a ghost wall: a violet curtain that is solid for part of every period and fades away between
