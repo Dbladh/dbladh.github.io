@@ -2,7 +2,7 @@
 // worked out from the same picture so the light catches the surface. Same chunky, warm style as the rest of the site. The high tier (see golfquality.js) draws them at 256 px with extra detail
 // (blades of grass, chipped bricks, lichen, nail heads, glints) on physically based materials that pick up the sky's reflections; the low tier keeps the small 128 px tiles on plain lit materials.
 import * as THREE from 'three';
-import { isLow } from './golfquality.js?v=20261027202411';
+import { isLow } from './golfquality.js?v=20261027202545';
 
 let seed = 12345;
 const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -115,6 +115,18 @@ function makeGround(kind) {
     return [220, 220, 220, v, 0.9];
   }, hi ? 2.8 : 2.2);
 }
+function makePatch(kind) {                                  // high tier only: ice with cracks and glints, mud with wet puddles, caramel with swirls, quicksand with slow rings
+  const W = SZ(), S = W / 128, n1 = noise(W, W, 8 * S, 3, 1), n2 = noise(W, W, 3 * S), n3 = noise(W, W, 1 * S), cr = new Float32Array(W * W);
+  if (kind === 'ice') for (let c = 0; c < 7; c++) { let x = rnd() * W, y = rnd() * W, a = rnd() * 6.28; for (let t = 0; t < 40 * S; t++) { a += (rnd() - 0.5) * 0.9; x += Math.cos(a) * 1.5; y += Math.sin(a) * 1.5; cr[(((y | 0) + W) % W) * W + (((x | 0) + W) % W)] = 1; } }
+  return make(W, W, (i, j) => {
+    const k = j * W + i, v = 0.6 * n1[k] + 0.4 * n2[k];
+    if (kind === 'ice') { const g = 236 + (n2[k] - 0.5) * 20 - cr[k] * 60, gl = n3[k] > 0.96 ? 20 : 0; return [g * 0.9 + gl, g * 0.97 + gl, 255, 0.3 * v - cr[k] * 0.6, gl || cr[k] ? 0.5 : 0.12]; }
+    if (kind === 'mud') { const pud = n2[k] > 0.62, g = 150 + (n1[k] - 0.5) * 50; return pud ? [g * 0.55, g * 0.45, g * 0.35, 0, 0.12] : [g, g * 0.78, g * 0.55, v, 0.9]; }
+    if (kind === 'caramel') { const sw = 0.5 + 0.5 * Math.sin((i + j) * 0.18 / S + n1[k] * 7), g = 215 + sw * 30; return [g, g * 0.75, g * 0.4, 0.4 * sw + 0.2 * n2[k], 0.18]; }
+    const r = 0.5 + 0.5 * Math.sin(Math.hypot(i - W / 2, j - W / 2) * 0.5 / S + n1[k] * 3), g = 200 + r * 40;
+    return [g, g * 0.82, g * 0.55, 0.3 * r + 0.3 * n2[k], 0.95];
+  }, 2.4);
+}
 let built = null;
 /** The textures and materials (built the first time they are asked for). The tier comes from golfquality.js: the low tier leaves out the normal maps and uses plain lit materials. */
 export function golfMaterials() {
@@ -133,6 +145,8 @@ export function golfMaterials() {
     red: lam(T.metal, '#e04a4a'), blue: lam(T.metal, '#4d8fe0'), cream: lam(T.metal, '#fffaf0'),
     lam,
     /** The lawn material of a themed hole ('grass' is the turf): cached, tinted by the hole's vertex colours. */
+    /** The map and normal map of a surface patch (ice, mud, caramel, quicksand), tinted by the caller; null on the low tier. */
+    patch(kind) { if (isLow()) return null; const key = 'p_' + kind; if (!T[key]) T[key] = makePatch(kind); return T[key]; },
     ground(kind) { if (!kind || kind === 'grass') return built.turf; const key = 'g_' + kind; if (!built[key]) { const t = makeGround(kind); T[key] = t; built[key] = lam(t, '#ffffff', { vertexColors: true }); built[key].userData.neon = 'turf'; } return built[key]; },
   };
   return built;

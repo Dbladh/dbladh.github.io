@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202411';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202411';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202411';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202411';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202411';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202545';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202545';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202545';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202545';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202545';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -266,7 +266,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       mat = new THREE.MeshBasicMaterial({ map: tx, color: '#9bd4ff', transparent: true, opacity: 0.95, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
     } else {
       const look = { ice: ['#bfe6ff', 0.8], mud: ['#6b4a2e', 0.95], caramel: ['#d9902f', 0.92], quicksand: ['#b98b4a', 0.95] }[pt.kind] || ['#999999', 0.9];
-      mat = new THREE.MeshLambertMaterial({ color: look[0], transparent: true, opacity: look[1], polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, emissive: pt.kind === 'ice' ? '#2a4a6a' : pt.kind === 'caramel' ? '#4a2a08' : '#000000' });
+      const opt = { color: look[0], transparent: true, opacity: look[1], polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, emissive: pt.kind === 'ice' ? '#2a4a6a' : pt.kind === 'caramel' ? '#4a2a08' : '#000000' }, pt2 = GM.patch(pt.kind);
+      if (pt2) {                                              // high tier: a painted, normal-mapped, glossy patch (UVs from the ground position)
+        const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, pp.getX(i) / 3, pp.getZ(i) / 3);
+        mat = new THREE.MeshStandardMaterial({ ...opt, map: pt2.map, normalMap: pt2.normal, normalScale: new THREE.Vector2(0.8, 0.8), roughnessMap: pt2.rough, roughness: 1, envMapIntensity: pt.kind === 'ice' ? 1 : 0.5 });
+      } else mat = new THREE.MeshLambertMaterial(opt);
     }
     disposables.push(mat); const m = new THREE.Mesh(geo, mat); m.renderOrder = 1; m.receiveShadow = true; g.add(m);
   }
