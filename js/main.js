@@ -1,16 +1,16 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261027205913';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261027205913';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261027210514';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261027210514';
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261027205913';
-import { buildWorld } from './world.js?v=20261027205913';
-import { createSky } from './sky.js?v=20261027205913';
-import { createDOF } from './dof.js?v=20261027205913';
-import { createRide } from './ride.js?v=20261027205913';
-import { createGame } from './bikegame.js?v=20261027205913';
-import { createAurora, setWarm } from './aurora.js?v=20261027205913';
-import { createAudio, pickFlicker } from './audio.js?v=20261027205913';
+import { PAL } from './palette.js?v=20261027210514';
+import { buildWorld } from './world.js?v=20261027210514';
+import { createSky } from './sky.js?v=20261027210514';
+import { createDOF } from './dof.js?v=20261027210514';
+import { createRide } from './ride.js?v=20261027210514';
+import { createGame } from './bikegame.js?v=20261027210514';
+import { createAurora, setWarm } from './aurora.js?v=20261027210514';
+import { createAudio, pickFlicker } from './audio.js?v=20261027210514';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -605,7 +605,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261027205913');
+        const mod = await import('./golf.js?v=20261027210514');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -624,7 +624,7 @@ function start() {
     golfLoading = true;
     try {
       if (!pinball) {
-        const mod = await import('./pinball.js?v=20261027205913');
+        const mod = await import('./pinball.js?v=20261027210514');
         pinball = mod.createPinball(scene, camera, renderer, world, { audio, reduceMotion, lowEnd });
         pinball.onQuit = () => { ride?.reset(); riseName(); };
       }
