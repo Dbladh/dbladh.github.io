@@ -2,13 +2,13 @@
 // bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
 // sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027210740';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027210740';
-import { toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027210740';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261027210740';
-import { isLow } from './golfquality.js?v=20261027210740';
-import { golfCourse, monthKey } from './monthseed.js?v=20261027210740';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027210740';
+import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027211107';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027211107';
+import { toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027211107';
+import { M, G, buildHoleVisual } from './golfvis.js?v=20261027211107';
+import { isLow } from './golfquality.js?v=20261027211107';
+import { golfCourse, monthKey } from './monthseed.js?v=20261027211107';
+import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027211107';
 
 const HOLE_INDEX = 3, COMBO_NEED = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
 const TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
@@ -130,6 +130,10 @@ export function createTable(env) {
     if (wall) { scene.remove(wall); wall = null; }
     for (const d of disposables.splice(0)) d.dispose?.();
     if (!group) return; ballMesh.material.dispose(); dots.dispose(); group = vis = hole = ball = ballMesh = dots = null; flips = []; flipMeshes = []; spin = spinMesh = coverMesh = coverRing = trailMesh = null; tgDown.clear(); trail.length = 0; slowK = 1; st.mode = 'off';
+  }
+  function restart() {                                     // the same table again from the first ball (the hole is played another time)
+    resetState(); resetTargets(); if (!hole.posts.includes(hole.cover)) hole.posts.push(hole.cover); ctx.cupR = 0; ctx.homing = false; coverK = 1; trail.length = 0; slowK = 1; shake = 0; drag = null; flipHeld = false; dots.count = 0; sinkT = 0; ballMesh.scale.setScalar(1);
+    teeBall(); st.mode = 'aim'; showLamps();
   }
   function resetState() { Object.assign(st, { balls: 0, pts: 0, combo: 0, lastHit: -99, flipT: -99, spins: 0, lamps: {}, open: false, clock: 0 }); st.litBumps.clear(); }
 
@@ -360,7 +364,7 @@ export function createTable(env) {
     camera.up.copy(up0); camera.lookAt(want.look); leanTable();
   }
   return {
-    st, attach, dispose, tick, frameCamera, leanTable, confetti, flashScreen, nudge,
+    st, attach, restart, dispose, tick, frameCamera, leanTable, confetti, flashScreen, nudge,
     get group() { return group; }, get wall() { return wall; }, get focusDistance() { return 24; },
     poseCamera: (out, dt) => camPose(out, dt), resetCamera() { cam.mix = 0; cam.init = false; }, holdCamera() { cam.init = false; },
     setRise(k) { group.scale.y = Math.max(0.001, k); wall.scale.y = group.scale.y; },
