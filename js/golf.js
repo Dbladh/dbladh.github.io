@@ -5,20 +5,20 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261027211107';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027211107';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027211107';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261027211107';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261027211107';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261027211107';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261027211107';
-import { createNeon } from './golfneon.js?v=20261027211107';
-import { createFx } from './golffx.js?v=20261027211107';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261027211107';
-import { buildDecor } from './golfdecor.js?v=20261027211107';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261027211107';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261027211107';
-import { createTable } from './pinball.js?v=20261027211107';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261027211300';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027211300';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027211300';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261027211300';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261027211300';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261027211300';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261027211300';
+import { createNeon } from './golfneon.js?v=20261027211300';
+import { createFx } from './golffx.js?v=20261027211300';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261027211300';
+import { buildDecor } from './golfdecor.js?v=20261027211300';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261027211300';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261027211300';
+import { createTable } from './pinball.js?v=20261027211300';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -100,8 +100,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       holes = prebuilt && prebuilt.key === st.seed + ':' + (fx ? 1 : 0) ? prebuilt.holes : null; prebuilt = null;           // (a random course comes ready-made from the worker)
       if (!holes) { holes = []; for (let i = 0; i < TABLE_HOLE; i++) { const h = makeHole(holeSeed(st.seed, i), i, st.order[i], st.shapes[i], fx ? { surface: themeOf(themes[i]).surface, theme: themes[i], more: !!st.random || MORE_BAKED } : null); h.theme = themes[i]; holes.push(h); } }
       { const mo = golfCourse(), q = new URLSearchParams(location.search), li = q.has('layout') ? +q.get('layout') : (st.month - 1) % LAYOUTS.length, mir = q.has('mirror') ? q.get('mirror') === '1' : Math.floor((st.month - 1) / LAYOUTS.length) === 1;     // (the table changes with the month)
-        const h = plainHole(holeSeed(st.seed, TABLE_HOLE), TABLE_HOLE); tableFrame = prepareTable(h, li, mir); h.par = TABLE_CFG.par; h.theme = themes[TABLE_HOLE]; holes.push(h); } }
-    chals = holes.map((h, i) => (i === TABLE_HOLE ? { id: 'table', text: 'Light every lamp and sink the cup' } : makeChallenge(h, i, holeSeed(st.seed, i))));
+        const h = plainHole(holeSeed(st.seed, TABLE_HOLE), TABLE_HOLE); tableFrame = prepareTable(h, li, mir); h.layoutName = LAYOUTS[li % LAYOUTS.length].name; h.par = TABLE_CFG.par; h.theme = themes[TABLE_HOLE]; holes.push(h); } }
+    chals = holes.map((h, i) => (i === TABLE_HOLE ? { id: 'table', text: 'Light the lamps to open the cup' } : makeChallenge(h, i, holeSeed(st.seed, i))));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
     const digs = holes.map((h, i) => [...h.sands.map((sd) => { const c = toWorld(sites[i], sd.x, sd.z); return { x: c.x, z: c.z, r: sd.r * 1.19 * 0.95, depth: 0.34 }; }), ...(h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
       const o = toWorld(sites[i], 0, 0), c = toWorld(sites[i], f.x, f.z), u = toWorld(sites[i], f.ux, f.uz), n = toWorld(sites[i], f.nx, f.nz);
@@ -202,7 +202,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function finishHole() {
     if (st.hole === TABLE_HOLE) st.strokes = Math.max(1, table.st.balls);          // (the balls used are the strokes)
     st.scores[st.hole] = st.strokes;
-    { const ch = chals[st.hole], ok = ch && chalStatus(ch, cs, hole, st.strokes, true, false) === 'done'; st.chalDone[st.hole] = !!ok; st.pts = st.pts || []; st.pts[st.hole] = holePoints(st.strokes, hole.par) + (ok ? CHAL_POINTS : 0) + (cs.secret ? 100 : 0); if (ok) setTimeout(() => say(elBanner, `Challenge complete! +${CHAL_POINTS}`, 1800, 'banner'), 700); }
+    { const ch = chals[st.hole], ok = ch && chalStatus(ch, cs, hole, st.strokes, true, false) === 'done'; st.chalDone[st.hole] = !!ok; st.pts = st.pts || []; const bonus = st.hole === TABLE_HOLE ? tableBonus(table.st.pts) : 0; st.pts[st.hole] = holePoints(st.strokes, hole.par) + (ok ? CHAL_POINTS : 0) + (cs.secret ? 100 : 0) + bonus; if (bonus) setTimeout(() => say(elToast, `Table bonus +${bonus}`, 1500, 'toast'), 1700); if (ok) setTimeout(() => say(elBanner, `Challenge complete! +${CHAL_POINTS}`, 1800, 'banner'), 700); }
     const d = st.strokes - hole.par, name = st.strokes === 1 ? 'Hole in one!' : d <= -2 ? 'Eagle!' : d === -1 ? 'Birdie!' : d === 0 ? 'Par' : d === 1 ? 'Bogey' : `+${d}`;
     say(elToast, name, 1500, 'toast'); st.mode = 'done'; st.t = 0;
     audio?.golf?.(st.strokes === 1 || d < 0 ? 'win' : 'cup');
@@ -247,7 +247,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     const bonus = speedBonus(st.playT), pts = st.pts.reduce((a, b) => a + (b || 0), 0) + bonus, stars = starsFor(pts), bestPts = readPts(); let np = false;
     if (bestPts === null || pts > bestPts) { try { localStorage.setItem(ptsKey(), String(pts)); } catch (e) { /* private mode */ } np = true; }
     const mins = Math.floor(st.playT / 60), secs = Math.round(st.playT % 60), done = st.chalDone.filter(Boolean).length;
-    const rows = st.scores.map((s, i) => `<tr><td>${i + 1}</td><td>${i === TABLE_HOLE ? 'Pinball' : HERO_NAMES[st.order[i]].replace('The ', '')}</td><td>${st.par[i]}</td><td>${s}</td><td title="${chals[i] ? chals[i].text : ''}">${st.chalDone[i] ? '★' : '·'}</td><td>${st.pts[i] || 0}</td></tr>`).join('');
+    const rows = st.scores.map((s, i) => `<tr><td>${i + 1}</td><td>${i === TABLE_HOLE ? `${holes[i].layoutName} Table` : HERO_NAMES[st.order[i]].replace('The ', '')}</td><td>${st.par[i]}</td><td>${s}</td><td title="${chals[i] ? chals[i].text : ''}">${st.chalDone[i] ? '★' : '·'}</td><td>${st.pts[i] || 0}</td></tr>`).join('');
     elScore.innerHTML = `<h2>${MONTHS[st.month - 1]} ${st.year}</h2><p class="golf-stars" aria-label="${stars} of 3 stars">${'★'.repeat(stars)}<i>${'★'.repeat(3 - stars)}</i></p>` +
       `<table><thead><tr><th>#</th><th>Hole</th><th>Par</th><th>You</th><th>◎</th><th>Pts</th></tr></thead><tbody>${rows}</tbody></table>` +
       `<p class="golf-total">${pts} points <small>${total} strokes (par ${par}) · ${done} of ${HOLES} challenges · ${mins}:${String(secs).padStart(2, '0')}${bonus ? ` · +${bonus} speed` : ''}</small></p>` +
@@ -454,7 +454,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261027211107', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261027211300', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -523,7 +523,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       else { overviewAll(trip); camera.position.copy(trip.pos); camera.lookAt(trip.look); }
       if (hole && st.mode === 'replay' && holeGroup) { vis.update(st.holeT, st.holeT, dt, st); }
       if (hole && onTable() && (st.mode === 'table' || st.mode === 'done')) {
-        st.holeT += dt; if (st.mode === 'table') st.playT += dt; table.tick(dt);
+        st.holeT += dt; if (st.mode === 'table') { st.playT += dt; cs.clock += dt; cs.lit = table.st.open; } table.tick(dt);
         if (st.mode === 'done' && st.t > 1.7) beginTravel(st.hole + 1);
       } else if (hole && st.mode !== 'card' && st.mode !== 'replay' && holeGroup) {
         st.holeT += dt * (fx.freeze > 0 ? 0.12 : 1); ctx.t = st.holeT;

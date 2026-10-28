@@ -1,11 +1,14 @@
 // Scoring and the per-hole challenges of the mini-golf. Pure data and rules (no THREE): which challenge a hole has (from its seed), how it is tracked, and how a hole and a round are scored.
-import { mulberry32 } from './golfhero.js?v=20261027211107';
+import { mulberry32 } from './golfhero.js?v=20261027211300';
 
 export const CHALLENGES = {
   ace: 'Hole in one', nowall: 'No wall bounces', nohazard: 'Stay out of sand and water', par: 'Finish at or under par', orbs: 'Collect every orb',
-  power: 'Sink it with a power-up active', jump: 'Jump the canyon', fast: 'Finish within 25 seconds', secret: 'Find the secret coin',
+  power: 'Sink it with a power-up active', jump: 'Jump the canyon', fast: 'Finish within 25 seconds', secret: 'Find the secret coin', table: 'Light the lamps to open the cup',
 };
 export const CHAL_POINTS = 100;
+/** The most the pinball table's own points (its bumpers, lamps, skill shot) add to hole 9: a great table is worth about one extra hole in one. */
+export const TABLE_BONUS_MAX = 500;
+export const tableBonus = (tablePts) => Math.min(TABLE_BONUS_MAX, Math.floor(tablePts / 5));
 
 /** The challenge of a hole: { id, text }. Only things the hole really has are offered. */
 export function makeChallenge(h, index, seed) {
@@ -18,7 +21,7 @@ export function makeChallenge(h, index, seed) {
   const id = o[(r() * o.length) | 0];
   return { id, text: CHALLENGES[id] };
 }
-export const newChalState = () => ({ wall: 0, hazard: false, orbs: 0, secret: 0, power: false, jumped: false, overGap: false, clock: 0 });
+export const newChalState = () => ({ wall: 0, hazard: false, orbs: 0, secret: 0, power: false, jumped: false, overGap: false, clock: 0, lit: false });
 
 /** 'done' (met, once the hole is holed), 'failed' (can no longer be met) or 'pending'. */
 export function chalStatus(ch, cs, h, strokes, holed, midStroke) {
@@ -31,6 +34,7 @@ export function chalStatus(ch, cs, h, strokes, holed, midStroke) {
     case 'secret': return cs.secret > 0 ? 'done' : holed ? 'failed' : 'pending';
     case 'power': return holed ? (cs.power ? 'done' : 'failed') : 'pending';
     case 'jump': return holed ? (cs.jumped ? 'done' : 'failed') : cs.jumped ? 'done' : 'pending';
+    case 'table': return cs.lit ? 'done' : holed ? 'failed' : 'pending';
     case 'fast': return cs.clock > 25 ? 'failed' : holed ? 'done' : 'pending';
     default: return 'pending';
   }
