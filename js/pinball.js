@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027215314';
-import { toWorld, YAWS } from './golfsites.js?v=20261027215314';
-import { M, G } from './golfvis.js?v=20261027215314';
-import { isLow } from './golfquality.js?v=20261027215314';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027215314';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027215612';
+import { toWorld, YAWS } from './golfsites.js?v=20261027215612';
+import { M, G } from './golfvis.js?v=20261027215612';
+import { isLow } from './golfquality.js?v=20261027215612';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027215612';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) { /* (no haptics here) */ } };      // (a short buzz on phones that can)
@@ -36,7 +36,7 @@ export function createTable(env) {
     for (const F of flashers) { F.f = Math.max(0, F.f - dt * 4.5); const k = Math.max(F.f, F.hold); for (const m of F.mats) m.emissive.copy(F.col).multiplyScalar(k * 0.9); F.scaleFn?.(k); }
   }
   function sparksAt(x, z, y, color, n) {                      // (high tier: glowing sparks from the part that was hit; low tier keeps only the ring pulse)
-    const fx = env.fx?.(); if (!fx || isLow()) return; group.localToWorld(tmpW.set(x, y, z)); fx.sparks(tmpW.x, tmpW.y, tmpW.z, color, n, 2.6, 2.8, 0.55, 0.06);
+    const fx = env.fx?.(); if (!fx || isLow()) return; group.localToWorld(tmpW.set(x, y, z)); fx.sparks(tmpW.x, tmpW.y, tmpW.z, color, n, 3.2, 3.4, 0.7, 0.13);
   }
   function buildChips() { elLamps.innerHTML = objs().map((k) => `<i data-l="${k}"><b>${LAMP_TEXT[k]}</b><small></small></i>`).join('') + '<i data-l="cup"><b>CUP</b><small></small></i>'; }
   const showLamps = (flash) => { for (const k of objs()) { const e = elLamps.querySelector(`[data-l="${k}"]`), was = e.classList.contains('on'); e.classList.toggle('on', !!st.lamps[k]); if (flash && st.lamps[k] && !was) { e.classList.remove('flash'); void e.offsetWidth; e.classList.add('flash'); } } const c = elLamps.querySelector('[data-l="cup"]'); c.classList.toggle('on', st.open); if (flash && st.open) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } };
@@ -273,7 +273,7 @@ export function createTable(env) {
   }
   function openCup() {
     st.open = true; const i = hole.posts.indexOf(hole.cover); if (i >= 0) hole.posts.splice(i, 1); ctx.cupR = CUP_R * 1.8; ctx.homing = true; showLamps(true); flashScreen();
-    say(elBanner, 'CUP OPEN! Sink it!', 2400, 'banner'); audio?.golf?.('pbunlock'); buzz([60, 40, 60, 40, 140]); shake = 0.5; pulse(hole.cup.x, hole.cup.z, 1.8);
+    say(elBanner, 'CUP OPEN! Sink it!', 2400, 'banner'); audio?.golf?.('pbunlock'); buzz([60, 40, 60, 40, 140]); shake = 0.3; pulse(hole.cup.x, hole.cup.z, 1.8);
     const burst = (n) => sparksAt(hole.cup.x, hole.cup.z, cupY + 0.6, ['#7dffb0', '#ffd23f', '#ffffff', '#6ec8ff'][n % 4], 36);                    // (the unlock: the cover is thrown off, a beam rises from the cup and the whole table lights up in a chase)
     const ev2 = [{ at: 0, fn: () => burst(0) }, { at: 0.2, fn: () => { burst(1); pulse(hole.cup.x, hole.cup.z, 2.4); } }, { at: 0.45, fn: () => burst(2) }, { at: 0.7, fn: () => burst(3) }];
     [...pops, ...hole.targets, ...slingFs.map((q) => ({ F: q.F, x: q.x, z: q.z }))].forEach((o, i) => ev2.push({ at: 0.15 + i * 0.1, fn: () => { hitPart(o.F || partOf.get(o), 1, '#7dffb0'); pulse(o.x, o.z, 1.1); } }));
