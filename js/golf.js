@@ -5,22 +5,25 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261027210514';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027210514';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027210514';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261027210514';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261027210514';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261027210514';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261027210514';
-import { createNeon } from './golfneon.js?v=20261027210514';
-import { createFx } from './golffx.js?v=20261027210514';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261027210514';
-import { buildDecor } from './golfdecor.js?v=20261027210514';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261027210514';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261027210740';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027210740';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027210740';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261027210740';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, CHAL_POINTS } from './golfchal.js?v=20261027210740';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261027210740';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261027210740';
+import { createNeon } from './golfneon.js?v=20261027210740';
+import { createFx } from './golffx.js?v=20261027210740';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261027210740';
+import { buildDecor } from './golfdecor.js?v=20261027210740';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261027210740';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261027210740';
+import { createTable } from './pinball.js?v=20261027210740';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
 const HERO_NAMES = { windmill: 'The Windmill', alligator: 'The Alligator', turntable: 'The Turntable', pendulum: 'The Hammers', geyser: 'The Geyser', cannon: 'The Cannon', teleport: 'The Warp Zone', slider: 'The Sliders', bridge: 'The Bridge', drawbridge: 'The Drawbridge', loop: 'The Loop-the-Loop' };
+const TABLE_HOLE = HOLES - 1, TABLE_CFG = { name: 'Pinball Golf', objs: ['ramp', 'spin', 'tgt'], tilt: 3.4, par: 3, nudges: 3 };      // (the last hole is the pinball table: balls are its strokes)
 const POWER_TIMES = { homing: 10, ghost: 8, bounce: 10, turbo: 10, freeze: 6, mega: 15, hamster: 6 };
 const BALL_TINTS = ['#ffffff', '#ffd1d1', '#d1ffd9', '#d1e6ff', '#fff2b5'];
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -31,7 +34,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const st = { mode: 'off', t: 0, hole: 0, holeT: 0, strokes: 0, scores: [], par: [], order: [], seed: 0, year: 0, month: 0, rollT: 0, idle: 0, hud: { hole: '', strokes: -1, pills: '' }, lastX: 0, lastZ: 0, multi: false, safety: false, cupScale: 1 };
   const fx = { homing: 0, ghost: 0, bounce: 0, turbo: 0, freeze: 0, mega: 0, hamster: 0 };      // seconds left of each power-up
   let holes = [], vises = [], decors = [], sites = [], Ys = [], fxs = null, lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
-  let scenery = null, chals = [], cs = newChalState(), neon = null, neonK = 0, ghostOn = false, ghostVis = null, dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
+  let table = null, tableFrame = null, scenery = null, chals = [], cs = newChalState(), neon = null, neonK = 0, ghostOn = false, ghostVis = null, dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
   const ballMeshes = [], ballShadows = [];
   const ctx = newCtx(), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0 };
   const up0 = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
@@ -51,13 +54,16 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const hud = document.createElement('div');
   hud.className = 'golf-hud'; hud.hidden = true;
   hud.innerHTML = '<div class="golf-top"><div class="golf-left"><div class="golf-info"><b data-k="hole"></b><span data-k="par"></span><span data-k="strokes"></span><span data-k="chal" class="golf-chal"></span></div><div class="golf-pills" data-k="pills"></div></div><button class="golf-quit" type="button">Leave</button></div><button class="golf-reset" type="button" hidden>Stuck? Reset ball (+1)</button>' +
-    '<div class="golf-banner" data-k="banner"></div><div class="golf-toast" data-k="toast"></div><div class="golf-power" data-k="power"><i></i></div><div class="golf-score" data-k="score" hidden></div>';
+    '<div class="pb-lamps" data-k="lamps"></div><div class="pb-help" data-k="help" hidden><h3>How to play</h3><ol><li><b>Putt</b> up the table: drag back, let go</li><li><b>Flip</b>: Space or the FLIP button</li><li><b>Light 3 lamps</b>: ramp, spinner, red targets</li><li><b>Sink the cup</b> once it opens</li></ol><button type="button" data-k="helpok">Got it</button></div><button class="pb-q" type="button" data-k="q" aria-label="How to play">?</button>' +
+    '<div class="golf-banner" data-k="banner"></div><div class="golf-toast" data-k="toast"></div><div class="golf-power" data-k="power"><i></i></div><button class="pb-nudge" type="button" data-k="nudge">NUDGE</button><button class="pb-flip" type="button">FLIP</button><div class="golf-score" data-k="score" hidden></div>';
+  hud.classList.add('pb-off');
   document.body.append(hud);
   const $ = (k) => hud.querySelector(`[data-k="${k}"]`);
-  const elChal = $('chal'), elHole = $('hole'), elPar = $('par'), elStrokes = $('strokes'), elBanner = $('banner'), elToast = $('toast'), elPower = $('power'), elScore = $('score'), elPills = $('pills');
+  const elChal = $('chal'), elHole = $('hole'), elPar = $('par'), elStrokes = $('strokes'), elBanner = $('banner'), elToast = $('toast'), elPower = $('power'), elScore = $('score'), elPills = $('pills'), elHelp = $('help');
   const timers = {};
   const say = (el, text, ms, key) => { el.textContent = text; el.classList.add('show'); clearTimeout(timers[key]); timers[key] = setTimeout(() => el.classList.remove('show'), ms); };
   hud.querySelector('.golf-quit').addEventListener('click', () => api.stop());
+  $('helpok').addEventListener('click', () => { elHelp.hidden = true; }); $('q').addEventListener('click', (e) => { elHelp.hidden = !elHelp.hidden; e.stopPropagation(); }); $('q').addEventListener('pointerdown', (e) => e.stopPropagation());
   const bestKey = () => `golf.best.${monthKey(st)}`;
   const readBest = () => { try { const v = parseInt(localStorage.getItem(bestKey()), 10); return Number.isFinite(v) ? v : null; } catch (e) { return null; } };
   const writeBest = (v) => { try { localStorage.setItem(bestKey(), String(v)); } catch (e) { /* private mode */ } };
@@ -81,6 +87,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     }
     dots = new THREE.InstancedMesh(G.dot, M.dot, 16); dots.count = 0; dots.frustumCulled = false;
     hamster = buildHamster(); hamster.visible = false;
+    table = createTable({ scene, camera, renderer, world, audio, hud, say, els: { banner: elBanner, toast: elToast, power: elPower, nudge: $('nudge'), lamps: $('lamps'), help: elHelp, msg: elChal, flip: hud.querySelector('.pb-flip') } });
   }
 
   let prebuilt = null;
@@ -90,8 +97,10 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     fxs = createFx(lowEnd); scene.add(fxs.group);
     { const themes = themeOrder(st.seed), fx = !!st.random || SHAPES_BAKED;            // (the themes are dealt out like the heroes: nine of the ten, none twice; the new surfaces come with them for random courses, and for the months once they are baked)
       holes = prebuilt && prebuilt.key === st.seed + ':' + (fx ? 1 : 0) ? prebuilt.holes : null; prebuilt = null;           // (a random course comes ready-made from the worker)
-      if (!holes) { holes = []; for (let i = 0; i < HOLES; i++) { const h = makeHole(holeSeed(st.seed, i), i, st.order[i], st.shapes[i], fx ? { surface: themeOf(themes[i]).surface, theme: themes[i], more: !!st.random || MORE_BAKED } : null); h.theme = themes[i]; holes.push(h); } } }
-    chals = holes.map((h, i) => makeChallenge(h, i, holeSeed(st.seed, i)));
+      if (!holes) { holes = []; for (let i = 0; i < TABLE_HOLE; i++) { const h = makeHole(holeSeed(st.seed, i), i, st.order[i], st.shapes[i], fx ? { surface: themeOf(themes[i]).surface, theme: themes[i], more: !!st.random || MORE_BAKED } : null); h.theme = themes[i]; holes.push(h); } }
+      { const mo = golfCourse(), q = new URLSearchParams(location.search), li = q.has('layout') ? +q.get('layout') : (st.month - 1) % LAYOUTS.length, mir = q.has('mirror') ? q.get('mirror') === '1' : Math.floor((st.month - 1) / LAYOUTS.length) === 1;     // (the table changes with the month)
+        const h = plainHole(holeSeed(st.seed, TABLE_HOLE), TABLE_HOLE); tableFrame = prepareTable(h, li, mir); h.par = TABLE_CFG.par; h.theme = themes[TABLE_HOLE]; holes.push(h); } }
+    chals = holes.map((h, i) => (i === TABLE_HOLE ? { id: 'table', text: 'Light every lamp and sink the cup' } : makeChallenge(h, i, holeSeed(st.seed, i))));
     const plan = planCourse(st.seed, holes); sites = plan.sites;
     const digs = holes.map((h, i) => [...h.sands.map((sd) => { const c = toWorld(sites[i], sd.x, sd.z); return { x: c.x, z: c.z, r: sd.r * 1.19 * 0.95, depth: 0.34 }; }), ...(h.feats || []).filter((f) => f.t === 'gap').map((f) => {              // canyon gaps: where the ground must be dug out, in world coordinates
       const o = toWorld(sites[i], 0, 0), c = toWorld(sites[i], f.x, f.z), u = toWorld(sites[i], f.ux, f.uz), n = toWorld(sites[i], f.nx, f.nz);
@@ -101,13 +110,14 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     vises = holes.map((h, i) => {
       const v = buildHoleVisual(h, { lowEnd, look: world.waterLook, fx: fxs }), g = v.group; g.rotation.y = (sites[i].k * Math.PI) / 4; g.position.set(sites[i].x, Ys[i] + 0.06, sites[i].z); g.scale.set(1, 0.001, 1); scene.add(g); return v;
     });
+    table.attach({ hole: holes[TABLE_HOLE], vis: vises[TABLE_HOLE], frame: tableFrame, site: sites[TABLE_HOLE], Y: Ys[TABLE_HOLE], cfg: TABLE_CFG }); table.leanTable();
     // the planting (set in the finished ground, so the ground is brought all the way in for a moment) and the gravel paths between the holes
     const near = (x, z, m) => { for (const sh of plan.shapes) for (const p of sh) { const dx = x - p[0], dz = z - p[1]; if (dx * dx + dz * dz < (p[2] + m) * (p[2] + m)) return true; } return false; };
     world.carve.set(1);
-    decors = holes.map((h, i) => { const d = buildDecor(h, sites[i], world.carve.groundNow, (x, z) => near(x, z, 0.7), lowEnd ? 0.55 : 1); d.group.visible = false; scene.add(d.group); return d; });
+    decors = holes.map((h, i) => { if (i === TABLE_HOLE) return { group: new THREE.Group(), dispose() {} }; const d = buildDecor(h, sites[i], world.carve.groundNow, (x, z) => near(x, z, 0.7), lowEnd ? 0.55 : 1); d.group.visible = false; scene.add(d.group); return d; });
     for (let i = 0; i < HOLES - 1; i++) world.carve.paint(pathBetween(i), 0.95, '#dccb9f', (x, z) => near(x, z, 0.5));
     lampSpotsAll = [];                                     // lamp posts along each hole and one beside each path
-    holes.forEach((h, i) => { const hp = h.hero ? toWorld(sites[i], h.hero.x, h.hero.z) : null; for (const p of lampSpots(h, sites[i], lowEnd ? 3 : 4, (x, z) => near(x, z, 0.6) || (hp && Math.hypot(x - hp.x, z - hp.z) < 5.2))) lampSpotsAll.push({ ...p, hole: i }); });
+    holes.forEach((h, i) => { if (i === TABLE_HOLE) return; const hp = h.hero ? toWorld(sites[i], h.hero.x, h.hero.z) : null; for (const p of lampSpots(h, sites[i], lowEnd ? 3 : 4, (x, z) => near(x, z, 0.6) || (hp && Math.hypot(x - hp.x, z - hp.z) < 5.2))) lampSpotsAll.push({ ...p, hole: i }); });
     for (let i = 0; i < HOLES - 1; i++) {
       const pts = pathBetween(i), a = pts[18], b = pts[22], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / l, nz = (b[0] - a[0]) / l;
       if (!near(a[0] + nx * 1.4, a[1] + nz * 1.4, 0.6)) lampSpotsAll.push({ x: a[0] + nx * 1.4, z: a[1] + nz * 1.4, ax: -nx, az: -nz, hole: i });
@@ -115,7 +125,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     scenery = buildScenery(holes, sites, plan.shapes, world.carve.groundNow, world.waterLook, st.seed, lowEnd, toWorld); scenery.group.visible = false; scene.add(scenery.group);
     lamps = buildLamps(lampSpotsAll, world.carve.groundNow); scene.add(lamps.group); shown = [];
     world.carve.set(0);
-    neon = createNeon(); for (const v of vises) neon.add(v.group); for (const d of decors) neon.add(d.group); if (scenery) neon.add(scenery.group);
+    neon = createNeon(); for (const v of vises) neon.add(v.group); if (table.wall) neon.add(table.wall); for (const d of decors) neon.add(d.group); if (scenery) neon.add(scenery.group);
     ready = true;
   }
   function pathBetween(i) {                                // from behind the cup of hole i to behind the tee of the next, in a smooth curve
@@ -134,7 +144,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     for (const m of ballMeshes) m.parent?.remove(m);
     for (const s of ballShadows) s.parent?.remove(s);
     dots.parent?.remove(dots); hamster.parent?.remove(hamster);
-    for (const v of vises) { scene.remove(v.group); v.dispose(); }
+    table?.dispose(); for (const v of vises) { scene.remove(v.group); v.dispose(); }
     for (const d of decors) { scene.remove(d.group); d.dispose(); }
     occ.pieces.clear(); occ.list = []; occ.hole = -1;
     if (neon) { neon.reset(); neon = null; }
@@ -144,7 +154,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     lights().forEach((l, i) => { if (lightHome[i]) l.position.copy(lightHome[i]); });
     sky?.shadowReset(); sky?.setLampKey(null); decors = []; vises = []; holes = []; holeGroup = null; vis = null; hole = null; ready = false;
   }
-  const setRise = (i, k) => { vises[i].group.scale.y = Math.max(0.001, k); world.carve.set(k, i); { const c = toWorld(sites[i], holes[i].cup.x, holes[i].cup.z); world.carve.setHole(i, c.x, c.z, k > 0.95 ? CUP_R * 0.92 + 0.03 : 0); } if (decors[i]) decors[i].group.visible = k > 0.92; const on = k > 0.92; if (lamps && shown[i] !== on) { shown[i] = on; lamps.showHole(i, on); } };
+  const setRise = (i, k) => { vises[i].group.scale.y = Math.max(0.001, k); if (i === TABLE_HOLE) table.setRise(k); world.carve.set(k, i); { const c = toWorld(sites[i], holes[i].cup.x, holes[i].cup.z); world.carve.setHole(i, c.x, c.z, k > 0.95 ? CUP_R * 0.92 + 0.03 : 0); } if (decors[i]) decors[i].group.visible = k > 0.92; const on = k > 0.92; if (lamps && shown[i] !== on) { shown[i] = on; lamps.showHole(i, on); } };
   const UVC = new THREE.Color('#8a4dff');
   const lights = () => world.lampLights?.() ?? [];
   function assignLights(i) {                               // the village's real lights stand in for the lamps near the hole in play
@@ -164,7 +174,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     for (const k in fx) fx[k] = 0;
     holeGroup.add(dots, hamster); ballMeshes.forEach((m, k) => { holeGroup.add(m, ballShadows[k]); m.visible = k === 0; ballShadows[k].visible = k === 0; m.scale.setScalar(1); });
     balls = [newBall(hole)]; st.lastX = balls[0].x; st.lastZ = balls[0].z; hamster.visible = false;
-    ctx.gateT = 0; hole.cover = 0; placeBalls(); st.hud.hole = ''; st.hud.strokes = -1; updateHud();
+    ctx.gateT = 0; if (i !== TABLE_HOLE) hole.cover = 0; placeBalls(); st.hud.hole = ''; st.hud.strokes = -1; updateHud();
     const P = hole.path, t0 = P[0], t1 = P[Math.min(P.length - 1, 10)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1; cam.dx = (t1.x - t0.x) / l; cam.dz = (t1.z - t0.z) / l; cam.phase = 'overview'; cam.t = 0;
     st.mode = 'aim'; aimShadow(i); assignLights(i); announce();
   }
@@ -174,7 +184,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function noteRest() {                                    // a ball that stops where it started twice in a row may be penned in: offer a reset to the tee
     const b = balls[0]; if (!b) return; if (Math.hypot(b.x - st.lastX, b.z - st.lastZ) < 0.35) st.stuck = (st.stuck || 0) + 1; else st.stuck = 0; elReset.hidden = st.stuck < 2;
   }
-  const announce = () => { say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast'); const m = (hole.recipes || [])[0]; if (m) setTimeout(() => { if (st.mode === 'aim' && vis === vises[st.hole]) say(elBanner, `Machine: ${MACHINE_HINTS[m.kind]}`, 3200, 'banner'); }, 2700); };
+  const announce = () => { say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${st.hole === TABLE_HOLE ? 'Pinball Golf' : HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast'); const m = (hole.recipes || [])[0]; if (m) setTimeout(() => { if (st.mode === 'aim' && vis === vises[st.hole]) say(elBanner, `Machine: ${MACHINE_HINTS[m.kind]}`, 3200, 'banner'); }, 2700); };
   function placeBalls() {
     balls.forEach((b, i) => {
       const m = ballMeshes[i], s = ballShadows[i]; if (!m) return;
@@ -231,7 +241,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     const bonus = speedBonus(st.playT), pts = st.pts.reduce((a, b) => a + (b || 0), 0) + bonus, stars = starsFor(pts), bestPts = readPts(); let np = false;
     if (bestPts === null || pts > bestPts) { try { localStorage.setItem(ptsKey(), String(pts)); } catch (e) { /* private mode */ } np = true; }
     const mins = Math.floor(st.playT / 60), secs = Math.round(st.playT % 60), done = st.chalDone.filter(Boolean).length;
-    const rows = st.scores.map((s, i) => `<tr><td>${i + 1}</td><td>${HERO_NAMES[st.order[i]].replace('The ', '')}</td><td>${st.par[i]}</td><td>${s}</td><td title="${chals[i] ? chals[i].text : ''}">${st.chalDone[i] ? '★' : '·'}</td><td>${st.pts[i] || 0}</td></tr>`).join('');
+    const rows = st.scores.map((s, i) => `<tr><td>${i + 1}</td><td>${i === TABLE_HOLE ? 'Pinball' : HERO_NAMES[st.order[i]].replace('The ', '')}</td><td>${st.par[i]}</td><td>${s}</td><td title="${chals[i] ? chals[i].text : ''}">${st.chalDone[i] ? '★' : '·'}</td><td>${st.pts[i] || 0}</td></tr>`).join('');
     elScore.innerHTML = `<h2>${MONTHS[st.month - 1]} ${st.year}</h2><p class="golf-stars" aria-label="${stars} of 3 stars">${'★'.repeat(stars)}<i>${'★'.repeat(3 - stars)}</i></p>` +
       `<table><thead><tr><th>#</th><th>Hole</th><th>Par</th><th>You</th><th>◎</th><th>Pts</th></tr></thead><tbody>${rows}</tbody></table>` +
       `<p class="golf-total">${pts} points <small>${total} strokes (par ${par}) · ${done} of ${HOLES} challenges · ${mins}:${String(secs).padStart(2, '0')}${bonus ? ` · +${bonus} speed` : ''}</small></p>` +
@@ -424,10 +434,10 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261027210514', import.meta.url), { type: 'module' });
-          w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, HOLES); };
+          w = new Worker(new URL('./golfworker.js?v=20261027210740', import.meta.url), { type: 'module' });
+          w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
-          w.postMessage({ seed, order, shapes, themes, fx, more, n: HOLES });
+          w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
         } catch (err) { done(); }
       });
     },
@@ -454,7 +464,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     /** Every frame (after the page has set the camera): moves the game on and, while it is active, owns the camera. */
     update(dt) {
       if (st.mode === 'off') return false;
-      dt = Math.min(dt, 0.05); if (st.moment > 0) { st.moment -= dt; dt *= 0.5; } st.t += dt; st.idle += dt; lamps?.update(world.night); fxs?.update(dt); scenery?.update(dt, fxs);
+      dt = Math.min(dt, 0.05); if (st.moment > 0) { st.moment -= dt; dt *= 0.5; } st.t += dt; st.idle += dt; if (table?.group) table.leanTable(); lamps?.update(world.night); fxs?.update(dt); scenery?.update(dt, fxs);
       { const u = Math.min(1, Math.max(0, (world.night - 0.35) / 0.5)); neonK = u * u * (3 - 2 * u); neon?.set(neonK); const L = lights(); if (L.length && lampSpotsAll.length) for (const l of L) l.color.set('#ffc27a').lerp(UVC, neonK); }
       if (st.mode === 'exit') {
         const k = reduceMotion ? 1 : ease(clamp01(st.t / EXIT));
