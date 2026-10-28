@@ -9,7 +9,7 @@ const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--
 const [fy, fm] = String(opt('from', '2026-1')).split('-').map(Number), N = +opt('months', 72), out = {}; let slow = 0;
 for (let k = 0; k < N; k++) {
   const month0 = fy * 12 + (fm - 1) + k, year = Math.floor(month0 / 12), month = (month0 % 12) + 1, cs = courseSeed(year, month), order = heroOrder(cs, true), shapes = shapeOrder(cs, true), themes = themeOrder(cs);
-  for (let i = 0; i < HOLES; i++) { const seed = holeSeed(cs, i), r = findHole(seed, i, order[i], shapes[i], { surface: themeOf(themes[i]).surface, theme: themes[i], more: true }); out[`${seed}.${i}`] = r.attempt * 2 + (r.drop ? 1 : 0); if (r.attempt > 0) slow++; }
+  for (let i = 0; i < HOLES - 1; i++) { const seed = holeSeed(cs, i), r = findHole(seed, i, order[i], shapes[i], { surface: themeOf(themes[i]).surface, theme: themes[i], more: true }); out[`${seed}.${i}`] = r.attempt * 2 + (r.drop ? 1 : 0); if (r.attempt > 0) slow++; }
   process.stdout.write(`\r${year}-${month} `);
 }
 const lines = Object.entries(out).map(([k, v]) => `  '${k}': ${v},`).join('\n');

@@ -1,28 +1,19 @@
-// Pinball Golf: a compact pinball table where golf is the skill shot. You putt the ball up the table (drag back and let go, as in the mini-golf), then it is pinball: one button swings the flippers,
-// bumpers, slingshots, a spinner, drop targets and ramps knock it about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets) and the cup on the raised deck opens;
-// sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
+// The Pinball Golf table, hole 9 of the mini-golf (golf.js drives it). A compact pinball table where golf is the skill shot: you putt the ball up the table (drag back and let go, as in the mini-golf), then it is
+// pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
+// and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { courseSeed, holeSeed, plainHole, heroOrder } from './golfgen.js?v=20261027211300';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027211300';
-import { toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261027211300';
-import { M, G, buildHoleVisual } from './golfvis.js?v=20261027211300';
-import { isLow } from './golfquality.js?v=20261027211300';
-import { golfCourse, monthKey } from './monthseed.js?v=20261027211300';
-import { prepareTable, LAYOUTS, stepFlips, isDrained, TABLE, PLAT_H, TILT, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027211300';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027211515';
+import { toWorld, YAWS } from './golfsites.js?v=20261027211515';
+import { M, G } from './golfvis.js?v=20261027211515';
+import { isLow } from './golfquality.js?v=20261027211515';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027211515';
 
-const HOLE_INDEX = 3, COMBO_NEED = 3, SITE = { x: -42, z: -70, k: 2 };         // (heading k = 2 turns the hole so its tee end is nearest the viewer and the cup is up the screen)
-const TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
-// the course: three holes, each its own table (layout, tilt) and its own three or four objectives that open the cup
-const HOLES = [
-  { name: 'First Ball', objs: ['ramp', 'spin', 'tgt'], tilt: 3.4, par: 3, nudges: 3, shift: 0 },
-  { name: 'Bumper Garden', objs: ['bump', 'lock', 'ramp'], tilt: 3.6, par: 3, nudges: 3, shift: 1 },
-  { name: 'Grand Finale', objs: ['combo', 'spin', 'bump', 'tgt'], tilt: 4.0, par: 4, nudges: 2, shift: 2 },
-];
+const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /** The pinball table as a controller: given a prepared hole (see prepareTable) and its visual group, it adds the playfield parts, runs the ball, flippers, lamps and scoring events, and poses the camera.
- *  The host (the standalone game below, or the mini-golf's hole 9) owns the hole, its ground and its HUD frame; `env` supplies the page: { scene, camera, renderer, world, audio, hud, say, els }. */
+ *  The host (the mini-golf's hole 9) owns the hole, its ground and its HUD frame; `env` supplies the page: { scene, camera, renderer, world, audio, hud, say, els }. */
 export function createTable(env) {
   const { scene, camera, renderer, audio, hud, say, els } = env, { banner: elBanner, toast: elToast, power: elPower, nudge: elNudge, lamps: elLamps, help: elHelp, msg: elMsg, flip: btnFlip } = els;
   const st = { mode: 'off', balls: 0, pts: 0, clock: 0, shotT: 99, combo: 0, lastHit: -99, flipT: -99, nudges: 3, spins: 0, lamps: {}, open: false, skill: false, skillDone: false, stuckT: 0, locked: null, sp: null, litBumps: new Set() };
@@ -373,112 +364,3 @@ export function createTable(env) {
   };
 }
 
-// ---------- the standalone game: three tables in a row, in their own HUD (until the table becomes hole 9 of the mini-golf) ----------
-export function createPinball(scene, camera, renderer, world, { audio = null, reduceMotion = false, lowEnd = false } = {}) {
-  const ps = { mode: 'off', t: 0, holeIdx: 0, results: [] };
-  let group = null, vis = null, hole = null;
-  const tmpV = new THREE.Vector3(), up0 = new THREE.Vector3(0, 1, 0), home = { pos: new THREE.Vector3(), look: new THREE.Vector3() }, from = { pos: new THREE.Vector3(), look: new THREE.Vector3() }, want = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
-  const hud = document.createElement('div'); hud.className = 'golf-hud'; hud.hidden = true;
-  hud.innerHTML = '<div class="golf-top"><div class="golf-left"><div class="golf-info"><b>Pinball Golf</b><span data-k="par"></span><span data-k="strokes"></span><span class="golf-chal" data-k="msg"></span></div></div><button class="golf-quit" type="button">Leave</button></div>' +
-    '<div class="pb-lamps" data-k="lamps"></div>' +
-    '<div class="pb-help" data-k="help" hidden><h3>How to play</h3><ol><li><b>Putt</b> up the table: drag back, let go</li><li><b>Flip</b>: Space or the FLIP button</li><li><b>Light 3 lamps</b>: ramp, spinner, red targets</li><li><b>Sink the cup</b> once it opens</li></ol><button type="button" data-k="helpok">Got it</button></div><button class="pb-q" type="button" data-k="q" aria-label="How to play">?</button>' +
-    '<div class="golf-banner" data-k="banner"></div><div class="golf-toast" data-k="toast"></div><div class="golf-power" data-k="power"><i></i></div><button class="pb-nudge" type="button" data-k="nudge">NUDGE</button><button class="pb-flip" type="button">FLIP</button><div class="golf-score" data-k="score" hidden></div>';
-  document.body.append(hud);
-  const $ = (k) => hud.querySelector(`[data-k="${k}"]`), elPar = $('par'), elStrokes = $('strokes'), elBanner = $('banner'), elScore = $('score'), elHelp = $('help'), elQ = $('q');
-  const timers = {}, say = (el, text, ms, key) => { el.textContent = text; el.classList.add('show'); clearTimeout(timers[key]); timers[key] = setTimeout(() => el.classList.remove('show'), ms); };
-  const table = createTable({ scene, camera, renderer, world, audio, hud, say, onSunk: () => finish(), els: { banner: elBanner, toast: $('toast'), power: $('power'), nudge: $('nudge'), lamps: $('lamps'), help: elHelp, msg: $('msg'), flip: hud.querySelector('.pb-flip') } });
-  const st = table.st;
-  hud.querySelector('.golf-quit').addEventListener('click', () => api.stop());
-  $('helpok').addEventListener('click', () => { elHelp.hidden = true; }); elQ.addEventListener('click', (e) => { elHelp.hidden = !elHelp.hidden; e.stopPropagation(); }); elQ.addEventListener('pointerdown', (e) => e.stopPropagation());
-  const boards = [], setBoards = (show) => { if (!boards.length) for (const b of world.boards) { let o = b.face; while (o && o.parent && o.parent !== scene) o = o.parent; if (o && !boards.includes(o)) boards.push(o); } for (const o of boards) o.visible = show; };
-
-  function buildTable() {                                   // the ground and the hole for the current table, then the table on it
-    const mo = golfCourse(), cs = courseSeed(mo.year, mo.month), type = heroOrder(cs)[HOLE_INDEX];
-    hole = plainHole(holeSeed(cs, HOLE_INDEX), HOLE_INDEX, type);
-    const q = new URLSearchParams(location.search), HD = HOLES[ps.holeIdx], li = q.has('layout') ? +q.get('layout') : (mo.month - 1 + HD.shift) % LAYOUTS.length, mir = q.has('mirror') ? q.get('mirror') === '1' : (Math.floor((mo.month - 1) / LAYOUTS.length) === 1) !== (ps.holeIdx === 1);      // (the table changes with the month and the hole)
-    const frame = prepareTable(hole, li, mir); st.layout = LAYOUTS[li % LAYOUTS.length].name; hole.par = HD.par;
-    const shape = hole.shape.map((p) => { const w = toWorld(SITE, p[0], p[1]); return [w.x, w.z, p[2] + MARGIN]; }), Y = world.carve.begin([shape], BLEND, [])[0]; world.carve.set(0, 0);
-    vis = buildHoleVisual(hole, { lowEnd, look: world.waterLook }); group = vis.group; group.rotation.y = (SITE.k * Math.PI) / 4; group.position.set(SITE.x, Y + 0.06, SITE.z); group.scale.set(1, 0.001, 1); scene.add(group);
-    table.attach({ hole, vis, frame, site: SITE, Y, cfg: HD });
-    { const c = toWorld(SITE, hole.cup.x, hole.cup.z); world.carve.setHole(0, c.x, c.z, CUP_R * 0.92 + 0.03); }
-  }
-  function disposeTable() { table.dispose(); if (group) { scene.remove(group); vis.dispose(); } group = vis = hole = null; }
-  const starStr = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
-  function finish() {
-    const HD = HOLES[ps.holeIdx], par = HD.par, bonus = st.balls <= 1 ? 1500 : st.balls === 2 ? 800 : st.balls === 3 ? 400 : 150, total = st.pts + bonus, stars = st.balls <= par - 1 ? 3 : st.balls <= par + 1 ? 2 : 1;
-    ps.results[ps.holeIdx] = { name: HD.name, pts: total, balls: st.balls, stars }; const last = ps.holeIdx === HOLES.length - 1;
-    ps.mode = 'card';
-    if (!last) {
-      elScore.innerHTML = `<h2>Hole ${ps.holeIdx + 1} cleared!</h2><p class="golf-stars">${starStr(stars)}</p><p class="golf-total">${total} points <small>${st.balls} ball${st.balls === 1 ? '' : 's'} · ${bonus} for the hole · ${st.pts} from the table</small></p><p class="pb-next">Next: ${HOLES[ps.holeIdx + 1].name}</p><div class="golf-btns"><button type="button" data-a="next">Next hole</button><button type="button" data-a="leave">Leave</button></div>`;
-    } else {
-      const sum = ps.results.reduce((a, r) => a + r.pts, 0), balls = ps.results.reduce((a, r) => a + r.balls, 0), starSum = ps.results.reduce((a, r) => a + r.stars, 0); let best = sum, fresh = false;
-      try { const mo = golfCourse(), key = `pb.best.${monthKey(mo)}`, prev = +localStorage.getItem(key) || 0; if (sum > prev) { localStorage.setItem(key, String(sum)); fresh = prev > 0; } best = Math.max(prev, sum); } catch (err) { /* (no storage: no best) */ }
-      elScore.innerHTML = `<h2>Course complete!</h2><p class="golf-stars">${starSum} of ${HOLES.length * 3} stars</p><table class="pb-tab">${ps.results.map((r, i) => `<tr><td>${i + 1}. ${r.name}</td><td>${r.balls} ball${r.balls === 1 ? '' : 's'}</td><td>${starStr(r.stars)}</td><td>${r.pts}</td></tr>`).join('')}</table><p class="golf-total">${sum} points <small>${balls} balls in all · best ${best}${fresh ? ' · new best!' : ''}</small></p><div class="golf-btns"><button type="button" data-a="again">Play again</button><button type="button" data-a="leave">Leave</button></div>`;
-    }
-    elScore.hidden = false; hud.classList.add('pb-card'); audio?.golf?.('win'); table.confetti();
-  }
-  elScore.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (a === 'next') gotoHole(ps.holeIdx + 1); else if (a === 'again') gotoHole(0); else if (a === 'leave') api.stop(); });
-  function gotoHole(i) { elScore.hidden = true; hud.classList.remove('pb-card'); if (i === 0) ps.results = []; ps.holeIdx = i; ps.mode = 'trans'; ps.t = 0; }       // (the table sinks into the ground, and the next hole's table rises)
-  function updateHud() { elPar.textContent = `Hole ${ps.holeIdx + 1}/${HOLES.length} · ${HOLES[ps.holeIdx].name} · Par ${hole.par}`; elStrokes.textContent = `${st.balls === 1 ? 'Ball 1' : `Ball ${Math.max(1, st.balls)}`} · ${st.pts} pts`; }
-
-  const onDown = (e) => { if (ps.mode !== 'off') table.input.down(e); };
-  const onKey = (e) => { if (e.key === 'Escape' && e.type === 'keydown') api.stop(); else table.input.key(e); };
-  const noScroll = (e) => { if (ps.mode !== 'off' && !e.target?.closest?.('.golf-quit, .golf-score')) e.preventDefault(); };
-  const onUp = (e) => { table.setFlip(false); table.input.up(e); };
-  function listen(on) {
-    const f = on ? 'addEventListener' : 'removeEventListener';
-    window[f]('pointerdown', onDown, { passive: false }); window[f]('pointermove', table.input.move); window[f]('pointerup', onUp); window[f]('pointercancel', onUp); window[f]('keydown', onKey); window[f]('keyup', onKey);
-    window[f]('touchmove', noScroll, { passive: false }); window[f]('touchstart', noScroll, { passive: false });
-  }
-
-  const api = {
-    get active() { return ps.mode !== 'off'; },
-    get focusDistance() { return table.focusDistance; },
-    onQuit: null,
-    get debug() { return table.debug; },
-    start(homeCam) {
-      if (ps.mode !== 'off') return;
-      home.pos.copy(homeCam.pos); home.look.copy(homeCam.look); from.pos.copy(homeCam.pos); from.look.copy(homeCam.look);
-      const q = new URLSearchParams(location.search); Object.assign(ps, { mode: 'enter', t: 0, results: [], holeIdx: q.has('hole') ? Math.max(0, Math.min(HOLES.length - 1, +q.get('hole') - 1)) : 0 }); table.setFlip(false);
-      setBoards(false); buildTable(); table.resetCamera(); table.poseCamera(want, 0.016);
-      document.body.classList.add('game-mode'); hud.hidden = false; hud.classList.remove('pb-card'); elScore.hidden = true; elHelp.hidden = true; listen(true); audio?.zoom?.('in', 1.7);
-      say(elBanner, `Hole ${ps.holeIdx + 1} · ${HOLES[ps.holeIdx].name}`, 2600, 'banner');
-    },
-    stop() {
-      if (ps.mode === 'off' || ps.mode === 'exit') return;
-      table.input.up(); world.carve.setHole(0, 0, 0, 0); hud.classList.add('leaving'); elScore.hidden = true; table.setFlip(false);
-      from.pos.copy(camera.position); tmpV.set(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(30).add(camera.position); from.look.copy(tmpV);
-      ps.mode = 'exit'; ps.t = 0; audio?.zoom?.('out', 1.4);
-    },
-    update(dt) {
-      if (ps.mode === 'off') return false;
-      dt = Math.min(dt, 0.05); ps.t += dt;
-      if (ps.mode === 'exit') {
-        const k = reduceMotion ? 1 : ease(clamp01(ps.t / 1.4)); camera.position.lerpVectors(from.pos, home.pos, k); tmpV.lerpVectors(from.look, home.look, k); camera.up.copy(up0); camera.lookAt(tmpV);
-        table.setRise(1 - k); world.carve.set(1 - k, 0);
-        if (k >= 1) {
-          disposeTable(); world.carve.end(); setBoards(true); document.body.classList.remove('game-mode'); hud.hidden = true; hud.classList.remove('leaving'); listen(false); ps.mode = 'off'; this.onQuit?.();
-        }
-        return true;
-      }
-      if (ps.mode === 'trans') {
-        const k = reduceMotion ? 1 : ease(clamp01(ps.t / 0.7)); table.setRise(1 - k); world.carve.set(1 - k, 0);
-        if (k >= 1) {
-          disposeTable(); world.carve.end(); buildTable();
-          from.pos.copy(camera.position); tmpV.set(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(30).add(camera.position); from.look.copy(tmpV); table.resetCamera(); ps.mode = 'enter'; ps.t = 0; say(elBanner, `Hole ${ps.holeIdx + 1} · ${HOLES[ps.holeIdx].name}`, 2600, 'banner');
-        }
-        return true;
-      }
-      if (ps.mode === 'enter') {
-        table.holdCamera(); table.poseCamera(want, dt);
-        const k = reduceMotion ? 1 : ease(clamp01(ps.t / 2.0)); camera.position.lerpVectors(from.pos, want.pos, k); tmpV.lerpVectors(from.look, want.look, k); camera.up.copy(up0); camera.lookAt(tmpV);
-        const r = reduceMotion ? 1 : ease(clamp01((ps.t - 0.3) / 1.2)); table.setRise(r); world.carve.set(r, 0); table.leanTable();
-        if (ps.t >= 2.1 || reduceMotion) { table.setRise(1); world.carve.set(1, 0); ps.mode = 'play'; elHelp.hidden = false; }
-        return true;
-      }
-      table.frameCamera(dt); table.tick(dt); updateHud();
-      return true;
-    },
-  };
-  return api;
-}

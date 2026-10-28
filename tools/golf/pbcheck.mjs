@@ -1,13 +1,13 @@
 // Checks every Pinball Golf table layout (and its mirror): nothing overlaps or sits against a wall, the lock saucers have a clear shot to the cup, a straight skill shot sinks in the open cup with some aim to spare,
 // and each winding ramp can be climbed. Usage: node tools/golf/pbcheck.mjs
-import { makeHole, courseSeed, holeSeed, heroOrder } from '../../js/golfgen.js';
+import { plainHole, courseSeed, holeSeed } from '../../js/golfgen.js';
 import { newBall, newCtx, stepBall, hillH, shoot } from '../../js/golfphys.js';
 import { prepareTable, LAYOUTS, TILT, PLAT_H } from '../../js/pbtable.js';
 
 const segDist = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1e-9; let t = ((px - ax) * dx + (pz - az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(px - (ax + dx * t), pz - (az + dz * t)); };
 const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false }; let bad = 0;
 for (let li = 0; li < LAYOUTS.length; li++) for (const mirror of [false, true]) {
-  const cs = courseSeed(2026, 3), H = makeHole(holeSeed(cs, 3), 3, heroOrder(cs)[3]); prepareTable(H, li, mirror); H.bumpers.push(...H.elevated); const notes = [];
+  const cs = courseSeed(2026, 3), H = plainHole(holeSeed(cs, 8), 8); prepareTable(H, li, mirror); H.bumpers.push(...H.elevated); const notes = [];
   const things = [...H.bumpers.map((b) => ({ n: 'bumper', x: b.x, z: b.z, r: b.r })), ...H.targets.map((t) => ({ n: 'target', x: t.x, z: t.z, r: t.r })), { n: 'spinner', x: H.spinner.x, z: H.spinner.z, r: H.spinner.len + 0.1 }, ...H.saucers.map((s) => ({ n: 'saucer', x: s.x, z: s.z, r: 0.6 }))];
   for (let i = 0; i < things.length; i++) {
     const a = things[i]; for (let j = i + 1; j < things.length; j++) { const b = things[j]; if (a.n === 'bumper' && b.n === 'bumper' && Math.abs(a.x - b.x) < 0.01) continue; if (Math.hypot(a.x - b.x, a.z - b.z) < a.r + b.r + 0.3) notes.push(`${a.n}/${b.n} too close at ${a.x},${a.z}`); }

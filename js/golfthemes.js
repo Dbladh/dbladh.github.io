@@ -1,6 +1,6 @@
 // The mini-golf's themes as plain data (no THREE): what a hole looks like (the colour of the lawn, the wall round it, the cup patch, the sand), what stands beside it (a landmark and scattered props), and
 // what is special about its ground (ice, mud, quicksand, lava). golfvis.js reads the colours, golfscenery.js the landmark and props, golfgen.js and golfphys.js the surface and the hazard.
-import { mulberry32 } from './golfhero.js?v=20261027211300';
+import { mulberry32 } from './golfhero.js?v=20261027211515';
 
 const BRICKS = ['#d3694a', '#bd5a3e', '#dc7d58', '#ad5039', '#c96348', '#c9a58a'], ROCKS = ['#a39d92', '#b8b1a3', '#8c8780', '#b0a698', '#c4bba8', '#968d7f'], WOODS = ['#ffffff', '#f0dcc0', '#e0c49c', '#ffe9cc'];
 

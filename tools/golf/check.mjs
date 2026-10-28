@@ -85,7 +85,7 @@ if (opt('tune', false)) {                                  // sweep the numbers 
     const [kind, field] = key.split('.'), keep = TUNING[kind][field]; console.log(`\n${key} (current ${keep})`);
     for (const v of grids[key]) {
       TUNING[kind][field] = v; let placed = 0, forg = 0, nec = 0, drop = 0;
-      for (let m = 1; m <= months; m++) { const cs = courseSeed(YEAR, m), order = heroOrder(cs, MORE_BAKED), shp = shapeOrder(cs); for (let i = 2; i < HOLES; i++) { const h = makeHole(holeSeed(cs, i), i, order[i], shp[i], extOf(cs, i)); for (const x of h.recipes) if (x.kind === kind) { placed++; forg += x.forgiveness; nec += x.necessity; } for (const l of h.recipeLog) if (l.kind === kind) drop++; } }
+      for (let m = 1; m <= months; m++) { const cs = courseSeed(YEAR, m), order = heroOrder(cs, MORE_BAKED), shp = shapeOrder(cs); for (let i = 2; i < HOLES - 1; i++) { const h = makeHole(holeSeed(cs, i), i, order[i], shp[i], extOf(cs, i)); for (const x of h.recipes) if (x.kind === kind) { placed++; forg += x.forgiveness; nec += x.necessity; } for (const l of h.recipeLog) if (l.kind === kind) drop++; } }
       console.log(`  ${field} = ${String(v).padEnd(4)} placed ${String(placed).padStart(3)}  forgiveness ${placed ? (forg / placed * 100).toFixed(0) : '-'}%  machine needed ${placed ? (nec / placed * 100).toFixed(0) : '-'}%  dropped ${drop}`);
     }
     TUNING[kind][field] = keep;
@@ -99,7 +99,7 @@ if (ONLY) {
 }
 for (const s of seeds.regress) runHole(seeds.year, s.month, s.hole);
 const regressN = rows.length;
-for (let m = START; m < START + MONTHS; m++) for (let i = 0; i < HOLES; i++) runHole(YEAR, m, i);
+for (let m = START; m < START + MONTHS; m++) for (let i = 0; i < HOLES - 1; i++) runHole(YEAR, m, i);
 
 const fails = rows.filter((r) => r.problems.length), pct = (a, b) => (b ? `${((a / b) * 100).toFixed(1)}%` : '-');
 console.log(`checked ${rows.length} holes (${regressN} regression seeds + ${MONTHS} months from ${YEAR}-${START}) in ${((Date.now() - t0) / 1000).toFixed(1)} s${BOT ? ' with the bot' : ''}`);

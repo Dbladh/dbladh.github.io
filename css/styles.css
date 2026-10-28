@@ -963,15 +963,13 @@ body.scene-mode .bike-hint { display: block; }
 .pb-help button { border: 0; border-radius: 999px; padding: 8px 14px; background: #e8594b; color: #fff; font: 700 13px/1 inherit; cursor: pointer; }
 .pb-q { position: fixed; z-index: 24; right: 14px; bottom: 2.5%; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(40,52,72,.85); color: #fff; font: 800 18px/1 inherit; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
 
-.pb-tab { width: 100%; border-collapse: collapse; margin: 6px 0; font: 600 13px/1.3 inherit; } .pb-tab td { padding: 3px 6px; text-align: left; } .pb-tab td:last-child { text-align: right; font-weight: 800; } .pb-tab td:nth-child(3) { color: #e8a60c; letter-spacing: 1px; }
-.pb-next { margin: 4px 0 8px; font: 600 14px/1.2 inherit; opacity: .75; }
 
 .mode-seed { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(42,28,12,.08); font: 600 13px/1.25 inherit; }
 .mode-seed div { display: flex; gap: 6px; flex-shrink: 0; }
 .mode-card .mode-seed button { padding: 8px 12px; border-radius: 999px; background: #2a1c0c; color: #fff; font: 700 12px/1 inherit; text-align: center; flex-direction: row; }
 .mode-card .mode-seed button[hidden] { display: none; }
 
-.pb-card .pb-lamps, .pb-card .pb-nudge, .pb-card .pb-flip, .pb-card .pb-q, .pb-off .pb-lamps, .pb-off .pb-nudge, .pb-off .pb-flip, .pb-off .pb-q, .pb-off .pb-help { display: none; }   /* (the pinball controls show only on the table hole of the mini-golf) */
+.pb-off .pb-lamps, .pb-off .pb-nudge, .pb-off .pb-flip, .pb-off .pb-q, .pb-off .pb-help { display: none; }   /* (the pinball controls show only on the table hole of the mini-golf) */
 
 .mode-load { position: fixed; left: 50%; bottom: 14%; transform: translateX(-50%); z-index: 61; padding: 12px 20px; border-radius: 999px; background: rgba(20,24,34,.88); color: #fff; font: 700 15px/1 inherit; box-shadow: 0 6px 22px rgba(0,0,0,.4); }
 .mode-load[hidden] { display: none; }

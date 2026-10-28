@@ -22,7 +22,7 @@ if (n > 0) {
   for (let m = 1; m <= n; m++) {
     const cs = courseSeed(2026, m), order = heroOrder(cs), shapes = shapeOrder(cs, true), cells = [];
     console.log(`\nmonth 2026-${m}: ${shapes.join(', ')}`);
-    for (let i = 0; i < HOLES; i++) {
+    for (let i = 0; i < HOLES - 1; i++) {
       let h = null; for (let a = 0; a < 300 && !h; a++) h = buildAttempt((holeSeed(cs, i) + a * 2654435761) >>> 0, i, order[i], only || shapes[i]);
       cells.push(h ? thumb(h) : Array(Hh).fill('(no valid layout)'.padEnd(W)));
     }

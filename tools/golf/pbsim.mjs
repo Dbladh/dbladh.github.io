@@ -1,12 +1,12 @@
 // Plays the Pinball Golf table with simple bots and reports how it feels: a skill shot (an aimed putt from the tee), then a flip bot (holds the flippers when the ball rolls down to them). Reports how long a ball stays
 // in play, how often it reaches the deck (the ramp lamp), drains, and sinks in the cup (assuming the cup is open). Usage: node tools/golf/pbsim.mjs [--balls 200]
-import { makeHole, courseSeed, holeSeed, heroOrder } from '../../js/golfgen.js';
+import { plainHole, courseSeed, holeSeed } from '../../js/golfgen.js';
 import { newBall, newCtx, stepBall, shoot, collideFlippers, hillH } from '../../js/golfphys.js';
 import { prepareTable, stepFlips, isDrained, TILT, PLAT_H, TABLE } from '../../js/pbtable.js';
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--${k}`); return i < 0 ? d : +args[i + 1]; }, BALLS = opt('balls', 200);
 let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-const cs = courseSeed(2026, 3), H = makeHole(holeSeed(cs, 3), 3, heroOrder(cs)[3]), fr = prepareTable(H); H.bumpers.push(...H.elevated);
+const cs = courseSeed(2026, 3), H = plainHole(holeSeed(cs, 8), 8), fr = prepareTable(H); H.bumpers.push(...H.elevated);
 const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false }, tally = { drained: 0, holed: 0, timeout: 0 }; let totalT = 0, deck = 0, sumFlips = 0;
 for (let n = 0; n < BALLS; n++) {
   const b = newBall(H), ctx = newCtx(); ctx.capV = 13; ctx.fricK = 0.3; ctx.tilt = TILT; ctx.cupR = 0.6 * 1.35;
