@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027214840';
-import { toWorld, YAWS } from './golfsites.js?v=20261027214840';
-import { M, G } from './golfvis.js?v=20261027214840';
-import { isLow } from './golfquality.js?v=20261027214840';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027214840';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261027214846';
+import { toWorld, YAWS } from './golfsites.js?v=20261027214846';
+import { M, G } from './golfvis.js?v=20261027214846';
+import { isLow } from './golfquality.js?v=20261027214846';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261027214846';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) { /* (no haptics here) */ } };      // (a short buzz on phones that can)
@@ -205,7 +205,7 @@ export function createTable(env) {
     return false;
   };
   const onMove = (e) => { if (drag) { drag.x = e.clientX; drag.y = e.clientY; updateAim(); } };
-  const onUp = () => {
+  const onUp = (e) => {
     if (e && e.pointerId !== undefined) sideHolds.delete(e.pointerId); else sideHolds.clear();
     if (!drag) return; const d = drag; drag = null; updateAim(); if (st.mode !== 'aim') return;
     const a = aimInfo(d); if (a.power < 0.06) return;
