@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261027213744';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261027213744';
-import { aceSearch } from './golface.js?v=20261027213744';
-import { BAKED } from './golfbake.js?v=20261027213744';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261027214133';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261027214133';
+import { aceSearch } from './golface.js?v=20261027214133';
+import { BAKED } from './golfbake.js?v=20261027214133';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -98,12 +98,12 @@ function blobPoly(x, z, r, seed) {
 function sandPoly(kind, x, z, rad, ox, oz, seed) {
   const rng = mulberry32(seed), pts = []; let c = 1, s = 0; const C = 0.9659258262890683, S = 0.25881904510252074, lump = []; for (let i = 0; i < 24; i++) lump.push(rng());
   for (let i = 0; i < 24; i++) {
-    let px, py; const bump = 1 + 0.12 * (lump[i] - 0.5);
-    if (kind === 0) { px = c * rad * 1.9; py = s * rad * 0.62; }                                  // an oval
-    else if (kind === 1) { px = c * rad * 1.9; py = s * rad * (0.4 + 0.45 * c * c); }             // a peanut
-    else if (kind === 2) { px = c * rad * 2.0; py = s * rad * 0.5 + 0.12 * (px * px) / rad - 0.5 * rad; }   // a banana
+    let px, py; const bump = 1 + 0.26 * (lump[i] - 0.5);
+    if (kind === 0) { px = c * rad * 1.4; py = s * rad * 0.98; }                                  // a plump rounded blob
+    else if (kind === 1) { px = c * rad * 1.55; py = s * rad * (0.62 + 0.4 * c * c); }             // a fat peanut
+    else if (kind === 2) { px = c * rad * 1.7; py = s * rad * 0.75 + 0.1 * (px * px) / rad - 0.4 * rad; }   // a kidney
     else if (kind === 3) { const rr = rad * (1 + 0.28 * (4 * c * c * c - 3 * c)); px = c * rr; py = s * rr; }   // a rounded triangle
-    else { const rr = rad * (1 + 0.3 * lump[i]); px = c * rr; py = s * rr; }                       // a lumpy blob
+    else { const rr = rad * (1 + 0.45 * lump[i]); px = c * rr; py = s * rr; }                       // a lumpy blob
     pts.push(x + (px * ox - py * oz) * bump, z + (px * oz + py * ox) * bump);
     const nc = c * C - s * S; s = s * C + c * S; c = nc;
   }
