@@ -2,7 +2,7 @@
 // worked out from the same picture so the light catches the surface. Same chunky, warm style as the rest of the site. The high tier (see golfquality.js) draws them at 256 px with extra detail
 // (blades of grass, chipped bricks, lichen, nail heads, glints) on physically based materials that pick up the sky's reflections; the low tier keeps the small 128 px tiles on plain lit materials.
 import * as THREE from 'three';
-import { isLow } from './golfquality.js?v=20261027202201';
+import { isLow } from './golfquality.js?v=20261027202411';
 
 let seed = 12345;
 const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -97,6 +97,24 @@ function makeSand() {                                     // fine grains, a few 
   for (let p = 0; p < 18 * S; p++) { const cx = rnd() * W, cy = rnd() * W, r = (1 + rnd() * 1.5) * S; for (let j = -4; j <= 4; j++) for (let i = -4; i <= 4; i++) if (i * i + j * j < r * r) pe[(((cy + j) | 0) + W) % W * W + (((cx + i) | 0) + W) % W] = 1; }
   return make(W, W, (i, j) => { const k = j * W + i, rip = 0.5 + 0.5 * Math.sin(j * 0.35 / S + n1[k] * 5), glint = hi && n3[k] > 0.93 ? 28 : 0, g = 226 + (n2[k] - 0.5) * 34 + (rip - 0.5) * 14 - pe[k] * 40 + glint; return [g, g * 0.9, g * 0.66 - pe[k] * 6, 0.3 * rip + 0.7 * n2[k] + pe[k] * 0.4, glint ? 0.3 : 0.92 - pe[k] * 0.1]; }, hi ? 1.8 : 1.4);
 }
+
+/** The lawn of a themed hole: the same kind of light, grey-leaning picture as the turf (the hole's lawn colours tint it through vertex colours), painted as dunes, snow, sugar, basalt or damp moss. */
+function makeGround(kind) {
+  const W = SZ(), S = W / 128, hi = !isLow(), n1 = noise(W, W, 10 * S, 3, 1), n2 = noise(W, W, 3 * S), n3 = noise(W, W, 1 * S), n0 = noise(W, W, 36 * S), n4 = noise(W, W, 6 * S, 1, 4), cr = new Float32Array(W * W), sp = [];
+  if (kind === 'rock' || kind === 'moss') for (let c = 0; c < (kind === 'rock' ? 9 : 4); c++) { let x = rnd() * W, y = rnd() * W, a = rnd() * 6.28; for (let t = 0; t < 46 * S; t++) { a += (rnd() - 0.5) * 0.8; x += Math.cos(a) * 1.6; y += Math.sin(a) * 1.6; cr[(((y | 0) + W) % W) * W + (((x | 0) + W) % W)] = 1; } }
+  if (kind === 'candy') for (let c = 0; c < 70 * S * S / 2; c++) sp.push([rnd() * W, rnd() * W, rnd() * 3.14, ['#ff3d7f', '#ffe14a', '#3dc8ff', '#ffffff', '#9a5cff'][(rnd() * 5) | 0]]);
+  const sprink = new Map(); if (kind === 'candy') for (const [x, y, a, c] of sp) for (let t = -3; t <= 3; t++) { const px = Math.round(x + Math.cos(a) * t * S) , py = Math.round(y + Math.sin(a) * t * S); sprink.set(((py + W) % W) * W + ((px + W) % W), c); }
+  const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  return make(W, W, (i, j) => {
+    const k = j * W + i, v = 0.6 * n1[k] + 0.4 * n2[k];
+    if (kind === 'sand') { const rip = 0.5 + 0.5 * Math.sin(j * 0.3 / S + n1[k] * 6), gl = hi && n3[k] > 0.94 ? 22 : 0, g = 232 + (n2[k] - 0.5) * 22 + (rip - 0.5) * 16 + gl; return [g, g * 0.97, g * 0.92, 0.5 * rip + 0.5 * n2[k], gl ? 0.3 : 0.95]; }
+    if (kind === 'snow') { const drift = 0.5 + 0.5 * Math.sin(i * 0.12 / S + n1[k] * 4) * Math.cos(j * 0.1 / S), gl = hi && n3[k] > 0.955 ? 30 : 0, g = 244 + (n0[k] - 0.5) * 10 - (1 - drift) * 8 + gl; return [g * 0.97, g * 0.99, g, 0.4 * drift + 0.3 * n2[k], gl ? 0.15 : 0.7]; }
+    if (kind === 'candy') { const sc = sprink.get(k); if (sc) { const [r, g, b] = hex(sc); return [r, g, b, 0.9, 0.35]; } const g = 238 + (n2[k] - 0.5) * 10 + Math.sin((i + j) * 0.2 / S) * 4; return [g, g * 0.97, g * 0.98, 0.3 * n2[k], 0.4]; }
+    if (kind === 'rock') { const g = 130 + v * 70 + (n3[k] - 0.5) * 20; const c = cr[k]; return c ? [255, 140, 40, 0, 0.5] : [g, g * 0.95, g * 0.98, v * 0.8 + 0.2 * n3[k], 0.85]; }
+    if (kind === 'moss') { const m = Math.max(0, n4[k] - 0.45) * 1.6, g = 150 + v * 60 - cr[k] * 40; return [g * (1 - m * 0.25), g * (1 + m * 0.1), g * (1 - m * 0.2), v * 0.7 + 0.3 * n3[k] - cr[k] * 0.3, 0.9]; }
+    return [220, 220, 220, v, 0.9];
+  }, hi ? 2.8 : 2.2);
+}
 let built = null;
 /** The textures and materials (built the first time they are asked for). The tier comes from golfquality.js: the low tier leaves out the normal maps and uses plain lit materials. */
 export function golfMaterials() {
@@ -114,6 +132,8 @@ export function golfMaterials() {
     plaster: lam(T.stone, '#fff4dc'), shingle: lam(T.wood, '#e8604e'), darkwood: lam(T.wood, '#8a5a38'), metal: lam(T.metal, '#aab2bd'),
     red: lam(T.metal, '#e04a4a'), blue: lam(T.metal, '#4d8fe0'), cream: lam(T.metal, '#fffaf0'),
     lam,
+    /** The lawn material of a themed hole ('grass' is the turf): cached, tinted by the hole's vertex colours. */
+    ground(kind) { if (!kind || kind === 'grass') return built.turf; const key = 'g_' + kind; if (!built[key]) { const t = makeGround(kind); T[key] = t; built[key] = lam(t, '#ffffff', { vertexColors: true }); built[key].userData.neon = 'turf'; } return built[key]; },
   };
   return built;
 }

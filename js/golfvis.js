@@ -1,11 +1,11 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202201';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202201';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202201';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202201';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202201';
+import { BALL_R, CUP_R, hillH, hillGrad } from './golfphys.js?v=20261027202411';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261027202411';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261027202411';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261027202411';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261027202411';
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 export const M = {
@@ -148,7 +148,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     }
   }
   const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); fg.setIndex(idx); fg.computeVertexNormals();
-  const fair = new THREE.Mesh(fg, M.grass); fair.receiveShadow = true; g.add(fair);
+  const GROUND = GM.ground(TH0.ground), fair = new THREE.Mesh(fg, GROUND); fair.receiveShadow = true; g.add(fair);
   for (const f of feats) if (f.t === 'gap') {                // the chasm: a dark floor and rock walls down both sides, under the border
     const yaw = Math.atan2(-f.uz, f.ux), cm = (f.c0 + f.c1) / 2, wide = f.c1 - f.c0 + 0.1, dk = stoneTint('#4a4239'), grp = new THREE.Group(); grp.position.set(f.x + f.nx * cm, 0, f.z + f.nz * cm); grp.rotation.y = yaw; g.add(grp);
     grp.add(rbox(paint('#241d18'), f.len + 0.2, 0.1, wide, 0, -f.d - 0.02, 0, 0.02));
@@ -177,7 +177,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (const rr of RING) for (let k = 0; k < SEG; k++) { const a = (k / SEG) * 6.2832, x = cx + Math.cos(a) * rr * CUP_R * 0.92, z = cz + Math.sin(a) * rr * CUP_R * 0.92; pp.push(x, hillH(h, x, z) + 0.032 + (rr < 1.15 ? 0.012 : 0), z); pu.push(x * 0.4, z * 0.4); pc.push(col0.r, col0.g, col0.b); }
     for (let r = 0; r < RING.length - 1; r++) for (let k = 0; k < SEG; k++) { const a0 = r * SEG + k, b0 = r * SEG + ((k + 1) % SEG), a1 = (r + 1) * SEG + k, b1 = (r + 1) * SEG + ((k + 1) % SEG); pi.push(a0, b0, a1, b0, b1, a1); }
     const pg = track(new THREE.BufferGeometry()); pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2)); pg.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3)); pg.setIndex(pi); pg.computeVertexNormals();
-    const patch = new THREE.Mesh(pg, M.grass); patch.receiveShadow = true; patch.material = M.grass; g.add(patch);
+    const patch = new THREE.Mesh(pg, GROUND); patch.receiveShadow = true; g.add(patch);
     const rim = new THREE.Mesh(track(new THREE.TorusGeometry(1.0, 0.08, 8, 32)), metal('#d5dbe3')); rim.rotation.x = Math.PI / 2; rim.position.y = 0.05; cupMesh.add(rim);
     const wall = new THREE.Mesh(track(new THREE.CylinderGeometry(1.0, 0.96, 1.0, 28, 1, true)), new THREE.MeshBasicMaterial({ color: '#0b0d10', side: THREE.BackSide })); wall.position.y = -0.46; cupMesh.add(wall);
     const floor = new THREE.Mesh(G.disc, new THREE.MeshBasicMaterial({ color: '#020304' })); floor.scale.set(0.96, 1, 0.96); floor.position.y = -0.95; cupMesh.add(floor); }
