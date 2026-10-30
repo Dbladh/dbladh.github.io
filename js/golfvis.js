@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState } from './golfphys.js?v=20261029212212';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029212212';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029212212';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029212212';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029212212';
-import { isLow } from './golfquality.js?v=20261029212212';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState } from './golfphys.js?v=20261029213431';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029213431';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029213431';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029213431';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029213431';
+import { isLow } from './golfquality.js?v=20261029213431';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -532,13 +532,13 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       w.add(rbox(blue, 0.3, 0.3, (hw + 0.5) * 2, m.du, 3.5, 0, 0.06));                                   // an arch over each hammer: a bar across the lane on two legs, the chain hangs from a ring on the bar
       for (const sd of [-1, 1]) { w.add(rbox(blue, 0.3, 3.6, 0.3, m.du, 1.75, sd * (hw + 0.45), 0.06)); w.add(rbox(blue, 0.9, 0.16, 0.55, m.du, 0.1, sd * (hw + 0.45), 0.04)); }
       if (!isLow()) for (const sd of [-1, 1]) { const br = rbox(blue, 0.18, 1.1, 0.12, m.du, 3.0, sd * (hw + 0.2), 0.03); br.rotation.x = sd * 0.8; w.add(br); w.add(cyl(metal('#c9ced6'), 0.09, 0.08, m.du, 3.5, sd * (hw + 0.45))); }       // high tier: corner braces and bolt heads
-      w.add(torus(yel, 0.13, 0.05, m.du, 3.32, 0, 0, Math.PI / 2)); w.add(rbox(blue, 0.12, 0.2, 0.12, m.du, 3.36, 0, 0.02));
+      const ring = torus(yel, 0.13, 0.05, 0, 0, 0, 0, Math.PI / 2), trolley = rbox(blue, 0.34, 0.2, 0.5, 0, 0, 0, 0.03); w.add(ring, trolley);        // (the chain hangs from a trolley that runs along the bar, so the whole hammer slides across the lane)
       const head = new THREE.Group(), body = cyl(padM, hr.rad, 0.9, 0, 0, 0); head.add(body); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, 0.18, 0)); head.add(cyl(yel, hr.rad * 1.02, 0.14, 0, -0.2, 0)); head.add(torus(blue, 0.12, 0.05, 0, 0.5, 0, Math.PI / 2)); w.add(head);
       const links = []; for (let i = 0; i < 9; i++) { const lk = torus(yel, 0.11, 0.035, 0, 0, 0); lk.scale.set(1, 1.5, 1); w.add(lk); links.push(lk); }
       updaters.push((heroT) => {
-        const off = hr.A * Math.sin(hr.w * heroT + m.ph); head.position.set(m.du, 0.6, off);
-        const topY = 3.3, hx = m.du, hy = 1.12, hz = off;
-        links.forEach((lk, i) => { const u = (i + 0.5) / links.length; lk.position.set(hx, topY + (hy - topY) * u, hz * u); lk.rotation.set(-Math.atan2(hz, topY - hy), i % 2 ? Math.PI / 2 : 0, 0); });
+        const ph = hr.w * heroT + m.ph, off = hr.A * Math.sin(ph), sw = 0.2 * Math.sin(ph) + 0.05 * Math.sin(ph * 2.7 + 1), topY = 3.3, hx = m.du, hy = 1.12;      // (the trolley slides with the hammer; the hammer lags a little behind it and swings under it)
+        ring.position.set(hx, topY + 0.02, off); trolley.position.set(hx, topY + 0.2, off); head.position.set(m.du, 0.6, off + sw); head.rotation.x = -Math.atan2(sw, topY - hy) * 0.8;
+        links.forEach((lk, i) => { const u = (i + 0.5) / links.length; lk.position.set(hx, topY + (hy - topY) * u, off + sw * u); lk.rotation.set(-Math.atan2(sw, topY - hy), i % 2 ? Math.PI / 2 : 0, 0); });
       });
     });
   } else if (hr.type === 'geyser') {                       // a stone-ringed pool that bubbles, swells and then throws up a column of water
