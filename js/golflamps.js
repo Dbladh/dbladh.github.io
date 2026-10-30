@@ -2,7 +2,7 @@
 // and, switched on by `update(night)`, a soft cone of light, a pool of light on the ground and a glow round the bulb. A few real point lights (borrowed from the village) light the
 // holes near the one in play (see golf.js).
 import * as THREE from 'three';
-import { toWorld } from './golfsites.js?v=20261029201758';
+import { toWorld } from './golfsites.js?v=20261029202034';
 
 const POST_H = 3.0, ARM = 1.7;
 const radial = (stops) => {
@@ -28,12 +28,12 @@ export function lampSpots(h, site, count, blocked) {
 }
 
 /** The lamps. `spots` is [{ hole, x, z, ax, az }]; `ground(x, z)` the real height of the ground. */
-export function buildLamps(spots, ground) {
+export function buildLamps(spots, ground, pool = null) {
   const n = spots.length, group = new THREE.Group(), UP = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), m = new THREE.Matrix4(), v = new THREE.Vector3(), s = new THREE.Vector3();
   const dark = new THREE.MeshLambertMaterial({ color: '#3b3d46' }), shadeMat = new THREE.MeshLambertMaterial({ color: '#2d2f38' }), bulbMat = new THREE.MeshBasicMaterial({ color: '#f4efe2' });
   const beamMat = new THREE.MeshBasicMaterial({ color: '#ffcf8a', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
   const poolTex = radial([[0, 0.8], [0.4, 0.38], [0.68, 0.1], [0.9, 0]]), glowTex = radial([[0, 1], [0.25, 0.55], [1, 0]]);
-  const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, color: '#ffc77a', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, color: '#ffc77a', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
   const glowMat = new THREE.PointsMaterial({ map: glowTex, color: '#ffd28a', size: 2.4, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
   const mk = (geo, mat, cast) => { const im = new THREE.InstancedMesh(geo, mat, n); im.castShadow = !!cast; im.frustumCulled = false; group.add(im); return im; };
   const poolMeshes = [], posts = mk(new THREE.CylinderGeometry(0.06, 0.08, POST_H, 8), dark, true), arms = mk(new THREE.BoxGeometry(1, 1, 1), dark, true), shades = mk(new THREE.ConeGeometry(0.3, 0.24, 10), shadeMat, true);
@@ -51,8 +51,8 @@ export function buildLamps(spots, ground) {
     set(shades, m.compose(v.set(bx, by + 0.28, bz), q.identity(), s.set(1, 1, 1)));
     set(bulbs, m.compose(v.set(bx, by, bz), q.identity(), s.set(1, 1, 1)));
     set(beams, m.compose(v.set(bx, (by + gy) / 2, bz), q.identity(), s.set(1, by - gy, 1)));
-    { const SEG = 14, geo = new THREE.PlaneGeometry(11, 11, SEG, SEG).rotateX(-Math.PI / 2), pp = geo.attributes.position;       // the pool of light is laid over the real ground (every vertex at the ground's height), so on a hill it follows the slope instead of a flat plane cutting into it in a jagged line
-      for (let k = 0; k < pp.count; k++) { const wx = bx + pp.getX(k), wz = bz + pp.getZ(k); pp.setXYZ(k, wx, ground(wx, wz) + 0.09, wz); }
+    { const SEG = 22, geo = new THREE.PlaneGeometry(11, 11, SEG, SEG).rotateX(-Math.PI / 2), pp = geo.attributes.position;       // the pool of light is laid over the real ground (every vertex at the ground's height), so on a hill it follows the slope instead of a flat plane cutting into it in a jagged line
+      for (let k = 0; k < pp.count; k++) { const wx = bx + pp.getX(k), wz = bz + pp.getZ(k); pp.setXYZ(k, wx, (pool ? pool(wx, wz) : ground(wx, wz)) + 0.1, wz); }
       const pm = new THREE.Mesh(geo, poolMat); pm.frustumCulled = false; pm.renderOrder = 2; pm.visible = false; group.add(pm); poolMeshes[i] = pm; }
     glowPos[i * 3] = bx; glowPos[i * 3 + 1] = by; glowPos[i * 3 + 2] = bz;
     p.bulb = { x: bx, y: by, z: bz }; p.mats = meshes;

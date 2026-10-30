@@ -2,7 +2,7 @@
 // worked out from the same picture so the light catches the surface. Same chunky, warm style as the rest of the site. The high tier (see golfquality.js) draws them at 256 px with extra detail
 // (blades of grass, chipped bricks, lichen, nail heads, glints) on physically based materials that pick up the sky's reflections; the low tier keeps the small 128 px tiles on plain lit materials.
 import * as THREE from 'three';
-import { isLow } from './golfquality.js?v=20261029201758';
+import { isLow } from './golfquality.js?v=20261029202034';
 
 let seed = 12345;
 const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
