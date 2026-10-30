@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029202807';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029202807';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029202807';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029202807';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029202807';
-import { isLow } from './golfquality.js?v=20261029202807';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029203837';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029203837';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029203837';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029203837';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029203837';
+import { isLow } from './golfquality.js?v=20261029203837';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -171,6 +171,8 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   }
   // the border: bricks, boulders or planks all the way round
   const border = buildBorder(h, g, disposables), hitFlash = new Map(), wallFlash = new Map(), heroFlash = new Map(); let heroMeshes = null;
+  const hitGroups = [], heroList = () => { if (heroMeshes) return; heroMeshes = []; heroRoot.traverse((o) => { if (o.userData.hitGroup) hitGroups.push(o); }); heroRoot.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.material && !Array.isArray(o.material) && o.material.emissive && !o.material.transparent && o.geometry !== G.disc) heroMeshes.push(o); }); };
+  const lightHero = (o, e) => { let f = heroFlash.get(o); if (!f) { f = { k: 0, orig: o.material, clone: null }; heroFlash.set(o, f); } if (!f.clone || o.material !== f.clone) { f.orig = o.material === f.clone ? f.orig : o.material; f.clone = f.orig.clone(); disposables.push(f.clone); o.material = f.clone; } f.k = Math.max(f.k, e); };
   // the tee sign, on a post beside the round green at the start
   { const t0 = h.path[0], t1 = h.path[Math.min(4, h.path.length - 1)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1, tx = (t1.x - t0.x) / l, tz = (t1.z - t0.z) / l;
     const sg = new THREE.Group(); sg.position.set(t0.x - tz * 0 + -tz * 3.9 - tx * 0.4, 0, t0.z + tx * 3.9 - tz * 0.4);
@@ -388,16 +390,18 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     heroRoot, group: g, pickups, cupMesh, flag, bumperParts,
     /** The ball hit the post or bumper at (x, z): its lit copy flares. Returns whether there was one. */
     flashAt(x, z, strength = 5) { const f = hitFlash.get(`${x},${z}`); if (!f) return false; f.k = Math.max(f.k, hitK(strength)); f.o.visible = true; return true; },
-    /** The ball hit something of the hero obstacle (a moving wall, a hammer, a sail...) at (x, y, z) of the hole: the one or two nearest parts light up. Returns whether any part was there. */
+    /** The ball hit something of the hero obstacle at (x, y, z) of the hole (the contact point, or the centre of the round thing): the moving piece it touched (a whole sail, a whole hammer) lights up. Returns whether a piece was there. */
     flashHero(x, y, z, strength = 5) {
-      if (!heroRoot || ghostOn) return false;
-      if (!heroMeshes) { heroMeshes = []; heroRoot.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.material && !Array.isArray(o.material) && o.material.emissive && !o.material.transparent && o.geometry !== G.disc) heroMeshes.push(o); }); }
+      if (!heroRoot || ghostOn) return false; heroList();
       g.updateWorldMatrix(true, false); heroRoot.updateWorldMatrix(true, true); g.localToWorld(_hp.set(x, y, z));
-      const hits = []; for (const o of heroMeshes) { if (!o.visible) continue; _hbox.setFromObject(o).expandByScalar(BALL_R + 0.18); if (_hbox.containsPoint(_hp)) { _hbox.getSize(_hs); hits.push([_hs.x * _hs.y * _hs.z, o]); } }
-      hits.sort((a, b) => a[0] - b[0]); const e = hitK(strength);
-      for (const [, o] of hits.slice(0, 2)) { let f = heroFlash.get(o); if (!f) { f = { k: 0, orig: o.material, clone: null }; heroFlash.set(o, f); } if (!f.clone || o.material !== f.clone) { f.orig = o.material === f.clone ? f.orig : o.material; f.clone = f.orig.clone(); disposables.push(f.clone); o.material = f.clone; } f.k = Math.max(f.k, e); }
-      return hits.length > 0;
+      if (hitGroups.length) { for (const grp of hitGroups) grp.traverse((o) => { if (heroMeshes.includes(o)) lightHero(o, hitK(strength)); }); return true; }
+      let best = null, bv = 1e9; for (const o of heroMeshes) { if (!o.visible) continue; _hbox.setFromObject(o); _hbox.getSize(_hs); if (Math.max(_hs.x, _hs.y, _hs.z) > 5) continue; _hbox.expandByScalar(BALL_R + 0.2); if (!_hbox.containsPoint(_hp)) continue; const v = _hs.x * _hs.y * _hs.z; if (v < bv) { bv = v; best = o; } }
+      if (!best) return false;
+      const e = hitK(strength), piece = best.parent && best.parent !== heroRoot && best.parent !== g ? best.parent : best;       // (the piece is the part's whole group: all of a hammer, all of a sail arm)
+      piece.traverse((o) => { if (heroMeshes.includes(o)) lightHero(o, e); }); return true;
     },
+    /** A gentle glow over the whole hero obstacle (the turntable that carries the ball round). */
+    flashHeroAll(strength = 3) { if (!heroRoot || ghostOn) return; heroList(); const e = hitK(strength) * 0.6; for (const o of heroMeshes) lightHero(o, e); },
     /** The ball hit the wall segment (ax, az)-(bx, bz): that stretch of the border (and a little of its neighbours) lights up. Returns whether it is a border wall. */
     flashWall(ax, az, bx, bz, strength = 5) {
       const i = border.segs.findIndex((w) => (w[0] === ax && w[1] === az && w[2] === bx && w[3] === bz)); if (i < 0) return false;
@@ -479,6 +483,7 @@ function heroVisual(hr, track, updaters, ctx = {}) {
       pv.add(rbox(red, 0.1, 0.3, 0.5, 0.02, -1.82, 0.26, 0.03)); rotor.add(pv);
     }
     rotor.add(new THREE.Mesh(G.sph, red)); rotor.children[rotor.children.length - 1].scale.setScalar(0.3); rotor.add(cone(red, 0.2, 0.4, 8, -0.28, 0, 0)); rotor.children[rotor.children.length - 1].rotation.z = Math.PI / 2;
+    rotor.userData.hitGroup = true;                      // (the sails: what lights up when the ball is stopped at the opening)
     updaters.push((heroT) => { rotor.rotation.x = heroT * hr.w + hr.phase; });
   } else if (hr.type === 'alligator') {                    // a chunky toy gator: big eyes, a mouth full of teeth, and jaws that shut across the lane
     const lat0 = hr.gap, lat1 = hw + 0.3, H = hr.half, mid = (lat0 + lat1) / 2, wd = lat1 - lat0, green = paint('#74c653'), green2 = paint('#5db041'), belly = paint('#b5e07e'), toothM = paint('#fffdf0'), redM = paint('#d9394a');
