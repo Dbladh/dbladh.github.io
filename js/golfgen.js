@@ -4,11 +4,11 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029220906';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029220906';
-import { aceSearch } from './golface.js?v=20261029220906';
-import { hillH } from './golfphys.js?v=20261029220906';
-import { BAKED } from './golfbake.js?v=20261029220906';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029221439';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029221439';
+import { aceSearch } from './golface.js?v=20261029221439';
+import { hillH } from './golfphys.js?v=20261029221439';
+import { BAKED } from './golfbake.js?v=20261029221439';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -229,21 +229,23 @@ function capRows(c, tx, tz, hw, dir) {
   return rows;
 }
 
-/** The roughs: a band of long grass (deep snow, loose sand, ash... by theme) along the foot of the walls, on both sides, touching them. A ball in the rough is slowed a fair bit (friction x1.5, a sand pit is x3.2); the middle of the lane, the green, rolls normally. The band stops short of the tee and the cup and breaks wherever something else stands (a machine, a post, a pit, a magnet). It is only 0.3 to 0.7 wide so the green keeps a lane of its own. */
-function addRoughs(out, S) {
-  if (S.index < 1) return; const { cl, w, N, free, keep, sAt, tx, tz } = S, ph = ((S.seed >>> 4) % 628) / 100, runs = [];
+/** The roughs: a band of long grass (deep snow, loose sand, ash... by theme) along the foot of the walls, on both sides, touching them: nearly the whole wall. A ball in the rough is slowed a fair bit (friction x1.5, a sand pit is x3.2); the middle of the lane, the green, rolls normally. The band stops short of the tee and the cup and breaks only where something else really stands (a machine, a post, a pit, a magnet, the hero, a canyon). It is 0.3 to 0.7 wide (times `scale`) so the green keeps a lane of its own. */
+function addRoughs(out, S, X, scale = 1) {
+  if (S.index < 1) return; const { cl, w, N, sAt, tx, tz } = S, ph = ((S.seed >>> 4) % 628) / 100, runs = [], pts = [...X.posts, ...X.bumpers, ...X.magnets.map((m) => ({ x: m.x, z: m.z, r: 1.0 })), ...X.pads.map((p) => ({ x: p.x, z: p.z, r: p.r + 0.6 })), ...X.boosts.map((b) => ({ x: b.x, z: b.z, r: b.len / 2 + 0.8 })), ...X.doors.flatMap((d) => [d.button && { x: d.button.x, z: d.button.z, r: 1.2 }, d.gate && { x: (d.gate[0] + d.gate[2]) / 2, z: (d.gate[1] + d.gate[3]) / 2, r: Math.hypot(d.gate[2] - d.gate[0], d.gate[3] - d.gate[1]) / 2 + 0.8 }].filter(Boolean)), ...X.tunnels.map((t) => ({ x: t.x, z: t.z, r: t.len / 2 + 0.8 })), ...X.feats.filter((f) => f.x !== undefined).map((f) => ({ x: f.x, z: f.z, r: (f.len || 2) / 2 + 1.2 })), ];
+  const polys = [...X.sands.map((o) => o.poly), ...X.ponds.map((o) => o.poly)], heroSpan = [S.sHero - Math.max(1.3, S.heroHalf * 0.42), S.sHero + Math.max(1.3, S.heroHalf * 0.42)], recSpans = X.recipes.map((rc) => { let bi = 0, bd = 1e9; for (let i = 0; i < N; i++) { const d = Math.hypot(cl[i].x - rc.F.o.x, cl[i].z - rc.F.o.z); if (d < bd) { bd = d; bi = i; } } return [sAt[bi] - 0.3, sAt[bi] + rc.len + 0.3]; });
+  const blocked = (x, z, m) => pts.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + m) || polys.some((pl) => inPolyG(pl, x, z));
   for (const side of [1, -1]) {
     let run = null;
     for (let i = 0; i < N; i++) {
-      const bw = Math.min(0.7, Math.max(0, w[i] - 1.15)) * (0.85 + 0.25 * Math.sin(sAt[i] * 0.8 + ph + side)), nx = -tz[i] * side, nz = tx[i] * side, mx = cl[i].x + nx * (w[i] - bw / 2), mz = cl[i].z + nz * (w[i] - bw / 2);
-      const ok = bw > 0.25 && sAt[i] > 3.4 && sAt[i] < S.length - 3.4 && free(mx, mz, bw / 2 + 0.25);
-      if (ok) { (run ||= []).push({ ox: cl[i].x + nx * (w[i] - 0.04), oz: cl[i].z + nz * (w[i] - 0.04), ix: cl[i].x + nx * (w[i] - bw), iz: cl[i].z + nz * (w[i] - bw) }); }
+      const bw = Math.min(0.7, Math.max(0, w[i] - 1.15)) * scale * (0.88 + 0.2 * Math.sin(sAt[i] * 0.8 + ph + side)), nx = -tz[i] * side, nz = tx[i] * side, mx = cl[i].x + nx * (w[i] - bw / 2), mz = cl[i].z + nz * (w[i] - bw / 2);
+      const ok = bw > 0.22 && sAt[i] > 0.5 && sAt[i] < S.length - 0.5 && !(sAt[i] > heroSpan[0] && sAt[i] < heroSpan[1]) && !recSpans.some((r) => sAt[i] > r[0] && sAt[i] < r[1]) && !blocked(mx, mz, bw / 2 + 0.1);
+      if (ok) (run ||= []).push({ ox: cl[i].x + nx * (w[i] - 0.04), oz: cl[i].z + nz * (w[i] - 0.04), ix: cl[i].x + nx * (w[i] - bw), iz: cl[i].z + nz * (w[i] - bw) });
       else if (run) { runs.push(run); run = null; }
     }
     if (run) runs.push(run);
   }
   for (const run of runs) {
-    if (run.length < 6) continue; const poly = []; for (const p of run) poly.push(p.ox, p.oz); for (let k = run.length - 1; k >= 0; k--) poly.push(run[k].ix, run[k].iz);
+    if (run.length < 4) continue; const poly = []; for (const p of run) poly.push(p.ox, p.oz); for (let k = run.length - 1; k >= 0; k--) poly.push(run[k].ix, run[k].iz);
     let cx = 0, cz = 0; for (let i = 0; i < poly.length; i += 2) { cx += poly[i]; cz += poly[i + 1]; } cx /= poly.length / 2; cz /= poly.length / 2; let r2 = 0; for (let i = 0; i < poly.length; i += 2) r2 = Math.max(r2, Math.hypot(poly[i] - cx, poly[i + 1] - cz));
     out.push({ kind: 'rough', poly, x: q(cx), z: q(cz), r: r2 + 0.3, ux: 0, uz: 0, ...SURFACE.rough });
   }
@@ -251,7 +253,6 @@ function addRoughs(out, S) {
 /** Surface patches of a hole (ice, mud, caramel, quicksand, a conveyor belt): strips across the corridor or an oval pit, placed on a straight stretch clear of everything else, drawn with their own generator so they never change the rest of a hole. */
 const SURFACE = { rough: { fric: 1.5 }, ice: { fric: 0.1 }, mud: { fric: 2.2 }, caramel: { fric: 2.8 }, quicksand: { fric: 1.8, pull: 2.4 }, conveyor: { fric: 0.8, push: 3.2 } };
 function addPatches(out, rr, surface, S, magnets = [], tunnels = []) {
-  addRoughs(out, S);
   const { cl, w, tx, tz, N, sAt, length, free, keep } = S, want = [];
   if (S.index >= 1 && surface && SURFACE[surface]) want.push(surface);
   if (S.index >= 3 && rr() < 0.35) want.push('conveyor');
@@ -513,7 +514,14 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   for (const sc of secrets) pickups.push(sc);                // (the secret coins of the machines)
   const patches = [], magnets = [], tunnels = [];
   if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free: freeX, keep, hero }, magnets, tunnels);
-  if (patches.some((p) => p.kind === 'rough') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), ...patches.filter((p) => p.kind === 'rough').map((p) => p.poly)], feats, [...posts, ...bumpers], segsAll())) for (let k = patches.length - 1; k >= 0; k--) if (patches[k].kind === 'rough') patches.splice(k, 1);          // (the green must always have a clear way to the cup that stays off the roughs: if the roughs shut it, they go)
+  if (ext) {                                              // the roughs along the walls: if they would shut the way to the cup they are made thinner, and if that is still not enough they go
+    const X = { sands, ponds, posts, bumpers, recipes, boosts, pads, doors, magnets, tunnels, feats }, SR = { seed, index, cl, w, tx, tz, N, sAt, length, sHero, heroHalf };
+    for (const scale of [1, 0.6, 0]) {
+      for (let k = patches.length - 1; k >= 0; k--) if (patches[k].kind === 'rough') patches.splice(k, 1);
+      if (!scale) break; addRoughs(patches, SR, X, scale);
+      if (!patches.some((p) => p.kind === 'rough') || laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), ...patches.filter((p) => p.kind === 'rough').map((p) => p.poly)], feats, [...posts, ...bumpers], segsAll())) break;
+    }
+  }
 
   // the second set of extras (ext.more): ghost walls and (see the widths above) a fork island, each drawn from their own generator
   const ghosts = [], islands = [], gates1 = [], rollers = [];
