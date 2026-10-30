@@ -2,7 +2,7 @@
 // worked out from the same picture so the light catches the surface. Same chunky, warm style as the rest of the site. The high tier (see golfquality.js) draws them at 256 px with extra detail
 // (blades of grass, chipped bricks, lichen, nail heads, glints) on physically based materials that pick up the sky's reflections; the low tier keeps the small 128 px tiles on plain lit materials.
 import * as THREE from 'three';
-import { isLow } from './golfquality.js?v=20261029220046';
+import { isLow } from './golfquality.js?v=20261029220514';
 
 let seed = 12345;
 const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -120,6 +120,7 @@ function makePatch(kind) {                                  // high tier only: i
   if (kind === 'ice') for (let c = 0; c < 7; c++) { let x = rnd() * W, y = rnd() * W, a = rnd() * 6.28; for (let t = 0; t < 40 * S; t++) { a += (rnd() - 0.5) * 0.9; x += Math.cos(a) * 1.5; y += Math.sin(a) * 1.5; cr[(((y | 0) + W) % W) * W + (((x | 0) + W) % W)] = 1; } }
   return make(W, W, (i, j) => {
     const k = j * W + i, v = 0.6 * n1[k] + 0.4 * n2[k];
+    if (kind === 'rough') { const g = 175 + (n3[k] - 0.5) * 110 + (n1[k] - 0.5) * 40; return [g, g, g, 0.7 * n3[k] + 0.3 * n2[k], 1]; }                      // the rough: a fine, dense speckle, tinted dark by the theme
     if (kind === 'ice') { const g = 236 + (n2[k] - 0.5) * 20 - cr[k] * 60, gl = n3[k] > 0.96 ? 20 : 0; return [g * 0.9 + gl, g * 0.97 + gl, 255, 0.3 * v - cr[k] * 0.6, gl || cr[k] ? 0.5 : 0.12]; }
     if (kind === 'mud') { const pud = n2[k] > 0.62, g = 150 + (n1[k] - 0.5) * 50; return pud ? [g * 0.55, g * 0.45, g * 0.35, 0, 0.12] : [g, g * 0.78, g * 0.55, v, 0.9]; }
     if (kind === 'caramel') { const sw = 0.5 + 0.5 * Math.sin((i + j) * 0.18 / S + n1[k] * 7), g = 215 + sw * 30; return [g, g * 0.75, g * 0.4, 0.4 * sw + 0.2 * n2[k], 0.18]; }
