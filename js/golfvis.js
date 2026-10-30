@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029215756';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029215756';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029215756';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029215756';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029215756';
-import { isLow } from './golfquality.js?v=20261029215756';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029220046';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029220046';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029220046';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029220046';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029220046';
+import { isLow } from './golfquality.js?v=20261029220046';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -116,6 +116,8 @@ function signTexture(n, par) {
 }
 /** The energy of a hit of this impact speed (about 1 to 12): a graze lights its target gently (0.7), a normal tap strongly (1, what a hard hit used to be) and a hard hit flares to 3.2. */
 const hitK = (strength) => 0.7 + 2.5 * Math.pow(Math.max(0, Math.min(1, (strength - 0.8) / 9)), 0.85);
+/** The rough: the theme's lawn colour taken a good deal darker, so it reads against the light, mown green. */
+const roughCol = (TH) => new THREE.Color(TH.fair[1]).multiplyScalar(0.5).offsetHSL(0, 0.06, -0.02);
 const _hbox = new THREE.Box3(), _hp = new THREE.Vector3(), _hs = new THREE.Vector3(), _hwarm = new THREE.Color('#ffe9a0');
 const _warm = new THREE.Color(), _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
 
@@ -134,7 +136,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
   // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised and lowered by the terrain (hills, berms, platforms, ramps, canyons)
-  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color(TH0.fair[0]), c2 = new THREE.Color(TH0.fair[1]), COLS = h.cols || 16, crest = new THREE.Color(TH0.fair[2]), shade = new THREE.Color(TH0.fair[3]), tmp = new THREE.Color();
+  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color(TH0.fair[0]).lerp(new THREE.Color('#ffffff'), 0.2), c2 = new THREE.Color(TH0.fair[1]).lerp(new THREE.Color('#ffffff'), 0.04).multiplyScalar(0.9), COLS = h.cols || 16, crest = new THREE.Color(TH0.fair[2]), shade = new THREE.Color(TH0.fair[3]), tmp = new THREE.Color();
   const rock = new THREE.Color(TH0.rock), deep = new THREE.Color('#4a4239'), plank = new THREE.Color('#e0a868'), feats = h.feats || [];
   let R = h.ribbon;
   if (feats.length || h.sands.length || h.dense) { const R2 = []; for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, a0 = R[i], b0 = R[i + 1]; R2.push([0, 1, 2, 3, 4].map((j) => (j === 4 && (a0[4] < 0 || b0[4] < 0) ? a0[4] : a0[j] + (b0[j] - a0[j]) * t))); } R2.push(R[R.length - 1]); R = R2; }
@@ -285,7 +287,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       const tx = chev.clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; disposables.push(tx); const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (pp.getX(i) * pt.ux + pp.getZ(i) * pt.uz) / 1.6, (-pp.getX(i) * pt.uz + pp.getZ(i) * pt.ux) / 1.6);
       mat = new THREE.MeshBasicMaterial({ map: tx, color: '#9bd4ff', transparent: true, opacity: 0.95, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
     } else {
-      const look = { rough: [TH0.rough || '#3f9f4f', 0.93], ice: ['#bfe6ff', 0.8], mud: ['#6b4a2e', 0.95], caramel: ['#d9902f', 0.92], quicksand: ['#b98b4a', 0.95] }[pt.kind] || ['#999999', 0.9];
+      const look = { rough: [roughCol(TH0), 0.96], ice: ['#bfe6ff', 0.8], mud: ['#6b4a2e', 0.95], caramel: ['#d9902f', 0.92], quicksand: ['#b98b4a', 0.95] }[pt.kind] || ['#999999', 0.9];
       const opt = { color: look[0], transparent: true, opacity: look[1], polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, emissive: pt.kind === 'ice' ? '#2a4a6a' : pt.kind === 'caramel' ? '#4a2a08' : '#000000' }, pt2 = GM.patch(pt.kind);
       if (pt2) {                                              // high tier: a painted, normal-mapped, glossy patch (UVs from the ground position)
         const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, pp.getX(i) / 3, pp.getZ(i) / 3);
@@ -295,7 +297,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     disposables.push(mat); const m = new THREE.Mesh(geo, mat); m.renderOrder = 1; m.receiveShadow = true; g.add(m);
     if (pt.kind === 'rough') {                                 // the rough: long grass (or deep snow, loose sand, ash... by theme), a darker blob with tufts or lumps standing in it
       const grassy = TH0.ground === 'grass' || TH0.ground === 'moss', n = isLow() ? 14 : 36, tg = track(grassy ? new THREE.ConeGeometry(0.07, 0.36, 4) : new THREE.IcosahedronGeometry(0.17, 0)), tm = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }); disposables.push(tm);
-      const im = new THREE.InstancedMesh(tg, tm, n), rg = mulberry32((h.seed ^ Math.round(pt.x * 91 + pt.z * 57)) >>> 0), base = new THREE.Color(TH0.rough || '#3f9f4f'), col = new THREE.Color(), cand = ['#ff9ccf', '#fff0b0', '#8ee0ff', '#ffffff'], mm = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(); let placed = 0;
+      const im = new THREE.InstancedMesh(tg, tm, n), rg = mulberry32((h.seed ^ Math.round(pt.x * 91 + pt.z * 57)) >>> 0), base = roughCol(TH0), col = new THREE.Color(), cand = ['#ff9ccf', '#fff0b0', '#8ee0ff', '#ffffff'], mm = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(); let placed = 0;
       for (let tries = 0; tries < n * 12 && placed < n; tries++) {
         const a = rg() * 6.2832, d = Math.sqrt(rg()) * pt.r, x = pt.x + Math.cos(a) * d, z = pt.z + Math.sin(a) * d; if (!inPoly(pt.poly, x, z)) continue;
         const sc = 0.7 + rg() * 0.9; e4.set((rg() - 0.5) * 0.4, rg() * 6.28, (rg() - 0.5) * 0.4); q4.setFromEuler(e4); s3.set(sc, grassy ? sc * (0.9 + rg() * 0.8) : sc * 0.7, sc);
