@@ -885,6 +885,7 @@ body.scene-mode .bike-hint { display: block; }
 .golf-reset { white-space: nowrap; max-width: 92vw; position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); pointer-events: auto; padding: 9px 16px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: #3a3340; font: inherit; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer; }
 .golf-reset[hidden] { display: none; }
 .golf-info .golf-chal { margin-top: 3px; font-size: 0.85rem; color: #ffe27a; opacity: 1; }
+.golf-info .golf-chal[data-s="done"] { color: #8dffbc; }
 .golf-info .golf-chal[data-s="failed"] { color: #ff9a9a; text-decoration: line-through; opacity: 0.8; }
 .golf-info .golf-chal:empty { display: none; }
 .golf-stars { margin: 0 0 8px; font-size: 2rem; letter-spacing: 0.15em; color: #ffc928; line-height: 1; }

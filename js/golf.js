@@ -5,20 +5,20 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029221439';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029221439';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029221439';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029221439';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029221439';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029221439';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261029221439';
-import { createNeon } from './golfneon.js?v=20261029221439';
-import { createFx } from './golffx.js?v=20261029221439';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261029221439';
-import { buildDecor } from './golfdecor.js?v=20261029221439';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029221439';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029221439';
-import { createTable } from './pinball.js?v=20261029221439';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029223539';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029223539';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029223539';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029223539';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029223539';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029223539';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261029223539';
+import { createNeon } from './golfneon.js?v=20261029223539';
+import { createFx } from './golffx.js?v=20261029223539';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261029223539';
+import { buildDecor } from './golfdecor.js?v=20261029223539';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029223539';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029223539';
+import { createTable } from './pinball.js?v=20261029223539';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -83,7 +83,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     const h = `Hole ${st.hole + 1} of ${HOLES}`;
     if (st.hud.hole !== h) { st.hud.hole = h; elHole.textContent = h; elPar.textContent = `Par ${hole ? hole.par : '-'}`; }
     { const tb = onTable(), t = tb ? `Ball ${Math.max(1, table.st.balls)} · ${table.st.pts} pts` : st.strokes === 1 ? '1 stroke' : `${st.strokes} strokes`; if (st.hud.strokes !== t) { st.hud.strokes = t; elStrokes.textContent = t; } }
-    if (!onTable()) { const ch = chals[st.hole]; if (ch) { const stt = chalStatus(ch, cs, hole, st.strokes, false, st.mode === 'roll'), t = `${stt === 'failed' ? '✗' : '◎'} ${ch.text}`; if (st.hud.chal !== t) { st.hud.chal = t; elChal.textContent = t; elChal.dataset.s = stt; } } }
+    // (once the ball is sinking or the hole is finished, the task shows how it ended: a hole in one used to flash a cross the moment the ball was in the cup)
+    if (!onTable()) { const ch = chals[st.hole]; if (ch) { const fin = st.scores[st.hole] !== undefined, stt = fin ? (st.chalDone[st.hole] ? 'done' : 'failed') : chalStatus(ch, cs, hole, st.strokes, st.mode === 'sink', st.mode === 'roll'), t = `${stt === 'failed' ? '✗' : stt === 'done' ? '✓' : '◎'} ${ch.text}`; if (st.hud.chal !== t) { st.hud.chal = t; elChal.textContent = t; elChal.dataset.s = stt; } } }
     let p = '';
     for (const k in fx) if (fx[k] > 0) p += `<span>${EMOJI[k]} ${NAMES[k]} <b>${Math.ceil(fx[k])}</b></span>`;
     if (st.multi) p += `<span>${EMOJI.multi} Multi-ball ready</span>`;
@@ -470,7 +471,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261029221439', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261029223539', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
