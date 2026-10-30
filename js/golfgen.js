@@ -4,10 +4,11 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029204307';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029204307';
-import { aceSearch } from './golface.js?v=20261029204307';
-import { BAKED } from './golfbake.js?v=20261029204307';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029212212';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029212212';
+import { aceSearch } from './golface.js?v=20261029212212';
+import { hillH } from './golfphys.js?v=20261029212212';
+import { BAKED } from './golfbake.js?v=20261029212212';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -184,8 +185,31 @@ export function makeHole(seed, index, type = 'windmill', shape = 'zigzag', ext =
 
 /** Take the bonuses that need a trick (the secret coin, the caged orb) off a hole: they stay only where one stroke can collect them and still hole out. */
 function dropBonuses(H) {
-  for (const rc of H.recipes.filter((r) => r.kind === 'secret')) { removeRecipe(H, rc.rid); H.recipes.splice(H.recipes.indexOf(rc), 1); }
+  for (const rc of H.recipes.filter((r) => r.kind === 'secret' || r.kind === 'pocket')) { removeRecipe(H, rc.rid); H.recipes.splice(H.recipes.indexOf(rc), 1); }
   if (H.cage) { H.cage = null; for (let i = H.walls.length - 1; i >= 0; i--) if (H.walls[i][7] === 'cage') H.walls.splice(i, 1); for (const p of H.pickups) p.caged = false; }
+}
+/** The start area (the ball, the two pegs either side and the mat) must be flat open ground on the course: inside the outline with room to spare, level, and clear of sand, water, posts, bumpers, machines, magnets and surface patches. */
+function teeClear(H) {
+  const O = H.outline.flat(), b = H.ball, polys = [...H.sands.map((s) => s.poly), ...H.ponds.map((p) => p.poly), ...(H.patches || []).map((p) => p.poly)];
+  const pts = [[b.x, b.z]]; for (const r of [0.6, 1.2]) for (let k = 0; k < 12; k++) pts.push([b.x + Math.cos(k * 0.5236) * r, b.z + Math.sin(k * 0.5236) * r]);
+  for (const [x, z] of pts) { if (!inPolyG(O, x, z)) return false; if (Math.abs(hillH(H, x, z)) > 0.1) return false; if (polys.some((pl) => inPolyG(pl, x, z))) return false; }
+  for (const o of [...H.posts, ...H.bumpers, ...H.pads, ...H.boosts, ...(H.doors || []).map((d) => d.button), ...(H.magnets || [])]) if (o && Math.hypot(o.x - b.x, o.z - b.z) < (o.r || 1) + 1.6) return false;
+  for (const w of H.walls) { const dx = w[2] - w[0], dz = w[3] - w[1], l2 = dx * dx + dz * dz || 1; let t = ((b.x - w[0]) * dx + (b.z - w[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; if (Math.hypot(b.x - w[0] - dx * t, b.z - w[1] - dz * t) < 1.05) return false; }
+  return true;
+}
+/** The floor triggers (boost strips, bounce pads, buttons) must lie wholly on the course and clear of sand, water, posts and bumpers: a strip is made narrower until its corners are inside the outline, and a trigger that still touches something goes (with its whole machine). */
+function tidyTriggers(H) {
+  const O = H.outline.flat(), polys = [...H.sands.map((s) => s.poly), ...H.ponds.map((p) => p.poly)], solid = [...H.posts, ...H.bumpers];
+  const bad = (x, z, m) => polys.some((pl) => inPolyG(pl, x, z)) || solid.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + m);
+  const rect = (o, wid) => { const pts = [], nx = -o.uz, nz = o.ux; for (const a of [-1, -0.5, 0, 0.5, 1]) for (const b of [-1, 0, 1]) pts.push([o.x + o.ux * a * o.len / 2 + nx * b * wid / 2, o.z + o.uz * a * o.len / 2 + nz * b * wid / 2]); return pts; };
+  const disc = (o, r) => { const pts = [[o.x, o.z]]; for (let k = 0; k < 8; k++) pts.push([o.x + Math.cos(k * 0.7854) * r, o.z + Math.sin(k * 0.7854) * r]); return pts; };
+  const drop = new Set(), dropCage = [];
+  for (const b of H.boosts) { let wid = b.wid; while (wid > 0.5 && !rect(b, wid + 0.25).every((p) => inPolyG(O, p[0], p[1]))) wid -= 0.1; b.wid = Math.round(wid * 10) / 10; if (!rect(b, b.wid + 0.25).every((p) => inPolyG(O, p[0], p[1])) || rect(b, b.wid).some((p) => bad(p[0], p[1], 0.25))) drop.add(b); }
+  for (const pd of H.pads) if (!disc(pd, pd.r + 0.1).every((p) => inPolyG(O, p[0], p[1])) || disc(pd, pd.r + 0.1).some((p) => bad(p[0], p[1], 0.2))) drop.add(pd);
+  for (const d of H.doors) if (d.button && (!disc(d.button, d.button.r + 0.1).every((p) => inPolyG(O, p[0], p[1])) || disc(d.button, d.button.r + 0.1).some((p) => bad(p[0], p[1], 0.2)))) drop.add(d);
+  if (H.cage && (!disc(H.cage.button, 0.65).every((p) => inPolyG(O, p[0], p[1])) || disc(H.cage.button, 0.65).some((p) => bad(p[0], p[1], 0.2)))) dropCage.push(1);
+  for (const o of drop) { if (o.rid) { removeRecipe(H, o.rid); const i = H.recipes.findIndex((r) => r.rid === o.rid); if (i >= 0) H.recipes.splice(i, 1); H.recipeLog.push({ kind: 'trigger', out: 'overlaps the course edge or an obstacle' }); } else for (const k of ['boosts', 'pads', 'doors']) { const i = H[k].indexOf(o); if (i >= 0) H[k].splice(i, 1); } }
+  if (dropCage.length) { H.cage = null; for (let i = H.walls.length - 1; i >= 0; i--) if (H.walls[i][7] === 'cage') H.walls.splice(i, 1); for (const p of H.pickups) p.caged = false; }
 }
 /** A hole in one must always be possible, with every bonus collected on the way: bonuses that would need extra strokes are removed, and a hole with no ace at all is rejected (a new layout is tried). */
 function holeInOnePossible(H) {
@@ -463,14 +487,7 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   }
   // interactive extras: boost strips and bounce pads on the floor, and a cage round one orb whose gate opens for a few seconds when the ball rolls over a button
   let cage = null;
-  if (index >= 2 && pickups.length && r() < 0.7) {
-    const pk = pickups[0], L = legs[pk.li], side = pk.side, P = (u, lat) => ({ x: pk.x + L.x * u - L.z * lat, z: pk.z + L.z * u + L.x * lat }), lat0 = side * 0.75, lat1 = side * (-0.8);      // (relative to the orb: back to the wall, out 0.8 in front of it)
-    const a0 = P(-0.9, lat0), a1 = P(-0.9, lat1), b0 = P(0.9, lat0), b1 = P(0.9, lat1), bt = P(-4.2, -side * 0.2);
-    if (free(bt.x, bt.z, 0.1)) {
-      const but = { x: q(bt.x), z: q(bt.z), r: 0.55 }; walls.push([a0.x, a0.z, a1.x, a1.z, 0, 1, 0, 'cage'], [b0.x, b0.z, b1.x, b1.z, 0, 1, 0, 'cage']);
-      cage = { gate: [a1.x, a1.z, b1.x, b1.z], sides: [[a0.x, a0.z, a1.x, a1.z], [b0.x, b0.z, b1.x, b1.z]], button: but, ux: L.x, uz: L.z }; pk.caged = true; keep.push({ x: but.x, z: but.z, r: 1.0 });
-    }
-  }
+  // (the old caged orb is gone: the 'pocket' machine in golfrecipes.js does the same job on a straight stretch, with a gate, a lane through it and a way out that one stroke can take)
   const lane = () => laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly)], feats, [...posts, ...bumpers], segsAll());
   while (!lane() && (sands.length || posts.length || bumpers.length)) { if (sands.length) sands.pop(); else if (bumpers.length) bumpers.pop(); else posts.pop(); }      // (a last check: something that blocks the only way through goes)
   for (const sc of secrets) pickups.push(sc);                // (the secret coins of the machines)
@@ -510,6 +527,8 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   const bounds = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hz: (maxZ - minZ) / 2 };
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
   const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, ghosts, islands, gates1, rollers, lanes: hero.lane ? [hero.lane] : [], dense: !!hero.lane, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
+  tidyTriggers(H);
+  if (!teeClear(H)) return null;                          // (a start that would run into a wall, a hill, sand or an obstacle is not allowed: another layout is tried)
   for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
     const res = proveRecipe(H, rec);
     if (res.pass < (rec.minPass || 3)) { removeRecipe(H, rec.rid); recipes.splice(recipes.indexOf(rec), 1); recipeLog.push({ kind: rec.kind, out: `proof failed (${res.pass}/8)` }); } else { rec.forgiveness = res.forgiveness; rec.necessity = necessityOf(H, rec); }

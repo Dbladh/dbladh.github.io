@@ -45,7 +45,7 @@ function structure(h) {
 /** A ball that ends up inside a cage (the gate was open when it rolled in) must be able to roll out again, whatever the gate does. */
 function penEscape(h) {
   if (!h.cage) return true;
-  const cg = h.cage, a = cg.sides[0], b = cg.sides[1], cx = (a[0] + a[2] + b[0] + b[2]) / 4, cz = (a[1] + a[3] + b[1] + b[3]) / 4, gx = (cg.gate[0] + cg.gate[2]) / 2, gz = (cg.gate[1] + cg.gate[3]) / 2;
+  const cg = h.cage, a = cg.sides[0], b = cg.sides[1], cx = (a[0] + a[2] + b[0] + b[2]) / 4, cz = (a[1] + a[3] + b[1] + b[3]) / 4, gx = cg.exit ? cg.exit.x : (cg.gate[0] + cg.gate[2]) / 2, gz = cg.exit ? cg.exit.z : (cg.gate[1] + cg.gate[3]) / 2;          // (a ball inside the pocket must be able to roll out of its open far end whatever the gate does)
   const ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0, fall: false }, ball = newBall(h), ctx = newCtx(); ball.x = cx; ball.z = cz; const dx = gx - cx, dz = gz - cz; shoot(ball, dx, dz, 0.5, false);
   for (let n = 0; n < 300 && !ball.rest; n++) { stepBall(ball, h, ctx, 1 / 60, ev); ctx.t += 1 / 60; }
   return Math.hypot(ball.x - cx, ball.z - cz) > Math.hypot(dx, dz) + 0.2;                    // (it got past the gate)

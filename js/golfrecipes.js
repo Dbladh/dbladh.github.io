@@ -4,8 +4,8 @@
 //   rail  : a cyan rail from a mouth, over a canyon, to an exit: rolling into the mouth fast enough carries the ball across (the ledge beside the canyon is the plain way).
 //   door  : a button, then two tall walls in a zigzag with a gate in the middle of each: the button opens the gates for a few seconds for a straight run.
 // Every recipe is checked with a proof shot (proveRecipe) over a band of powers, and dropped if the intended route does not work.
-import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261029204307';
-import { TUNING } from './golftuning.js?v=20261029204307';
+import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261029212212';
+import { TUNING } from './golftuning.js?v=20261029212212';
 
 export { TUNING };                                         // (so the tester can sweep the numbers on the very copy the recipes read)
 const HALF_W = 2.3;
@@ -57,6 +57,15 @@ const stamp = {
     keepAlong(S, F, len);
     return { kind: 'secret', rid, F, len, entryU: 0.0, lat: T.lat, coin, minPass: 3 };
   },
+  pocket(S, sl, rid) {                                       // a lane along the wall, shut at its near end by a gate and open at its far end, with a coin inside: the button just before the gate opens it, so ONE stroke along that lane rolls over the button, in through the gate, over the coin and out again, and on towards the cup
+    const F = frameAt(S, sl.i0, sl.i1), side = S.r() < 0.5 ? 1 : -1, P0 = 1.8, LEN = 3.6, latIn = side * 1.0, latMid = side * 1.65, len = P0 + LEN + 1.2;
+    const pa = F.P(P0, latIn), pb = F.P(P0 + LEN, latIn), mouth = seg(F, P0, Math.min(latIn, side * (HALF_W + 0.1)), Math.max(latIn, side * (HALF_W + 0.1))), bt = F.P(P0 - 1.4, latMid), coin = F.P(P0 + LEN * 0.55, latMid);
+    S.barriers.push({ a: [pa.x, pa.z], b: [pb.x, pb.z], low: false, rid }); S.walls.push([pa.x, pa.z, pb.x, pb.z, 0, 1, 0, rid]);
+    S.doors.push({ gate: mouth, button: { x: bt.x, z: bt.z, r: 0.55 }, rid });
+    S.secrets.push({ x: coin.x, z: coin.z, type: 'coin', secret: true, rid });
+    keepAlong(S, F, len);
+    return { kind: 'pocket', rid, F, len, entryU: 0.0, lat: latMid, coin, minPass: 3 };
+  },
   bridge(S, sl, rid) {
     const T = TUNING.bridge, F = frameAt(S, sl.i0, sl.i1), ledge = S.r() < 0.5 ? 1 : -1, g = T.gap, len = T.gapAt + g + 1.0, bp = F.P(T.buttonAt, 0), gc = F.P(T.gapAt + g / 2, 0);
     S.feats.push({ t: 'gap', ux: F.ux, uz: F.uz, nx: F.nx, nz: F.nz, wid: 4, x: gc.x, z: gc.z, len: g, d: 1.4, bridge: true, c0: ledge > 0 ? -HALF_W - 0.05 : -HALF_W + 1.85, c1: ledge > 0 ? HALF_W - 1.85 : HALF_W + 0.05, rid });
@@ -98,13 +107,14 @@ const stamp = {
 /** Which recipes a hole gets, in order along the corridor. */
 function wanted(S) {
   const i = S.index, out = [], r = S.r;
-  const pick = () => { const o = ['vault']; if (i >= 5) o.push('rail', 'rail'); if (i >= 3) o.push('secret'); if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
+  const pick = () => { const o = ['vault']; if (i >= 5) o.push('rail', 'rail'); if (i >= 3) o.push('secret', 'pocket', 'pocket'); if (i >= 4) o.push('bridge', 'bridge'); if (i >= 3) o.push('door', 'door'); if (i >= 3 && S.type !== 'drawbridge') o.push('runup', 'runup'); return o[(r() * o.length) | 0]; };
+  if (i >= 3 && r() < 0.5) out.push('pocket');                                // (the pocket gets the first pick of the straight stretches)
   if (i >= 2) out.push(pick());
   if (i >= 4 && r() < 0.6) out.push(pick());
   if (i >= 6 && r() < 0.6) out.push(pick());
   return out;
 }
-const LENGTH = { rail: () => TUNING.rail.exitAt + 0.9, secret: () => TUNING.secret.frontAt + TUNING.secret.len + 1.0, bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 2.8 };
+const LENGTH = { pocket: () => 5.8, rail: () => TUNING.rail.exitAt + 0.9, secret: () => TUNING.secret.frontAt + TUNING.secret.len + 1.0, bridge: () => TUNING.bridge.gapAt + TUNING.bridge.gap + 1.0, runup: () => TUNING.runup.rampAt + TUNING.runup.ramp + TUNING.runup.gap + 1.0, vault: () => TUNING.vault.fence2 + 1.4, door: () => TUNING.door.wall2 + 2.8 };
 
 /**
  * Place the recipes of a hole. `S` is the generator's state (the corridor, what is placed so far and the arrays to add to). `plainOk()` says whether the plain route still exists.
