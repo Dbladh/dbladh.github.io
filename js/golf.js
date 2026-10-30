@@ -5,20 +5,20 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029214201';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029214201';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029214201';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029214201';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029214201';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029214201';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261029214201';
-import { createNeon } from './golfneon.js?v=20261029214201';
-import { createFx } from './golffx.js?v=20261029214201';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261029214201';
-import { buildDecor } from './golfdecor.js?v=20261029214201';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029214201';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029214201';
-import { createTable } from './pinball.js?v=20261029214201';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029214328';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029214328';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029214328';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029214328';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029214328';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029214328';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261029214328';
+import { createNeon } from './golfneon.js?v=20261029214328';
+import { createFx } from './golffx.js?v=20261029214328';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261029214328';
+import { buildDecor } from './golfdecor.js?v=20261029214328';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029214328';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029214328';
+import { createTable } from './pinball.js?v=20261029214328';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -470,7 +470,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261029214201', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261029214328', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -576,7 +576,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
               if (ev.fx === 1) for (const q of [hole.hero.a, hole.hero.b]) { const w = wp(q.x, 0.9, q.z); fxs.sparks(w.x, w.y, w.z, '#7fffd4', 18, 1.6, 3, 0.8, 0.06); fxs.ring(w.x, w.y - 0.85, w.z, 1.2, 0.7, '#7fffd4'); }
               if (ev.fx === 6 || ev.fx === 7 || ev.fx === 10) st.moment = Math.max(st.moment || 0, 0.4);          // (a short slow-motion beat when a machine fires)
               if (ev.fx === 6) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ff7fd0', 16, 2.4, 3, 0.6); fxs.ring(w.x, w.y, w.z, 1.2, 0.6, '#ff7fd0'); }
-              if (ev.fx === 7) { const w = wp(hole.cage.button.x, 0.15, hole.cage.button.z); fxs.sparks(w.x, w.y, w.z, '#6dff9a', 20, 2.2, 2.6, 0.7); fxs.ring(w.x, w.y, w.z, 1.3, 0.7, '#6dff9a'); }
+              if (ev.fx === 7) { const bt = (hole.cage && hole.cage.button) || ((hole.doors || []).find((dr) => dr.button && Math.hypot(dr.button.x - b.x, dr.button.z - b.z) < 2) || {}).button || b, w = wp(bt.x, 0.15, bt.z); fxs.sparks(w.x, w.y, w.z, '#6dff9a', 20, 2.2, 2.6, 0.7); fxs.ring(w.x, w.y, w.z, 1.3, 0.7, '#6dff9a'); }
               if (ev.fx === 8) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ffe14a', 8, 1.8, 1.2, 0.4); }
               if (ev.fx === 10) { const w = wp(b.x, 0.5, b.z); fxs.sparks(w.x, w.y, w.z, '#7fe9ff', 14, 1.8, 2.2, 0.6); fxs.ring(w.x, w.y - 0.4, w.z, 1.1, 0.6, '#7fe9ff'); }
               if (ev.fx === 9) { const w = wp(b.x, 0.3, b.z); fxs.sparks(w.x, w.y, w.z, '#7fe9ff', 14, 2.4, 1.8, 0.6); }

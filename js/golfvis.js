@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState } from './golfphys.js?v=20261029214201';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029214201';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029214201';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029214201';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029214201';
-import { isLow } from './golfquality.js?v=20261029214201';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029214328';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029214328';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029214328';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029214328';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029214328';
+import { isLow } from './golfquality.js?v=20261029214328';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -299,18 +299,27 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const arc = new THREE.Mesh(track(new THREE.TorusGeometry(0.62, 0.17, 8, 16, Math.PI)), red); arc.rotation.x = Math.PI / 2; arc.position.y = 0.55; hs.add(arc);
     for (const sd of [-1, 1]) { hs.add(cyl(red, 0.17, 0.55, sd * 0.62, 0.28, 0)); hs.add(cyl(wht, 0.18, 0.14, sd * 0.62, 0.07, 0)); if (!isLow()) for (let k = 0; k < 3; k++) hs.add(torus(metal('#c8803a'), 0.19, 0.035, sd * 0.62, 0.22 + k * 0.1, 0, Math.PI / 2)); } g.add(hs);      // (high tier: copper coils on the legs)
     const pullIn = mg.pull > 0, onCol = new THREE.Color(pullIn ? '#ff6a5f' : '#6aa8ff'), amber = new THREE.Color('#ffc23a'), white = new THREE.Color('#ffffff'), dim = new THREE.Color('#7b7f8a');
-    const rings = [0, 1, 2].map((i) => { const m = new THREE.Mesh(track(new THREE.RingGeometry(0.95, 1.0, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: onCol, transparent: true, opacity: 0.5, depthWrite: false })); disposables.push(m.material); m.position.set(mg.x, gy + 0.08, mg.z); g.add(m); return m; });
-    const field = new THREE.Mesh(track(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: onCol, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); disposables.push(field.material); field.position.set(mg.x, gy + 0.06, mg.z); field.scale.setScalar(mg.r); field.renderOrder = 1; g.add(field);
+    const outFlat = h.outline.flat(), SEG = 48;                  // (the rings and the field are drawn on the real ground: every vertex sits at the terrain's height, and the parts that would lie outside the course (over a wall or the hillside) are not drawn)
+    const ringMesh = (opacity, additive) => { const geo = new THREE.BufferGeometry(), pos = new Float32Array(SEG * 4 * 3), idx = []; for (let k = 0; k < SEG; k++) { const b0 = k * 4; idx.push(b0, b0 + 1, b0 + 2, b0 + 1, b0 + 3, b0 + 2); } geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(idx); disposables.push(geo);
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: onCol, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); disposables.push(m.material); m.frustumCulled = false; m.renderOrder = additive ? 1 : 2; g.add(m); return m; };
+    const fillRing = (m, R0, R1) => {                            // a band from radius R0 to R1 round the magnet, following the ground
+      const pos = m.geometry.attributes.position.array, pt = (a, r) => { const x = mg.x + Math.cos(a) * r, z = mg.z + Math.sin(a) * r; return [x, Math.max(0, hillH(h, x, z)) + 0.08, z, inPoly(outFlat, x, z)]; };
+      let prev = [pt(0, R0), pt(0, R1)];
+      for (let k = 0; k < SEG; k++) { const a1 = ((k + 1) / SEG) * 6.2832, cur = [pt(a1, R0), pt(a1, R1)], ok = prev[0][3] && prev[1][3] && cur[0][3] && cur[1][3], o = k * 12, vs = [prev[0], prev[1], cur[0], cur[1]];
+        for (let v = 0; v < 4; v++) { const p = ok ? vs[v] : [mg.x, gy, mg.z]; pos[o + v * 3] = p[0]; pos[o + v * 3 + 1] = p[1]; pos[o + v * 3 + 2] = p[2]; } prev = cur; }
+      m.geometry.attributes.position.needsUpdate = true;
+    };
+    const rings = [0, 1, 2].map(() => ringMesh(0.5, false)), fields = [0, 1, 2, 3].map((i) => { const m = ringMesh(0, true); fillRing(m, Math.max(0.02, (mg.r * i) / 4), (mg.r * (i + 1)) / 4); return m; });          // (the field: a disc as four bands, drawn once)
     const lamp = new THREE.Mesh(G.sph, new THREE.MeshBasicMaterial({ color: dim })); disposables.push(lamp.material); lamp.scale.setScalar(0.17); lamp.position.set(mg.x, gy + 1.05, mg.z); g.add(lamp);        // (the indicator: grey when off, flashing amber just before it switches on, its own colour while on, flashing white just before it switches off)
     updaters.push((heroT) => {
       const { power, warn } = magnetState(mg, heroT), blink = Math.floor(heroT * (warn === 'on' ? 7 : 4)) % 2 === 0, col = lamp.material.color;
       if (warn === 'on') col.copy(blink ? amber : dim); else if (warn === 'off') col.copy(blink ? white : onCol); else col.copy(power > 0 ? onCol : dim);
       lamp.scale.setScalar(0.17 + (power > 0 || warn === 'on' ? 0.05 * Math.sin(heroT * 12) * (warn ? 1 : 0.4) : 0));
-      field.material.opacity = 0.16 * power * (warn === 'off' && !blink ? 0.4 : 1); field.material.color.copy(onCol);
+      for (const f of fields) { f.material.opacity = 0.16 * power * (warn === 'off' && !blink ? 0.4 : 1); f.material.color.copy(onCol); }
       rings.forEach((m, i) => {
         let k = ((heroT * (0.5 + 0.9 * power) + i / 3) % 1); if (pullIn) k = 1 - k;
-        if (power <= 0) { m.scale.setScalar(mg.r); m.material.color.copy(warn === 'on' ? (blink ? amber : dim) : dim); m.material.opacity = warn === 'on' ? (blink ? 0.7 : 0.2) : 0.14; return; }
-        m.scale.setScalar(0.2 + k * mg.r); m.material.color.copy(warn === 'off' && !blink ? white : onCol); m.material.opacity = 0.8 * power * Math.sin(k * Math.PI);
+        if (power <= 0) { if (m.userData.R !== mg.r) { m.userData.R = mg.r; fillRing(m, mg.r - 0.05, mg.r); } m.material.color.copy(warn === 'on' ? (blink ? amber : dim) : dim); m.material.opacity = warn === 'on' ? (blink ? 0.7 : 0.2) : 0.14; return; }
+        { const R = 0.2 + k * mg.r; fillRing(m, R - 0.05 * R, R); m.userData.R = R; } m.material.color.copy(warn === 'off' && !blink ? white : onCol); m.material.opacity = 0.8 * power * Math.sin(k * Math.PI);
       });
     });
   }
