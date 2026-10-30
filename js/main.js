@@ -1,16 +1,16 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261029201632';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261029201632';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261029201758';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261029201758';
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261029201632';
-import { buildWorld } from './world.js?v=20261029201632';
-import { createSky } from './sky.js?v=20261029201632';
-import { createDOF } from './dof.js?v=20261029201632';
-import { createRide } from './ride.js?v=20261029201632';
-import { createGame } from './bikegame.js?v=20261029201632';
-import { createAurora, setWarm } from './aurora.js?v=20261029201632';
-import { createAudio, pickFlicker } from './audio.js?v=20261029201632';
+import { PAL } from './palette.js?v=20261029201758';
+import { buildWorld } from './world.js?v=20261029201758';
+import { createSky } from './sky.js?v=20261029201758';
+import { createDOF } from './dof.js?v=20261029201758';
+import { createRide } from './ride.js?v=20261029201758';
+import { createGame } from './bikegame.js?v=20261029201758';
+import { createAurora, setWarm } from './aurora.js?v=20261029201758';
+import { createAudio, pickFlicker } from './audio.js?v=20261029201758';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -604,7 +604,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261029201632');
+        const mod = await import('./golf.js?v=20261029201758');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }

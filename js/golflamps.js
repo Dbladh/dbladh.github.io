@@ -2,7 +2,7 @@
 // and, switched on by `update(night)`, a soft cone of light, a pool of light on the ground and a glow round the bulb. A few real point lights (borrowed from the village) light the
 // holes near the one in play (see golf.js).
 import * as THREE from 'three';
-import { toWorld } from './golfsites.js?v=20261029201632';
+import { toWorld } from './golfsites.js?v=20261029201758';
 
 const POST_H = 3.0, ARM = 1.7;
 const radial = (stops) => {
@@ -36,34 +36,36 @@ export function buildLamps(spots, ground) {
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, color: '#ffc77a', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
   const glowMat = new THREE.PointsMaterial({ map: glowTex, color: '#ffd28a', size: 2.4, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
   const mk = (geo, mat, cast) => { const im = new THREE.InstancedMesh(geo, mat, n); im.castShadow = !!cast; im.frustumCulled = false; group.add(im); return im; };
-  const posts = mk(new THREE.CylinderGeometry(0.06, 0.08, POST_H, 8), dark, true), arms = mk(new THREE.BoxGeometry(1, 1, 1), dark, true), shades = mk(new THREE.ConeGeometry(0.3, 0.24, 10), shadeMat, true);
-  const bulbs = mk(new THREE.SphereGeometry(0.15, 10, 8), bulbMat), beams = mk(new THREE.ConeGeometry(4.2, 1, 24, 1, true), beamMat), pools = mk(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat);
-  beams.renderOrder = 2; pools.renderOrder = 2;
+  const poolMeshes = [], posts = mk(new THREE.CylinderGeometry(0.06, 0.08, POST_H, 8), dark, true), arms = mk(new THREE.BoxGeometry(1, 1, 1), dark, true), shades = mk(new THREE.ConeGeometry(0.3, 0.24, 10), shadeMat, true);
+  const bulbs = mk(new THREE.SphereGeometry(0.15, 10, 8), bulbMat), beams = mk(new THREE.ConeGeometry(4.2, 1, 24, 1, true), beamMat);
+  beams.renderOrder = 2;
   const glowGeo = new THREE.BufferGeometry(), glowPos = new Float32Array(n * 3); glowGeo.setAttribute('position', new THREE.BufferAttribute(glowPos, 3));
   const glow = new THREE.Points(glowGeo, glowMat); glow.frustumCulled = false; glow.renderOrder = 3; group.add(glow);
   const finals = [], bulbAt = [];
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   spots.forEach((p, i) => {
     const y = ground(p.x, p.z), bx = p.x + p.ax * ARM, bz = p.z + p.az * ARM, by = y + POST_H - 0.12, gy = ground(bx, bz), yaw = Math.atan2(-p.az, p.ax), set = (mesh, mat4) => { (finals[i] ||= [])[meshes.indexOf(mesh)] = mat4.clone(); };
-    const meshes = [posts, arms, shades, bulbs, beams, pools];
+    const meshes = [posts, arms, shades, bulbs, beams];
     set(posts, m.compose(v.set(p.x, y + POST_H / 2, p.z), q.identity(), s.set(1, 1, 1)));
     set(arms, m.compose(v.set(p.x + p.ax * ARM * 0.5, y + POST_H, p.z + p.az * ARM * 0.5), q.setFromAxisAngle(UP, yaw), s.set(ARM, 0.07, 0.07)));
     set(shades, m.compose(v.set(bx, by + 0.28, bz), q.identity(), s.set(1, 1, 1)));
     set(bulbs, m.compose(v.set(bx, by, bz), q.identity(), s.set(1, 1, 1)));
     set(beams, m.compose(v.set(bx, (by + gy) / 2, bz), q.identity(), s.set(1, by - gy, 1)));
-    set(pools, m.compose(v.set(bx, gy + 0.07, bz), q.identity(), s.set(11, 1, 11)));
+    { const SEG = 14, geo = new THREE.PlaneGeometry(11, 11, SEG, SEG).rotateX(-Math.PI / 2), pp = geo.attributes.position;       // the pool of light is laid over the real ground (every vertex at the ground's height), so on a hill it follows the slope instead of a flat plane cutting into it in a jagged line
+      for (let k = 0; k < pp.count; k++) { const wx = bx + pp.getX(k), wz = bz + pp.getZ(k); pp.setXYZ(k, wx, ground(wx, wz) + 0.09, wz); }
+      const pm = new THREE.Mesh(geo, poolMat); pm.frustumCulled = false; pm.renderOrder = 2; pm.visible = false; group.add(pm); poolMeshes[i] = pm; }
     glowPos[i * 3] = bx; glowPos[i * 3 + 1] = by; glowPos[i * 3 + 2] = bz;
     p.bulb = { x: bx, y: by, z: bz }; p.mats = meshes;
     for (const mesh of meshes) mesh.setMatrixAt(i, zero);
   });
-  for (const mesh of [posts, arms, shades, bulbs, beams, pools]) mesh.instanceMatrix.needsUpdate = true;
-  const meshes = [posts, arms, shades, bulbs, beams, pools], day = new THREE.Color('#f4efe2'), nightC = new THREE.Color('#fff0c4'); let lastNight = -1; const warmC = new THREE.Color('#ffcf8a'), warmP = new THREE.Color('#ffc77a'), warmG = new THREE.Color('#ffd28a'), uvC = new THREE.Color('#8a4dff'), uvG = new THREE.Color('#b57dff'), uvBulb = new THREE.Color('#e3c2ff');
+  for (const mesh of [posts, arms, shades, bulbs, beams]) mesh.instanceMatrix.needsUpdate = true;
+  const meshes = [posts, arms, shades, bulbs, beams], day = new THREE.Color('#f4efe2'), nightC = new THREE.Color('#fff0c4'); let lastNight = -1; const warmC = new THREE.Color('#ffcf8a'), warmP = new THREE.Color('#ffc77a'), warmG = new THREE.Color('#ffd28a'), uvC = new THREE.Color('#8a4dff'), uvG = new THREE.Color('#b57dff'), uvBulb = new THREE.Color('#e3c2ff');
   return {
     group, count: n,
     /** Show or hide the lamps of hole `hole` (they appear once the hole has risen). */
-    show(hole, on) { spots.forEach((p, i) => { for (let k = 0; k < meshes.length; k++) meshes[k].setMatrixAt(i, on ? finals[i][k] : zero); }); for (const mesh of meshes) mesh.instanceMatrix.needsUpdate = true; },
+    show(hole, on) { spots.forEach((p, i) => { poolMeshes[i].visible = on; for (let k = 0; k < meshes.length; k++) meshes[k].setMatrixAt(i, on ? finals[i][k] : zero); }); for (const mesh of meshes) mesh.instanceMatrix.needsUpdate = true; },
     showHole(hole, on) {
-      let hit = false; spots.forEach((p, i) => { if (p.hole !== hole) return; hit = true; for (let k = 0; k < meshes.length; k++) meshes[k].setMatrixAt(i, on ? finals[i][k] : zero); });
+      let hit = false; spots.forEach((p, i) => { if (p.hole !== hole) return; hit = true; poolMeshes[i].visible = on; for (let k = 0; k < meshes.length; k++) meshes[k].setMatrixAt(i, on ? finals[i][k] : zero); });
       if (hit) for (const mesh of meshes) mesh.instanceMatrix.needsUpdate = true;
     },
     /** `night`: 0 (day) to 1 (full night). */
@@ -75,6 +77,6 @@ export function buildLamps(spots, ground) {
       bulbMat.color.copy(day).lerp(nightC, k).lerp(uvBulb, u); beamMat.color.copy(warmC).lerp(uvC, u); poolMat.color.copy(warmP).lerp(uvC, u); glowMat.color.copy(warmG).lerp(uvG, u);
       glow.visible = beamMat.visible = poolMat.visible = k > 0.003;
     },
-    dispose() { for (const mesh of meshes) { mesh.geometry.dispose(); mesh.dispose?.(); } glowGeo.dispose(); poolTex.dispose(); glowTex.dispose(); for (const mt of [dark, shadeMat, bulbMat, beamMat, poolMat, glowMat]) mt.dispose(); },
+    dispose() { for (const pm of poolMeshes) pm?.geometry.dispose(); for (const mesh of meshes) { mesh.geometry.dispose(); mesh.dispose?.(); } glowGeo.dispose(); poolTex.dispose(); glowTex.dispose(); for (const mt of [dark, shadeMat, bulbMat, beamMat, poolMat, glowMat]) mt.dispose(); },
   };
 }
