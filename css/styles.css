@@ -882,7 +882,7 @@ body.scene-mode .bike-hint { display: block; }
 .golf-info { display: flex; flex-direction: column; gap: 2px; padding: 9px 16px; border-radius: 16px; background: rgba(24, 20, 44, 0.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-size: 0.95rem; }
 .golf-info b { font-size: 1.05rem; letter-spacing: 0.02em; }
 .golf-info span { opacity: 0.85; }
-.golf-reset { position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); pointer-events: auto; padding: 9px 16px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: #3a3340; font: inherit; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer; }
+.golf-reset { white-space: nowrap; max-width: 92vw; position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); pointer-events: auto; padding: 9px 16px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: #3a3340; font: inherit; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer; }
 .golf-reset[hidden] { display: none; }
 .golf-info .golf-chal { margin-top: 3px; font-size: 0.85rem; color: #ffe27a; opacity: 1; }
 .golf-info .golf-chal[data-s="failed"] { color: #ff9a9a; text-decoration: line-through; opacity: 0.8; }
@@ -921,8 +921,8 @@ body.scene-mode .bike-hint { display: block; }
 .golf-score tbody td:nth-child(2) { text-align: left; }
 
 /* Pinball Golf */
-.pb-flip { position: absolute; left: 50%; bottom: 2.5%; transform: translateX(-50%); pointer-events: auto; width: min(40vw, 190px); height: 56px; border: 0; border-radius: 32px; background: linear-gradient(#ff7a68, #e8594b); color: #fff; font: inherit; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.12em; box-shadow: 0 6px 0 #a63a30, 0 10px 24px rgba(0, 0, 0, 0.35); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
-.pb-flip:active { transform: translateX(-50%) translateY(4px); box-shadow: 0 2px 0 #a63a30; }
+.pb-flip { pointer-events: auto; flex: 1 1 0; max-width: 220px; min-width: 96px; height: 56px; border: 0; border-radius: 32px; background: linear-gradient(#ff7a68, #e8594b); color: #fff; font: inherit; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.12em; box-shadow: 0 6px 0 #a63a30, 0 10px 24px rgba(0, 0, 0, 0.35); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pb-flip:active { transform: translateY(4px); box-shadow: 0 2px 0 #a63a30; }
 .pb-tilt { position: absolute; right: 16px; top: 50%; width: 22px; height: 120px; transform: translateY(-50%); border-radius: 12px; background: rgba(24, 20, 44, 0.55); overflow: hidden; display: flex; flex-direction: column-reverse; align-items: center; }
 .pb-tilt i { display: block; width: 100%; background: linear-gradient(#ffd23f, #ff6a3d); height: 0; }
 .pb-tilt span { position: absolute; bottom: -18px; font-size: 0.6rem; letter-spacing: 0.1em; color: #fff; opacity: 0.8; }
@@ -940,28 +940,28 @@ body.scene-mode .bike-hint { display: block; }
 .pb-pop { position: fixed; z-index: 25; pointer-events: none; transform: translate(-50%, -50%); font: 800 22px/1 inherit; color: #ffe27a; text-shadow: 0 2px 0 #7a3b00, 0 0 12px rgba(255,200,60,.8); animation: pbpop .9s ease-out forwards; }
 .pb-pop.c2 { font-size: 26px; color: #ffb84a; } .pb-pop.c3 { font-size: 30px; color: #ff8a3c; } .pb-pop.c4 { font-size: 34px; color: #ff5f5f; } .pb-pop.c5 { font-size: 40px; color: #ff4fa0; }
 @keyframes pbpop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.25); } 100% { opacity: 0; transform: translate(-50%, -210%) scale(1); } }
-.pb-lamps { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 22; pointer-events: none; }
+.pb-lamps { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 22; pointer-events: none; max-height: calc(100vh - 190px); }
 .pb-lamps i { display: flex; flex-direction: column; gap: 3px; min-width: 150px; font-style: normal; padding: 8px 12px; border-radius: 14px; background: rgba(20,24,34,.78); color: rgba(255,255,255,.6); border: 2px solid rgba(255,255,255,.25); transition: all .25s; }
 .pb-lamps i b { font: 800 12px/1 inherit; letter-spacing: .08em; } .pb-lamps i small { font: 500 11px/1.2 inherit; opacity: .9; }
 .pb-lamps i.next { color: #fff; border-color: #ffd23f; box-shadow: 0 0 12px rgba(255,210,63,.7); animation: pbnext 1.1s ease-in-out infinite; }
-@keyframes pbnext { 50% { box-shadow: 0 0 22px rgba(255,210,63,1); transform: translateX(-4px); } }
+@keyframes pbnext { 50% { box-shadow: 0 0 22px rgba(255,210,63,1); } }
 .pb-lamps i.on { background: #ffd23f; color: #3a2400; border-color: #fff2a8; box-shadow: 0 0 14px rgba(255,210,63,.9); }
 .pb-lamps i[data-l="cup"].on { background: #7dffb0; color: #053a1c; border-color: #d6ffe6; box-shadow: 0 0 16px rgba(125,255,176,.95); }
-.pb-nudge { position: fixed; left: 4%; bottom: 2.5%; z-index: 22; padding: 12px 16px; border: 0; border-radius: 999px; background: rgba(40,52,72,.85); color: #fff; font: 700 14px/1 inherit; box-shadow: 0 4px 12px rgba(0,0,0,.35); cursor: pointer; }
+.pb-nudge { pointer-events: auto; flex: 0 0 auto; padding: 12px 16px; border: 0; border-radius: 999px; background: rgba(40,52,72,.85); color: #fff; font: 700 14px/1 inherit; box-shadow: 0 4px 12px rgba(0,0,0,.35); cursor: pointer; }
 .pb-nudge:disabled { opacity: .4; }
 
 .pb-lamps i.flash { animation: pblamp .9s ease-out; }
-@keyframes pblamp { 0% { transform: scale(1); } 25% { transform: scale(1.45); box-shadow: 0 0 32px 8px rgba(255,255,255,.95); } 100% { transform: scale(1); } }
+@keyframes pblamp { 0% { filter: brightness(1); } 25% { filter: brightness(1.6); box-shadow: 0 0 28px 6px rgba(255,255,255,.95); } 100% { filter: brightness(1); } }
 .pb-flash { position: fixed; inset: 0; z-index: 30; pointer-events: none; background: radial-gradient(circle, rgba(255,255,255,.75), rgba(255,235,150,.35) 60%, transparent 80%); animation: pbflash .7s ease-out forwards; }
 @keyframes pbflash { from { opacity: 1; } to { opacity: 0; } }
 .pb-conf { position: fixed; z-index: 31; left: 50%; top: 45%; width: 10px; height: 14px; border-radius: 2px; pointer-events: none; animation: pbconf 1.5s cubic-bezier(.2,.7,.4,1) forwards; }
 @keyframes pbconf { 0% { transform: translate(0,0) rotate(0); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 340px)) rotate(720deg); opacity: 0; } }
 
-.pb-help { position: fixed; z-index: 40; left: 14px; top: 118px; width: min(72vw, 250px); padding: 10px 12px; border-radius: 18px; background: rgba(255,248,234,.96); color: #2a1c0c; box-shadow: 0 10px 34px rgba(0,0,0,.4); }
+.pb-help { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: auto; width: min(86vw, 300px); max-height: 80vh; overflow: auto; padding: 14px 16px; box-shadow: 0 0 0 100vmax rgba(10, 8, 24, 0.45);  border-radius: 18px; background: rgba(255,248,234,.96); color: #2a1c0c; }
 .pb-help[hidden] { display: none; }
 .pb-help h3 { margin: 0 0 4px; font: 800 15px/1.1 inherit; } .pb-help ol { margin: 0 0 8px; padding-left: 18px; font: 500 12.5px/1.3 inherit; } .pb-help li { margin-bottom: 2px; }
 .pb-help button { border: 0; border-radius: 999px; padding: 8px 14px; background: #e8594b; color: #fff; font: 700 13px/1 inherit; cursor: pointer; }
-.pb-q { position: fixed; z-index: 24; right: 14px; bottom: 2.5%; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(40,52,72,.85); color: #fff; font: 800 18px/1 inherit; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+.pb-q { pointer-events: auto; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(40,52,72,.85); color: #fff; font: 800 18px/1 inherit; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
 
 
 .mode-seed { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(42,28,12,.08); font: 600 13px/1.25 inherit; }
@@ -973,4 +973,22 @@ body.scene-mode .bike-hint { display: block; }
 
 .mode-load { position: fixed; left: 50%; bottom: 14%; transform: translateX(-50%); z-index: 61; padding: 12px 20px; border-radius: 999px; background: rgba(20,24,34,.88); color: #fff; font: 700 15px/1 inherit; box-shadow: 0 6px 22px rgba(0,0,0,.4); }
 .mode-load[hidden] { display: none; }
-@media (max-height: 620px), (max-width: 560px) { .pb-lamps { top: 56%; gap: 5px; } .pb-lamps i { min-width: 0; padding: 6px 9px; } .pb-lamps i small { display: none; } .pb-lamps i b { font-size: 11px; } .pb-help { top: 96px; } }
+/* the HUD never overlaps: top-left column (info, pills, lamps) that wraps inside the space left of Leave; the pinball controls sit in one dock row along the bottom; messages wrap and stay clear of both */
+.golf-top { align-items: flex-start; }
+.golf-left { min-width: 0; max-width: calc(100% - 112px); }
+.golf-info { max-width: 100%; box-sizing: border-box; }
+.golf-info span, .golf-info b { overflow-wrap: anywhere; }
+.golf-quit { flex: 0 0 auto; }
+.pb-dock { position: absolute; left: 0; right: 0; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 14px; pointer-events: none; box-sizing: border-box; z-index: 22; }
+.golf-banner, .golf-toast { max-width: 92vw; white-space: normal; width: max-content; }
+.golf-banner { top: 28%; } .golf-toast { top: 38%; }
+.golf-hud:not(.pb-off) .golf-power { bottom: 88px; }
+@media (max-width: 760px), (max-height: 680px) {
+  .golf-banner { top: max(30%, 190px); } .golf-toast { top: calc(max(30%, 190px) + 46px); }
+  .pb-lamps { position: static; transform: none; flex-direction: row; flex-wrap: wrap; gap: 5px; max-height: none; }
+  .pb-lamps i { min-width: 0; padding: 5px 9px; border-radius: 12px; } .pb-lamps i small { display: none; } .pb-lamps i b { font-size: 11px; }
+  .golf-info { padding: 7px 12px; font-size: 0.88rem; } .golf-info b { font-size: 0.98rem; }
+  .pb-flip { height: 52px; font-size: 1.15rem; } .pb-nudge { padding: 11px 13px; font-size: 13px; }
+}
+@media (max-height: 520px) { .golf-banner { top: max(40%, 175px); } .golf-toast { top: calc(max(40%, 175px) + 40px); } .golf-banner { font-size: 1.3rem; } .golf-toast { font-size: 1.1rem; } }
+@media (max-width: 380px) { .pb-dock { gap: 8px; padding: 0 10px; } .pb-nudge { padding: 10px 10px; font-size: 12px; } .pb-flip { min-width: 80px; letter-spacing: 0.06em; } }
