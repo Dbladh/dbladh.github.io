@@ -5,20 +5,20 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029193608';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029193608';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029193608';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029193608';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029193608';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029193608';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261029193608';
-import { createNeon } from './golfneon.js?v=20261029193608';
-import { createFx } from './golffx.js?v=20261029193608';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261029193608';
-import { buildDecor } from './golfdecor.js?v=20261029193608';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029193608';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029193608';
-import { createTable } from './pinball.js?v=20261029193608';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029194525';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029194525';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029194525';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029194525';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029194525';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029194525';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261029194525';
+import { createNeon } from './golfneon.js?v=20261029194525';
+import { createFx } from './golffx.js?v=20261029194525';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261029194525';
+import { buildDecor } from './golfdecor.js?v=20261029194525';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029194525';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029194525';
+import { createTable } from './pinball.js?v=20261029194525';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -62,9 +62,15 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const $ = (k) => hud.querySelector(`[data-k="${k}"]`);
   const elChal = $('chal'), elHole = $('hole'), elPar = $('par'), elStrokes = $('strokes'), elBanner = $('banner'), elToast = $('toast'), elPower = $('power'), elScore = $('score'), elPills = $('pills'), elHelp = $('help');
   const timers = {};
-  function placeMsgs() {                                  // the banner and the toast sit below the info column (never over it), and the toast under the banner
-    const lb = hud.querySelector('.golf-left').getBoundingClientRect().bottom, y = Math.max(innerHeight * 0.26, lb + 12);
-    elBanner.style.top = `${y}px`; elToast.style.top = `${y + (elBanner.offsetHeight || 40) + 6}px`;
+  function placeMsgs() {                                  // the banner and the toast go in the free band between the info column above and the controls below (never over either); a band that is too small shrinks the text
+    const H = innerHeight, lb = hud.querySelector('.golf-left').getBoundingClientRect().bottom + 8;
+    let lim = H - 8; for (const q of ['.golf-reset:not([hidden])', '.golf-power', '.pb-dock > :not([hidden])']) { const e = hud.querySelector(q); if (e && e.offsetParent !== null) lim = Math.min(lim, e.getBoundingClientRect().top - 8); }
+    elBanner.style.setProperty('--ms', 1); elToast.style.setProperty('--ms', 1);
+    const bh = elBanner.offsetHeight || 40, th = elToast.offsetHeight || 30, need = bh + th + 6, band = Math.max(40, lim - lb), k = need > band ? Math.max(0.55, band / need) : 1;
+    elBanner.style.setProperty('--ms', k); elToast.style.setProperty('--ms', k);
+    const bh2 = (elBanner.offsetHeight || 40), th2 = (elToast.offsetHeight || 30), y = Math.max(lb, Math.min(Math.max(H * 0.26, lb), lim - bh2 - th2 - 6));
+    elToast.style.visibility = need * 0.55 > band + 4 ? 'hidden' : '';                                       // (no room for both: the banner wins)
+    elBanner.style.top = `${y}px`; elToast.style.top = `${y + bh2 + 6}px`;
   }
   window.addEventListener('resize', () => { if (!hud.hidden) placeMsgs(); });
   const say = (el, text, ms, key) => { el.textContent = text; if (el === elBanner || el === elToast) placeMsgs(); el.classList.add('show'); clearTimeout(timers[key]); timers[key] = setTimeout(() => el.classList.remove('show'), ms); };
@@ -460,7 +466,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261029193608', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261029194525', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
