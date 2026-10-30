@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029220514';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029220514';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029220514';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029220514';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029220514';
-import { isLow } from './golfquality.js?v=20261029220514';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029220906';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029220906';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029220906';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029220906';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029220906';
+import { isLow } from './golfquality.js?v=20261029220906';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -136,7 +136,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const g = new THREE.Group(), disposables = [], updaters = [];
   const track = (geo) => { disposables.push(geo); return geo; };
   // the fairway: a ribbon of green along the corridor and round the tee and cup greens, in mown stripes, raised and lowered by the terrain (hills, berms, platforms, ramps, canyons)
-  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color(TH0.fair[0]).lerp(new THREE.Color('#ffffff'), 0.2), c2 = new THREE.Color(TH0.fair[1]).lerp(new THREE.Color('#ffffff'), 0.04).multiplyScalar(0.9), COLS = h.cols || 16, crest = new THREE.Color(TH0.fair[2]), shade = new THREE.Color(TH0.fair[3]), tmp = new THREE.Color();
+  const pos = [], uvs = [], col = [], idx = [], hts = [], c1 = new THREE.Color(TH0.fair[0]).lerp(new THREE.Color('#ffffff'), 0.2), c2 = new THREE.Color(TH0.fair[1]).lerp(new THREE.Color('#ffffff'), 0.04).multiplyScalar(0.9), COLS = h.cols || 24, crest = new THREE.Color(TH0.fair[2]), shade = new THREE.Color(TH0.fair[3]), tmp = new THREE.Color();
   const rock = new THREE.Color(TH0.rock), deep = new THREE.Color('#4a4239'), plank = new THREE.Color('#e0a868'), feats = h.feats || [];
   let R = h.ribbon;
   if (feats.length || h.sands.length || h.dense) { const R2 = []; for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, a0 = R[i], b0 = R[i + 1]; R2.push([0, 1, 2, 3, 4].map((j) => (j === 4 && (a0[4] < 0 || b0[4] < 0) ? a0[4] : a0[j] + (b0[j] - a0[j]) * t))); } R2.push(R[R.length - 1]); R = R2; }
@@ -144,7 +144,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   for (let i = 0; i < R.length; i++) {
     const row = R[i];
     for (let c = 0; c <= COLS; c++) {
-      const stripe = Math.floor(Math.abs(c - COLS / 2 + 0.01) / 2.6) & 1, u = c / COLS, x = row[0] + (row[2] - row[0]) * u, z = row[1] + (row[3] - row[1]) * u;
+      const stripe = Math.floor(Math.abs(c - COLS / 2 + 0.01) / (COLS / 12)) & 1, u = c / COLS, x = row[0] + (row[2] - row[0]) * u, z = row[1] + (row[3] - row[1]) * u;
       const hh = hillH(h, x, z), gr = hillGrad(h, x, z), gm = Math.sqrt(gr.x * gr.x + gr.z * gr.z), sl = Math.min(1, gm * 1.7), up = Math.max(0, hh);      // slopes read by shading: crests go lighter and warmer, the slopes darker and greener
       pos.push(x, hh + 0.03, z); uvs.push(x * 0.4, z * 0.4); hts.push(hh); const lit = Math.max(0, Math.min(1, 0.5 - (gr.x * 0.7 - gr.z * 0.7) * 1.6)), band = up > 0.04 ? 0.5 + 0.5 * Math.cos(up * 20.9) : 1;      // sunlit and shaded sides, plus faint contour bands every 0.3
       tmp.copy(stripe ? c1 : c2).lerp(crest, Math.min(1, up / 0.9) * 0.7).lerp(shade, sl * 0.8).multiplyScalar(0.72 + 0.5 * lit - 0.07 * band);
