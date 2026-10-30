@@ -40,7 +40,7 @@ export function buildHero(type, f, r) {
   const mid = { ...f, x: f.x + f.ux * f.len / 2, z: f.z + f.uz * f.len / 2 }, walls = [], hw = f.hw;
   const hero = { type, x: mid.x, z: mid.z, ux: f.ux, uz: f.uz, nx: f.nx, nz: f.nz, hw, walls };
   if (type === 'windmill') {                              // sails sweep across a low opening
-    Object.assign(hero, { gap: 1.0, half: 1.1, w: q(1.2 + r() * 1.2) * 0.5 + 0.7, phase: r() * 1.5 });
+    Object.assign(hero, { gap: 1.0, half: 1.1, w: (q(1.2 + r() * 1.2) * 0.5 + 0.7) * (2 / 3), phase: r() * 1.5 });      // (the sails turn at two thirds of their old speed)
     for (const s of [-1, 1]) rect(mid, -hero.half, hero.half, hero.gap * s, (hw + 0.3) * s, walls);
     hero.gate = gateSeg(mid, -(hero.half + 0.1), hero.gap);
   } else if (type === 'alligator') {                      // a gator whose jaws open and shut across the lane
@@ -50,7 +50,7 @@ export function buildHero(type, f, r) {
   } else if (type === 'turntable') {                      // a spinning disc that swirls the ball round
     Object.assign(hero, { r: 1.9, omega: (r() < 0.5 ? 1 : -1) * (1.3 + r() * 0.5) });
   } else if (type === 'pendulum') {                       // two hammers swinging across the lane
-    Object.assign(hero, { A: hw - 0.78, w: 1.7 + r() * 0.5, rad: 0.55, hammers: [{ du: -1.7, ph: r() * 3 }, { du: 1.7, ph: 3.1 + r() * 3 }] });
+    Object.assign(hero, { A: hw - 0.78, w: (1.7 + r() * 0.5) * (2 / 3), rad: 0.55, hammers: [{ du: -1.7, ph: r() * 3 }, { du: 1.7, ph: 3.1 + r() * 3 }] });
   } else if (type === 'geyser') {                         // a vent that erupts now and then and throws the ball out
     Object.assign(hero, { r: 1.25, period: 3.6 + r() * 1.2, phase: r() * 3, push: 9 });
   } else if (type === 'cannon') {                         // a cannon that swallows the ball and fires it on down the lane
