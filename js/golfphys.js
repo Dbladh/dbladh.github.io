@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261029194525';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261029200716';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -90,7 +90,7 @@ function collideSeg(b, ax, az, bx, bz, e, ev, kick = 0) {
   if (d < 1e-6) { const l = Math.sqrt(l2) || 1; nx = -dz / l; nz = dx / l; } else { nx = ox / d; nz = oz / d; }
   b.x += nx * (BALL_R - d); b.z += nz * (BALL_R - d);
   const vn = b.vx * nx + b.vz * nz;
-  if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vz -= (1 + e) * vn * nz; if (-vn > ev.wall) ev.wall = -vn; }
+  if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vz -= (1 + e) * vn * nz; if (-vn > ev.wall) { ev.wall = -vn; ev.sax = ax; ev.saz = az; ev.sbx = bx; ev.sbz = bz; } }
 }
 /** Bounce off a round thing (a post, a bumper, a hammer), which may itself be moving at (vcx, vcz). */
 function collideCircle(b, cx, cz, r, e, ev, vcx, vcz) {

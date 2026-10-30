@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029194525';
-import { toWorld, YAWS } from './golfsites.js?v=20261029194525';
-import { M, G } from './golfvis.js?v=20261029194525';
-import { isLow } from './golfquality.js?v=20261029194525';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261029194525';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029200716';
+import { toWorld, YAWS } from './golfsites.js?v=20261029200716';
+import { M, G } from './golfvis.js?v=20261029200716';
+import { isLow } from './golfquality.js?v=20261029200716';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261029200716';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) { /* (no haptics here) */ } };      // (a short buzz on phones that can)
@@ -356,10 +356,10 @@ export function createTable(env) {
         if (tg) knockTarget(tg);
         else if (ev.hx === hole.cover.x && ev.hz === hole.cover.z) { audio?.golf?.('wall', 0.8); shake = 0.12; if (!st.open && st.clock - (st.coverSay || -9) > 4) { st.coverSay = st.clock; say(elBanner, `CUP LOCKED: light ${objs().map((k) => LAMP_TEXT[k]).join(', ')}`, 2600, 'banner'); } }
         else if (hole.bumpers.some((b) => b.x === ev.hx && b.z === ev.hz)) { addScore(100, ev.hx, ev.hz, ev.hr); shake = 0.16; { const hb = hole.bumpers.find((b) => b.x === ev.hx && b.z === ev.hz); hitPart(partOf.get(hb), 1, COMBO_COL[Math.min(5, st.combo)]); sparksAt(ev.hx, ev.hz, 0.8, COMBO_COL[Math.min(5, st.combo)], 10 + 4 * st.combo); buzz(10); } audio?.golf?.('pbbump', st.combo); const pb = pops.find((b) => b.x === ev.hx && b.z === ev.hz); if (pb && !st.litBumps.has(pb)) { st.litBumps.add(pb); pulse(pb.x, pb.z, 1.1); if (st.litBumps.size === pops.length) lamp('bump'); } }
-        else { addScore(25, ev.hx, ev.hz, ev.hr); audio?.golf?.('post', Math.min(1, ev.post / 12)); }
+        else { env.glow?.()?.disc(ev.hx, ev.hz, ev.hr, ev.post, '#ffd23f'); addScore(25, ev.hx, ev.hz, ev.hr); audio?.golf?.('post', Math.min(1, ev.post / 12)); }
       }
       if (ev.kick) { addScore(20, ev.kx, ev.kz, 0.9); shake = 0.09; audio?.golf?.('pbkick'); let sf = null, sd = 1e9; for (const q of slingFs) { const d = Math.hypot(q.x - ev.kx, q.z - ev.kz); if (d < sd) { sd = d; sf = q; } } if (sf) { hitPart(sf.F, 1, '#ffd23f'); sparksAt(ev.kx, ev.kz, 0.5, '#ffd23f', 8); buzz(12); } }
-      if (ev.wall > 1.5) audio?.golf?.('wall', Math.min(1, ev.wall / 12));
+      if (ev.wall > 1.5) { audio?.golf?.('wall', Math.min(1, ev.wall / 12)); env.glow?.()?.wall(ev.sax, ev.saz, ev.sbx, ev.sbz, ball.x, ball.z, ev.wall, '#ffe9a0'); }
       if (ev.holed) { st.mode = 'sink'; sinkT = 0; return; }
       if (drained()) {
         if (st.shotT < SAVE_TIME && st.skill) { st.balls--; say(elBanner, 'BALL SAVED!', 1600, 'banner'); } else { say(elToast, 'Ball lost', 1400, 'toast'); }
