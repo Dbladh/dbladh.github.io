@@ -4,10 +4,10 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029203837';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029203837';
-import { aceSearch } from './golface.js?v=20261029203837';
-import { BAKED } from './golfbake.js?v=20261029203837';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029204307';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029204307';
+import { aceSearch } from './golface.js?v=20261029204307';
+import { BAKED } from './golfbake.js?v=20261029204307';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -233,11 +233,12 @@ function addPatches(out, rr, surface, S, magnets = [], tunnels = []) {
       tunnels.push({ x: q(cl[mid].x), z: q(cl[mid].z), ux: tx[mid], uz: tz[mid], len: Math.hypot(cl[i1].x - cl[ci].x, cl[i1].z - cl[ci].z), hw: w[mid] }); keep.push({ x: cl[mid].x, z: cl[mid].z, r: 3.2 }); break;
     }
   }
-  if (S.index >= 2 && rr() < 0.45) {                                          // a magnet beside the lane, pulling the ball in (or, now and then, pushing it away)
+  for (let k = 0; k < 2; k++) if (S.index >= 2 + 2 * k && rr() < (k ? 0.4 : 0.6)) {      // magnets beside the lane: some pull the ball in, some push it away, and they switch on and off (the second one only on the later holes)
     for (let tries = 0; tries < 60; tries++) {
       const ci = 8 + ((rr() * (N - 17)) | 0), side = rr() < 0.5 ? 1 : -1, lat = side * (w[ci] - 0.55), x = cl[ci].x - tz[ci] * lat, z = cl[ci].z + tx[ci] * lat;
-      if (sAt[ci] < 5 || sAt[ci] > length - 5 || Math.hypot(x - S.hero.x, z - S.hero.z) < 4.2 || !free(x, z, 0.2)) continue;
-      magnets.push({ x: q(x), z: q(z), r: 2.7, pull: rr() < 0.8 ? 3.6 : -3.6 }); keep.push({ x, z, r: 2.2 }); break;
+      if (sAt[ci] < 5 || sAt[ci] > length - 5 || Math.hypot(x - S.hero.x, z - S.hero.z) < 4.2 || !free(x, z, 0.2) || magnets.some((o) => Math.hypot(o.x - x, o.z - z) < 7)) continue;
+      const first = ((S.index + (S.seed >>> 5)) & 1) === 0, pullIn = k ? !(magnets.length ? magnets[0].pull > 0 : first) : first;                // (a second magnet is the opposite kind of the first)
+      magnets.push({ x: q(x), z: q(z), r: 3.3, pull: pullIn ? 9 : -9, period: q(5.5 + rr() * 2.5), duty: Math.round((0.5 + rr() * 0.15) * 100) / 100, phase: Math.round(rr() * 800) / 100 }); keep.push({ x, z, r: 2.4 }); break;
     }
   }
 }

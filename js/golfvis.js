@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029203837';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029203837';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029203837';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029203837';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029203837';
-import { isLow } from './golfquality.js?v=20261029203837';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState } from './golfphys.js?v=20261029204307';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029204307';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029204307';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029204307';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029204307';
+import { isLow } from './golfquality.js?v=20261029204307';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -298,8 +298,21 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const gy = Math.max(0, hillH(h, mg.x, mg.z)), red = metal('#e5483f'), wht = metal('#f2f2f6'), hs = new THREE.Group(); hs.position.set(mg.x, gy, mg.z);
     const arc = new THREE.Mesh(track(new THREE.TorusGeometry(0.62, 0.17, 8, 16, Math.PI)), red); arc.rotation.x = Math.PI / 2; arc.position.y = 0.55; hs.add(arc);
     for (const sd of [-1, 1]) { hs.add(cyl(red, 0.17, 0.55, sd * 0.62, 0.28, 0)); hs.add(cyl(wht, 0.18, 0.14, sd * 0.62, 0.07, 0)); if (!isLow()) for (let k = 0; k < 3; k++) hs.add(torus(metal('#c8803a'), 0.19, 0.035, sd * 0.62, 0.22 + k * 0.1, 0, Math.PI / 2)); } g.add(hs);      // (high tier: copper coils on the legs)
-    const rings = [0, 1, 2].map((i) => { const m = new THREE.Mesh(track(new THREE.RingGeometry(0.95, 1.0, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: mg.pull > 0 ? '#ff6a5f' : '#6aa8ff', transparent: true, opacity: 0.5, depthWrite: false })); disposables.push(m.material); m.position.set(mg.x, gy + 0.08, mg.z); g.add(m); return m; });
-    updaters.push((heroT) => { rings.forEach((m, i) => { let k = ((heroT * 0.5 + i / 3) % 1); if (mg.pull > 0) k = 1 - k; m.scale.setScalar(0.2 + k * mg.r); m.material.opacity = 0.55 * Math.sin(k * Math.PI); }); });
+    const pullIn = mg.pull > 0, onCol = new THREE.Color(pullIn ? '#ff6a5f' : '#6aa8ff'), amber = new THREE.Color('#ffc23a'), white = new THREE.Color('#ffffff'), dim = new THREE.Color('#7b7f8a');
+    const rings = [0, 1, 2].map((i) => { const m = new THREE.Mesh(track(new THREE.RingGeometry(0.95, 1.0, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: onCol, transparent: true, opacity: 0.5, depthWrite: false })); disposables.push(m.material); m.position.set(mg.x, gy + 0.08, mg.z); g.add(m); return m; });
+    const field = new THREE.Mesh(track(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: onCol, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); disposables.push(field.material); field.position.set(mg.x, gy + 0.06, mg.z); field.scale.setScalar(mg.r); field.renderOrder = 1; g.add(field);
+    const lamp = new THREE.Mesh(G.sph, new THREE.MeshBasicMaterial({ color: dim })); disposables.push(lamp.material); lamp.scale.setScalar(0.17); lamp.position.set(mg.x, gy + 1.05, mg.z); g.add(lamp);        // (the indicator: grey when off, flashing amber just before it switches on, its own colour while on, flashing white just before it switches off)
+    updaters.push((heroT) => {
+      const { power, warn } = magnetState(mg, heroT), blink = Math.floor(heroT * (warn === 'on' ? 7 : 4)) % 2 === 0, col = lamp.material.color;
+      if (warn === 'on') col.copy(blink ? amber : dim); else if (warn === 'off') col.copy(blink ? white : onCol); else col.copy(power > 0 ? onCol : dim);
+      lamp.scale.setScalar(0.17 + (power > 0 || warn === 'on' ? 0.05 * Math.sin(heroT * 12) * (warn ? 1 : 0.4) : 0));
+      field.material.opacity = 0.16 * power * (warn === 'off' && !blink ? 0.4 : 1); field.material.color.copy(onCol);
+      rings.forEach((m, i) => {
+        let k = ((heroT * (0.5 + 0.9 * power) + i / 3) % 1); if (pullIn) k = 1 - k;
+        if (power <= 0) { m.scale.setScalar(mg.r); m.material.color.copy(warn === 'on' ? (blink ? amber : dim) : dim); m.material.opacity = warn === 'on' ? (blink ? 0.7 : 0.2) : 0.14; return; }
+        m.scale.setScalar(0.2 + k * mg.r); m.material.color.copy(warn === 'off' && !blink ? white : onCol); m.material.opacity = 0.8 * power * Math.sin(k * Math.PI);
+      });
+    });
   }
   for (const tn of h.tunnels || []) {                          // a tunnel: stone arches and a see-through roof over a straight stretch, every piece standing on the ground under it
     const R = Math.min(2.0, tn.hw - 0.15), yaw = Math.atan2(-tn.uz, tn.ux), stone = stoneTint(TH0.rock, true), at = (lx) => [tn.x + tn.ux * lx, tn.z + tn.uz * lx];

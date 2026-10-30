@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261029203837';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261029204307';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -140,6 +140,13 @@ export function triggerBar(hole, o) {
   return (o.bar = { ux, uz, half: Math.max(o.r, hw * 0.7), len: Math.max(1.0, o.r * 1.4) });
 }
 export function onTrigger(hole, o, b) { const bar = triggerBar(hole, o), rx = b.x - o.x, rz = b.z - o.z; return Math.abs(rx * bar.ux + rz * bar.uz) < bar.len / 2 && Math.abs(-rx * bar.uz + rz * bar.ux) < bar.half; }
+/** A magnet switches on and off: { power (0 to 1, easing in and out over 0.3 s), warn ('on' for the last 1.2 s before it switches on, 'off' for the last 1 s before it switches off, else '') } at time t. A magnet without a period is always on. */
+export function magnetState(m, t) {
+  if (!m.period) return { power: 1, warn: '' };
+  const per = m.period, p = (((t + m.phase) % per) + per) % per, onT = per * m.duty, RAMP = 0.3;
+  if (p < onT) return { power: Math.min(1, p / RAMP, (onT - p) / RAMP), warn: onT - p < 1.0 ? 'off' : '' };
+  return { power: 0, warn: per - p < 1.2 ? 'on' : '' };
+}
 export function patchAt(hole, b) { if (hole.patches) for (const p of hole.patches) if (dist2(b, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, b.x, b.z)) return p; return null; }
 export function inSand(hole, b) { for (const s of hole.sands) if (dist2(b, s.x, s.z) < s.r * s.r * 1.45 && inPoly(s.poly, b.x, b.z)) return true; return false; }
 /** The push needed to take the ball clear of whatever it overlaps that a ghost passes through (hero walls, posts, bumpers): adds to (out.x, out.z) and returns whether it overlaps. */
@@ -215,7 +222,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; if (ctx.tilt && hole.tiltDir) { b.vx += hole.tiltDir.x * ctx.tilt * h; b.vz += hole.tiltDir.z * ctx.tilt * h; } }
     const pt = b.air ? null : patchAt(hole, b);                         // (a patch of ice, mud, caramel, quicksand or a conveyor under the ball)
     if (pt) { if (pt.pull) { const cx = pt.x - b.x, cz = pt.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1; b.vx += (cx / cd) * pt.pull * h; b.vz += (cz / cd) * pt.pull * h; } if (pt.push) { b.vx += pt.ux * pt.push * h; b.vz += pt.uz * pt.push * h; } }
-    if (hole.magnets && !b.air) for (const m of hole.magnets) { const dx = m.x - b.x, dz = m.z - b.z, d2 = dx * dx + dz * dz; if (d2 < m.r * m.r && d2 > 0.04) { const d = Math.sqrt(d2), k = (m.pull * (1 - d / m.r) * h) / d; b.vx += dx * k; b.vz += dz * k; } }        // (a magnet pulls the ball in (or, with a negative pull, pushes it away))
+    if (hole.magnets && !b.air) for (const m of hole.magnets) { const dx = m.x - b.x, dz = m.z - b.z, d2 = dx * dx + dz * dz; if (d2 < m.r * m.r && d2 > 0.04) { const pw = magnetState(m, tt).power; if (pw <= 0) continue; const d = Math.sqrt(d2), f = 1 - d / m.r, k = (m.pull * pw * f * (0.4 + 0.6 * f) * h) / d; b.vx += dx * k; b.vz += dz * k; } }        // (a magnet pulls the ball in (or, with a negative pull, pushes it away))
     if (!b.air) for (const rv of hole.rivers) {
       const dx = rv.b.x - rv.a.x, dz = rv.b.z - rv.a.z, l2 = dx * dx + dz * dz; let t = ((b.x - rv.a.x) * dx + (b.z - rv.a.z) * dz) / l2; if (t < -0.05 || t > 1.05) continue;
       t = t < 0 ? 0 : t > 1 ? 1 : t; const px = rv.a.x + dx * t - b.x, pz = rv.a.z + dz * t - b.z;
