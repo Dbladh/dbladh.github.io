@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029201401';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029201401';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029201401';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029201401';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029201401';
-import { isLow } from './golfquality.js?v=20261029201401';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029201632';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029201632';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029201632';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029201632';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029201632';
+import { isLow } from './golfquality.js?v=20261029201632';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -114,8 +114,8 @@ function signTexture(n, par) {
   x.fillStyle = '#2a1a0c'; x.textAlign = 'center'; x.font = '800 112px "Outfit", system-ui, sans-serif'; x.fillText(`${n}`, 128, 102); x.font = '800 40px "Outfit", system-ui, sans-serif'; x.fillText(`PAR ${par}`, 128, 144);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
-/** How bright a hit of this impact speed (about 1 to 12) lights its target: a tap barely glows, a hard hit flares fully. */
-const hitK = (strength) => Math.max(0.1, Math.min(1, Math.pow(Math.max(0, strength - 0.8) / 9, 0.85)));
+/** The energy of a hit of this impact speed (about 1 to 12): a graze lights its target gently (0.7), a normal tap strongly (1, what a hard hit used to be) and a hard hit flares to 3.2. */
+const hitK = (strength) => 0.7 + 2.5 * Math.pow(Math.max(0, Math.min(1, (strength - 0.8) / 9)), 0.85);
 const _warm = new THREE.Color(), _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
 
 let wireTex = null;
@@ -394,7 +394,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     },
     update(heroT, t, dt, st) {
       for (const u of updaters) u(heroT, t, dt, st);
-      for (const f of hitFlash.values()) if (f.k > 0) { f.k = Math.max(0, f.k - dt * 3.2); f.o.position.copy(f.src.position); f.o.scale.copy(f.src.scale).multiplyScalar(1.12); f.o.material.opacity = Math.min(1, f.k * f.k * 1.1); if (f.k === 0) f.o.visible = false; }
+      for (const f of hitFlash.values()) if (f.k > 0) { f.k = Math.max(0, f.k - dt * 3.2 * (f.k > 1 ? 1.6 : 1)); f.o.position.copy(f.src.position); f.o.scale.copy(f.src.scale).multiplyScalar(1.08 + 0.05 * Math.min(f.k, 3.2)); f.o.material.opacity = Math.min(1, f.k * f.k * 1.1); if (f.k === 0) f.o.visible = false; }
       if (wallFlash.size) {                                  // the border: lit by brightening those stretches' own instance colours (so the glow is the wall itself), then settling back
         const c = new THREE.Color(); let touched = false;
         for (const [j, k0] of wallFlash) {
