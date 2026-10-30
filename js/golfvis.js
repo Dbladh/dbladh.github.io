@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029202034';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029202034';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029202034';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029202034';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029202034';
-import { isLow } from './golfquality.js?v=20261029202034';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029202807';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029202807';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029202807';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029202807';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029202807';
+import { isLow } from './golfquality.js?v=20261029202807';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -116,6 +116,7 @@ function signTexture(n, par) {
 }
 /** The energy of a hit of this impact speed (about 1 to 12): a graze lights its target gently (0.7), a normal tap strongly (1, what a hard hit used to be) and a hard hit flares to 3.2. */
 const hitK = (strength) => 0.7 + 2.5 * Math.pow(Math.max(0, Math.min(1, (strength - 0.8) / 9)), 0.85);
+const _hbox = new THREE.Box3(), _hp = new THREE.Vector3(), _hs = new THREE.Vector3(), _hwarm = new THREE.Color('#ffe9a0');
 const _warm = new THREE.Color(), _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
 
 let wireTex = null;
@@ -169,7 +170,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     }
   }
   // the border: bricks, boulders or planks all the way round
-  const border = buildBorder(h, g, disposables), hitFlash = new Map(), wallFlash = new Map();
+  const border = buildBorder(h, g, disposables), hitFlash = new Map(), wallFlash = new Map(), heroFlash = new Map(); let heroMeshes = null;
   // the tee sign, on a post beside the round green at the start
   { const t0 = h.path[0], t1 = h.path[Math.min(4, h.path.length - 1)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1, tx = (t1.x - t0.x) / l, tz = (t1.z - t0.z) / l;
     const sg = new THREE.Group(); sg.position.set(t0.x - tz * 0 + -tz * 3.9 - tx * 0.4, 0, t0.z + tx * 3.9 - tz * 0.4);
@@ -387,6 +388,16 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     heroRoot, group: g, pickups, cupMesh, flag, bumperParts,
     /** The ball hit the post or bumper at (x, z): its lit copy flares. Returns whether there was one. */
     flashAt(x, z, strength = 5) { const f = hitFlash.get(`${x},${z}`); if (!f) return false; f.k = Math.max(f.k, hitK(strength)); f.o.visible = true; return true; },
+    /** The ball hit something of the hero obstacle (a moving wall, a hammer, a sail...) at (x, y, z) of the hole: the one or two nearest parts light up. Returns whether any part was there. */
+    flashHero(x, y, z, strength = 5) {
+      if (!heroRoot || ghostOn) return false;
+      if (!heroMeshes) { heroMeshes = []; heroRoot.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.material && !Array.isArray(o.material) && o.material.emissive && !o.material.transparent && o.geometry !== G.disc) heroMeshes.push(o); }); }
+      g.updateWorldMatrix(true, false); heroRoot.updateWorldMatrix(true, true); g.localToWorld(_hp.set(x, y, z));
+      const hits = []; for (const o of heroMeshes) { if (!o.visible) continue; _hbox.setFromObject(o).expandByScalar(BALL_R + 0.18); if (_hbox.containsPoint(_hp)) { _hbox.getSize(_hs); hits.push([_hs.x * _hs.y * _hs.z, o]); } }
+      hits.sort((a, b) => a[0] - b[0]); const e = hitK(strength);
+      for (const [, o] of hits.slice(0, 2)) { let f = heroFlash.get(o); if (!f) { f = { k: 0, orig: o.material, clone: null }; heroFlash.set(o, f); } if (!f.clone || o.material !== f.clone) { f.orig = o.material === f.clone ? f.orig : o.material; f.clone = f.orig.clone(); disposables.push(f.clone); o.material = f.clone; } f.k = Math.max(f.k, e); }
+      return hits.length > 0;
+    },
     /** The ball hit the wall segment (ax, az)-(bx, bz): that stretch of the border (and a little of its neighbours) lights up. Returns whether it is a border wall. */
     flashWall(ax, az, bx, bz, strength = 5) {
       const i = border.segs.findIndex((w) => (w[0] === ax && w[1] === az && w[2] === bx && w[3] === bz)); if (i < 0) return false;
@@ -394,6 +405,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     },
     update(heroT, t, dt, st) {
       for (const u of updaters) u(heroT, t, dt, st);
+      for (const [o, f] of heroFlash) {                      // the hero parts that were hit: each wears its own copy of its material while it glows, then gets the shared one back
+        f.k = Math.max(0, f.k - dt * 3 * (f.k > 1 ? 1.6 : 1));
+        if (f.k > 0) { if (o.material === f.clone) f.clone.emissive.copy(_hwarm).multiplyScalar(Math.min(1.4, f.k * 0.55)); else f.k = 0; }
+        if (f.k === 0) { if (o.material === f.clone) o.material = f.orig; heroFlash.delete(o); }
+      }
       for (const f of hitFlash.values()) if (f.k > 0) { f.k = Math.max(0, f.k - dt * 3.2 * (f.k > 1 ? 1.6 : 1)); f.o.position.copy(f.src.position); f.o.scale.copy(f.src.scale).multiplyScalar(1.08 + 0.05 * Math.min(f.k, 3.2)); f.o.material.opacity = Math.min(1, f.k * f.k * 1.1); if (f.k === 0) f.o.visible = false; }
       if (wallFlash.size) {                                  // the border: lit by brightening those stretches' own instance colours (so the glow is the wall itself), then settling back
         const c = new THREE.Color(); let touched = false;
