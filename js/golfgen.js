@@ -4,11 +4,11 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029214328';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029214328';
-import { aceSearch } from './golface.js?v=20261029214328';
-import { hillH } from './golfphys.js?v=20261029214328';
-import { BAKED } from './golfbake.js?v=20261029214328';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261029215756';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261029215756';
+import { aceSearch } from './golface.js?v=20261029215756';
+import { hillH } from './golfphys.js?v=20261029215756';
+import { BAKED } from './golfbake.js?v=20261029215756';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -229,9 +229,31 @@ function capRows(c, tx, tz, hw, dir) {
   return rows;
 }
 
+/** A long soft blob lying along a wall: len along the wall, wid across it, 20 points with a gentle lump. Only + - * and the seeded generator. */
+function roughPoly(x, z, ox, oz, len, wid, seed) {
+  const rng = mulberry32(seed), lump = []; for (let i = 0; i < 20; i++) lump.push(rng()); const pts = []; let c = 1, s = 0; const C = 0.9510565162951535, S = 0.3090169943749474;       // (18 degrees a step)
+  for (let i = 0; i < 20; i++) { const b = 1 + 0.16 * (lump[i] - 0.5), px = c * len * b, py = s * wid * b; pts.push(x + px * ox - py * oz, z + px * oz + py * ox); const nc = c * C - s * S; s = s * C + c * S; c = nc; }
+  return pts;
+}
+/** The roughs: soft blobs of long grass (deep snow, loose sand, ash... by theme) on the edges of the fairway. A ball in the rough is slowed a fair bit (friction x1.5, a sand pit is x3.2); the fairway itself, the green, rolls normally. They come from their own random stream, lie wholly inside the walls and clear of everything else. */
+function addRoughs(out, S) {
+  if (S.index < 1) return; const { cl, w, N, free, keep } = S, rr = mulberry32((S.seed ^ 0x3b9f1d27) >>> 0), want = 1 + (rr() < 0.55 ? 1 : 0) + (S.index >= 4 && rr() < 0.45 ? 1 : 0);
+  const gapOf = (x, z) => { let bd = 1e9, g = 0; for (let i = 0; i < N; i++) { const d = Math.hypot(x - cl[i].x, z - cl[i].z); if (d < bd) { bd = d; g = w[i] - d; } } return g; };      // (how far inside the wall a point is: 0 at the wall, the half-width at the centre line)
+  for (let k = 0; k < want; k++) {
+    for (let tries = 0; tries < 70; tries++) {
+      const ci = 6 + ((rr() * (N - 12)) | 0), side = rr() < 0.5 ? 1 : -1, wid = 0.42 + rr() * 0.16, len = 1.0 + rr() * 1.2, rad = len, lat = side * (w[ci] - wid - 0.18), nx = -S.tz[ci], nz = S.tx[ci], x = q(cl[ci].x + nx * lat), z = q(cl[ci].z + nz * lat);
+      if (!free(x, z, rad * 1.2) || Math.hypot(x - cl[0].x, z - cl[0].z) < rad + 3.4 || Math.hypot(x - cl[N - 1].x, z - cl[N - 1].z) < rad + 3.4) continue;       // (never at the tee or the cup)
+      const poly = roughPoly(x, z, S.tx[ci], S.tz[ci], len, wid, S.seed ^ (0x6d2b79f5 + k * 977)); let ok = true, r2 = 0, nearest = 9;
+      for (let i = 0; i < poly.length; i += 2) { const g = gapOf(poly[i], poly[i + 1]); if (g < 0.1 || g > 1.35) { ok = false; break; } nearest = Math.min(nearest, g); r2 = Math.max(r2, Math.hypot(poly[i] - x, poly[i + 1] - z)); }       // (along the wall: wholly inside it, never further than 1.35 from it, and touching it, so the middle of the lane stays green)
+      if (!ok || nearest > 0.45 || out.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r2 + 0.3)) continue;
+      out.push({ kind: 'rough', poly, x, z, r: r2 + 0.3, ux: 0, uz: 0, ...SURFACE.rough }); keep.push({ x, z, r: r2 + 0.6 }); break;
+    }
+  }
+}
 /** Surface patches of a hole (ice, mud, caramel, quicksand, a conveyor belt): strips across the corridor or an oval pit, placed on a straight stretch clear of everything else, drawn with their own generator so they never change the rest of a hole. */
-const SURFACE = { ice: { fric: 0.1 }, mud: { fric: 2.2 }, caramel: { fric: 2.8 }, quicksand: { fric: 1.8, pull: 2.4 }, conveyor: { fric: 0.8, push: 3.2 } };
+const SURFACE = { rough: { fric: 1.5 }, ice: { fric: 0.1 }, mud: { fric: 2.2 }, caramel: { fric: 2.8 }, quicksand: { fric: 1.8, pull: 2.4 }, conveyor: { fric: 0.8, push: 3.2 } };
 function addPatches(out, rr, surface, S, magnets = [], tunnels = []) {
+  addRoughs(out, S);
   const { cl, w, tx, tz, N, sAt, length, free, keep } = S, want = [];
   if (S.index >= 1 && surface && SURFACE[surface]) want.push(surface);
   if (S.index >= 3 && rr() < 0.35) want.push('conveyor');
@@ -493,6 +515,7 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   for (const sc of secrets) pickups.push(sc);                // (the secret coins of the machines)
   const patches = [], magnets = [], tunnels = [];
   if (ext) addPatches(patches, mulberry32((seed ^ 0x51ed270b) >>> 0), ext.surface, { seed, index, cl, w, tx, tz, N, sAt, length, free: freeX, keep, hero }, magnets, tunnels);
+  if (patches.some((p) => p.kind === 'rough') && !laneExists(cl, w, ball, cup, [...ponds.map((o) => o.poly), ...sands.map((o) => o.poly), ...patches.filter((p) => p.kind === 'rough').map((p) => p.poly)], feats, [...posts, ...bumpers], segsAll())) for (let k = patches.length - 1; k >= 0; k--) if (patches[k].kind === 'rough') patches.splice(k, 1);          // (the green must always have a clear way to the cup that stays off the roughs: if the roughs shut it, they go)
 
   // the second set of extras (ext.more): ghost walls and (see the widths above) a fork island, each drawn from their own generator
   const ghosts = [], islands = [], gates1 = [], rollers = [];

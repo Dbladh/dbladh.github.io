@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029214328';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029214328';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029214328';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029214328';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029214328';
-import { isLow } from './golfquality.js?v=20261029214328';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261029215756';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029215756';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029215756';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029215756';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029215756';
+import { isLow } from './golfquality.js?v=20261029215756';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -285,7 +285,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       const tx = chev.clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; disposables.push(tx); const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (pp.getX(i) * pt.ux + pp.getZ(i) * pt.uz) / 1.6, (-pp.getX(i) * pt.uz + pp.getZ(i) * pt.ux) / 1.6);
       mat = new THREE.MeshBasicMaterial({ map: tx, color: '#9bd4ff', transparent: true, opacity: 0.95, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
     } else {
-      const look = { ice: ['#bfe6ff', 0.8], mud: ['#6b4a2e', 0.95], caramel: ['#d9902f', 0.92], quicksand: ['#b98b4a', 0.95] }[pt.kind] || ['#999999', 0.9];
+      const look = { rough: [TH0.rough || '#3f9f4f', 0.93], ice: ['#bfe6ff', 0.8], mud: ['#6b4a2e', 0.95], caramel: ['#d9902f', 0.92], quicksand: ['#b98b4a', 0.95] }[pt.kind] || ['#999999', 0.9];
       const opt = { color: look[0], transparent: true, opacity: look[1], polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, emissive: pt.kind === 'ice' ? '#2a4a6a' : pt.kind === 'caramel' ? '#4a2a08' : '#000000' }, pt2 = GM.patch(pt.kind);
       if (pt2) {                                              // high tier: a painted, normal-mapped, glossy patch (UVs from the ground position)
         const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, pp.getX(i) / 3, pp.getZ(i) / 3);
@@ -293,6 +293,17 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       } else mat = new THREE.MeshLambertMaterial(opt);
     }
     disposables.push(mat); const m = new THREE.Mesh(geo, mat); m.renderOrder = 1; m.receiveShadow = true; g.add(m);
+    if (pt.kind === 'rough') {                                 // the rough: long grass (or deep snow, loose sand, ash... by theme), a darker blob with tufts or lumps standing in it
+      const grassy = TH0.ground === 'grass' || TH0.ground === 'moss', n = isLow() ? 14 : 36, tg = track(grassy ? new THREE.ConeGeometry(0.07, 0.36, 4) : new THREE.IcosahedronGeometry(0.17, 0)), tm = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }); disposables.push(tm);
+      const im = new THREE.InstancedMesh(tg, tm, n), rg = mulberry32((h.seed ^ Math.round(pt.x * 91 + pt.z * 57)) >>> 0), base = new THREE.Color(TH0.rough || '#3f9f4f'), col = new THREE.Color(), cand = ['#ff9ccf', '#fff0b0', '#8ee0ff', '#ffffff'], mm = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(); let placed = 0;
+      for (let tries = 0; tries < n * 12 && placed < n; tries++) {
+        const a = rg() * 6.2832, d = Math.sqrt(rg()) * pt.r, x = pt.x + Math.cos(a) * d, z = pt.z + Math.sin(a) * d; if (!inPoly(pt.poly, x, z)) continue;
+        const sc = 0.7 + rg() * 0.9; e4.set((rg() - 0.5) * 0.4, rg() * 6.28, (rg() - 0.5) * 0.4); q4.setFromEuler(e4); s3.set(sc, grassy ? sc * (0.9 + rg() * 0.8) : sc * 0.7, sc);
+        mm.compose(v3.set(x, Math.max(0, hillH(h, x, z)) + (grassy ? 0.2 : 0.1), z), q4, s3); im.setMatrixAt(placed, mm);
+        if (TH0.ground === 'candy') col.set(cand[(rg() * cand.length) | 0]); else col.copy(base).offsetHSL((rg() - 0.5) * 0.04, 0, (rg() - 0.35) * (grassy ? 0.16 : 0.08)); im.setColorAt(placed, col); placed++;
+      }
+      im.count = placed; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.castShadow = true; im.frustumCulled = false; g.add(im); disposables.push(im);
+    }
   }
   for (const mg of h.magnets || []) {                          // a magnet: a red and white horseshoe on the ground with rings that pulse towards (or away from) it
     const gy = Math.max(0, hillH(h, mg.x, mg.z)), red = metal('#e5483f'), wht = metal('#f2f2f6'), hs = new THREE.Group(); hs.position.set(mg.x, gy, mg.z);
