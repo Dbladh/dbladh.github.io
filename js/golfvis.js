@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029200716';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029200716';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261029200716';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029200716';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029200716';
-import { isLow } from './golfquality.js?v=20261029200716';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar } from './golfphys.js?v=20261029201153';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261029201153';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261029201153';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261029201153';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261029201153';
+import { isLow } from './golfquality.js?v=20261029201153';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -81,7 +81,7 @@ function buildBorder(h, g, disposables) {
   const TH = themeOf(h.theme), style = TH.border, r = mulberry32(h.seed ^ 0x5bd1e995), O = h.outline, segs = h.walls.filter((w) => w[4]);
   let area = 0; for (let i = 0; i < O.length; i++) { const a = O[i], b = O[(i + 1) % O.length]; area += a[0] * b[1] - b[0] * a[1]; }
   const sgn = area > 0 ? 1 : -1, col = new THREE.Color();
-  const make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; g.add(m); disposables.push(m); return m; };
+  const made = [], make = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = m.receiveShadow = true; m.userData.seg = n === segs.length; g.add(m); disposables.push(m); made.push(m); return m; };
   const place = (mesh, i, w, off, y, lenK, hgt, thick, shift, palette, tilt = 0) => {
     const dx = w[2] - w[0], dz = w[3] - w[1], l = Math.sqrt(dx * dx + dz * dz) || 1, hy = Math.max(0, hillH(h, (w[0] + w[2]) / 2, (w[1] + w[3]) / 2)), ox = (sgn * dz) / l, oz = (-sgn * dx) / l, ux = dx / l, uz = dz / l;
     _q.setFromAxisAngle(UP, Math.atan2(-dz, dx)); if (tilt) { _q2.setFromAxisAngle(_vx, tilt); _q.multiply(_q2); }
@@ -106,6 +106,7 @@ function buildBorder(h, g, disposables) {
     posts.count = n;
     for (const m of [p0, p1, posts]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
+  return { segs, meshes: made.filter((m) => m.userData.seg && m.instanceColor) };
 }
 function signTexture(n, par) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 160; const x = c.getContext('2d');
@@ -113,7 +114,7 @@ function signTexture(n, par) {
   x.fillStyle = '#2a1a0c'; x.textAlign = 'center'; x.font = '800 112px "Outfit", system-ui, sans-serif'; x.fillText(`${n}`, 128, 102); x.font = '800 40px "Outfit", system-ui, sans-serif'; x.fillText(`PAR ${par}`, 128, 144);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
-const _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
+const _warm = new THREE.Color(), _q2 = new THREE.Quaternion(), _vx = new THREE.Vector3(1, 0, 0);
 
 let wireTex = null;
 /** A glowing wire on the ground from a to b with pulses running along it; it brightens while the machine it feeds is switched on (st.gateOpen). */
@@ -166,7 +167,7 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     }
   }
   // the border: bricks, boulders or planks all the way round
-  buildBorder(h, g, disposables);
+  const border = buildBorder(h, g, disposables), hitFlash = new Map(), wallFlash = new Map();
   // the tee sign, on a post beside the round green at the start
   { const t0 = h.path[0], t1 = h.path[Math.min(4, h.path.length - 1)], l = Math.hypot(t1.x - t0.x, t1.z - t0.z) || 1, tx = (t1.x - t0.x) / l, tz = (t1.z - t0.z) / l;
     const sg = new THREE.Group(); sg.position.set(t0.x - tz * 0 + -tz * 3.9 - tx * 0.4, 0, t0.z + tx * 3.9 - tz * 0.4);
@@ -202,11 +203,13 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     p.needsUpdate = true; flGeo.computeVertexNormals();
   });
   // posts, bumpers, sand
-  for (const p of h.posts) { g.add(cyl(M.post, p.r, 1.0, p.x, 0.45, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z)); }                    // (painted warning bands: this is something the ball hits)
+  const overlay = (src, geo, key) => { const o = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#fff0b0', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); o.visible = false; o.renderOrder = 6; g.add(o); disposables.push(o.material); hitFlash.set(key, { o, src, k: 0 }); };      // (a lit copy of a post or bumper, exactly its own shape, shown only while it flashes)
+  for (const p of h.posts) { const pm = cyl(M.post, p.r, 1.0, p.x, 0.45, p.z); g.add(pm); overlay(pm, G.cyl, `${p.x},${p.z}`); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z));
+  }                                                                                  // (the painted warning bands: this is something the ball hits)
   const bumperParts = new Map();                              // (each bumper's body and cap: the pinball table lights them when hit)
   for (const p of h.bumpers) {
     const BL = { candy: ['#ff5f9e', 'sph'], haunted: ['#ff8a2a', 'sph'], ice: ['#7cc8ff', 'cyl'], space: ['#8a63ff', 'cyl'], volcano: ['#ff5a1a', 'cyl'], desert: ['#d98a3d', 'cyl'] }[h.theme], round = BL && BL[1] === 'sph', ph = p.x * 3 + p.z;      // (the bumpers take the theme's look: gumdrops, pumpkins, ice posts, crystal domes)
-    const b = round ? new THREE.Mesh(G.sph, BL ? paint(BL[0]) : M.bumper) : cyl(BL ? paint(BL[0]) : M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z); if (round) { b.position.set(p.x, 0.45, p.z); cap.visible = false; } g.add(b); g.add(cap); bumperParts.set(p, { b, cap }); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
+    const b = round ? new THREE.Mesh(G.sph, BL ? paint(BL[0]) : M.bumper) : cyl(BL ? paint(BL[0]) : M.bumper, p.r, 0.8, p.x, 0.4, p.z), cap = cyl(M.white, p.r * 1.05, 0.12, p.x, 0.62, p.z); if (round) { b.position.set(p.x, 0.45, p.z); cap.visible = false; } g.add(b); g.add(cap); bumperParts.set(p, { b, cap }); overlay(b, round ? G.sph : G.cyl, `${p.x},${p.z}`); g.add(torus(paint('#ffd23f'), p.r * 1.0, 0.05, p.x, 0.3, p.z, Math.PI / 2));
     updaters.push((heroT, t) => { const k = (1 + 0.05 * Math.sin(t * 4 + ph)) * (1 + (p.pop || 0)); if (round) b.scale.set(p.r * 1.05 * k, 0.7 * k, p.r * 1.05 * k); else b.scale.set(p.r * k, 0.8, p.r * k); cap.scale.set(p.r * 1.05 * k, 0.12, p.r * 1.05 * k); });          // (bumpers breathe a little: they are alive)
   }
   // boost strips (moving chevrons), bounce pads, and the cage round one orb with its button and gate
@@ -380,7 +383,25 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   return {
     setGhost(on) { if (on === ghostOn) return; ghostOn = on; for (const [o, m] of ghosted) { o.material = on ? ghostOf(m) : m; o.castShadow = !on; } },
     heroRoot, group: g, pickups, cupMesh, flag, bumperParts,
-    update(heroT, t, dt, st) { for (const u of updaters) u(heroT, t, dt, st); },
+    /** The ball hit the post or bumper at (x, z): its lit copy flares. Returns whether there was one. */
+    flashAt(x, z, strength = 5) { const f = hitFlash.get(`${x},${z}`); if (!f) return false; f.k = Math.min(1, 0.7 + strength / 14); f.o.visible = true; return true; },
+    /** The ball hit the wall segment (ax, az)-(bx, bz): that stretch of the border (and a little of its neighbours) lights up. Returns whether it is a border wall. */
+    flashWall(ax, az, bx, bz, strength = 5) {
+      const i = border.segs.findIndex((w) => (w[0] === ax && w[1] === az && w[2] === bx && w[3] === bz)); if (i < 0) return false;
+      const k = Math.min(1, 0.7 + strength / 14); for (const [j, m] of [[i, 1], [i - 1, 0.55], [i + 1, 0.55]]) if (j >= 0 && j < border.segs.length) wallFlash.set(j, Math.max(wallFlash.get(j) || 0, k * m)); return true;
+    },
+    update(heroT, t, dt, st) {
+      for (const u of updaters) u(heroT, t, dt, st);
+      for (const f of hitFlash.values()) if (f.k > 0) { f.k = Math.max(0, f.k - dt * 3.2); f.o.position.copy(f.src.position); f.o.scale.copy(f.src.scale).multiplyScalar(1.12); f.o.material.opacity = f.k * f.k * 0.9; if (f.k === 0) f.o.visible = false; }
+      if (wallFlash.size) {                                  // the border: lit by brightening those stretches' own instance colours (so the glow is the wall itself), then settling back
+        const c = new THREE.Color(); let touched = false;
+        for (const [j, k0] of wallFlash) {
+          const k = Math.max(0, k0 - dt * 2.6); if (k > 0) wallFlash.set(j, k); else wallFlash.delete(j); touched = true;
+          for (const m of border.meshes) { m.userData.base ||= new Map(); let b = m.userData.base.get(j); if (!b) { b = new THREE.Color(); m.getColorAt(j, b); m.userData.base.set(j, b); } c.copy(b).multiplyScalar(1 + 2.4 * k).add(_warm.setRGB(0.5 * k, 0.4 * k, 0.12 * k)); m.setColorAt(j, c); if (k === 0) m.userData.base.delete(j); m.instanceColor.needsUpdate = true; }
+        }
+        void touched;
+      }
+    },
     dispose() { for (const d of disposables) d.dispose?.(); g.traverse((o) => { if (o.material && o.material !== M.rail && o.material.map === undefined) { /* shared materials are kept */ } }); },
   };
 }
