@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031102817';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031103345';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -289,6 +289,25 @@ export function createAudio({ base = 'audio/' } = {}) {
       burst('lowpass', 260, 0.5, t0 + 0.15, 0.32 * big, 1.4 + 1.2 * big, 0.12);  // the echo rolling off the hills
       burst('lowpass', 420, 0.5, t0 + 0.6 + 0.3 * big, 0.14 * big, 1.6, 0.2);    // and a second, fainter one
       const n = 10 + Math.round(10 * big); for (let i = 0; i < n; i++) burst('highpass', 2500 + Math.random() * 3000, 0.7, t0 + 0.15 + Math.random() * (0.9 + 0.7 * big), 0.05 * big * (0.3 + Math.random()), 0.05, 0.003);   // the crackle
+    },
+    /** Something creepy and far away: 'wind' (a long hollow howl), 'owl' (two low hoots), 'creak' (a door on a dry hinge) or 'whisper' (breathy syllables). `pan` -1..1. */
+    creepy(kind = 'wind', pan = 0) {
+      if (!ctx || !on || !scn || !gate('creepy', 4)) return;
+      const t0 = ctx.currentTime + 0.05, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = pan; p.connect(scn.out); } const dest = p || scn.out, nb = noise();
+      const env = (g, pk, a, d) => { g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(pk, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); };
+      if (kind === 'wind') {
+        const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = nb; s.loop = true; f.type = 'bandpass'; f.Q.value = 6; f.frequency.setValueAtTime(260, t0); f.frequency.linearRampToValueAtTime(520, t0 + 2.2); f.frequency.linearRampToValueAtTime(300, t0 + 4.5);
+        env(g, 0.2, 2.0, 2.8); s.connect(f); f.connect(g); g.connect(dest); s.start(t0, Math.random()); s.stop(t0 + 5);
+      } else if (kind === 'owl') {
+        for (const [dt, f0] of [[0, 430], [0.55, 400]]) { const o = ctx.createOscillator(), v = ctx.createOscillator(), vg = ctx.createGain(), g = ctx.createGain(), t = t0 + dt; o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.88, t + 0.4); v.frequency.value = 6; vg.gain.value = 8; v.connect(vg); vg.connect(o.frequency);
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45); o.connect(g); g.connect(dest); o.start(t); v.start(t); o.stop(t + 0.5); v.stop(t + 0.5); }
+      } else if (kind === 'creak') {
+        const o = ctx.createOscillator(), lf = ctx.createOscillator(), lg = ctx.createGain(), f = ctx.createBiquadFilter(), g = ctx.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t0); o.frequency.linearRampToValueAtTime(190, t0 + 1.4); lf.type = 'square'; lf.frequency.value = 23; lg.gain.value = 22; lf.connect(lg); lg.connect(o.frequency);
+        f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 5; env(g, 0.05, 0.5, 1.0); o.connect(f); f.connect(g); g.connect(dest); o.start(t0); lf.start(t0); o.stop(t0 + 1.6); lf.stop(t0 + 1.6);
+      } else {
+        for (let i = 0; i < 4; i++) { const t = t0 + i * 0.32 + Math.random() * 0.08, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = nb; f.type = 'bandpass'; f.frequency.value = 2400 + Math.random() * 1800; f.Q.value = 2.5;
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random()); s.stop(t + 0.35); }
+      }
     },
     /** Sleigh bells: a handful of bright little pings that shake across the sky from one side to the other (`dir` 1 left to right, -1 the other way). */
     sleigh(dir = 1) {

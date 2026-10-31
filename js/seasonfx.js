@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031102817';
+import { heightAt, POND, pathX } from './world.js?v=20261031103345';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -242,11 +242,176 @@ function makeFireworks(ctx) {
   };
 }
 
+// the decorations of each billboard (one group per board, a child of its sign group), rebuilt when the frame's layout changes and hidden while the sign is open
+function makeBoardSets(ctx, build) {
+  const sets = new Map();
+  return {
+    sync(hide) {
+      for (const b of ctx.world.boards) {
+        if (!b.frame || !b.group) continue; let e = sets.get(b); if (!e) { e = { v: -1, g: null }; sets.set(b, e); }
+        if (e.v !== b.frameV) { e.v = b.frameV; if (e.g) { b.group.remove(e.g); disposeTree(e.g); } e.g = build(b); b.group.add(e.g); }
+        e.g.visible = !hide && b.frame.lw < 22;
+      }
+    },
+    dispose() { for (const [b, e] of sets) if (e.g) { b.group.remove(e.g); disposeTree(e.g); } sets.clear(); },
+  };
+}
+// ---------------------------------------------------------------- Halloween
+// A haunted house on a free bit of ground (crooked tower, glowing windows that flicker, a dead tree, a fence), carved pumpkins with candle-lit faces by the houses, a big orange glow round the moon, bats that cross it,
+// a ghost that drifts about the haunted house now and then, and the odd creepy sound; the billboards get pumpkins, cobwebs, orange and purple lights, a perched bat and a skeleton hand.
+const HAL = ['#ff8a1f', '#a64dff', '#ff8a1f', '#ffb347', '#8a3dff'].map((c) => new THREE.Color(c));
+function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const faceTex = () => canvasTex(128, 128, (g) => {
+  g.fillStyle = '#ffcf5a'; g.shadowColor = '#ff9a1f'; g.shadowBlur = 10;
+  g.beginPath(); g.moveTo(30, 52); g.lineTo(52, 52); g.lineTo(41, 30); g.closePath(); g.fill(); g.beginPath(); g.moveTo(76, 52); g.lineTo(98, 52); g.lineTo(87, 30); g.closePath(); g.fill();      // eyes
+  g.beginPath(); g.moveTo(62, 66); g.lineTo(70, 80); g.lineTo(54, 80); g.closePath(); g.fill();                                                                                         // nose
+  g.beginPath(); g.moveTo(26, 88); g.quadraticCurveTo(64, 118, 102, 88); g.lineTo(94, 86); g.lineTo(86, 98); g.lineTo(76, 90); g.lineTo(64, 102); g.lineTo(52, 90); g.lineTo(42, 98); g.lineTo(34, 86); g.closePath(); g.fill();   // grin
+});
+const batTex = () => canvasTex(128, 64, (g) => {
+  g.fillStyle = '#07050c'; g.beginPath(); g.moveTo(64, 20); g.quadraticCurveTo(80, 6, 124, 14); g.quadraticCurveTo(108, 28, 106, 46); g.quadraticCurveTo(94, 34, 84, 46); g.quadraticCurveTo(76, 36, 70, 52); g.lineTo(64, 40);
+  g.lineTo(58, 52); g.quadraticCurveTo(52, 36, 44, 46); g.quadraticCurveTo(34, 34, 22, 46); g.quadraticCurveTo(20, 28, 4, 14); g.quadraticCurveTo(48, 6, 64, 20); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(58, 22); g.lineTo(56, 8); g.lineTo(62, 16); g.lineTo(66, 16); g.lineTo(72, 8); g.lineTo(70, 22); g.closePath(); g.fill();
+});
+const ghostTex = () => canvasTex(128, 192, (g) => {
+  const gr = g.createLinearGradient(0, 0, 0, 192); gr.addColorStop(0, 'rgba(235,245,255,0.95)'); gr.addColorStop(1, 'rgba(235,245,255,0.05)'); g.fillStyle = gr;
+  g.beginPath(); g.moveTo(20, 190); g.quadraticCurveTo(10, 90, 30, 52); g.quadraticCurveTo(64, -6, 98, 52); g.quadraticCurveTo(118, 90, 108, 190); g.quadraticCurveTo(92, 170, 84, 190); g.quadraticCurveTo(70, 168, 56, 190); g.quadraticCurveTo(42, 168, 20, 190); g.fill();
+  g.fillStyle = '#10121c'; g.beginPath(); g.ellipse(48, 74, 7, 11, 0, 0, 6.3); g.ellipse(80, 74, 7, 11, 0, 0, 6.3); g.fill(); g.beginPath(); g.ellipse(64, 106, 8, 12, 0, 0, 6.3); g.fill();
+});
+const webTex = () => canvasTex(128, 128, (g) => {
+  g.strokeStyle = 'rgba(240,240,255,0.8)'; g.lineWidth = 1.6; g.beginPath();
+  for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI / 2; g.moveTo(0, 0); g.lineTo(Math.cos(a) * 150, Math.sin(a) * 150); }
+  for (let r = 22; r < 130; r += 20) { g.moveTo(r, 0); for (let i = 1; i <= 6; i++) { const a = (i / 6) * Math.PI / 2, a0 = ((i - 0.5) / 6) * Math.PI / 2, rr = r * 0.82; g.quadraticCurveTo(Math.cos(a0) * rr, Math.sin(a0) * rr, Math.cos(a) * r, Math.sin(a) * r); } }
+  g.stroke();
+});
+function makeHalloween(ctx) {
+  const root = new THREE.Group(); ctx.scene.add(root);
+  const tex = faceTex(), faceMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }), skin = lam('#e8741a'), stemM = lam('#4a5a2a');
+  const pumpGeo = new THREE.SphereGeometry(1, 12, 9), stemGeo = new THREE.CylinderGeometry(0.1, 0.16, 0.34, 6), faceGeo = new THREE.PlaneGeometry(1.5, 1.5);
+  const glowPts = [];
+  function pumpkin(s, face = true) {
+    const g = new THREE.Group(), b = new THREE.Mesh(pumpGeo, skin); b.scale.set(1, 0.8, 1); b.castShadow = true; g.add(b);
+    const st = new THREE.Mesh(stemGeo, stemM); st.position.y = 0.8; st.rotation.z = 0.25; g.add(st);
+    if (face) { const f = new THREE.Mesh(faceGeo, faceMat); f.position.set(0, 0.04, 0.97); g.add(f); }
+    g.scale.setScalar(s); return g;
+  }
+  // pumpkins by the houses, facing the front
+  const houses = ctx.world.houseList(), put = [];
+  houses.forEach((h, i) => {
+    const n = 1 + (i % 2) + (ctx.low ? 0 : 1);
+    for (let k = 0; k < n; k++) {
+      const a = Math.PI * (0.18 + 0.64 * ((k + 0.5 + (i % 3) * 0.2) / n)), d = (h.r || 3) + 0.9 + k * 0.5, x = h.x + Math.cos(a) * d, z = h.z + Math.sin(a) * d;
+      if (Math.abs(x - pathX(z)) < 1.4 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 1) continue;
+      const s = 0.38 + ((i * 7 + k * 3) % 5) * 0.06, p = pumpkin(s); p.position.set(x, heightAt(x, z) + 0.8 * s * 0.8, z); p.rotation.y = Math.PI / 2 - a + (k - 0.5) * 0.3; root.add(p); put.push(p);
+      glowPts.push([x, heightAt(x, z) + 0.8 * s * 0.8, z + s * 1.2]);
+    }
+  });
+  const glow = bulbs(glowPts, [HAL[0]], 0.9); root.add(glow);
+  // the haunted house
+  const spot = ctx.freeSpot(9); let hh = null; const wins = [];
+  if (spot) {
+    hh = new THREE.Group(); hh.position.set(spot.x, spot.y, spot.z); hh.scale.setScalar(1.55); hh.rotation.y = 0.15;
+    const wall = lam('#403850'), roof = lam('#1c1724'), dark = lam('#0e0b14'), wood = lam('#2c2230');
+    const box = (w, h, d, m, x, y, z, ry = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(0, ry, rz); o.castShadow = true; hh.add(o); return o; };
+    box(4.2, 2.8, 3.2, wall, 0, 1.4, 0); box(1.8, 2.2, 2.6, wall, 2.6, 1.1, -0.2, 0, 0.0);
+    const mainRoof = new THREE.Mesh(new THREE.ConeGeometry(3.5, 1.9, 4), roof); mainRoof.position.set(0, 3.7, 0); mainRoof.rotation.y = Math.PI / 4; mainRoof.scale.set(1, 1, 0.82); mainRoof.castShadow = true; hh.add(mainRoof);
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.0, 4.6, 8), wall); tower.position.set(-2.5, 2.3, 0.2); tower.rotation.z = 0.05; tower.castShadow = true; hh.add(tower);
+    const tcap = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.3, 8), roof); tcap.position.set(-2.62, 5.8, 0.2); tcap.rotation.z = 0.09; hh.add(tcap);
+    const sRoof = new THREE.Mesh(new THREE.ConeGeometry(1.7, 1.2, 4), roof); sRoof.position.set(2.6, 2.7, -0.2); sRoof.rotation.y = Math.PI / 4; hh.add(sRoof);
+    box(0.5, 1.4, 0.5, dark, 1.1, 4.3, -0.4, 0, -0.12);                                       // a crooked chimney
+    box(0.9, 1.7, 0.12, dark, 0.3, 0.85, 1.63);                                              // the door
+    box(1.8, 0.14, 1.0, wood, 0.3, 0.07, 2.1); box(0.14, 1.4, 0.14, wood, -0.5, 0.75, 2.5, 0, 0.06); box(0.14, 1.4, 0.14, wood, 1.1, 0.75, 2.5, 0, -0.05);   // the porch
+    const win = (x, y, z, col, w = 0.7, h = 0.9, ry = 0, d = 0) => { const m = new THREE.MeshBasicMaterial({ color: col, fog: false }), o = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); o.position.set(x, y, z + 0.01); o.rotation.y = ry; hh.add(o); wins.push({ m, c: new THREE.Color(col), ph: Math.random() * 20 + d }); };
+    win(-1.1, 1.9, 1.62, '#ffb347'); win(1.5, 1.9, 1.62, '#9dff6a'); win(-1.1, 0.8, 1.62, '#ff8a1f', 0.7, 0.7); win(-2.5, 3.4, 1.05, '#9dff6a', 0.45, 0.8); win(3.0, 1.4, 1.14, '#ffb347', 0.6, 0.7);
+    win(-2.5, 4.6, 0.95, '#ff8a1f', 0.32, 0.55);
+    for (let i = 0; i < 9; i++) { const x = -3.4 + i * 1.05; box(0.12, 1.0 + (i % 3) * 0.12, 0.12, wood, x, 0.5, 3.9, 0, ((i * 5) % 7 - 3) * 0.04); } box(7.6, 0.1, 0.08, wood, 0.0, 0.75, 3.9);        // the fence
+    // a dead tree with bare branches
+    const tr = new THREE.Group(); tr.position.set(4.7, 0, 2.6);
+    const lim = (x, y, z, l, r0, rx, rz) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.6, r0, l, 5), dark); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); tr.add(o); };
+    lim(0, 1.5, 0, 3.0, 0.2, 0, 0.05); lim(0.6, 3.0, 0, 1.6, 0.1, 0, -0.9); lim(-0.5, 2.7, 0.1, 1.4, 0.09, 0.2, 0.8); lim(1.2, 3.8, 0, 1.0, 0.06, 0, -0.5); lim(-0.9, 3.4, 0, 1.0, 0.06, 0, 0.5); lim(0.1, 3.8, 0.2, 1.1, 0.07, 0.4, 0.1);
+    hh.add(tr); root.add(hh);
+    for (const [x, z] of [[-1.8, 4.5], [2.6, 4.2]]) { const p = pumpkin(0.45); p.position.set(x, 0.36, z); hh.add(p); }
+    ctx.hallSpot = () => ({ x: spot.x, y: spot.y, z: spot.z });
+  }
+  // a big orange glow round the moon
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 8, 64, 64, 64); r.addColorStop(0, 'rgba(255,150,40,0.95)'); r.addColorStop(0.35, 'rgba(255,120,30,0.45)'); r.addColorStop(1, 'rgba(255,90,20,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); }), transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+  halo.scale.setScalar(70); halo.renderOrder = -9; ctx.skyScene.add(halo);
+  // the billboards
+  const bset = makeBoardSets(ctx, (b) => {
+    const F = b.frame, g = new THREE.Group(), { lw, lh, x, top, bot, T, cwY, cwW } = F, pts = [], zf = 0.62;
+    const x0 = x - lw / 2 - T - 0.12, x1 = x + lw / 2 + T + 0.12, y0 = bot - T - 0.12, y1 = top + T + 0.12, step = ctx.low ? 1.1 : 0.75;
+    for (let xx = x0; xx <= x1; xx += step) pts.push([xx, y1, zf], [xx, y0, zf]); for (let yy = y0 + step; yy < y1; yy += step) pts.push([x0, yy, zf], [x1, yy, zf]);
+    g.add(bulbs(pts, HAL, 0.55));
+    const fy = cwY + 0.07; [[-0.36, 0.34], [-0.05, 0.46], [0.3, 0.38]].forEach(([fx, s], i) => { const p = pumpkin(s); p.position.set(x + cwW * fx, fy + s * 0.64, 0.75); p.rotation.y = (i - 1) * 0.15; g.add(p); });
+    for (const sx of [-1, 1]) { const p = pumpkin(0.5); p.position.set(sx * 6.9, 0.45, 1.0); p.rotation.y = -sx * 0.4; g.add(p); }
+    const wm = new THREE.MeshBasicMaterial({ map: webTex(), transparent: true, depthWrite: false, opacity: 0.8 });
+    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), wm); w.scale.x = sx; w.position.set(x + sx * (lw / 2 + T + 1.3), top + T - 1.3, 0.3); g.add(w); }       // (cobwebs hang from the outer corners, off the picture)
+    const bm = new THREE.MeshBasicMaterial({ map: batTex(), transparent: true, side: THREE.DoubleSide }), bat = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), bm); bat.position.set(x + lw * 0.22, top + T + 0.5, 0.2); g.add(bat);
+    for (const ex of [-0.1, 0.1]) { const e = new THREE.Mesh(new THREE.CircleGeometry(0.04, 6), new THREE.MeshBasicMaterial({ color: '#ff3030' })); e.position.set(x + lw * 0.22 + ex, top + T + 0.46, 0.22); g.add(e); }
+    const bone = lam('#e6e0cc'), hand = new THREE.Group(); hand.position.set(x + lw / 2 + T - 0.2, top + T + 0.1, 0.7);          // a skeleton hand over the top corner
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.18), bone); hand.add(palm);
+    for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.1), bone); f.position.set(-0.2 + i * 0.133, -0.45, 0.04); f.rotation.x = -0.15; hand.add(f); }
+    const th = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), bone); th.position.set(0.34, -0.1, 0.04); th.rotation.z = -0.9; hand.add(th); g.add(hand);
+    return g;
+  });
+  return {
+    update(dt, s) {
+      const n = s.night, flick = 0.8 + 0.2 * Math.sin(performance.now() * 0.013) * Math.sin(performance.now() * 0.0071 + 1);
+      faceMat.color.setScalar((0.35 + 0.65 * n) * flick);
+      for (const w of wins) { const t = performance.now() * 0.001 + w.ph, f = 0.55 + 0.45 * Math.max(0, Math.sin(t * 3.1) * Math.sin(t * 1.3 + 2)) + (Math.sin(t * 17) > 0.96 ? 0.4 : 0); w.m.color.copy(w.c).multiplyScalar((0.15 + 0.85 * n) * f); }
+      const moon = ctx.sky?.bodies.moon;
+      if (moon) { halo.position.copy(moon.position); halo.position.z -= 1; halo.material.opacity = 0.7 * (moon.material.opacity ?? 1) * n * (0.5 + 0.5 * s.peak); }
+      bset.sync(s.hide);
+    },
+    dispose() { bset.dispose(); ctx.skyScene.remove(halo); halo.material.map.dispose(); halo.material.dispose(); if (hh) disposeTree(hh); disposeTree(root); ctx.scene.remove(root); glow.geometry.dispose(); },
+    root,
+  };
+}
+// bats cross the moon, a ghost drifts round the haunted house, and now and then something creepy is heard
+function makeHauntings(ctx) {
+  const bm = new THREE.SpriteMaterial({ map: batTex(), transparent: true, depthTest: false, depthWrite: false, fog: false, opacity: 0 }), bats = [];
+  for (let i = 0; i < (ctx.low ? 0 : 5); i++) { const s = new THREE.Sprite(bm.clone()); s.renderOrder = -6; s.visible = false; ctx.skyScene.add(s); bats.push({ s, d: 0 }); }
+  const gm = new THREE.SpriteMaterial({ map: ghostTex(), transparent: true, depthWrite: false, opacity: 0 }), ghost = new THREE.Sprite(gm); ghost.scale.set(2.2, 3.3, 1); ghost.visible = false; ctx.scene.add(ghost);
+  let flight = -1, fdir = 1, fy = 0, gt = -1, gcx = 0, gcz = -20, gcy = 0, waitB = 14 + Math.random() * 20, waitG = 20 + Math.random() * 25, waitS = 10 + Math.random() * 15, clock = 0;
+  const KINDS = ['wind', 'owl', 'creak', 'whisper', 'owl', 'wind'];
+  return {
+    go(name) {
+      if (name === 'sound') ctx.audio?.creepy?.(KINDS[(Math.random() * KINDS.length) | 0], (Math.random() * 2 - 1) * 0.8);
+      if (name === 'bats' && flight < 0) { flight = 0; fdir = Math.random() < 0.5 ? 1 : -1; fy = (Math.random() - 0.5) * 8; bats.forEach((b, i) => { b.d = i * 0.35 + Math.random() * 0.2; b.s.visible = true; }); }
+      if (name === 'ghost' && gt < 0) { gt = 0; const sp = ctx.hallSpot?.(); gcx = sp ? sp.x : (Math.random() - 0.5) * 20; gcz = sp ? sp.z + 1 : -20; gcy = sp ? sp.y : heightAt(gcx, gcz); ghost.visible = true; }
+    },
+    update(dt, s) {
+      clock += dt;
+      if (s.night > 0.5 && !s.hide) {
+        waitB -= dt; waitG -= dt; waitS -= dt;
+        if (waitB <= 0) { waitB = 25 + Math.random() * 40; if (!ctx.reduceMotion) this.go('bats'); }
+        if (waitG <= 0) { waitG = 30 + Math.random() * 40; if (!ctx.reduceMotion) this.go('ghost'); }
+        if (waitS <= 0) { waitS = 20 + Math.random() * 20; this.go('sound'); }
+      }
+      const moon = ctx.sky?.bodies.moon;
+      if (flight >= 0) {
+        flight += dt; const dur = 9, u = flight / dur, mp = moon ? moon.position : { x: 0, y: 40, z: -125 };
+        for (const b of bats) {
+          const k = u - b.d / dur * 0.4, sc = 7 + Math.sin(b.d * 9) * 1.5; b.s.visible = k > 0 && k < 1;
+          b.s.position.set(mp.x + (k - 0.5) * 230 * fdir, mp.y + fy + Math.sin(k * 11 + b.d * 7) * 3.5 + b.d * 3, mp.z + 0.5); b.s.scale.set(sc * (1 + 0.4 * Math.sin(clock * 22 + b.d * 20)), sc * 0.5 * (1 - 0.45 * Math.sin(clock * 22 + b.d * 20)), 1);
+          b.s.material.opacity = Math.min(1, Math.max(0, Math.min(k * 8, (1 - k) * 8))) * 0.95;
+        }
+        if (u > 1.3) { flight = -1; bats.forEach((b) => { b.s.visible = false; }); }
+      }
+      if (gt >= 0) {
+        gt += dt; const dur = 14, u = gt / dur; if (u >= 1) { gt = -1; ghost.visible = false; return; }
+        const a = clock * 0.35, r = 4.8 + Math.sin(clock * 0.6) * 1.2; ghost.position.set(gcx + Math.cos(a) * r, gcy + 2.4 + Math.sin(clock * 1.4) * 0.35, gcz + Math.sin(a) * r * 0.7);
+        gm.opacity = Math.min(1, Math.min(u * 6, (1 - u) * 6)) * (0.35 + 0.15 * Math.sin(clock * 5)) * s.night;
+      }
+    },
+    dispose() { for (const b of bats) { ctx.skyScene.remove(b.s); b.s.material.dispose(); } ctx.scene.remove(ghost); gm.map.dispose(); gm.dispose(); bm.map.dispose(); bm.dispose(); },
+  };
+}
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], newyear: [makeFireworks], july4: [makeFireworks] };
-export function createSeasonFx({ scene, skyScene, world, audio, low = false, reduceMotion = false }) {
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], newyear: [makeFireworks], july4: [makeFireworks] };
+export function createSeasonFx({ scene, skyScene, world, audio, sky, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
-  const ctx = { scene, skyScene, world, audio, low, reduceMotion };
+  const ctx = { scene, skyScene, world, audio, sky, low, reduceMotion };
   const used = [];
   ctx.freeSpot = (clear = 5) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
     const hs = world.houseList(), cands = [];
