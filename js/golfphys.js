@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030203956';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030212753';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -204,6 +204,7 @@ function stepChute(b, hole, h, ev) {
   b.chute.k = bk;
   const dx = P[bk + 1][0] - P[bk][0], dz = P[bk + 1][1] - P[bk][1], l = Math.sqrt(dx * dx + dz * dz) || 1, tx = dx / l, tz = dz / l;
   b.vx += tx * C.acc * h; b.vz += tz * C.acc * h;
+  for (let q = 0; q < C.pads.length; q++) if (b.chute.pk !== q && Math.abs(bk - C.pads[q]) <= 1) { b.chute.pk = q; b.vx += tx * C.kick; b.vz += tz * C.kick; ev.fx = 8; }       // (a boost pad in the floor kicks the ball on)
   let sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz); if (sp > 0) { const ns = Math.max(0, sp - C.fric * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; } if (sp > C.vmax) { const k = C.vmax / sp; b.vx *= k; b.vz *= k; sp = C.vmax; }
   b.x += b.vx * h; b.z += b.vz * h;
   for (let k = Math.max(0, bk - 3); k <= Math.min(n - 2, bk + 4); k++) { collideSeg(b, C.left[k][0], C.left[k][1], C.left[k][2], C.left[k][3], C.e, ev); collideSeg(b, C.right[k][0], C.right[k][1], C.right[k][2], C.right[k][3], C.e, ev); }
@@ -212,7 +213,7 @@ function stepChute(b, hole, h, ev) {
   const s = P[bk][2] + bt * l; b.ly = C.ly[bk] + (C.ly[bk + 1] - C.ly[bk]) * bt; b.y = hillH(hole, b.x, b.z); b.air = false; b.vy = 0;
   if (bk >= n - 2 && bt > 0.97 || s >= C.len - 0.15) {                       // the end: dropped towards the cup, a little off from where in the channel it was and how fast
     const lat = ((b.x - P[bk][0]) * -tz + (b.z - P[bk][1]) * tx) / C.hw, cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1;
-    const ang = lat * C.scatter + (sp - 5) * C.scatterV, ca = Math.cos(ang), sa = Math.sin(ang), dx2 = (cx * ca - cz * sa) / cd, dz2 = (cx * sa + cz * ca) / cd;
+    const ang = lat * C.scatter + (Math.min(sp, 7) - 5) * C.scatterV, ca = Math.cos(ang), sa = Math.sin(ang), dx2 = (cx * ca - cz * sa) / cd, dz2 = (cx * sa + cz * ca) / cd;
     const v = (-0.47 + Math.sqrt(0.2209 + 0.676 * Math.max(0.5, cd))) / 0.338;                // (the speed that carries the dropped ball just to the cup: the fall takes 0.47 s, the roll after it loses 0.19 of the speed squared)
     b.vx = dx2 * v; b.vz = dz2 * v; b.y = hillH(hole, b.x, b.z) + C.exitH; b.air = true; b.vy = 0.3; b.ly = 0; b.chute = null; b.over = true; b.tcool = 0.3; ev.fx = 12;
   }

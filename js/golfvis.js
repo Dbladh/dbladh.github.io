@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030203956';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030203956';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261030203956';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030203956';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030203956';
-import { isLow } from './golfquality.js?v=20261030203956';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030212753';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030212753';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261030212753';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030212753';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030212753';
+import { isLow } from './golfquality.js?v=20261030212753';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -236,8 +236,10 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   const chev = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d'); x.fillStyle = '#12304a'; x.fillRect(0, 0, 128, 64); x.strokeStyle = '#ffe14a'; x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round'; for (let i = 0; i < 2; i++) { const ox = 18 + i * 56; x.beginPath(); x.moveTo(ox, 10); x.lineTo(ox + 26, 32); x.lineTo(ox, 54); x.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; })();
   for (const o of h.boosts || []) {
     const tx = chev.clone(); tx.needsUpdate = true; tx.repeat.set(o.len / 1.6, 1); disposables.push(tx); const bm = new THREE.MeshBasicMaterial({ map: tx, transparent: true, opacity: 0.95 }); disposables.push(bm);
-    const strip = new THREE.Mesh(track(new THREE.PlaneGeometry(o.len, o.wid).rotateX(-Math.PI / 2)), bm); strip.position.set(o.x, hillH(h, o.x, o.z) + 0.06, o.z); strip.rotation.y = Math.atan2(-o.uz, o.ux); strip.renderOrder = 1; g.add(strip);
-    g.add((() => { const e = rbox(paint('#ffe14a'), o.len + 0.1, 0.03, 0.06, 0, 0, 0, 0.01); e.position.set(o.x - (-o.uz) * (o.wid / 2 + 0.03), hillH(h, o.x, o.z) + 0.06, o.z - o.ux * (o.wid / 2 + 0.03)); e.rotation.y = Math.atan2(-o.uz, o.ux); return e; })());
+    const yawB = Math.atan2(-o.uz, o.ux), BF = { h, cx: o.x, cz: o.z, yaw: yawB }, baseB = hillH(h, o.x, o.z), sg = track(new THREE.PlaneGeometry(o.len, o.wid, Math.min(40, Math.ceil(o.len / 0.3)), Math.min(40, Math.ceil(o.wid / 0.3))).rotateX(-Math.PI / 2)), sp = sg.attributes.position, cB = Math.cos(yawB), sB = Math.sin(yawB);
+    for (let i = 0; i < sp.count; i++) { const lx = sp.getX(i), lz = sp.getZ(i); sp.setY(i, hillH(h, o.x + lx * cB + lz * sB, o.z - lx * sB + lz * cB) - baseB + 0.06); }
+    const strip = new THREE.Mesh(sg, bm); strip.position.set(o.x, baseB, o.z); strip.rotation.y = yawB; strip.renderOrder = 1; g.add(strip);
+    for (const sd of [-1, 1]) { const e = slab(BF, paint('#ffe14a'), o.len + 0.1, 0.03, 0.06, 0, 0.06, sd * (o.wid / 2 + 0.03)); const eg = new THREE.Group(); eg.position.set(o.x, baseB, o.z); eg.rotation.y = yawB; eg.add(e); g.add(eg); }
     if (o.powered) { let on = 0; updaters.push((heroT, t, dt, st) => { on += ((st && st.gateOpen ? 1 : 0) - on) * Math.min(1, dt * 6); tx.offset.x = -t * 0.9 * (0.1 + 0.9 * on); bm.opacity = 0.35 + 0.6 * on; bm.color.setScalar(0.45 + 0.55 * on); }); }
     else updaters.push((heroT, t) => { tx.offset.x = -t * 0.9; });
   }
@@ -261,6 +263,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       const rp = []; for (let i = 0; i < n; i += 2) rp.push(new THREE.Vector3(W[i * 6 + 3], W[i * 6 + 4], W[i * 6 + 5])); const tg = track(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rp), Math.min(120, n), 0.05, 5, false)); const rt = new THREE.Mesh(tg, metal('#d7dce4')); rt.castShadow = true; cg.add(rt); grow.push([tg, tg.index.count / (n - 1)]);
     }
     const legs = []; for (let i = 4; i < n - 2; i += 8) { const y = C.ly[i], lg = rbox(metal('#aab2bd'), 0.12, y, 0.12, P[i][0], y / 2, P[i][1], 0.02); lg.visible = false; cg.add(lg); legs.push([i, lg]); }
+    for (const i of C.pads) {                               // boost pads in the floor of the channel: a dark plate with three yellow chevrons pointing along it
+      const a = P[Math.max(0, i - 1)], b2 = P[Math.min(n - 1, i + 1)], yaw = Math.atan2(-(b2[1] - a[1]), b2[0] - a[0]), pg = new THREE.Group(); pg.position.set(P[i][0], C.ly[i] + 0.03, P[i][1]); pg.rotation.y = yaw; pg.visible = false;
+      pg.add(rbox(paint('#2b2b3a'), 1.0, 0.03, C.hw * 1.5, 0, 0, 0, 0.01)); for (let k = 0; k < 3; k++) { const ch = cone(paint('#ffe14a'), 0.2, 0.12, 3, -0.3 + k * 0.3, 0.07, 0); ch.rotation.z = -Math.PI / 2; ch.scale.set(1, 1, 2.4); pg.add(ch); }
+      cg.add(pg); legs.push([i, pg]);
+    }
     const M = C.mouth, ring = torus(paint('#7fe9ff'), 0.62, 0.07, M.x, 0.45, M.z, 0, Math.atan2(M.ux, M.uz) + Math.PI / 2, 0); g.add(ring);          // (the glint at the mouth: a faint ring that is always there)
     const ex = torus(paint('#7fe9ff'), 0.5, 0.06, P[n - 1][0], C.ly[n - 1] + 0.3, P[n - 1][1], 0, Math.atan2(P[n - 1][0] - P[n - 2][0], P[n - 1][1] - P[n - 2][1]) + Math.PI / 2, 0); ex.visible = false; cg.add(ex);
     let front = 0;                                          // how many samples of the channel are showing: it grows just ahead of the ball while the ball is in it, and folds away again once the gate has shut
@@ -281,10 +288,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
   }
   for (const o of h.pads || []) {                              // a launch pad or trampoline: a wide bar across the lane (about 70% of it), easy to hit
     const bar = triggerBar(h, o), W2 = bar.half * 2, gp = new THREE.Group(); gp.position.set(o.x, hillH(h, o.x, o.z), o.z); gp.rotation.y = Math.atan2(-bar.uz, bar.ux);
-    gp.add(rbox(paint('#2b2b3a'), bar.len + 0.2, 0.1, W2 + 0.2, 0, 0.06, 0, 0.03)); const top = rbox(paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), bar.len, 0.07, W2, 0, o.tramp ? 0.2 : 0.13, 0, 0.03); gp.add(top);
-    for (const sd of [-1, 1]) gp.add(rbox(paint('#ffe14a'), bar.len + 0.12, 0.05, 0.08, 0, 0.17, sd * (bar.half + 0.02), 0.01));
+    const PF = { h, cx: o.x, cz: o.z, yaw: Math.atan2(-bar.uz, bar.ux) };
+    gp.add(slab(PF, paint('#2b2b3a'), bar.len + 0.2, 0.1, W2 + 0.2, 0, 0.06, 0)); const top = slab(PF, paint(o.tramp ? '#4fc3ff' : '#ff4fb3'), bar.len, 0.07, W2, 0, o.tramp ? 0.2 : 0.13, 0); gp.add(top);
+    for (const sd of [-1, 1]) gp.add(slab(PF, paint('#ffe14a'), bar.len + 0.12, 0.05, 0.08, 0, 0.17, sd * (bar.half + 0.02)));
     for (let k = 0; k < 3; k++) { const ch = cone(paint('#ffffff'), 0.2, 0.12, 3, -bar.len / 2 + 0.18 + k * 0.3, o.tramp ? 0.27 : 0.2, 0); ch.rotation.z = -Math.PI / 2; ch.scale.set(1, 1, Math.min(2.2, bar.half * 0.7)); gp.add(ch); }
-    if (!isLow()) for (let k = 0; k < Math.round(W2 / 0.6); k++) for (const ex of [-1, 1]) gp.add(cyl(metal('#c9ced6'), 0.05, 0.05, ex * (bar.len / 2 + 0.08), 0.12, -bar.half + 0.3 + k * 0.6));      // high tier: bolt heads along the ends
+    if (!isLow()) for (let k = 0; k < Math.round(W2 / 0.6); k++) for (const ex of [-1, 1]) { const bz = -bar.half + 0.3 + k * 0.6, bx = ex * (bar.len / 2 + 0.08), cs = Math.cos(PF.yaw), sn = Math.sin(PF.yaw); gp.add(cyl(metal('#c9ced6'), 0.05, 0.05, bx, 0.12 + hillH(h, o.x + bx * cs + bz * sn, o.z - bx * sn + bz * cs) - hillH(h, o.x, o.z), bz)); }      // high tier: bolt heads along the ends
     g.add(gp);
     updaters.push((heroT, t) => { const k = 1 + 0.06 * Math.sin(t * 5 + o.x); top.scale.y = k; if (o.tramp) top.position.y = 0.2 + 0.05 * Math.sin(t * 6 + o.z); });
   }
@@ -506,6 +514,12 @@ function rboxGeo(sx, sy, sz, b = 0.05) {                   // a box with softly 
   g = new THREE.ExtrudeGeometry(sh, { depth: sz - 2 * bb, bevelEnabled: true, bevelThickness: bb, bevelSize: bb, bevelSegments: 2, curveSegments: 2 }); g.translate(0, 0, -(sz - 2 * bb) / 2);
   rboxCache.set(key, g); return g;
 }
+/** A flat slab (like `rbox`) that follows the ground: its corners are lifted or dropped to the terrain under them, so a bar laid across a hill lies on it instead of floating over it. `F` is the frame it sits in: { h, cx, cz, yaw } (a group at (cx, ground, cz) turned by `yaw`). */
+function slab(F, m, sx, sy, sz, x, y, z) {
+  const g = new THREE.BoxGeometry(sx, sy, sz, Math.min(40, Math.max(1, Math.ceil(sx / 0.3))), 1, Math.min(40, Math.max(1, Math.ceil(sz / 0.3)))), p = g.attributes.position, c = Math.cos(F.yaw), s2 = Math.sin(F.yaw), base = hillH(F.h, F.cx, F.cz);
+  for (let i = 0; i < p.count; i++) { const lx = p.getX(i) + x, lz = p.getZ(i) + z, wx = F.cx + lx * c + lz * s2, wz = F.cz - lx * s2 + lz * c; p.setXYZ(i, lx - x, p.getY(i) + hillH(F.h, wx, wz) - base, lz - z); }
+  g.computeVertexNormals(); const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.receiveShadow = true; o.castShadow = false; return o;
+}
 const rbox = (m, sx, sy, sz, x, y, z, b = 0.05) => { const o = new THREE.Mesh(rboxGeo(sx, sy, sz, b), m); o.position.set(x, y, z); return o; };
 const paint = (hex) => { let m = paintCache.get(hex); if (!m) { m = isLow() ? new THREE.MeshLambertMaterial({ color: hex }) : new THREE.MeshStandardMaterial({ color: hex, roughness: 0.5, metalness: 0, envMapIntensity: 0.45 }); paintCache.set(hex, m); } return m; };           // toy paint: flat on the low tier, softly glossy on the high one
 const metal = (hex) => { const k = 'm' + hex; let m = paintCache.get(k); if (!m) { m = GM.lam(GM.tex.metal, hex); paintCache.set(k, m); } return m; };      // painted metal
@@ -518,9 +532,9 @@ const torus = (m, R, t, x, y, z, rx = 0, ry = 0, rz = 0) => { const k = `t${R}|$
 
 /** A gate button: a wide yellow bar across the lane (see `triggerBar`), with a dark frame and white arrows; `plate` is the part that sinks when it is pressed. */
 function buttonBar(h, bt) {
-  const bar = triggerBar(h, bt), W2 = bar.half * 2, btn = new THREE.Group(); btn.position.set(bt.x, hillH(h, bt.x, bt.z), bt.z); btn.rotation.y = Math.atan2(-bar.uz, bar.ux);
-  const plate = rbox(paint('#ffd23f'), bar.len, 0.08, W2, 0, 0.06, 0, 0.03); btn.add(rbox(paint('#2b2b3a'), bar.len + 0.2, 0.06, W2 + 0.2, 0, 0.04, 0, 0.03), plate);
-  for (let k = 0; k < Math.max(2, Math.round(W2 / 0.8)); k++) btn.add(rbox(paint('#ffffff'), bar.len * 0.5, 0.02, 0.1, 0, 0.11, -bar.half + 0.3 + k * Math.min(0.8, (W2 - 0.6) / Math.max(1, Math.round(W2 / 0.8) - 1)), 0.01));
+  const bar = triggerBar(h, bt), W2 = bar.half * 2, btn = new THREE.Group(), yaw = Math.atan2(-bar.uz, bar.ux), F = { h, cx: bt.x, cz: bt.z, yaw }; btn.position.set(bt.x, hillH(h, bt.x, bt.z), bt.z); btn.rotation.y = yaw;
+  const plate = slab(F, paint('#ffd23f'), bar.len, 0.08, W2, 0, 0.06, 0); btn.add(slab(F, paint('#2b2b3a'), bar.len + 0.2, 0.06, W2 + 0.2, 0, 0.04, 0), plate);
+  for (let k = 0; k < Math.max(2, Math.round(W2 / 0.8)); k++) btn.add(slab(F, paint('#ffffff'), bar.len * 0.5, 0.02, 0.1, 0, 0.11, -bar.half + 0.3 + k * Math.min(0.8, (W2 - 0.6) / Math.max(1, Math.round(W2 / 0.8) - 1))));
   return { btn, plate };
 }
 

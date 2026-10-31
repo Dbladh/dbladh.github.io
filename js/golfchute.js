@@ -1,9 +1,9 @@
 // The secret chute: a clear winding channel that leaves a hole through a gap in its wall, runs round the outside of the course and drops the ball back near the cup.
 // The gap is shut by a gate that a button on the course opens for a few seconds (the same button and gate as a door machine, flagged `secret`). Pure data like golfgen.js, and deterministic:
 // it uses only + - * / sqrt, and rounds every point. The ball's physics in the chute is in golfphys.js (stepChute); the channel itself is drawn by golfvis.js.
-import { inPoly } from './golfphys.js?v=20261030203956';
+import { inPoly, newBall, newCtx, shoot, stepBall } from './golfphys.js?v=20261030212753';
 
-export const CHUTE = { hw: 0.85, acc: 0.5, fric: 0.35, vmax: 7, e: 0.6, exitH: 1.0, gap: 0.78, scatter: 0.27, scatterV: 0.034 };
+export const CHUTE = { hw: 0.85, acc: 1.3, fric: 0.2, vmax: 10, kick: 3, e: 0.6, exitH: 1.0, gap: 0.78, scatter: 0.2, scatterV: 0.026 };
 const q = (v) => Math.round(v * 2) / 2, q2 = (v) => Math.round(v * 100) / 100;
 const sm = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1; let t = ((x - ax) * dx + (z - az) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.sqrt((x - ax - dx * t) * (x - ax - dx * t) + (z - az - dz * t) * (z - az - dz * t)); };
@@ -32,15 +32,19 @@ export function makeChute(H, r) {
   const solids = [...H.posts, ...H.bumpers, ...H.pads, ...H.boosts, ...(H.magnets || []).map((m) => ({ x: m.x, z: m.z, r: 1.2 })), ...(H.tunnels || []).map((t) => ({ x: t.x, z: t.z, r: t.len / 2 })), ...(H.feats || []).filter((f) => f.x !== undefined).map((f) => ({ x: f.x, z: f.z, r: (f.len || 2) / 2 + 0.6 })), ...H.doors.map((d) => d.button).filter(Boolean), ...H.pickups];
   const polys = [...H.sands.map((s) => s.poly), ...H.ponds.map((p) => p.poly), ...(H.patches || []).filter((p) => p.kind !== 'rough').map((p) => p.poly)];
   const clear = (x, z, m) => !solids.some((o) => Math.sqrt((o.x - x) * (o.x - x) + (o.z - z) * (o.z - z)) < (o.r || 0.6) + m) && !polys.some((pl) => inPoly(pl, x, z)) && Math.sqrt((H.hero.x - x) * (H.hero.x - x) + (H.hero.z - z) * (H.hero.z - z)) > 3.4;
-  const side0 = r() < 0.5 ? 1 : -1, L = sAt[N - 1];
-    for (const side of [side0, -side0]) for (let att = 0; att < 14; att++) {
-    const sT = L * (0.3 + 0.032 * att), im = sAt.findIndex((s) => s >= sT); if (im < 4 || im > N - 14) continue;
+  const buttonOk = (x, z) => {
+    if (Math.hypot(x - H.ball.x, z - H.ball.z) < 3.6 || Math.hypot(x - H.cup.x, z - H.cup.z) < 3.0 || !clear(x, z, 0.9) || !inPoly(O, x, z)) return false;
+    for (const wl of H.walls) { if (!wl[4]) continue; if (segDist(x, z, wl[0], wl[1], wl[2], wl[3]) < 1.3) return false; }
+    return true;
+  };
+  const mouthShot = (b) => b.chute;
+  const side0 = r() < 0.5 ? 1 : -1, L = sAt[N - 1]; let searches = 0;
+    for (const side of [side0, -side0]) for (let att = 0; att < 24; att++) {
+    const sT = L * (0.3 + 0.021 * att), im = sAt.findIndex((s) => s >= sT); if (im < 4 || im > N - 14) continue;
     const [tx, tz] = tan(im), nx = -tz * side, nz = tx * side;                                  // (nx, nz: out of the course on this side)
     if (tan(im - 3)[0] * tx + tan(im - 3)[1] * tz < 0.985 || tan(im + 3)[0] * tx + tan(im + 3)[1] * tz < 0.96) continue;
     const mx = cl[im].x + nx * w[im], mz = cl[im].z + nz * w[im];
     if (solids.some((o) => Math.sqrt((o.x - cl[im].x) * (o.x - cl[im].x) + (o.z - cl[im].z) * (o.z - cl[im].z)) < (o.r || 0.6) + 0.6) || Math.sqrt((H.hero.x - cl[im].x) * (H.hero.x - cl[im].x) + (H.hero.z - cl[im].z) * (H.hero.z - cl[im].z)) < 2.8) continue;
-    const ib = Math.max(2, sAt.findIndex((s) => s >= sAt[im] - 5.2)), bt = { x: q2(cl[ib].x), z: q2(cl[ib].z), r: 0.55 };
-    if (!clear(bt.x, bt.z, 0.9) || Math.hypot(bt.x - H.ball.x, bt.z - H.ball.z) < 3.6 || Math.hypot(bt.x - H.cup.x, bt.z - H.cup.z) < 3.0) continue;
     // the gap: the wall segments about the mouth go, the gate takes their place
     const gone = []; for (let j = 0; j < H.walls.length; j++) { const wl = H.walls[j]; if (!wl[4] || wl[5] || wl[7]) continue; const cx = (wl[0] + wl[2]) / 2, cz = (wl[1] + wl[3]) / 2; if (Math.sqrt((cx - mx) * (cx - mx) + (cz - mz) * (cz - mz)) < CHUTE.gap + 0.3) gone.push(j); }
     if (gone.length < 3 || gone.length > 6) continue;
@@ -77,17 +81,47 @@ export function makeChute(H, r) {
       ly.push(q2(0.2 + 1.35 * sm(pts[i][2] / 3.5) - 0.55 * (pts[i][2] / len)));
     }
     const lw = [], rw = []; for (let i = 0; i < n - 1; i++) { lw.push([left[i][0], left[i][1], left[i + 1][0], left[i + 1][1]]); rw.push([right[i][0], right[i][1], right[i + 1][0], right[i + 1][1]]); }
+    const bak = { walls: H.walls.slice(), bounds: H.bounds, shape: H.shape.map((sp) => sp[2]) };
     for (let k = gone.length - 1; k >= 0; k--) H.walls.splice(gone[k], 1);
     const gate = [q2(pa[0]), q2(pa[1]), q2(pb[0]), q2(pb[1])];
-    H.doors.push({ gate, button: bt, secret: true });
+    const door = { gate, button: { x: 1e3, z: 1e3, r: 0.55 }, secret: true }; H.doors.push(door);
     const T0 = [pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]], tl = Math.sqrt(T0[0] * T0[0] + T0[1] * T0[1]) || 1;
-    H.chute = { pts: pts.map((p) => [q2(p[0]), q2(p[1]), q2(p[2])]), left: lw, right: rw, ly, len: q2(len), hw, mouth: { x: q2(gx), z: q2(gz), ux: q2(nx), uz: q2(nz), hw: q2(gl / 2 - 0.15) }, exit: { x: q2(exit.x), z: q2(exit.z) }, exitH: CHUTE.exitH, scatter: CHUTE.scatter, scatterV: CHUTE.scatterV, acc: CHUTE.acc, fric: CHUTE.fric, vmax: CHUTE.vmax, e: CHUTE.e, sx: T0[0] / tl, sz: T0[1] / tl };
+    const padAt = []; for (let i = 7; i < n - 8; i += 9) padAt.push(i);                      // (boost pads in the floor, one every four and a half units)
+    H.chute = { pts: pts.map((p) => [q2(p[0]), q2(p[1]), q2(p[2])]), left: lw, right: rw, ly, len: q2(len), hw, mouth: { x: q2(gx), z: q2(gz), ux: q2(nx), uz: q2(nz), hw: q2(gl / 2 - 0.15) }, exit: { x: q2(exit.x), z: q2(exit.z) }, exitH: CHUTE.exitH, scatter: CHUTE.scatter, scatterV: CHUTE.scatterV, kick: CHUTE.kick, pads: padAt, acc: CHUTE.acc, fric: CHUTE.fric, vmax: CHUTE.vmax, e: CHUTE.e, sx: T0[0] / tl, sz: T0[1] / tl };
     // keep the hole's bounds (and the sites' discs) round the chute
     let x0 = H.bounds.cx - H.bounds.hx, x1 = H.bounds.cx + H.bounds.hx, z0 = H.bounds.cz - H.bounds.hz, z1 = H.bounds.cz + H.bounds.hz;
     for (const p of pts) { x0 = Math.min(x0, p[0] - 1); x1 = Math.max(x1, p[0] + 1); z0 = Math.min(z0, p[1] - 1); z1 = Math.max(z1, p[1] + 1); }
     H.bounds = { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2 };
     for (const sp of H.shape) { let m = 1e9; for (const p of pts) { const d = Math.sqrt((p[0] - sp[0]) * (p[0] - sp[0]) + (p[1] - sp[1]) * (p[1] - sp[1])); if (d < m) m = d; } if (m < 7) sp[2] = Math.max(sp[2], q2(m + hw + 0.8)); }
-    return true;
+    // one stroke must be able to do it all: roll over the button, on through the gap and into the chute. A shot from the tee that gets in with the gate held open is found first, then the button is laid on its path.
+    if (++searches > 4) { H.walls.length = 0; H.walls.push(...bak.walls); H.doors.pop(); H.chute = undefined; H.bounds = bak.bounds; H.shape.forEach((sp, i) => { sp[2] = bak.shape[i]; }); return false; }
+    const shot = findShot(H, mouthShot);
+    let placed = false;
+    if (shot) for (const fr of [0.5, 0.35, 0.65, 0.25, 0.8]) {
+      const k = Math.floor(shot.path.length * fr), [bx, bz] = shot.path[k];
+      if (!buttonOk(bx, bz)) continue;
+      door.button = { x: q2(bx), z: q2(bz), r: 0.55 };
+      if (replay(H, shot)) { placed = true; break; }
+    }
+    if (placed) return true;
+    H.walls.length = 0; H.walls.push(...bak.walls); H.doors.pop(); H.chute = undefined; H.bounds = bak.bounds; H.shape.forEach((sp, i) => { sp[2] = bak.shape[i]; });
   }
+  return false;
+}
+
+/** The first shot from the tee (angles nearest the mouth first, a few powers) that ends with the ball in the chute while the gate is held open; its path is returned as [x, z] points before it went in. */
+function findShot(H, goal) {
+  const M = H.chute.mouth, a0 = Math.atan2(M.z - H.ball.z, M.x - H.ball.x), angs = [0];
+  for (let k = 1; k <= 15; k++) angs.push(k * 0.2, -k * 0.2);
+  for (const power of [0.6, 0.85, 0.4]) for (const da of angs) {
+    const b = newBall(H), ctx = newCtx(), ev = {}, a = a0 + da, path = []; ctx.gateT = 1e4; shoot(b, Math.cos(a), Math.sin(a), power, false);
+    for (let i = 0; i < 120 && !b.holed && !b.sunk && !b.rest; i++) { ctx.t = i / 30; stepBall(b, H, ctx, 1 / 30, ev); if (goal(b)) return path.length > 8 ? { a, power, path } : null; path.push([b.x, b.z]); }
+  }
+  return null;
+}
+/** The same shot with the gate shut and the button laid: does it still end in the chute? */
+function replay(H, shot) {
+  const b = newBall(H), ctx = newCtx(), ev = {}; ctx.gateT = 0; shoot(b, Math.cos(shot.a), Math.sin(shot.a), shot.power, false);
+  for (let i = 0; i < 200 && !b.holed && !b.sunk && !b.rest; i++) { ctx.t = i / 30; stepBall(b, H, ctx, 1 / 30, ev); if (b.chute) return true; }
   return false;
 }
