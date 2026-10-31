@@ -1,7 +1,7 @@
 // The secret chute: a clear winding channel that leaves a hole through a gap in its wall, runs round the outside of the course and drops the ball back near the cup.
 // The gap is shut by a gate that a button on the course opens for a few seconds (the same button and gate as a door machine, flagged `secret`). Pure data like golfgen.js, and deterministic:
 // it uses only + - * / sqrt, and rounds every point. The ball's physics in the chute is in golfphys.js (stepChute); the channel itself is drawn by golfvis.js.
-import { inPoly } from './golfphys.js?v=20261030203557';
+import { inPoly } from './golfphys.js?v=20261030203956';
 
 export const CHUTE = { hw: 0.85, acc: 0.5, fric: 0.35, vmax: 7, e: 0.6, exitH: 1.0, gap: 0.78, scatter: 0.27, scatterV: 0.034 };
 const q = (v) => Math.round(v * 2) / 2, q2 = (v) => Math.round(v * 100) / 100;

@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030203557';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030203557';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261030203557';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030203557';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030203557';
-import { isLow } from './golfquality.js?v=20261030203557';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030203956';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030203956';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261030203956';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030203956';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030203956';
+import { isLow } from './golfquality.js?v=20261030203956';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -193,8 +193,13 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     const pg = track(new THREE.BufferGeometry()); pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2)); pg.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3)); pg.setIndex(pi); pg.computeVertexNormals();
     const patch = new THREE.Mesh(pg, GROUND); patch.receiveShadow = true; g.add(patch);
     const rim = new THREE.Mesh(track(new THREE.TorusGeometry(1.0, 0.08, 8, 32)), metal('#d5dbe3')); rim.rotation.x = Math.PI / 2; rim.position.y = 0.05; cupMesh.add(rim);
-    const wall = new THREE.Mesh(track(new THREE.CylinderGeometry(1.0, 0.96, 1.0, 28, 1, true)), new THREE.MeshBasicMaterial({ color: '#0b0d10', side: THREE.BackSide })); wall.position.y = -0.46; cupMesh.add(wall);
-    const floor = new THREE.Mesh(G.disc, new THREE.MeshBasicMaterial({ color: '#020304' })); floor.scale.set(0.96, 1, 0.96); floor.position.y = -0.95; cupMesh.add(floor); }
+    { // the shaft: a pale plastic cup that fades to dark with depth, so looking down the hole you see its walls going down to a floor
+      const wg = track(new THREE.CylinderGeometry(1.0, 0.94, 1.3, 32, 10, true)), wp = wg.attributes.position, wc = new Float32Array(wp.count * 3), top = new THREE.Color('#e4e0d4'), bot = new THREE.Color('#15140f'), cc = new THREE.Color();
+      for (let i = 0; i < wp.count; i++) { const k = Math.min(1, Math.max(0, (0.65 - wp.getY(i)) / 1.3)), ring = 0.92 + 0.08 * Math.sin(wp.getY(i) * 38); cc.copy(top).lerp(bot, Math.pow(k, 0.75)).multiplyScalar(ring); wc[i * 3] = cc.r; wc[i * 3 + 1] = cc.g; wc[i * 3 + 2] = cc.b; }
+      wg.setAttribute('color', new THREE.BufferAttribute(wc, 3));
+      const wall = new THREE.Mesh(wg, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })); wall.position.y = -0.62; cupMesh.add(wall);
+      const floor = new THREE.Mesh(G.disc, new THREE.MeshBasicMaterial({ color: '#2a2823' })); floor.scale.set(0.94, 1, 0.94); floor.position.y = -1.26; cupMesh.add(floor);
+      const dot = new THREE.Mesh(G.disc, new THREE.MeshBasicMaterial({ color: '#0d0c0a' })); dot.scale.set(0.5, 1, 0.5); dot.position.y = -1.255; cupMesh.add(dot); } }
   const flag = new THREE.Group(); flag.position.set(h.cup.x, 0, h.cup.z);
   flag.add(cyl(M.pole, 0.04, 2.4, 0, 1.2, 0)); flag.add(sph(M.pole, 0.07, 0.07, 0.07, 0, 2.42, 0)); flag.add(cyl(metal('#d5dbe3'), 0.075, 0.1, 0, 0.05, 0)); flag.add(cyl(paint('#ef5b4d'), 0.047, 0.3, 0, 2.15, 0)); flag.add(cone(metal('#d5dbe3'), 0.05, 0.16, 8, 0, 2.55, 0));          // (a base ring, a red band, a ball and a spike finial)
   const flGeo = new THREE.PlaneGeometry(0.95, 0.6, 14, 5), flMat = new THREE.MeshLambertMaterial({ color: '#ffffff', map: flagCloth(), emissive: '#6a2018', side: THREE.DoubleSide }), fl = new THREE.Mesh(flGeo, flMat), flBase = flGeo.attributes.position.array.slice(); disposables.push(flGeo, flMat); fl.castShadow = true; fl.position.set(0.48, 2.1, 0); flag.add(fl); g.add(flag);
