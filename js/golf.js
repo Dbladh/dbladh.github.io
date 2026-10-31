@@ -5,22 +5,22 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030223324';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030223324';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030223324';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030223324';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030223324';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030223324';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261030223324';
-import { createTrail } from './golftrail.js?v=20261030223324';
-import { createNeon } from './golfneon.js?v=20261030223324';
-import { createFx } from './golffx.js?v=20261030223324';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261030223324';
-import { buildDecor } from './golfdecor.js?v=20261030223324';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030223324';
-import { isLow } from './golfquality.js?v=20261030223324';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030223324';
-import { createTable } from './pinball.js?v=20261030223324';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030224202';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030224202';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030224202';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030224202';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030224202';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030224202';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261030224202';
+import { createTrail } from './golftrail.js?v=20261030224202';
+import { createNeon } from './golfneon.js?v=20261030224202';
+import { createFx } from './golffx.js?v=20261030224202';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261030224202';
+import { buildDecor } from './golfdecor.js?v=20261030224202';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030224202';
+import { isLow } from './golfquality.js?v=20261030224202';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030224202';
+import { createTable } from './pinball.js?v=20261030224202';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -47,7 +47,12 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const up0 = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
   const frame = { pos: new THREE.Vector3(), look: new THREE.Vector3(), dist: 40 };           // the full view of the current hole
   const trip = { pos: new THREE.Vector3(), look: new THREE.Vector3(), dist: 40, ctrl: new THREE.Vector3(), from: new THREE.Vector3(), fromLook: new THREE.Vector3(), to: -1 };   // the camera travelling to the next hole
-  const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), dx: 1, dz: 0, phase: 'overview', t: 0, slow: 0 };
+  const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), vp: new THREE.Vector3(), vl: new THREE.Vector3(), dx: 1, dz: 0, phase: 'overview', t: 0, slow: 0, kk: 0, lead: 0, gy: 0, gyHole: -1 };
+  /** One step of a critically damped spring (like SmoothDamp): `cur` moves towards `target` with velocity `vel` in about `smooth` seconds, with no jerk at the start or the end of a move. */
+  const springTo = (cur, vel, target, smooth, dt) => {
+    const om = 2 / Math.max(0.05, smooth), x = om * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    for (const a of ['x', 'y', 'z']) { const ch = cur[a] - target[a], tmp = (vel[a] + om * ch) * dt; vel[a] = (vel[a] - om * tmp) * e; cur[a] = target[a] + (ch + tmp) * e; }
+  };
   const flyFrom = { pos: new THREE.Vector3(), look: new THREE.Vector3() }, home = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
   const behind = { pos: new THREE.Vector3(), look: new THREE.Vector3() }, want = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
   const boardRoots = [];                                   // the three billboards: tucked away while golfing
@@ -421,7 +426,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     return out;
   }
   function behindPose(b, dx, dz, back, upH, ahead, out) {  // behind the ball, looking the way it will go
-    const S = sites[st.hole], P = toWorld(S, b.x - dx * back, b.z - dz * back), L = toWorld(S, b.x + dx * ahead, b.z + dz * ahead), base = Ys[st.hole] + 0.06 + Math.max(0, hillH(hole, b.x, b.z));
+    const S = sites[st.hole], P = toWorld(S, b.x - dx * back, b.z - dz * back), L = toWorld(S, b.x + dx * ahead, b.z + dz * ahead), base = Ys[st.hole] + 0.06 + (cam.gyHole === st.hole ? cam.gy : Math.max(0, hillH(hole, b.x, b.z)));
     out.pos.set(P.x, Math.max(base + upH, world.carve.groundNow(P.x, P.z) + 2.4), P.z); out.look.set(L.x, base + 0.3, L.z);
   }
   function tableCamera(dt) {                               // the table: the whole hole at first, a sweep up behind the ball, then the pinball camera (behind while aiming, high above while in play)
@@ -444,7 +449,9 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       if (fx.hamster > 0) { if (sp > 0.8) { cam.dx += (b.vx / sp - cam.dx) * Math.min(1, dt * 2.5); cam.dz += (b.vz / sp - cam.dz) * Math.min(1, dt * 2.5); } }
       else if (st.mode === 'aim') { const t = aimTarget(b); let tx = t.x - b.x, tz = t.z - b.z; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l; cam.dx += (tx - cam.dx) * Math.min(1, dt * 1.8); cam.dz += (tz - cam.dz) * Math.min(1, dt * 1.8); }
       const l = Math.hypot(cam.dx, cam.dz) || 1; cam.dx /= l; cam.dz /= l;
-      if (fx.hamster > 0) behindPose(b, cam.dx, cam.dz, 4.2, 3.4, 4.5, behind); else behindPose(b, cam.dx, cam.dz, 7.2, 6.0, 6.0, behind);
+      { const gt = Math.max(0, hillH(hole, b.x, b.z)); if (cam.gyHole !== st.hole) { cam.gyHole = st.hole; cam.gy = gt; } else cam.gy += (gt - cam.gy) * (1 - Math.exp(-dt * 2.5)); }      // (the ground under the ball, smoothed so the camera does not bob over hills)
+      cam.lead += ((st.mode === 'roll' ? Math.min(1, sp / 10) : 0) - cam.lead) * (1 - Math.exp(-dt * 1.6));         // (look a little further ahead the faster the ball goes)
+      if (fx.hamster > 0) behindPose(b, cam.dx, cam.dz, 4.2, 3.4, 4.5, behind); else behindPose(b, cam.dx, cam.dz, 7.2 + 1.2 * cam.lead, 6.0, 6.0 + 2.6 * cam.lead, behind);
       if (cam.phase === 'sweep') {                          // the camera swings from the full view round and in to behind the ball
         framing(); const k = ease(clamp01(cam.t / SWEEP));
         want.pos.lerpVectors(frame.pos, behind.pos, k); want.look.lerpVectors(frame.look, behind.look, k);
@@ -453,7 +460,9 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     }
     cam.slow = Math.max(0, cam.slow - dt);
     const k = cam.phase === 'follow' ? 3.2 : cam.phase === 'overview' ? (cam.slow > 0 ? 2.2 : 4) : 9;
-    cam.pos.lerp(want.pos, 1 - Math.exp(-dt * k)); cam.look.lerp(want.look, 1 - Math.exp(-dt * k));
+    cam.kk = cam.kk > 0 ? cam.kk + (k - cam.kk) * (1 - Math.exp(-dt * 3)) : k;                                      // (the speed of the camera changes smoothly between phases)
+    if (dt > 0.2) { cam.vp.set(0, 0, 0); cam.vl.set(0, 0, 0); }
+    springTo(cam.pos, cam.vp, want.pos, 1.5 / cam.kk, dt); springTo(cam.look, cam.vl, want.look, 1.2 / cam.kk, dt);
     camera.position.copy(cam.pos); camera.up.copy(up0); camera.lookAt(cam.look);
   }
   function fly(k) {                                        // between the camera we came from (or go back to) and where it is heading
@@ -482,7 +491,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     /** Debug: a world point `up` above and `dist` out from the hero of the current hole, as { p: [x, y, z], hero: [x, y, z] }. */
     heroPoint() { const hr = hole.hero; const v = holeGroup.localToWorld(new THREE.Vector3(hr.x, 0, hr.z)); const v2 = holeGroup.localToWorld(new THREE.Vector3(hr.x + hr.ux, 0, hr.z + hr.uz)); return { hero: [v.x, v.y, v.z], dx: v2.x - v.x, dz: v2.z - v.z }; },
     /** Debug: jump straight to hole `i` (0-based). */
-    jump(i) { if (ready && st.mode !== 'off' && st.mode !== 'exit' && st.mode !== 'enter') { elScore.hidden = true; startHole(i); framing(); cam.pos.copy(frame.pos); cam.look.copy(frame.look); } },
+    jump(i) { if (ready && st.mode !== 'off' && st.mode !== 'exit' && st.mode !== 'enter') { elScore.hidden = true; startHole(i); framing(); (cam.vp.set(0, 0, 0), cam.vl.set(0, 0, 0)), cam.pos.copy(frame.pos); cam.look.copy(frame.look); } },
     /** Debug: the live state. */
     get debug() { return { st, hole, holes, sites, Ys, balls, ev, frame, cam, fx, ctx, vis, table, trail }; },
     /** Does the course about to be played have to be searched for (a random one)? Then it is built in a worker first: `prepare(progress)` resolves when it is ready (or at once if it cannot be). */
@@ -492,7 +501,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261030223324', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261030224202', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -507,7 +516,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       home.pos.copy(homeCam.pos); home.look.copy(homeCam.look); flyFrom.pos.copy(homeCam.pos); flyFrom.look.copy(homeCam.look);
       setBoards(false); buildCourse(); overviewAll(trip);
       document.body.classList.add('game-mode'); hud.hidden = false; elScore.hidden = true;
-      startHole(0); st.mode = 'enter'; st.t = 0; toastOff(); framing(); cam.pos.copy(camera.position); cam.look.copy(frame.look);
+      startHole(0); st.mode = 'enter'; st.t = 0; toastOff(); framing(); (cam.vp.set(0, 0, 0), cam.vl.set(0, 0, 0)), cam.pos.copy(camera.position); cam.look.copy(frame.look);
       listen(true); window.addEventListener('touchmove', noScroll, { passive: false }); window.addEventListener('touchstart', noScroll, { passive: false });
       audio?.zoom?.('in', 1.7);
       say(elBanner, `The ${monthLabel(st)} Course`, 3200, 'banner');
@@ -538,7 +547,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         overviewAll(trip); want.pos.copy(trip.pos); want.look.copy(trip.look); fly(k);
         for (let i = 0; i < vises.length; i++) setRise(i, reduceMotion ? 1 : ease(clamp01((st.t - RISE_AT - i * RISE_GAP) / RISE_T)));
         if (st.t >= tAll + 0.5 || reduceMotion) {
-          st.mode = 'aim'; st.t = 0; cam.pos.copy(camera.position); tmpV.set(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(30).add(camera.position); cam.look.copy(tmpV); cam.slow = 1.8; cam.phase = 'overview'; cam.t = 0;
+          st.mode = 'aim'; st.t = 0; (cam.vp.set(0, 0, 0), cam.vl.set(0, 0, 0)), cam.pos.copy(camera.position); tmpV.set(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(30).add(camera.position); cam.look.copy(tmpV); cam.slow = 1.8; cam.phase = 'overview'; cam.t = 0;
           for (let i = 0; i < vises.length; i++) setRise(i, 1);
           if (scenery) scenery.group.visible = true;
           announce();
@@ -549,8 +558,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         const k = reduceMotion ? 1 : ease(clamp01(st.t / TRAVEL));
         tripCamera(k);
         if (k >= 1) {
-          cam.pos.copy(camera.position); cam.look.copy(trip.look);
-          if (st.mode === 'finale') showScore(); else { startHole(trip.to); cam.pos.copy(camera.position); cam.look.copy(trip.look); }
+          (cam.vp.set(0, 0, 0), cam.vl.set(0, 0, 0)), cam.pos.copy(camera.position); cam.look.copy(trip.look);
+          if (st.mode === 'finale') showScore(); else { startHole(trip.to); (cam.vp.set(0, 0, 0), cam.vl.set(0, 0, 0)), cam.pos.copy(camera.position); cam.look.copy(trip.look); }
         }
         updateScenery(dt); updateOcclusion(dt); updateHud();
         return true;
