@@ -48,8 +48,8 @@ export function createWeather({ calm = false } = {}) {
   let name = 'clear', hold = null, rate = 0.16, mode = 'auto', temp = null, place = null;
   const subs = new Set(), store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
   const changed = () => { for (const f of subs) f(api); };
-  let autoT = 0, autoName = '', localT = 1800;
-  const applyReading = (rd) => { api.set(fromReading({ code: rd.code, cloud: rd.cloud, wind: rd.wind })); temp = rd.temp; place = 'here'; };
+  let autoT = 0, autoName = '', localT = 1800, bowArm = false, bowT = 0;
+  const applyReading = (rd) => { api.set(fromReading({ code: rd.code, cloud: rd.cloud, wind: rd.wind }), typeof performance !== 'undefined' && performance.now() < 2500); temp = rd.temp; place = 'here'; };          // (a reading that is already at hand when the page opens is just the weather; a later one eases in)
   void place;
   const api = {
     state,
@@ -112,20 +112,27 @@ export function createWeather({ calm = false } = {}) {
       if (snowing) { const up = 1 - Math.exp(-dt * 0.02); state.cover += (1 - state.cover) * up; state.roof += (1 - state.roof) * up * 1.4; state.tree += (1 - state.tree) * up * 1.8; }
       else { state.cover = Math.max(0, state.cover - dt * thaw / 360); state.roof = Math.max(0, state.roof - dt * thaw / 200); state.tree = Math.max(0, state.tree - dt * thaw / 120); }
     }
-      { // a rainbow: while the ground is still wet and the rain has eased, under a sky that is not shut (the sky also needs the sun up and on the far side)
-        const bt = Math.min(1, state.wet) * Math.min(1, Math.max(0, 1 - state.rain * 1.6)) * (1 - Math.min(1, Math.max(0, (state.cloud - 0.55) / 0.35))) * (state.snow > 0.1 ? 0 : 1), up = bt > state.bow ? 0.25 : 0.4;
-        state.bow += (bt - state.bow) * (1 - Math.exp(-dt * up));
+      { // a rainbow is an event, not a state: once it has really rained and the rain has stopped and the sky has opened, one shows for a minute or so (it fades in, holds, then fades away for good); more rain starts it over
+        if (state.rain > 0.3) { bowArm = true; bowT = 0; }
+        else if (bowArm && state.rain < 0.12 && state.cloud < 0.75 && state.snow < 0.1) { bowT += dt; if (bowT > 110) bowArm = false; }
+        const bt = bowArm && bowT > 0 ? Math.min(1, bowT / 12) * (1 - Math.min(1, Math.max(0, (bowT - 60) / 45))) : 0;
+        state.bow += (bt - state.bow) * (1 - Math.exp(-dt * 0.6));
       }
-      state.mist = Math.max(state.fog, state.rain * 0.65, state.wet * 0.3 * (1 - Math.min(1, state.snow * 2)));          // (the mist: thick in fog, thinner in rain, and a thin trace over wet ground)
       state.flash = Math.max(0, state.flash - dt * 3.2);
       api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004 || Math.abs(vel[k]) > 0.002);
       if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm && !api.quiet) state.flash = 1; onFlash?.(); } } else hold = null;
     },
   };
-  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null, saved = store.get('wx.mode');
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null;
   if (q && PRESETS[q]) { mode = 'preset'; api.set(q, true); }
-  else if (q === 'auto' || !saved || saved === 'auto') { mode = 'auto'; autoName = baseline(); api.set(autoName, true); }
-  else if (saved === 'local') { mode = 'local'; api.useLocal(true).then((r) => { if (r === 'ok') { for (const k of KEYS) state[k] = target[k]; state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.roof = state.tree = state.snow > 0.3 ? 1 : 0; } else { mode = 'auto'; autoName = baseline(); api.set(autoName, true); } changed(); }); }
-  else if (PRESETS[saved]) { mode = 'preset'; api.set(saved, true); }
+  else {
+    // The site always opens on "My weather": the seasonal guess shows at once, and the visitor's own weather replaces it as soon as it is read (from the last reading if it is recent; otherwise the browser asks for the position
+    // unless it was refused, and a refusal or a failure leaves the seasonal weather).
+    mode = 'auto'; autoName = baseline(); api.set(autoName, true);
+    (async () => {
+      try { const ps = await navigator.permissions?.query({ name: 'geolocation' }); if (ps && ps.state === 'denied') return; } catch (e) { /* no permission query: just ask */ }
+      if ((await api.useLocal()) === 'ok') { mode = 'local'; store.set('wx.mode', 'local'); changed(); }
+    })();
+  }
   return api;
 }

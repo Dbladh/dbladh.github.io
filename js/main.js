@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030235343';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030235343';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030235755';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030235755';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261030235343';
-import { createWeather } from './weather.js?v=20261030235343';
-import { PAL } from './palette.js?v=20261030235343';
-import { buildWorld } from './world.js?v=20261030235343';
-import { createSky } from './sky.js?v=20261030235343';
-import { createDOF } from './dof.js?v=20261030235343';
-import { createRide } from './ride.js?v=20261030235343';
-import { createGame } from './bikegame.js?v=20261030235343';
-import { createAurora, setWarm } from './aurora.js?v=20261030235343';
-import { createAudio, pickFlicker } from './audio.js?v=20261030235343';
+import { createPrecip } from './precip.js?v=20261030235755';
+import { createWeather } from './weather.js?v=20261030235755';
+import { PAL } from './palette.js?v=20261030235755';
+import { buildWorld } from './world.js?v=20261030235755';
+import { createSky } from './sky.js?v=20261030235755';
+import { createDOF } from './dof.js?v=20261030235755';
+import { createRide } from './ride.js?v=20261030235755';
+import { createGame } from './bikegame.js?v=20261030235755';
+import { createAurora, setWarm } from './aurora.js?v=20261030235755';
+import { createAudio, pickFlicker } from './audio.js?v=20261030235755';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -610,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261030235343');
+        const mod = await import('./golf.js?v=20261030235755');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
