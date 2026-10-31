@@ -11,13 +11,82 @@ export const PRESETS = {
   fog: { cloud: 0.55, rain: 0, snow: 0, fog: 0.95, wind: 0.04, storm: 0 },
 };
 
+// ---- where the weather comes from ----
+// 'auto': a seeded guess from the real date and time of day, shaped by the season (the same for everyone on a given day, mostly clear); 'local': what it is doing where the visitor is (Open-Meteo, no key,
+// only after they ask, with their position rounded to about 10 km); or a preset picked by hand. The mode and the last local reading are remembered (the reading for half an hour).
+const SEASON = [   // clear, cloudy, rain, storm, snow, fog, per month (January first)
+  [0.36, 0.2, 0.05, 0, 0.25, 0.14], [0.38, 0.2, 0.06, 0, 0.22, 0.14], [0.45, 0.2, 0.2, 0.02, 0.06, 0.07], [0.46, 0.2, 0.24, 0.04, 0, 0.06], [0.5, 0.2, 0.2, 0.06, 0, 0.04], [0.58, 0.16, 0.12, 0.11, 0, 0.03],
+  [0.6, 0.15, 0.1, 0.13, 0, 0.02], [0.6, 0.15, 0.1, 0.12, 0, 0.03], [0.46, 0.2, 0.16, 0.04, 0, 0.14], [0.36, 0.22, 0.2, 0.02, 0, 0.2], [0.34, 0.25, 0.2, 0.01, 0.06, 0.14], [0.34, 0.2, 0.08, 0, 0.26, 0.12],
+];
+const NAMES = ['clear', 'cloudy', 'rain', 'storm', 'snow', 'fog'];
+const hashS = (n) => { let h = (n ^ 0x9e3779b9) >>> 0; h = Math.imul(h ^ (h >>> 15), 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+/** The guess for a real date: a preset name (the weather is held for a three hour block, so it changes slowly and is the same for everyone). */
+export function baseline(date = new Date()) {
+  const m = date.getMonth(), block = Math.floor(date.getHours() / 3), key = date.getFullYear() * 10000 + (m + 1) * 100 + date.getDate();
+  const w = SEASON[m].slice(); if (date.getHours() < 13 || date.getHours() > 22) w[3] *= 0.2; if (date.getHours() > 9 && date.getHours() < 17) w[5] *= 0.15;      // (storms build in the afternoon, fog lies in the early hours)
+  let r = hashS(key * 8 + block) * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < 6; i++) { r -= w[i]; if (r <= 0) return NAMES[i]; }
+  return 'clear';
+}
+/** Turn a reading of the weather outside (Open-Meteo's WMO code, cloud cover, wind) into the numbers the landscape uses. */
+export function fromReading({ code = 0, cloud = 0, wind = 0 }) {
+  const c = Math.min(1, Math.max(0.04, cloud / 100 * 0.9)), wd = Math.min(1, Math.max(0.05, wind / 40)), o = { cloud: c, rain: 0, snow: 0, fog: 0, wind: wd, storm: 0 };
+  if (code === 45 || code === 48) { o.fog = 0.95; o.cloud = Math.max(c, 0.5); }
+  else if (code >= 51 && code <= 57) { o.rain = 0.35; o.cloud = Math.max(c, 0.8); }
+  else if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) { o.rain = code === 61 || code === 80 ? 0.55 : code === 63 || code === 81 ? 0.8 : 1; o.cloud = Math.max(c, 0.9); }
+  else if ((code >= 71 && code <= 77) || code === 85 || code === 86) { o.snow = code === 71 || code === 85 ? 0.45 : code === 73 ? 0.7 : 0.95; o.cloud = Math.max(c, 0.85); }
+  else if (code >= 95) { o.rain = 1; o.storm = 1; o.cloud = 1; o.wind = Math.max(o.wind, 0.7); }
+  return o;
+}
+/** The simple icon for a set of numbers: sun, moon, partly cloudy, cloud, rain, storm, snow or fog. */
+export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
+
 export function createWeather() {
   const state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, flash: 0 }, target = { ...PRESETS.clear };
-  let name = 'clear', hold = null, rate = 0.16;
+  let name = 'clear', hold = null, rate = 0.16, mode = 'auto', temp = null, place = null;
+  const subs = new Set(), store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+  const changed = () => { for (const f of subs) f(api); };
+  let autoT = 0, autoName = '', localT = 1800;
+  const applyReading = (rd) => { api.set(fromReading({ code: rd.code, cloud: rd.cloud, wind: rd.wind })); temp = rd.temp; place = 'here'; };
+  void place;
   const api = {
     state,
     get name() { return name; },
     busy: false,
+    get mode() { return mode; },
+    get temp() { return temp; },
+    /** The icon name for what the weather is heading for (the target, so the icon changes the moment it is chosen). */
+    kind(night = false) { return kindOf(target, night); },
+    onChange(f) { subs.add(f); },
+    /** 'auto' (the guess from the date and time), 'local' (asks for the position first if it must) or a preset name. Returns what happened for 'local': 'ok', 'denied' or 'failed'. */
+    async setMode(m) {
+      if (m === 'local') {
+        const r = await api.useLocal(); if (r !== 'ok') return r; mode = 'local'; store.set('wx.mode', 'local'); changed(); return 'ok';
+      }
+      mode = m === 'auto' ? 'auto' : 'preset'; temp = null; store.set('wx.mode', m);
+      if (m === 'auto') api.set(baseline()); else api.set(m);
+      changed(); return 'ok';
+    },
+    /** Read the weather where the visitor is: from the last reading if it is under half an hour old, else the browser's position (rounded) and Open-Meteo. */
+    async useLocal(quiet = false) {
+      try {
+        const c = JSON.parse(store.get('wx.local') || 'null');
+        if (c && Date.now() - c.t < 30 * 60 * 1000) { applyReading(c); return 'ok'; }
+      } catch (e) { /* no reading kept */ }
+      if (quiet) { try { const ps = await navigator.permissions.query({ name: 'geolocation' }); if (ps.state !== 'granted') return 'denied'; } catch (e) { return 'denied'; } }          // (a refresh in the background never asks)
+      let pos; try { pos = await new Promise((res, rej) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(res, rej, { timeout: 9000, maximumAge: 3600000 }) : rej(new Error('none'))); } catch (e) { return e && e.code === 1 ? 'denied' : 'failed'; }
+      const lat = Math.round(pos.coords.latitude * 10) / 10, lon = Math.round(pos.coords.longitude * 10) / 10, ac = new AbortController(), to = setTimeout(() => ac.abort(), 7000);
+      try {
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m&wind_speed_unit=kmh`, { signal: ac.signal });
+        const j = await r.json(), cur = j.current; if (!cur) return 'failed';
+        const rd = { t: Date.now(), code: cur.weather_code, cloud: cur.cloud_cover, wind: cur.wind_speed_10m, temp: cur.temperature_2m }; store.set('wx.local', JSON.stringify(rd)); applyReading(rd); return 'ok';
+      } catch (e) { return 'failed'; } finally { clearTimeout(to); }
+    },
+    /** Called every frame: in 'auto' the guess is looked at again every few minutes (it changes only every three hours); a stale local reading is refreshed. */
+    tick(dt) {
+      if (mode === 'auto') { autoT -= dt; if (autoT <= 0) { autoT = 300; const b = baseline(); if (b !== autoName) { autoName = b; api.set(b); changed(); } } }
+      else if (mode === 'local') { localT -= dt; if (localT <= 0) { localT = 1800; api.useLocal(true).then(() => changed()); } }
+    },
     names: Object.keys(PRESETS),
     /** Go to a preset (eased over several seconds), or to the given numbers; `instant` jumps there. */
     set(preset, instant = false) {
@@ -37,7 +106,10 @@ export function createWeather() {
       if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; state.flash = 1; onFlash?.(); } } else hold = null;
     },
   };
-  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null;
-  if (q && PRESETS[q]) api.set(q, true);
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null, saved = store.get('wx.mode');
+  if (q && PRESETS[q]) { mode = 'preset'; api.set(q, true); }
+  else if (q === 'auto' || !saved || saved === 'auto') { mode = 'auto'; autoName = baseline(); api.set(autoName, true); }
+  else if (saved === 'local') { mode = 'local'; api.useLocal(true).then((r) => { if (r === 'ok') { for (const k of KEYS) state[k] = target[k]; state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.snow > 0.3 ? 1 : 0; } else { mode = 'auto'; autoName = baseline(); api.set(autoName, true); } changed(); }); }
+  else if (PRESETS[saved]) { mode = 'preset'; api.set(saved, true); }
   return api;
 }

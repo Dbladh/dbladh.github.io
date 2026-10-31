@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261030185113">
+  <link rel="stylesheet" href="css/styles.css?v=20261030231611">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261030185113 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261030231611 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -70,6 +70,17 @@
              aria-label="Time of day">
     </label>
     <button id="scene-sound" class="scene-sound" type="button" aria-label="Sound off" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.8a7.5 7.5 0 0 1 0 10.4"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+    <div class="wx" id="wx">
+      <button id="wx-chip" class="scene-sound wx-chip" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Weather" title="Weather"><span class="wx-ico" id="wx-ico" aria-hidden="true"></span><span class="wx-temp" id="wx-temp" hidden></span></button>
+      <div class="wx-menu" id="wx-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-wx="local">My weather</button>
+        <button type="button" role="menuitem" data-wx="auto">Seasonal</button>
+        <hr>
+        <button type="button" role="menuitem" data-wx="clear">Clear</button><button type="button" role="menuitem" data-wx="cloudy">Cloudy</button><button type="button" role="menuitem" data-wx="rain">Rain</button>
+        <button type="button" role="menuitem" data-wx="storm">Storm</button><button type="button" role="menuitem" data-wx="snow">Snow</button><button type="button" role="menuitem" data-wx="fog">Fog</button>
+        <p class="wx-note" id="wx-note" hidden></p>
+      </div>
+    </div>
     <button id="simple-toggle" type="button" aria-pressed="false">Simple view</button>
   </div>
 
@@ -321,6 +332,6 @@
     <figure><img alt=""><figcaption></figcaption></figure>
   </dialog>
 
-  <script type="module" src="js/main.js?v=20261030185113"></script>
+  <script type="module" src="js/main.js?v=20261030231611"></script>
 </body>
 </html>

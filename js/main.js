@@ -1,17 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231242';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231242';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231611';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231611';
 import * as THREE from 'three';
-import { createWeather } from './weather.js?v=20261030231242';
-import { PAL } from './palette.js?v=20261030231242';
-import { buildWorld } from './world.js?v=20261030231242';
-import { createSky } from './sky.js?v=20261030231242';
-import { createDOF } from './dof.js?v=20261030231242';
-import { createRide } from './ride.js?v=20261030231242';
-import { createGame } from './bikegame.js?v=20261030231242';
-import { createAurora, setWarm } from './aurora.js?v=20261030231242';
-import { createAudio, pickFlicker } from './audio.js?v=20261030231242';
+import { createPrecip } from './precip.js?v=20261030231611';
+import { createWeather } from './weather.js?v=20261030231611';
+import { PAL } from './palette.js?v=20261030231611';
+import { buildWorld } from './world.js?v=20261030231611';
+import { createSky } from './sky.js?v=20261030231611';
+import { createDOF } from './dof.js?v=20261030231611';
+import { createRide } from './ride.js?v=20261030231611';
+import { createGame } from './bikegame.js?v=20261030231611';
+import { createAurora, setWarm } from './aurora.js?v=20261030231611';
+import { createAudio, pickFlicker } from './audio.js?v=20261030231611';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -186,6 +187,7 @@ function start() {
   const classic = new URLSearchParams(location.search).get('look') === 'classic'; // A/B: the original look
   const sky = createSky(scene, skyScene, renderer, { classic });
   const weather = createWeather();
+  const precip = createPrecip({ low: lowEnd }); scene.add(precip.group);
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
@@ -606,7 +608,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261030231242');
+        const mod = await import('./golf.js?v=20261030231611');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -851,6 +853,37 @@ function start() {
 
   simpleBtn.addEventListener('click', () => setSimple(!simple));
   // The landscape's sound button (sound is off until it is pressed)
+  // ---- the weather chip: an icon for what the weather is (and the temperature when it is the visitor's own), and a small menu to choose ----
+  { const chip = document.getElementById('wx-chip'), ico = document.getElementById('wx-ico'), tmp = document.getElementById('wx-temp'), menu = document.getElementById('wx-menu'), note = document.getElementById('wx-note');
+    const P = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`, CLOUD = 'M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.5 4.3 4.3 0 0 0 7 18z';
+    const ICONS = {
+      sun: P('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>'),
+      moon: P('<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>'),
+      partly: P('<circle cx="8.5" cy="8.5" r="2.8"/><path d="M8.5 2.5v1.2M2.5 8.5h1.2M4.3 4.3l.9.9M12.7 4.3l-.9.9"/><path d="M9 19h8.5a3.6 3.6 0 0 0 .5-7.15A4.8 4.8 0 0 0 9.4 12.2 3.4 3.4 0 0 0 9 19z"/>'),
+      cloud: P(`<path d="${CLOUD}"/>`),
+      rain: P(`<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6.5 4.3 4.3 0 0 0 7 15z"/><path d="M8.5 18l-1 2.2M12.5 18l-1 2.2M16.5 18l-1 2.2"/>`),
+      storm: P(`<path d="M7 14.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6 4.3 4.3 0 0 0 7 14.5z"/><path d="M12.5 14l-2.5 4h3l-1.5 4"/>`),
+      snow: P(`<path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M9.6 4.6L12 6.5l2.4-1.9M9.6 19.4L12 17.5l2.4 1.9"/>`),
+      fog: P(`<path d="M7 12h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 3.5 4.3 4.3 0 0 0 7 12z"/><path d="M4 16h16M6 19.5h12"/>`),
+    }, LABEL = { sun: 'Clear', moon: 'Clear night', partly: 'Partly cloudy', cloud: 'Cloudy', rain: 'Rain', storm: 'Storm', snow: 'Snow', fog: 'Fog' };
+    let shown = ''; const useF = /^en-(US|LR)|^my/i.test(navigator.language || ''), deg = (c) => Math.round(useF ? c * 9 / 5 + 32 : c);          // (Fahrenheit where it is the custom)
+    const refresh = () => {
+      const k = weather.kind(nightK > 0.5), mine = weather.mode === 'local' && weather.temp !== null; if (k !== shown) { shown = k; ico.innerHTML = ICONS[k]; }
+      tmp.hidden = !mine; if (mine) tmp.textContent = `${deg(weather.temp)}°`;
+      const what = mine ? `${LABEL[k]} where you are, ${deg(weather.temp)} degrees` : weather.mode === 'auto' ? `${LABEL[k]} (seasonal)` : LABEL[k]; chip.title = chip.ariaLabel = `Weather: ${what}`;
+      for (const b of menu.querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.wx === (weather.mode === 'preset' ? weather.name : weather.mode)));
+    };
+    weather.onChange(refresh); setInterval(refresh, 4000); refresh();
+    const close = () => { menu.hidden = true; chip.setAttribute('aria-expanded', 'false'); };
+    chip.addEventListener('click', (e) => { e.stopPropagation(); const open = menu.hidden; menu.hidden = !open; chip.setAttribute('aria-expanded', String(open)); if (open) { note.hidden = true; menu.querySelector('button')?.focus(); } });
+    document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('#wx')) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { close(); chip.focus(); } });
+    menu.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-wx]'); if (!b) return; const m = b.dataset.wx; audio.ui('click');
+      if (m === 'local') { note.hidden = false; note.textContent = 'Asking where you are (rounded to about 10 km)...'; const r = await weather.setMode('local'); if (r === 'ok') { close(); refresh(); } else note.textContent = r === 'denied' ? 'Location is off for this site, so I can’t check your weather.' : 'Couldn’t reach the weather service. Try again later.'; return; }
+      await weather.setMode(m); close(); refresh();
+    });
+  }
   const sndBtn = document.getElementById('scene-sound');
   const showSnd = () => { if (!sndBtn) return; sndBtn.setAttribute('aria-pressed', String(audio.enabled)); sndBtn.setAttribute('aria-label', audio.enabled ? 'Sound on' : 'Sound off'); };
   sndBtn?.addEventListener('click', () => { audio.unlock(); audio.enabled = !audio.enabled; if (audio.enabled) audio.ui('tap'); showSnd(); });
@@ -951,7 +984,7 @@ function start() {
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.1);
     prof.ft[prof.n++ % prof.ft.length] = rawDt * 1000;
 
-    weather.update(dt); if ((reduceMotion || dragging) && weather.busy) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
+    weather.tick(dt); weather.update(dt); precip.update(dt, camera, weather.state, !!(game?.active || golf?.active), canvas.height, reduceMotion); if ((reduceMotion || dragging) && weather.busy) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
       const sT = performance.now(); setTime(hour + (dt * 24) / DAY_SECONDS); secT('time', sT);

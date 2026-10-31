@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030231242';
-import { auroraColour } from './aurora.js?v=20261030231242';
+import { PAL } from './palette.js?v=20261030231611';
+import { auroraColour } from './aurora.js?v=20261030231611';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030231242';
+} from './houses.js?v=20261030231611';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2209,7 +2209,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
-  let signNoFog = false;
+  let signNoFog = false, windClock = 0;
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
   // Each closed sign carries a picture of real work beside its title (painted by paintBoard once it has loaded):
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
@@ -2814,7 +2814,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       if (camera) { camPos = camera.position; camObj = camera; }
       { const g = dance.w > 0.002 ? dance.w : 0; flowerGlow.value.set(dance.lh[0] * g, dance.lh[1] * g, dance.lh[2] * g); flowerMix.value.set(Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * g, dance.sweep); }
       ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
-      terrainWind.uWindTime.value = time;
+      windClock += dt * (0.7 + 4.5 * cloudLook.wind * cloudLook.wind + 2.5 * cloudLook.wind); terrainWind.uWindTime.value = windClock;          // (the grass sways faster in a wind)
       pondU.uTime.value = time;
       for (const wr of windmills) wr.rotation.z -= dt * 0.7;
       for (const b of boards) b.tickHover?.(dt);
