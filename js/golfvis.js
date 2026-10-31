@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030213320';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030213320';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261030213320';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030213320';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030213320';
-import { isLow } from './golfquality.js?v=20261030213320';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030213455';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030213455';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261030213455';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030213455';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030213455';
+import { isLow } from './golfquality.js?v=20261030213455';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -263,9 +263,10 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
       const rp = []; for (let i = 0; i < n; i += 2) rp.push(new THREE.Vector3(W[i * 6 + 3], W[i * 6 + 4], W[i * 6 + 5])); const tg = track(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rp), Math.min(120, n), 0.05, 5, false)); const rt = new THREE.Mesh(tg, metal('#d7dce4')); rt.castShadow = true; cg.add(rt); grow.push([tg, tg.index.count / (n - 1)]);
     }
     const legs = []; for (let i = 4; i < n - 2; i += 8) { const y = C.ly[i], lg = rbox(metal('#aab2bd'), 0.12, y, 0.12, P[i][0], y / 2, P[i][1], 0.02); lg.visible = false; cg.add(lg); legs.push([i, lg]); }
+    const padT = chev.clone(); padT.needsUpdate = true; padT.repeat.set(1.2 / 1.6, 1); disposables.push(padT); const padM = new THREE.MeshBasicMaterial({ map: padT, transparent: true, opacity: 0.95 }); disposables.push(padM); updaters.push((heroT, t) => { padT.offset.x = -t * 0.9; });          // (the same moving chevrons as a boost strip, pointing along the channel)
     for (const i of C.pads) {                               // boost pads in the floor of the channel: a dark plate with three yellow chevrons pointing along it
       const a = P[Math.max(0, i - 1)], b2 = P[Math.min(n - 1, i + 1)], yaw = Math.atan2(-(b2[1] - a[1]), b2[0] - a[0]), pg = new THREE.Group(); pg.position.set(P[i][0], C.ly[i] + 0.03, P[i][1]); pg.rotation.y = yaw; pg.visible = false;
-      pg.add(rbox(paint('#2b2b3a'), 1.0, 0.03, C.hw * 1.5, 0, 0, 0, 0.01)); for (let k = 0; k < 3; k++) { const ch = cone(paint('#ffe14a'), 0.2, 0.12, 3, -0.3 + k * 0.3, 0.07, 0); ch.rotation.z = -Math.PI / 2; ch.scale.set(1, 1, 2.4); pg.add(ch); }
+      pg.add(rbox(paint('#2b2b3a'), 1.3, 0.03, C.hw * 1.5, 0, 0, 0, 0.01)); const pl = new THREE.Mesh(track(new THREE.PlaneGeometry(1.2, C.hw * 1.4).rotateX(-Math.PI / 2)), padM); pl.position.y = 0.02; pg.add(pl);
       cg.add(pg); legs.push([i, pg]);
     }
     const M = C.mouth, ring = torus(paint('#7fe9ff'), 0.62, 0.07, M.x, 0.45, M.z, 0, Math.atan2(M.ux, M.uz) + Math.PI / 2, 0); ring.visible = false;
