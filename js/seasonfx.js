@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031102513';
+import { heightAt, POND, pathX } from './world.js?v=20261031102519';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -213,7 +213,7 @@ function makeFireworks(ctx) {
   const launch = (delay, big) => {
     const b = bursts.find((q) => !q.busy); if (!b) return false;
     b.busy = true; b.phase = delay > 0 ? -1 : 0; b.delay = delay; b.t = 0; b.x1 = (rnd() * 2 - 1) * 62; b.x0 = b.x1 + (rnd() - 0.5) * 18; b.y1 = 34 + rnd() * 36; b.power = big ? 1.25 : 0.8 + rnd() * 0.5; b.pan = b.x1 / 70;
-    const p = FW_COLS[(rnd() * FW_COLS.length) | 0]; b.mat.uniforms.uC1.value.copy(p[0]); b.mat.uniforms.uC2.value.copy(p[1]); b.mat.uniforms.uSpd.value = 15 * b.power; b.mat.uniforms.uSize.value = ctx.low ? 1.1 : 0.85; b.mat.uniforms.uLife.value = 2.0 + rnd() * 0.8; return true;
+    const p = FW_COLS[(rnd() * FW_COLS.length) | 0]; b.mat.uniforms.uC1.value.copy(p[0]); b.mat.uniforms.uC2.value.copy(p[1]); b.mat.uniforms.uSpd.value = 26 * b.power; b.mat.uniforms.uSize.value = ctx.low ? 1.5 : 1.2; b.mat.uniforms.uLife.value = 2.0 + rnd() * 0.8; return true;
   };
   const show = (peak) => { const n = 3 + Math.floor(rnd() * 4 + peak * 8); let t = 0; for (let i = 0; i < n; i++) { t += 0.35 + rnd() * 1.0; queue.push({ at: t, big: false }); } if (peak > 0.5) { for (let i = 0; i < 5; i++) queue.push({ at: t + 1.2 + i * 0.18, big: true }); } };   // (a finale of bigger bursts together on the day itself)
   let clock = 0;
