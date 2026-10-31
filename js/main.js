@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031002337';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031002337';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031002621';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031002621';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031002337';
-import { createWeather } from './weather.js?v=20261031002337';
-import { PAL } from './palette.js?v=20261031002337';
-import { buildWorld } from './world.js?v=20261031002337';
-import { createSky } from './sky.js?v=20261031002337';
-import { createDOF } from './dof.js?v=20261031002337';
-import { createRide } from './ride.js?v=20261031002337';
-import { createGame } from './bikegame.js?v=20261031002337';
-import { createAurora, setWarm } from './aurora.js?v=20261031002337';
-import { createAudio, pickFlicker } from './audio.js?v=20261031002337';
+import { createPrecip } from './precip.js?v=20261031002621';
+import { createWeather } from './weather.js?v=20261031002621';
+import { PAL } from './palette.js?v=20261031002621';
+import { buildWorld } from './world.js?v=20261031002621';
+import { createSky } from './sky.js?v=20261031002621';
+import { createDOF } from './dof.js?v=20261031002621';
+import { createRide } from './ride.js?v=20261031002621';
+import { createGame } from './bikegame.js?v=20261031002621';
+import { createAurora, setWarm } from './aurora.js?v=20261031002621';
+import { createAudio, pickFlicker } from './audio.js?v=20261031002621';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -610,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031002337');
+        const mod = await import('./golf.js?v=20261031002621');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -863,12 +863,13 @@ function start() {
       moon: P('<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>'),
       partly: P('<circle cx="8.5" cy="8.5" r="2.8"/><path d="M8.5 2.5v1.2M2.5 8.5h1.2M4.3 4.3l.9.9M12.7 4.3l-.9.9"/><path d="M9 19h8.5a3.6 3.6 0 0 0 .5-7.15A4.8 4.8 0 0 0 9.4 12.2 3.4 3.4 0 0 0 9 19z"/>'),
       cloud: P(`<path d="${CLOUD}"/>`),
+      overcast: P('<path d="M7 13h10.5a3.6 3.6 0 0 0 .5-7.15A4.8 4.8 0 0 0 8.4 6.2 3.4 3.4 0 0 0 7 13z"/><path d="M5 17h14M7.5 20.5h9"/>'),
       shower: P('<circle cx="7.5" cy="7" r="2.5"/><path d="M7.5 2v1.2M2 7h1.2M3.6 3.1l.9.9M11.4 3.1l-.9.9"/><path d="M9 15h8a3.5 3.5 0 0 0 .5-6.95A4.6 4.6 0 0 0 9.2 9.2 3.2 3.2 0 0 0 9 15z"/><path d="M10.5 18l-1 2.2M14.5 18l-1 2.2"/>'),
       rain: P(`<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6.5 4.3 4.3 0 0 0 7 15z"/><path d="M8.5 18l-1 2.2M12.5 18l-1 2.2M16.5 18l-1 2.2"/>`),
       storm: P(`<path d="M7 14.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6 4.3 4.3 0 0 0 7 14.5z"/><path d="M12.5 14l-2.5 4h3l-1.5 4"/>`),
       snow: P(`<path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M9.6 4.6L12 6.5l2.4-1.9M9.6 19.4L12 17.5l2.4 1.9"/>`),
       fog: P(`<path d="M7 12h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 3.5 4.3 4.3 0 0 0 7 12z"/><path d="M4 16h16M6 19.5h12"/>`),
-    }, LABEL = { shower: 'Sun shower', sun: 'Clear', moon: 'Clear night', partly: 'Partly cloudy', cloud: 'Cloudy', rain: 'Rain', storm: 'Storm', snow: 'Snow', fog: 'Fog' };
+    }, LABEL = { overcast: 'Overcast', shower: 'Sun shower', sun: 'Clear', moon: 'Clear night', partly: 'Partly cloudy', cloud: 'Cloudy', rain: 'Rain', storm: 'Storm', snow: 'Snow', fog: 'Fog' };
     let shown = ''; const useF = /^en-(US|LR)|^my/i.test(navigator.language || ''), deg = (c) => Math.round(useF ? c * 9 / 5 + 32 : c);          // (Fahrenheit where it is the custom)
     const refresh = () => {
       const k = weather.kind(nightK > 0.5), mine = weather.mode === 'local' && weather.temp !== null; if (k !== shown) { shown = k; ico.innerHTML = ICONS[k]; }

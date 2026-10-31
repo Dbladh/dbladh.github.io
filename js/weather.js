@@ -6,7 +6,8 @@ const OMEGA = { cloud: 0.7, rain: 0.75, snow: 0.6, fog: 0.42, wind: 0.5, storm: 
 export const PRESETS = {
   clear: { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0 },
   cloudy: { cloud: 0.78, rain: 0, snow: 0, fog: 0.05, wind: 0.35, storm: 0 },
-  rain: { cloud: 0.92, rain: 0.75, snow: 0, fog: 0.2, wind: 0.4, storm: 0 },
+  overcast: { cloud: 1, rain: 0, snow: 0, fog: 0.14, wind: 0.22, storm: 0 },                    // a low grey lid over the whole sky
+  rain: { cloud: 0.96, rain: 0.75, snow: 0, fog: 0.2, wind: 0.4, storm: 0 },
   storm: { cloud: 1, rain: 1, snow: 0, fog: 0.25, wind: 0.85, storm: 1 },
   snow: { cloud: 0.85, rain: 0, snow: 0.8, fog: 0.25, wind: 0.22, storm: 0 },
   fog: { cloud: 0.6, rain: 0, snow: 0, fog: 1, wind: 0.04, storm: 0 },
@@ -27,7 +28,7 @@ export function baseline(date = new Date()) {
   const m = date.getMonth(), block = Math.floor(date.getHours() / 3), key = date.getFullYear() * 10000 + (m + 1) * 100 + date.getDate();
   const w = SEASON[m].slice(); if (date.getHours() < 13 || date.getHours() > 22) w[3] *= 0.2; if (date.getHours() > 9 && date.getHours() < 17) w[5] *= 0.15;      // (storms build in the afternoon, fog lies in the early hours)
   let r = hashS(key * 8 + block) * w.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < 6; i++) { r -= w[i]; if (r <= 0) return NAMES[i] === 'rain' && m >= 2 && m <= 8 && hashS(key * 3 + block) < 0.4 ? 'shower' : NAMES[i]; }
+  for (let i = 0; i < 6; i++) { r -= w[i]; if (r <= 0) return NAMES[i] === 'rain' && m >= 2 && m <= 8 && hashS(key * 3 + block) < 0.4 ? 'shower' : NAMES[i] === 'cloudy' && hashS(key * 5 + block + 1) < 0.45 ? 'overcast' : NAMES[i]; }
   return 'clear';
 }
 /** Turn a reading of the weather outside (Open-Meteo's WMO code, cloud cover, wind) into the numbers the landscape uses. */
@@ -41,7 +42,7 @@ export function fromReading({ code = 0, cloud = 0, wind = 0 }) {
   return o;
 }
 /** The simple icon for a set of numbers: sun, moon, partly cloudy, cloud, rain, storm, snow or fog. */
-export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 && t.cloud < 0.72 && !night ? 'shower' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
+export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 && t.cloud < 0.72 && !night ? 'shower' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.92 ? 'overcast' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
 
 export function createWeather({ calm = false } = {}) {
   const vel = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0, storm: 0 }, state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, roof: 0, tree: 0, bow: 0, mist: 0, flash: 0 }, target = { ...PRESETS.clear };

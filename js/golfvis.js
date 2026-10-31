@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261031002337';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261031002337';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261031002337';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261031002337';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261031002337';
-import { isLow } from './golfquality.js?v=20261031002337';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261031002621';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261031002621';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261031002621';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261031002621';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261031002621';
+import { isLow } from './golfquality.js?v=20261031002621';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
