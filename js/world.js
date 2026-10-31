@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031112336';
-import { auroraColour } from './aurora.js?v=20261031112336';
+import { PAL } from './palette.js?v=20261031112519';
+import { auroraColour } from './aurora.js?v=20261031112519';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031112336';
+} from './houses.js?v=20261031112519';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1953,7 +1953,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     lobeLists.forEach((list, i) => instanced(blobGeos[i], foliageMat, list, o({ farGeometry: farBlobs[i] })));
     instanced(GEO.leaf, foliageMat, src.leaf, o({ shadow: false }));
     instanced(GEO.fruit, MAT.flatWhite, src.fruit, o({ shadow: false }));
-    instanced(GEO.cypress, foliageMat, src.cypress, o());
+    instanced(GEO.cypress, foliageMatDS, src.cypress, o());
     instanced(GEO.pine, foliageMatDS, src.pine, o({ farGeometry: GEO.pineFar }));
     instanced(GEO.bush, foliageMat, src.bush, o({ farGeometry: GEO.bushFar }));
     instanced(GEO.berry, MAT.flatWhite, src.berry, o({ shadow: false }));
