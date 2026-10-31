@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031112013';
+import { heightAt, POND, pathX } from './world.js?v=20261031112142';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -868,12 +868,25 @@ function posePoint(u) {                           // the blended pose at hop pro
   let i = 0; while (i < HOP_SEQ.length - 2 && u > HOP_SEQ[i + 1][0]) i++; const [u0, a] = HOP_SEQ[i], [u1, b] = HOP_SEQ[i + 1], t = smooth01(Math.min(1, Math.max(0, (u - u0) / (u1 - u0)))), A = BPOSE[a], B = BPOSE[b], o = {};
   for (const k in A) o[k] = A[k] + (B[k] - A[k]) * t; return o;
 }
+let FUR = null;
+function furTextures() {                                       // short soft fur: fine strokes and clumps, drawn once, with a normal map from the same drawing (shared by every bunny)
+  if (FUR) return FUR; const r = rng(55);
+  FUR = surfaceTex((g, S) => {
+    g.fillStyle = '#808080'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S, rad = 10 + r() * 22, v = 100 + Math.floor(r() * 60); for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) { const q = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad); q.addColorStop(0, `rgba(${v},${v},${v},0.5)`); q.addColorStop(1, `rgba(${v},${v},${v},0)`); g.fillStyle = q; g.beginPath(); g.arc(x + ox, y + oy, rad, 0, 6.3); g.fill(); } }
+    g.lineCap = 'round'; for (let i = 0; i < 3200; i++) { const x = r() * S, y = r() * S, l = 6 + r() * 9, a = Math.PI / 2 + (r() - 0.5) * 0.7, v = r() < 0.5 ? 60 + r() * 40 : 170 + r() * 60; g.strokeStyle = `rgba(${v},${v},${v},0.55)`; g.lineWidth = 0.8 + r() * 0.9; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + (r() - 0.5) * 4, y + l * 0.5, x + Math.cos(a) * l * 0.4, y + Math.sin(a) * l); g.stroke(); }
+  }, '#f2f2f2', (c, S) => {
+    for (let i = 0; i < 40; i++) { c.fillStyle = r() < 0.5 ? 'rgba(90,70,50,0.07)' : 'rgba(255,255,255,0.1)'; c.beginPath(); c.ellipse(r() * S, r() * S, 8 + r() * 20, 4 + r() * 10, r() * 3, 0, 6.3); c.fill(); }
+  });
+  return FUR;
+}
+const furMat = (color, rx = 3, ry = 2) => { const T = furTextures(), map = T.map.clone(), nm = T.normal.clone(); for (const t of [map, nm]) { t.repeat.set(rx, ry); t.needsUpdate = true; } return new THREE.MeshStandardMaterial({ color, map, normalMap: nm, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 1, metalness: 0 }); };
 function bunnyRig(color, bellyColor = '#f6f0e8') {
-  const fur = lam(color), belly = lam(bellyColor), pink = lam('#f0a8b8'), dark = lam('#141012'), root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const fur = furMat(color), belly = furMat(bellyColor, 2, 1.5), pink = lam('#f0a8b8'), dark = lam('#141012'), root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   const ell = (par, r, sx, sy, sz, m, x, y, z) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), m); o.scale.set(sx, sy, sz); o.position.set(x, y, z); o.castShadow = true; par.add(o); return o; };
   const jt = (par, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); par.add(g); return g; };
   ell(body, 0.3, 0.95, 0.9, 1.15, fur, 0, 0, 0); ell(body, 0.26, 0.9, 0.78, 1.25, belly, 0, -0.04, 0.16); ell(body, 0.24, 0.9, 0.95, 1.1, fur, 0, 0.02, 0.32);
-  ell(body, 0.1, 1, 1, 1, lam('#ffffff'), 0, 0.06, -0.36);                                                                       // the tail
+  ell(body, 0.1, 1, 1, 1, furMat('#ffffff', 1.5, 1.5), 0, 0.06, -0.36);                                                                       // the tail
   const neck = jt(body, 0, 0.1, 0.5), head = ell(neck, 0.2, 0.9, 0.95, 1.05, fur, 0, 0.04, 0.05); head.castShadow = true;
   ell(neck, 0.1, 0.9, 0.75, 1, belly, 0, -0.03, 0.2); ell(neck, 0.03, 1, 0.8, 1, pink, 0, 0.0, 0.3);
   const muz = neck.children[neck.children.length - 2];
@@ -929,7 +942,7 @@ function makeEasterHunt(ctx) {
   let hint = 25;
   // bunnies hopping about
   const bun = [], bcol = ['#f2ede6', '#c9a27a', '#b8b4b0'], home = ctx.freeSpot(5, 17) || { x: 12, z: -20 };
-  for (let i = 0; i < (ctx.low ? 2 : 3); i++) { const rig = bunnyRig(bcol[i % 3], i === 1 ? '#e8d8c0' : '#f6f0e8'), b = rig.root; b.scale.setScalar(1.15); const x = home.x + (r() - 0.5) * 6, z = home.z + (r() - 0.5) * 6; b.position.set(x, heightAt(x, z), z); root.add(b); bun.push({ rig, b, tx: x, tz: z, x, z, t: r() * 2, hop: -1, from: [x, z], yaw: r() * 6.28, dx: 0, dz: 1 }); }
+  for (let i = 0; i < (ctx.low ? 2 : 3); i++) { const rig = bunnyRig(bcol[i % 3], i === 1 ? '#e8d8c0' : '#f6f0e8'), b = rig.root; b.scale.setScalar(0.58); const x = home.x + (r() - 0.5) * 6, z = home.z + (r() - 0.5) * 6; b.position.set(x, heightAt(x, z), z); root.add(b); bun.push({ rig, b, tx: x, tz: z, x, z, t: r() * 2, hop: -1, from: [x, z], yaw: r() * 6.28, dx: 0, dz: 1 }); }
   return {
     update(dt, s) {
       root.visible = !s.hide; chip.style.display = s.hide ? 'none' : '';
@@ -939,14 +952,14 @@ function makeEasterHunt(ctx) {
         const rg = k.rig;
         if (k.hop >= 0) {                                                  // a hop: crouch, push off, stretch through the air, land on the front paws, settle
           k.hop += dt / 0.8; const u = Math.min(1, k.hop), tr = smooth01(Math.min(1, Math.max(0, (u - 0.26) / 0.5))), x = k.from[0] + (k.tx - k.from[0]) * tr, z = k.from[1] + (k.tz - k.from[1]) * tr, air = Math.sin(Math.PI * Math.min(1, Math.max(0, (u - 0.28) / 0.46)));
-          k.x = x; k.z = z; k.b.position.set(x, heightAt(x, z) + air * 0.5, z); rg.pose(posePoint(u), dt, 0);
+          k.x = x; k.z = z; k.b.position.set(x, heightAt(x, z) + air * 0.28, z); rg.pose(posePoint(u), dt, 0);
           if (u >= 1) { k.hop = -1; k.t = r() < 0.4 ? 0.15 : 0.8 + r() * 2.6; k.n = (k.n || 0) - 1; }
         } else {
           rg.pose(BPOSE.rest, dt, 1); k.t -= dt;
           if (k.t <= 0) {
             if (!(k.n > 0)) { k.n = 2 + Math.floor(r() * 3); const a = r() * 6.28; k.dx = Math.cos(a); k.dz = Math.sin(a); }
-            let nx = k.x + k.dx * 1.5, nz = k.z + k.dz * 1.5;
-            if (Math.hypot(nx - home.x, nz - home.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { const l = Math.hypot(home.x - k.x, home.z - k.z) || 1; k.dx = (home.x - k.x) / l; k.dz = (home.z - k.z) / l; nx = k.x + k.dx * 1.5; nz = k.z + k.dz * 1.5; }
+            let nx = k.x + k.dx * 0.85, nz = k.z + k.dz * 0.85;
+            if (Math.hypot(nx - home.x, nz - home.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { const l = Math.hypot(home.x - k.x, home.z - k.z) || 1; k.dx = (home.x - k.x) / l; k.dz = (home.z - k.z) / l; nx = k.x + k.dx * 0.85; nz = k.z + k.dz * 0.85; }
             k.from = [k.x, k.z]; k.tx = nx; k.tz = nz; k.hop = 0;
           }
         }
