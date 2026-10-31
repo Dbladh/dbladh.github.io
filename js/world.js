@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030231037';
-import { auroraColour } from './aurora.js?v=20261030231037';
+import { PAL } from './palette.js?v=20261030231242';
+import { auroraColour } from './aurora.js?v=20261030231242';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
-  buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030231037';
+  SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
+} from './houses.js?v=20261030231242';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -697,20 +697,21 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const auroraU = { value: new THREE.Vector3() };                       // the colour the aurora is casting on the ground and the pond (zero when there is none)
+  const terrainWx = { uWet: { value: 0 }, uSnow: { value: 0 } };               // what the weather has left on the ground (0..1): rain darkens it, snow whitens it
   const terrainWind = { uWindTime: { value: 0 }, uDay: { value: 1 } };   // grass sway (desktop) and cloud shadows
   // Big soft cloud shadows drifting across the land by day: the same moving noise the clouds suggest, painted
   // straight into the terrain colour (no shadow maps, no geometry).
   const terrainHoles = { value: Array.from({ length: 9 }, () => new THREE.Vector3(0, 0, 0)) };       // the mini-golf's cups: round holes cut right through the ground ([x, z, radius], radius 0 = none)
   const addCloudShadows = (sh) => {
     sh.uniforms.uHoles = terrainHoles;
-    sh.uniforms.uShadowT = terrainWind.uWindTime;
+    sh.uniforms.uShadowT = terrainWind.uWindTime; sh.uniforms.uWet = terrainWx.uWet; sh.uniforms.uSnow = terrainWx.uSnow;
     sh.uniforms.uShadowDay = terrainWind.uDay; sh.uniforms.uAurora = auroraU;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
+uniform float uWet, uSnow; uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
 float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -730,6 +731,12 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   float stripe = mix(sq, 0.5, smoothstep(0.2, 0.5, saa));                                                      // (far away the bands blend into an average instead of shimmering)
   float grassy = smoothstep(0.015, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
   float sd = stripe - 0.5; diffuseColor.rgb *= 1.0 + grassy * sd * (sd < 0.0 ? 0.19 : 0.32);                 // (the dark bands are held back, so the stripes stay subtle)
+  diffuseColor.rgb *= 1.0 - 0.24 * uWet;                                                                       // (rain: the ground darkens)
+  if (uSnow > 0.002) {                                                                                           // (snow: it settles in patches and joins up as it builds)
+    float sn = csF(vCWPos.xz * 0.33) * 0.62 + csF(vCWPos.xz * 1.9 + 5.0) * 0.38, th = mix(1.05, -0.12, uSnow);
+    float cv = smoothstep(th, th + 0.18, sn);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 1.0) * (0.92 + 0.08 * sn), cv * 0.96);
+  }
 }`);
   };
   if (low) terrainMat.onBeforeCompile = addCloudShadows;
@@ -958,7 +965,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   const pondU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uTime: { value: 0 }, uDay: { value: 1 }, uHeightTex: { value: pondHeight }, uAurora: auroraU, uBeatPos: { value: -1 }, uRip: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uRipOn: { value: 0 }, uRipple: { value: new THREE.Color(0, 0, 0) },
     uHT: { value: new THREE.Vector4(POND.x - PB.r, POND.z - PB.r, 1 / (PB.r * 2), 1 / (PB.r * 2)) },
-    uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
+    uRain: { value: 0 }, uHorizon: { value: new THREE.Color('#cfe9fb') }, uSkyTop: { value: new THREE.Color('#5aa0f0') },
     uCenter: { value: new THREE.Vector2(POND.x, POND.z) }, uR: { value: POND.r },
   }]);
   pondU.uAurora = auroraU;                                              // (merge copies uniforms: share the aurora's one)
@@ -977,11 +984,20 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           #include <fog_vertex>
         }`,
       fragmentShader: `
-        uniform float uTime, uDay, uR, uBeatPos, uRipOn; uniform vec4 uRip[8]; uniform vec3 uHorizon, uSkyTop, uAurora, uRipple; uniform vec2 uCenter;
+        uniform float uRain; uniform float uTime, uDay, uR, uBeatPos, uRipOn; uniform vec4 uRip[8]; uniform vec3 uHorizon, uSkyTop, uAurora, uRipple; uniform vec2 uCenter;
         uniform sampler2D uHeightTex; uniform vec4 uHT;
         varying vec3 vW;
         #include <fog_pars_fragment>
         vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
+        float rainRings(vec2 p) {                                       // raindrops: small rings that open all over the water
+          float s = 0.0; vec2 g = floor(p / 0.7);
+          for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
+            vec2 c = g + vec2(float(i), float(j)); float h1 = fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453), h2 = fract(sin(dot(c, vec2(39.346, 11.135))) * 24634.634);
+            vec2 ctr = (c + vec2(h1, h2)) * 0.7; float t = fract(uTime * 0.8 + h1 * 7.0), r = t * 0.5;
+            s += smoothstep(0.045, 0.0, abs(length(p - ctr) - r)) * (1.0 - t) * step(h2, uRain);
+          }
+          return s;
+        }
         float ringAt(vec2 p, vec2 c, float phase, float rmax) {
           float t = fract(uTime * 0.11 + phase);
           float r = t * rmax, d = abs(length(p - c) - r);
@@ -1030,6 +1046,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           col += vec3(1.0) * smoothstep(0.9, 1.0, tw) * (0.12 + 0.3 * uDay);
           float rings = ringAt(p, uCenter + vec2(-1.6, 1.2), 0.0, 2.6) + ringAt(p, uCenter + vec2(2.0, -0.8), 0.37, 2.2) + ringAt(p, uCenter + vec2(0.4, -2.4), 0.71, 2.0);
           col = mix(col, lin(vec3(0.95, 0.99, 1.0)), clamp(rings, 0.0, 1.0) * 0.55 * (0.4 + 0.6 * uDay));
+          if (uRain > 0.01) col = mix(col, lin(vec3(0.95, 0.99, 1.0)), clamp(rainRings(p), 0.0, 1.0) * 0.6);
           if (uBeatPos >= 0.0 && max(uRipple.r, max(uRipple.g, uRipple.b)) > 0.002) {
             float b0 = floor(uBeatPos), fr = uBeatPos - b0;
             float br = uRipOn > 0.5 ? noteRings(p) : beatRing(p, b0, fr) + beatRing(p, b0 - 1.0, fr + 1.0) + beatRing(p, b0 - 2.0, fr + 2.0);
@@ -2192,6 +2209,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
+  let signNoFog = false;
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
   // Each closed sign carries a picture of real work beside its title (painted by paintBoard once it has loaded):
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
@@ -2907,6 +2925,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       });
     },
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
+    /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
+    setWeather(wx) {
+      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0 }; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.cover; pondU.uRain.value = w.rain;
+      const noFog = (w.fogK || 0) > 0.04; if (noFog !== signNoFog) { signNoFog = noFog; for (const m of signMats) { m.fog = !noFog; m.needsUpdate = true; } }
+    },
     setClouds(night, horizon, wx = null) {
       cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0; cloudLook.storm = wx ? wx.storm : 0;
       pondU.uHorizon.value.copy(horizon);

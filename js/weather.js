@@ -23,7 +23,7 @@ export function createWeather() {
     set(preset, instant = false) {
       const p = typeof preset === 'string' ? PRESETS[preset] : preset; if (!p) return false;
       name = typeof preset === 'string' ? preset : 'custom'; for (const k of KEYS) target[k] = p[k] ?? 0;
-      if (instant) { for (const k of KEYS) state[k] = target[k]; if (state.rain > 0.3) state.wet = 1; if (state.snow > 0.3) state.cover = 1; }
+      if (instant) { for (const k of KEYS) state[k] = target[k]; state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.snow > 0.3 ? 1 : 0; }
       return true;
     },
     /** One step: the numbers ease towards the target, the ground gets wet or snowy (and dries or melts more slowly), a lightning flash dies away. */

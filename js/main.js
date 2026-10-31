@@ -1,17 +1,17 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231037';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231037';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231242';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231242';
 import * as THREE from 'three';
-import { createWeather } from './weather.js?v=20261030231037';
-import { PAL } from './palette.js?v=20261030231037';
-import { buildWorld } from './world.js?v=20261030231037';
-import { createSky } from './sky.js?v=20261030231037';
-import { createDOF } from './dof.js?v=20261030231037';
-import { createRide } from './ride.js?v=20261030231037';
-import { createGame } from './bikegame.js?v=20261030231037';
-import { createAurora, setWarm } from './aurora.js?v=20261030231037';
-import { createAudio, pickFlicker } from './audio.js?v=20261030231037';
+import { createWeather } from './weather.js?v=20261030231242';
+import { PAL } from './palette.js?v=20261030231242';
+import { buildWorld } from './world.js?v=20261030231242';
+import { createSky } from './sky.js?v=20261030231242';
+import { createDOF } from './dof.js?v=20261030231242';
+import { createRide } from './ride.js?v=20261030231242';
+import { createGame } from './bikegame.js?v=20261030231242';
+import { createAurora, setWarm } from './aurora.js?v=20261030231242';
+import { createAudio, pickFlicker } from './audio.js?v=20261030231242';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -606,7 +606,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261030231037');
+        const mod = await import('./golf.js?v=20261030231242');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -782,6 +782,7 @@ function start() {
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
     world.setClouds(night, horizon, game?.active || golf?.active ? null : weather.state);
+    world.setWeather(game?.active || golf?.active ? null : { wet: weather.state.wet, cover: weather.state.cover, rain: weather.state.rain, fogK: sky.fogK });
     dof?.setLook(horizon, lowEnd || quality.scale < 1 || game?.active ? 0 : 1);
     const minute = Math.floor(hour * 60);
     if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes

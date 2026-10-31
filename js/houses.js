@@ -3,7 +3,7 @@
 // so the same seed always builds the same village. `mergeByMaterial` then collapses each house into a
 // handful of draw calls.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030231037';
+import { PAL } from './palette.js?v=20261030231242';
 
 // ---------------------------------------------------------------- small helpers
 
@@ -275,15 +275,27 @@ const ROOF_TEX = {
 const ROOF_TILE = { tile: 1.7, slate: 1.3, shingle: 1.5, thatch: 2.2, metal: 2.0 };
 const ROOF_BUMP = { tile: 1.3, slate: 1.1, shingle: 1.8, thatch: 1.5, metal: 0.5 };      // normal-map strength per roof kind
 const roofTexCache = new Map(), roofMatCache = new Map();
+/** How much snow lies on the roofs (0..1): one value shared by every roof material (the weather moves it). */
+export const SNOW = { value: 0 };
+const snowRoof = (m) => {                                    // snow settles on the faces that look up, and shows through the roof texture as it builds
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uSnow = SNOW;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow;')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { float upS = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)); float sn = smoothstep(0.45, 0.8, upS) * smoothstep(0.0, 0.3, uSnow);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.94, 1.0), sn * 0.94); }`);
+  };
+  return m;
+};
 export function roofMaterial(kind, hex) {
   if (typeof hex === 'undefined') { hex = kind; kind = 'tile'; }           // legacy call roofMaterial('#hex')
   const key = kind + '|' + hex;
   if (!roofMatCache.has(key)) {
     if (!roofTexCache.has(kind)) roofTexCache.set(kind, canvasTex(256, (g, S) => ROOF_TEX[kind](g, S)));
     const tex = roofTexCache.get(kind);
-    roofMatCache.set(key, new THREE.MeshStandardMaterial({
+    roofMatCache.set(key, snowRoof(new THREE.MeshStandardMaterial({
       color: hex, map: tex, normalMap: normalMapFrom(tex, 'r|' + kind, 5, kind === 'shingle' ? 0.1 : kind === 'thatch' ? 0.08 : 0.05, kind === 'shingle'), normalScale: new THREE.Vector2(ROOF_BUMP[kind], ROOF_BUMP[kind]), roughness: kind === 'metal' ? 0.38 : kind === 'slate' ? 0.55 : 0.82, metalness: kind === 'metal' ? 0.3 : 0, envMapIntensity: 0.35,
-    }));
+    })));
   }
   return roofMatCache.get(key);
 }
