@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031111646';
+import { heightAt, POND, pathX } from './world.js?v=20261031112013';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -852,6 +852,57 @@ function bunnyMesh(color) {
   for (const sx of [-1, 1]) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), m); f.scale.set(0.8, 0.6, 1.4); f.position.set(sx * 0.2, 0.08, 0.3); g.add(f); }
   return g;
 }
+// A rigged bunny: a spine (haunches, belly, chest), a neck and head with a muzzle, cheeks, whiskers and two-part ears, hind legs with thigh, shin and long foot, front legs with upper and lower arm, and a tail. Every joint is its own group, so a pose is
+// just a handful of angles; a hop blends through poses (sitting, crouch, launch, peak, fall, landing) and the idle adds breathing, a twitching nose and ears and a turning head.
+const BPOSE = {                                   // hind thigh, knee, ankle | front shoulder, elbow | body pitch (negative: nose up), hips height | neck | ear
+  rest:   { th: -0.95, kn: 1.75, an: -0.8, sh: 0.15, el: -0.2, pitch: -0.4, y: 0.27, neck: 0.4, ear: -0.12 },
+  crouch: { th: -1.2, kn: 2.05, an: -0.95, sh: 0.35, el: -0.5, pitch: 0.02, y: 0.2, neck: 0.05, ear: -0.55 },
+  launch: { th: 0.5, kn: -0.15, an: 0.95, sh: -0.95, el: 1.25, pitch: -0.38, y: 0.4, neck: -0.15, ear: -0.95 },
+  peak:   { th: 0.75, kn: -0.35, an: 1.05, sh: -0.75, el: 0.7, pitch: -0.06, y: 0.36, neck: -0.1, ear: -1.05 },
+  fall:   { th: 0.15, kn: 0.7, an: 0.5, sh: -1.05, el: 0.25, pitch: 0.22, y: 0.36, neck: 0.12, ear: -0.85 },
+  land:   { th: -0.75, kn: 1.4, an: -0.5, sh: -0.25, el: -0.1, pitch: 0.12, y: 0.23, neck: 0.25, ear: -0.25 },
+};
+const HOP_SEQ = [[0, 'rest'], [0.14, 'crouch'], [0.28, 'launch'], [0.5, 'peak'], [0.72, 'fall'], [0.86, 'land'], [1, 'rest']];
+const smooth01 = (t) => t * t * (3 - 2 * t);
+function posePoint(u) {                           // the blended pose at hop progress u (0..1)
+  let i = 0; while (i < HOP_SEQ.length - 2 && u > HOP_SEQ[i + 1][0]) i++; const [u0, a] = HOP_SEQ[i], [u1, b] = HOP_SEQ[i + 1], t = smooth01(Math.min(1, Math.max(0, (u - u0) / (u1 - u0)))), A = BPOSE[a], B = BPOSE[b], o = {};
+  for (const k in A) o[k] = A[k] + (B[k] - A[k]) * t; return o;
+}
+function bunnyRig(color, bellyColor = '#f6f0e8') {
+  const fur = lam(color), belly = lam(bellyColor), pink = lam('#f0a8b8'), dark = lam('#141012'), root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const ell = (par, r, sx, sy, sz, m, x, y, z) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), m); o.scale.set(sx, sy, sz); o.position.set(x, y, z); o.castShadow = true; par.add(o); return o; };
+  const jt = (par, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); par.add(g); return g; };
+  ell(body, 0.3, 0.95, 0.9, 1.15, fur, 0, 0, 0); ell(body, 0.26, 0.9, 0.78, 1.25, belly, 0, -0.04, 0.16); ell(body, 0.24, 0.9, 0.95, 1.1, fur, 0, 0.02, 0.32);
+  ell(body, 0.1, 1, 1, 1, lam('#ffffff'), 0, 0.06, -0.36);                                                                       // the tail
+  const neck = jt(body, 0, 0.1, 0.5), head = ell(neck, 0.2, 0.9, 0.95, 1.05, fur, 0, 0.04, 0.05); head.castShadow = true;
+  ell(neck, 0.1, 0.9, 0.75, 1, belly, 0, -0.03, 0.2); ell(neck, 0.03, 1, 0.8, 1, pink, 0, 0.0, 0.3);
+  const muz = neck.children[neck.children.length - 2];
+  const whisk = []; for (const sx of [-1, 1]) {
+    ell(neck, 0.09, 0.9, 0.9, 0.9, belly, sx * 0.1, -0.05, 0.14); ell(neck, 0.035, 1, 1.15, 0.6, dark, sx * 0.12, 0.06, 0.16); ell(neck, 0.012, 1, 1, 1, lam('#ffffff'), sx * 0.125, 0.075, 0.185);
+    for (let k = 0; k < 3; k++) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.004, 0.004), lam('#e8e4de')); w.position.set(sx * 0.16, -0.02 - k * 0.012, 0.26); w.rotation.set(0, sx * (0.3 + k * 0.15), (k - 1) * 0.12 * sx); neck.add(w); whisk.push(w); }
+  }
+  const ears = []; for (const sx of [-1, 1]) {
+    const base = jt(neck, sx * 0.08, 0.2, -0.02); base.rotation.z = -sx * 0.18; ell(base, 0.07, 0.7, 2.4, 0.32, fur, 0, 0.12, 0); ell(base, 0.045, 0.6, 2.1, 0.2, pink, 0, 0.12, 0.03);
+    const tip = jt(base, 0, 0.26, 0); ell(tip, 0.06, 0.62, 2.2, 0.3, fur, 0, 0.09, 0); ell(tip, 0.035, 0.5, 1.8, 0.2, pink, 0, 0.09, 0.025); ears.push({ base, tip, sx });
+  }
+  const hind = [], fore = []; for (const sx of [-1, 1]) {
+    const th = jt(body, sx * 0.2, -0.02, -0.05); ell(th, 0.2, 0.62, 1.15, 1.05, fur, 0, -0.1, 0.0); const kn = jt(th, 0, -0.2, 0.06); const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.2, 3, 6), fur); shin.position.set(0, -0.1, 0); kn.add(shin);
+    const an = jt(kn, 0, -0.22, 0); ell(an, 0.05, 0.9, 0.55, 3.0, belly, 0, -0.02, 0.1); hind.push({ th, kn, an });
+    const sh = jt(body, sx * 0.14, -0.04, 0.36); const up = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.1, 3, 6), fur); up.position.y = -0.08; sh.add(up); const el = jt(sh, 0, -0.16, 0); const lo = new THREE.Mesh(new THREE.CapsuleGeometry(0.034, 0.09, 3, 6), fur); lo.position.y = -0.07; el.add(lo); ell(el, 0.045, 1, 0.6, 1.5, belly, 0, -0.15, 0.03); fore.push({ sh, el });
+  }
+  const rig = { root, body, neck, ears, hind, fore, muz, look: 0, clock: Math.random() * 9, twitch: 0 };
+  rig.pose = (p, dt = 0, idle = 1) => {
+    rig.clock += dt; const c = rig.clock, br = idle * Math.sin(c * 2.6) * 0.012;
+    body.position.y = p.y; body.rotation.x = p.pitch; body.scale.set(1 + br * 0.5, 1 + br, 1);
+    for (const h of hind) { h.th.rotation.x = p.th; h.kn.rotation.x = p.kn; h.an.rotation.x = p.an; }
+    for (const f of fore) { f.sh.rotation.x = p.sh; f.el.rotation.x = p.el; }
+    neck.rotation.x = p.neck + 0.05 * Math.sin(c * 1.3) * idle; neck.rotation.y = idle * (Math.sin(c * 0.45) * 0.35 * Math.max(0, Math.sin(c * 0.17 + 1)));
+    for (const e of ears) { const fl = idle * (rig.twitch > 0 ? Math.sin(rig.twitch * 40) * 0.25 * e.sx : 0); e.base.rotation.x = p.ear * 0.7 + fl; e.tip.rotation.x = p.ear * 0.5 + Math.sin(c * 11 + e.sx) * 0.05 * (1 - idle * 0.6); }
+    rig.twitch = Math.max(0, rig.twitch - dt); if (idle && Math.random() < dt * 0.35) rig.twitch = 0.35;
+    muz.scale.set(0.9, 0.75 + idle * 0.06 * Math.sin(c * 14), 1);                                                    // (the nose twitches)
+  };
+  rig.pose(BPOSE.rest); return rig;
+}
 function makeEasterHunt(ctx) {
   const root = new THREE.Group(), r = rng(808), EGGS = 8; ctx.scene.add(root);
   const eg = eggGeo(1), eggs = [], used = [], ox = [];
@@ -862,15 +913,15 @@ function makeEasterHunt(ctx) {
     if (Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) > 0.8) continue; spots.push([x, z]);
   }
   const pairs = [['#ff7eb6', '#fff2a8'], ['#7ec8ff', '#ffffff'], ['#9be37a', '#ffe08a'], ['#c49bff', '#ffb3d9'], ['#ffb347', '#ffffff'], ['#ff6f6f', '#ffe0a8'], ['#5fd6c4', '#fff2a8'], ['#f7e26b', '#ff9ac0']];
-  spots.forEach(([x, z], i) => { const m = new THREE.Mesh(bands(...pairs[i % pairs.length]), mat); const s = 0.52; m.scale.setScalar(s); m.position.set(x, heightAt(x, z) + 0.3 * s * 0.9, z); m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5); m.castShadow = true; root.add(m); eggs.push({ m, x, y: m.position.y, z, found: false, t: 0 }); });
-  const glint = bulbs(spots.map(([x, z]) => [x, heightAt(x, z) + 0.45, z]), PASTELS, 0.38); root.add(glint);                       // (a faint twinkle over each, so they can be found)
+  spots.forEach(([x, z], i) => { const m = new THREE.Mesh(bands(...pairs[i % pairs.length]), mat); const s = 1.04; m.scale.setScalar(s); m.position.set(x, heightAt(x, z) + 0.3 * s * 0.9, z); m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5); m.castShadow = true; root.add(m); eggs.push({ m, x, y: m.position.y, z, found: false, t: 0 }); });
+  const glint = bulbs(spots.map(([x, z]) => [x, heightAt(x, z) + 0.9, z]), PASTELS, 0.5); root.add(glint);                       // (a faint twinkle over each, so they can be found)
   // the chip: "Eggs found 2 of 8"
   const chip = document.createElement('div'); chip.className = 'egg-chip'; chip.setAttribute('aria-live', 'polite'); document.body.appendChild(chip); let found = 0, chipT = 0;
   const say = (t, hold = 4) => { chip.textContent = t; chip.classList.add('on'); chipT = hold; };
   const total = () => eggs.length;
   function click(e) {
     if (!ctx.camera || !ctx.canvas || eggs.every((q) => q.found) || root.visible === false) return;
-    const rc = ctx.canvas.getBoundingClientRect(), v = new THREE.Vector3(); let best = null, bd = 34;
+    const rc = ctx.canvas.getBoundingClientRect(), v = new THREE.Vector3(); let best = null, bd = 44;
     for (const q of eggs) { if (q.found) continue; v.set(q.x, q.y, q.z).project(ctx.camera); if (v.z > 1 || v.z < -1) continue; const px = (v.x * 0.5 + 0.5) * rc.width + rc.left, py = (-v.y * 0.5 + 0.5) * rc.height + rc.top, d = Math.hypot(px - e.clientX, py - e.clientY); if (d < bd) { bd = d; best = q; } }
     if (best) { best.found = true; best.t = 0; found++; ctx.audio?.eggFind?.(found); say(found >= total() ? 'You found every egg!' : `Eggs found: ${found} of ${total()}`, found >= total() ? 7 : 4); if (found >= total()) ctx.audio?.eggFind?.(9); }
   }
@@ -878,16 +929,28 @@ function makeEasterHunt(ctx) {
   let hint = 25;
   // bunnies hopping about
   const bun = [], bcol = ['#f2ede6', '#c9a27a', '#b8b4b0'], home = ctx.freeSpot(5, 17) || { x: 12, z: -20 };
-  for (let i = 0; i < (ctx.low ? 2 : 3); i++) { const b = bunnyMesh(bcol[i % 3]); b.scale.setScalar(0.8); const x = home.x + (r() - 0.5) * 6, z = home.z + (r() - 0.5) * 6; b.position.set(x, heightAt(x, z), z); root.add(b); bun.push({ b, tx: x, tz: z, x, z, t: r() * 2, hop: -1, from: [x, z] }); }
+  for (let i = 0; i < (ctx.low ? 2 : 3); i++) { const rig = bunnyRig(bcol[i % 3], i === 1 ? '#e8d8c0' : '#f6f0e8'), b = rig.root; b.scale.setScalar(1.15); const x = home.x + (r() - 0.5) * 6, z = home.z + (r() - 0.5) * 6; b.position.set(x, heightAt(x, z), z); root.add(b); bun.push({ rig, b, tx: x, tz: z, x, z, t: r() * 2, hop: -1, from: [x, z], yaw: r() * 6.28, dx: 0, dz: 1 }); }
   return {
     update(dt, s) {
       root.visible = !s.hide; chip.style.display = s.hide ? 'none' : '';
-      for (const q of eggs) { if (!q.found) continue; q.t += dt; const u = Math.min(1, q.t / 0.7); q.m.scale.setScalar(0.52 * (1 + 1.2 * Math.sin(u * Math.PI) * (1 - u)) * (1 - u * u)); q.m.position.y = q.y + u * 0.9; q.m.rotation.y += dt * 8; q.m.visible = u < 1; }
+      for (const q of eggs) { if (!q.found) continue; q.t += dt; const u = Math.min(1, q.t / 0.7); q.m.scale.setScalar(1.04 * (1 + 1.2 * Math.sin(u * Math.PI) * (1 - u)) * (1 - u * u)); q.m.position.y = q.y + u * 1.6; q.m.rotation.y += dt * 8; q.m.visible = u < 1; }
       if (chipT > 0) { chipT -= dt; if (chipT <= 0) chip.classList.remove('on'); } else if (found === 0 && !s.hide && (hint -= dt) <= 0) { say(`Eggs are hidden in the grass: find ${total()}`, 6); hint = 1e9; }
-      const bunnyGlint = glint.geometry.attributes.position; void bunnyGlint;
       for (const k of bun) {
-        if (k.hop >= 0) { k.hop += dt / 0.42; const u = Math.min(1, k.hop), x = k.from[0] + (k.tx - k.from[0]) * u, z = k.from[1] + (k.tz - k.from[1]) * u; k.x = x; k.z = z; k.b.position.set(x, heightAt(x, z) + Math.sin(u * Math.PI) * 0.55, z); k.b.rotation.x = -Math.cos(u * Math.PI) * 0.35; if (u >= 1) { k.hop = -1; k.t = r() < 0.4 ? 0.1 : 0.8 + r() * 2.5; k.b.rotation.x = 0; k.n = (k.n || 0) - 1; } }
-        else { k.t -= dt; if (k.t <= 0) { if (!(k.n > 0)) { k.n = 2 + Math.floor(r() * 3); const a = r() * 6.28, d = 2 + r() * 3.5; k.dx = Math.cos(a); k.dz = Math.sin(a); k.dd = d; } let nx = k.x + k.dx * 1.2, nz = k.z + k.dz * 1.2; if (Math.hypot(nx - home.x, nz - home.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { k.dx = home.x - k.x; const l = Math.hypot(k.dx, home.z - k.z) || 1; k.dx /= l; k.dz = (home.z - k.z) / l; nx = k.x + k.dx * 1.2; nz = k.z + k.dz * 1.2; } k.from = [k.x, k.z]; k.tx = nx; k.tz = nz; k.hop = 0; k.b.rotation.y = Math.atan2(k.dx, k.dz); } }
+        const rg = k.rig;
+        if (k.hop >= 0) {                                                  // a hop: crouch, push off, stretch through the air, land on the front paws, settle
+          k.hop += dt / 0.8; const u = Math.min(1, k.hop), tr = smooth01(Math.min(1, Math.max(0, (u - 0.26) / 0.5))), x = k.from[0] + (k.tx - k.from[0]) * tr, z = k.from[1] + (k.tz - k.from[1]) * tr, air = Math.sin(Math.PI * Math.min(1, Math.max(0, (u - 0.28) / 0.46)));
+          k.x = x; k.z = z; k.b.position.set(x, heightAt(x, z) + air * 0.5, z); rg.pose(posePoint(u), dt, 0);
+          if (u >= 1) { k.hop = -1; k.t = r() < 0.4 ? 0.15 : 0.8 + r() * 2.6; k.n = (k.n || 0) - 1; }
+        } else {
+          rg.pose(BPOSE.rest, dt, 1); k.t -= dt;
+          if (k.t <= 0) {
+            if (!(k.n > 0)) { k.n = 2 + Math.floor(r() * 3); const a = r() * 6.28; k.dx = Math.cos(a); k.dz = Math.sin(a); }
+            let nx = k.x + k.dx * 1.5, nz = k.z + k.dz * 1.5;
+            if (Math.hypot(nx - home.x, nz - home.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { const l = Math.hypot(home.x - k.x, home.z - k.z) || 1; k.dx = (home.x - k.x) / l; k.dz = (home.z - k.z) / l; nx = k.x + k.dx * 1.5; nz = k.z + k.dz * 1.5; }
+            k.from = [k.x, k.z]; k.tx = nx; k.tz = nz; k.hop = 0;
+          }
+        }
+        let dy = Math.atan2(k.dx, k.dz) - k.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); k.yaw += dy * Math.min(1, dt * (k.hop >= 0 ? 10 : 3)); k.b.rotation.y = k.yaw;
       }
     },
     dispose() { ctx.canvas?.removeEventListener('click', click); chip.remove(); ctx.scene.remove(root); eg.dispose(); mat.dispose(); glint.geometry.dispose(); },
