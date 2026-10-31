@@ -5,20 +5,21 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261029223539';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261029223539';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029223539';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261029223539';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261029223539';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261029223539';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261029223539';
-import { createNeon } from './golfneon.js?v=20261029223539';
-import { createFx } from './golffx.js?v=20261029223539';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261029223539';
-import { buildDecor } from './golfdecor.js?v=20261029223539';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261029223539';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261029223539';
-import { createTable } from './pinball.js?v=20261029223539';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030185113';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030185113';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030185113';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030185113';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030185113';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030185113';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261030185113';
+import { createNeon } from './golfneon.js?v=20261030185113';
+import { createFx } from './golffx.js?v=20261030185113';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261030185113';
+import { buildDecor } from './golfdecor.js?v=20261030185113';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030185113';
+import { isLow } from './golfquality.js?v=20261030185113';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030185113';
+import { createTable } from './pinball.js?v=20261030185113';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -30,12 +31,15 @@ const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
+const _rq = new THREE.Quaternion(), _ra = new THREE.Vector3();
+/** Roll a ball mesh as it travels: about the horizontal axis at right angles to its velocity (up x v), in its parent's frame, so it turns forward whichever way the hole faces or leans. `d` is the distance travelled. */
+function rollBall(mesh, vx, vz, d) { _ra.set(vz, 0, -vx); const l = _ra.length(); if (l < 1e-6) return; _ra.multiplyScalar(1 / l); _rq.setFromAxisAngle(_ra, d / BALL_R); mesh.quaternion.premultiply(_rq); }
 export function createGolf(scene, camera, renderer, world, { audio = null, reduceMotion = false, sky = null, lowEnd = false } = {}) {
   const st = { mode: 'off', t: 0, hole: 0, holeT: 0, strokes: 0, scores: [], par: [], order: [], seed: 0, year: 0, month: 0, rollT: 0, idle: 0, hud: { hole: '', strokes: -1, pills: '' }, lastX: 0, lastZ: 0, multi: false, safety: false, cupScale: 1 };
   const fx = { homing: 0, ghost: 0, bounce: 0, turbo: 0, freeze: 0, mega: 0, hamster: 0 };      // seconds left of each power-up
   let holes = [], vises = [], decors = [], sites = [], Ys = [], fxs = null, lamps = null, lampSpotsAll = [], lightHome = [], shown = [];         // every hole of the course, its meshes, where it lies (x, z, heading) and the height of its lawn
   let table = null, tableFrame = null, scenery = null, chals = [], cs = newChalState(), neon = null, neonK = 0, ghostOn = false, ghostVis = null, dbgCam = null, holeGroup = null, vis = null, hole = null, balls = [], drag = null, dots = null, hamster = null, sinkT = 0, ready = false;
-  const ballMeshes = [], ballShadows = [];
+  const ballMeshes = [], ballShadows = []; let dimples = null;
   const onTable = () => st.hole === TABLE_HOLE && !!table?.group;
   const ctx = newCtx(), ev = { wall: 0, post: 0, holed: false, splash: false, fx: 0 };
   const up0 = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
@@ -93,9 +97,23 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   }
 
   // ---------- the balls and the aiming dots (they move from hole to hole) ----------
+  function dimpleTexture() {                               // a golf ball's dimples as a normal map: round dents placed evenly over the sphere itself (not over the flat texture), so every one is the same size and a true circle wherever it lies
+    const W = 768, H = 384, N = 100, R = 0.162, pts = [], ga = Math.PI * (3 - Math.sqrt(5)), cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
+    for (let i = 0; i < N; i++) { const y = 1 - (2 * (i + 0.5)) / N, r = Math.sqrt(1 - y * y), a = ga * i; pts.push([Math.cos(a) * r, y, Math.sin(a) * r]); }       // (a Fibonacci lattice: evenly spaced points)
+    const hgt = new Float32Array(W * H);
+    for (let py = 0; py < H; py++) { const lat = (0.5 - (py + 0.5) / H) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
+      for (let px = 0; px < W; px++) { const lon = ((px + 0.5) / W) * 6.2832, dx = cl * Math.cos(lon), dz = cl * Math.sin(lon); let best = -1; for (let k = 0; k < N; k++) { const p = pts[k], d = p[0] * dx + p[1] * sl + p[2] * dz; if (d > best) best = d; }
+        const ang = Math.acos(Math.min(1, best)); hgt[py * W + px] = ang < R ? 1 - 0.35 * (1 - (ang / R) * (ang / R)) : 1; } }
+    const out = c.createImageData(W, H), hAt = (x, y) => hgt[Math.min(H - 1, Math.max(0, y)) * W + ((x + W) % W)];
+    for (let y = 0; y < H; y++) { const lat = (0.5 - (y + 0.5) / H) * Math.PI, k = 1 / Math.max(0.2, Math.cos(lat)), du = 6.2832 / W, dv = Math.PI / H;       // (a step east is shorter nearer the poles: the slope is worked out on the sphere's real surface)
+      for (let x = 0; x < W; x++) { const sx = ((hAt(x + 1, y) - hAt(x - 1, y)) / (2 * du)) * k, sy = (hAt(x, y + 1) - hAt(x, y - 1)) / (2 * dv), st = 0.45, nx = -sx * st, ny = sy * st, l = Math.hypot(nx, ny, 1), o = (y * W + x) * 4; out.data[o] = (nx / l * 0.5 + 0.5) * 255; out.data[o + 1] = (ny / l * 0.5 + 0.5) * 255; out.data[o + 2] = (1 / l * 0.5 + 0.5) * 255; out.data[o + 3] = 255; } }
+    c.putImageData(out, 0, 0);
+    const t = new THREE.CanvasTexture(cv); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+  }
   function buildBits() {
     for (let i = 0; i < 5; i++) {                           // the balls (more than one only with the multi-ball power-up) and their shadows
-      const m = new THREE.Mesh(G.ball, M.ball.clone()); m.material.color.set(BALL_TINTS[i]); m.userData.mat = m.material; m.castShadow = true; m.visible = false; ballMeshes.push(m);
+      const m = new THREE.Mesh(G.ball, M.ball.clone()); m.material.color.set(BALL_TINTS[i]); if (!isLow()) { dimples ||= dimpleTexture(); m.material.normalMap = dimples; m.material.normalScale.set(0.45, 0.45); }       // (the mini-golf ball is dimpled; the pinball ball is a smooth steel one, see pinball.js)
+      m.userData.mat = m.material; m.castShadow = true; m.visible = false; ballMeshes.push(m);
       const s = new THREE.Mesh(G.disc, M.shadow); s.scale.set(BALL_R * 1.1, 1, BALL_R * 1.1); s.visible = false; ballShadows.push(s);
     }
     dots = new THREE.InstancedMesh(G.dot, M.dot, 16); dots.count = 0; dots.frustumCulled = false;
@@ -249,7 +267,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     const bb = balls[0]; if (!bb.holed && !bb.sunk) { stepBall(bb, hole, ctx, sdt, ev); ctx.t += sdt; st.holeT = ctx.t; }
     if (ev.holed) { const m = ballMeshes[0]; m.visible = false; audio?.golf?.('cup'); }
     if (ev.splash) { if (fxs && !ev.fall) { const p = holeGroup.localToWorld(new THREE.Vector3(bb.x, 0.1, bb.z)); fxs.burst('splash', p.x, p.y, p.z); } }
-    placeBalls(); const sp = Math.hypot(bb.vx, bb.vz); if (sp > 0.05) { tmpV.set(-bb.vz, 0, bb.vx).normalize(); ballMeshes[0].rotateOnWorldAxis(tmpV, (sp * sdt) / BALL_R); }
+    placeBalls(); const sp = Math.hypot(bb.vx, bb.vz); if (sp > 0.05) { rollBall(ballMeshes[0], bb.vx, bb.vz, sp * sdt); }
   }
   function shareResult(btn) {
     const text = `${st.summary} ${location.origin}${location.pathname}`, done = () => { if (btn) { const o = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = o; }, 1400); } };
@@ -471,7 +489,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261029223539', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261030185113', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -590,7 +608,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
             if (ev.splash) { st.fell = ev.fall; audio?.golf?.(ev.fall ? 'wall' : 'splash'); if (fxs && !ev.fall) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.1, b.z)); fxs.burst('splash', p.x, p.y, p.z); } if (balls.length > 1) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } continue; }
             if (ev.holed) { holedBall = b; continue; }
             if (!b.rest) live++;
-            const sp = Math.hypot(b.vx, b.vz); if (sp > 0.05) { tmpV.set(-b.vz, 0, b.vx).normalize(); ballMeshes[i].rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); }
+            const sp = Math.hypot(b.vx, b.vz); if (sp > 0.05) { rollBall(ballMeshes[i], b.vx, b.vz, sp * dt); }
           }
           collect();
           if (holedBall) { cs.power = Object.keys(fx).some((k) => fx[k] > 0); balls = [holedBall]; hideExtraBalls(); st.mode = 'sink'; sinkT = 0; fx.hamster = 0; }
@@ -605,7 +623,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
           }
         } else if (st.mode === 'aim') { stepBall(balls[0], hole, ctx, dt, ev); collect(); }
         if (st.mode === 'sink') {
-          sinkT += dt; const s = clamp01(sinkT / 0.5), m = ballMeshes[0]; m.scale.setScalar(1 - 0.75 * s); m.position.set(hole.cup.x, 0.2 - 1.2 * s + BALL_R * (1 - s), hole.cup.z); m.visible = true; hamster.visible = false;
+          sinkT += dt; const s = clamp01(sinkT / 0.5), m = ballMeshes[0], hb = balls[0], e = ease(clamp01(s * 2.2)), sx = hb.capX ?? hole.cup.x, sz = hb.capZ ?? hole.cup.z; m.scale.setScalar(1 - 0.75 * s); m.position.set(sx + (hole.cup.x - sx) * e, 0.2 - 1.2 * s + BALL_R * (1 - s), sz + (hole.cup.z - sz) * e);       // (the ball drops from where it fell in, not from the middle) m.visible = true; hamster.visible = false;
           if (s >= 1) { m.visible = false; ballShadows[0].visible = false; finishHole(); }
         } else if (st.mode === 'done') { if (st.t > 1.7) beginTravel(st.hole + 1); }
         else { placeBalls(); ballMeshes[0].scale.setScalar(1); }

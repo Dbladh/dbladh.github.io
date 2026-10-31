@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261029223539';
-import { toWorld, YAWS } from './golfsites.js?v=20261029223539';
-import { M, G } from './golfvis.js?v=20261029223539';
-import { isLow } from './golfquality.js?v=20261029223539';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261029223539';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030185113';
+import { toWorld, YAWS } from './golfsites.js?v=20261030185113';
+import { M, G } from './golfvis.js?v=20261030185113';
+import { isLow } from './golfquality.js?v=20261030185113';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261030185113';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const hitAmt = (v) => 0.7 + 2.5 * Math.pow(Math.max(0, Math.min(1, (v - 0.8) / 9)), 0.85);       // (how hard the ball hit, 0.2 to 1)
@@ -14,6 +14,9 @@ const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) { /* (no haptics
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+const _rq = new THREE.Quaternion(), _ra = new THREE.Vector3();
+/** Roll a ball mesh as it travels: about the horizontal axis at right angles to its velocity (up x v), in its parent's frame, so it turns forward whichever way the hole faces or leans. `d` is the distance travelled. */
+function rollBall(mesh, vx, vz, d) { _ra.set(vz, 0, -vx); const l = _ra.length(); if (l < 1e-6) return; _ra.multiplyScalar(1 / l); _rq.setFromAxisAngle(_ra, d / BALL_R); mesh.quaternion.premultiply(_rq); }
 /** The pinball table as a controller: given a prepared hole (see prepareTable) and its visual group, it adds the playfield parts, runs the ball, flippers, lamps and scoring events, and poses the camera.
  *  The host (the mini-golf's hole 9) owns the hole, its ground and its HUD frame; `env` supplies the page: { scene, camera, renderer, world, audio, hud, say, els }. */
 export function createTable(env) {
@@ -400,7 +403,7 @@ export function createTable(env) {
       ballMesh.scale.setScalar(1 - 0.85 * down); ballMesh.position.set(sp.x, hillH(hole, sp.x, sp.z) + 0.03 + BALL_R * (1 - 0.85 * down) - 0.5 * down, sp.z); stepFlippers(dt);
       if (s >= 1) { ball.x = sp.x; ball.z = sp.z; ball.vx = ball.vz = 0; ball.rest = true; ball.still = 0; ball.air = false; ball.y = hillH(hole, sp.x, sp.z); st.locked = sp; st.mode = 'aim'; ballMesh.scale.setScalar(1); }
     } else stepFlippers(dt);
-    if (st.mode !== 'sink' && st.mode !== 'card' && st.mode !== 'lock') { place(); ballMesh.scale.setScalar(1); const sp = Math.hypot(ball.vx, ball.vz); if (sp > 0.05) { tmpV.set(-ball.vz, 0, ball.vx).normalize(); ballMesh.rotateOnWorldAxis(tmpV, (sp * dt) / BALL_R); } }
+    if (st.mode !== 'sink' && st.mode !== 'card' && st.mode !== 'lock') { place(); ballMesh.scale.setScalar(1); const sp = Math.hypot(ball.vx, ball.vz); if (sp > 0.05) { rollBall(ballMesh, ball.vx, ball.vz, sp * dt); } }
     updateTrail(dt); spinMesh.rotation.y = -spin.a; vis.update(ctx.t, ctx.t, dt, st); updatePulses(dt); updateRolls(); updateIdleHint(dt); updateFlash(dt); updateCelebration(dt); updateTargets(dt); updateSpots(dt); updateCover(dt); updateGuides(dt); updateHud();
   }
   /** The camera for this frame (behind the ball while aiming, high above while in play, with the shake of a nudge), and the table's lean. */

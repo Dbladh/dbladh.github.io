@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261029223539';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030185113';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -324,11 +324,18 @@ export function stepBall(b, hole, ctx, dt, ev) {
     }
     // water
     if (!ghost && !b.air) for (const p of hole.ponds) if (dist2(b, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, b.x, b.z)) { b.sunk = true; ev.splash = true; return; }
-    // the cup: it takes a ball that gets there slowly enough, and gently pulls in one that is close and slow
+    // the cup: a ball that rolls over it is not simply caught. Its speed must be low enough for where it crosses (right over the middle it can drop at a brisk roll; near the rim it must be almost still), the rim
+    // dips it towards the middle (a ball that does not drop is curved round the hole, may circle it, and can lip out), and a ball that has all but stopped inside the rim falls in. The pinball table keeps the old, generous cup.
     const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz), sp2 = Math.sqrt(b.vx * b.vx + b.vz * b.vz), cr = ctx.cupR, big = cr / CUP_R;
     if (b.air) continue;
-    if (cd < cr && sp2 < (ctx.capV || 7.5) * Math.sqrt(big)) { b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
-    if (cd < 1.15 * big && sp2 < 4.5 * big) { const k = 7 * (1 - cd / (1.15 * big)) * h / (cd || 1); b.vx += cx * k; b.vz += cz * k; }
+    if (ctx.capV) {
+      if (cd < cr && sp2 < ctx.capV * Math.sqrt(big)) { b.capX = b.x; b.capZ = b.z; b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
+      if (cd < 1.15 * big && sp2 < 4.5 * big) { const k = 7 * (1 - cd / (1.15 * big)) * h / (cd || 1); b.vx += cx * k; b.vz += cz * k; }
+    } else if (cd < cr) {
+      const f = cd / cr, vcap = 4.0 * Math.pow(Math.max(0, 1 - f * f), 1.2) * Math.sqrt(big);
+      if (sp2 < vcap || sp2 < 0.25) { b.capX = b.x; b.capZ = b.z; b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
+      const pull = (7 * f * h) / (cd || 1); b.vx += cx * pull; b.vz += cz * pull;
+    }
   }
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);
   _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
