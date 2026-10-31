@@ -5,22 +5,22 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030220526';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030220526';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030220526';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030220526';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030220526';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030220526';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261030220526';
-import { createTrail } from './golftrail.js?v=20261030220526';
-import { createNeon } from './golfneon.js?v=20261030220526';
-import { createFx } from './golffx.js?v=20261030220526';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261030220526';
-import { buildDecor } from './golfdecor.js?v=20261030220526';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030220526';
-import { isLow } from './golfquality.js?v=20261030220526';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030220526';
-import { createTable } from './pinball.js?v=20261030220526';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030220955';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030220955';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030220955';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030220955';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030220955';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030220955';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261030220955';
+import { createTrail } from './golftrail.js?v=20261030220955';
+import { createNeon } from './golfneon.js?v=20261030220955';
+import { createFx } from './golffx.js?v=20261030220955';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261030220955';
+import { buildDecor } from './golfdecor.js?v=20261030220955';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030220955';
+import { isLow } from './golfquality.js?v=20261030220955';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030220955';
+import { createTable } from './pinball.js?v=20261030220955';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -333,7 +333,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function tickPowers(dt) {
     for (const k in fx) if (fx[k] > 0) { fx[k] = Math.max(0, fx[k] - dt); if (fx[k] === 0 && k === 'hamster' && st.mode === 'hamster') { st.mode = 'roll'; st.rollT = 0; } }
     ctx.homing = fx.homing > 0; ctx.ghost = fx.ghost > 0; ctx.bounce = fx.bounce > 0; ctx.turbo = fx.turbo > 0; ctx.drive = fx.hamster > 0; ctx.cupR = CUP_R * (fx.mega > 0 ? 2.6 : 1);
-    st.cupScale += ((fx.mega > 0 ? 2.6 : 1) - st.cupScale) * Math.min(1, dt * 6); if (vis) vis.cupMesh.scale.set(CUP_R * 0.92 * st.cupScale, 1, CUP_R * 0.92 * st.cupScale);
+    st.cupScale += ((fx.mega > 0 ? 2.6 : 1) - st.cupScale) * Math.min(1, dt * 6); if (vis) vis.cupMesh.scale.set(CUP_R * 0.92 * st.cupScale, 1, CUP_R * 0.92 * st.cupScale)
+    if (vis) { const mo = vis.cupMesh.userData.mouth; if (mo) { const k = clamp01((st.cupScale - 1.04) / 0.5); mo.visible = k > 0.01; mo.material.opacity = k; } }
   }
 
   // ---------- aiming ----------
@@ -491,7 +492,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261030220526', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261030220955', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });

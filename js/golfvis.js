@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030220526';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030220526';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261030220526';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030220526';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030220526';
-import { isLow } from './golfquality.js?v=20261030220526';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030220955';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030220955';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261030220955';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030220955';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030220955';
+import { isLow } from './golfquality.js?v=20261030220955';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -192,6 +192,11 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (let r = 0; r < RING.length - 1; r++) for (let k = 0; k < SEG; k++) { const a0 = r * SEG + k, b0 = r * SEG + ((k + 1) % SEG), a1 = (r + 1) * SEG + k, b1 = (r + 1) * SEG + ((k + 1) % SEG); pi.push(a0, b0, a1, b0, b1, a1); }
     const pg = track(new THREE.BufferGeometry()); pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2)); pg.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3)); pg.setIndex(pi); pg.computeVertexNormals();
     const patch = new THREE.Mesh(pg, GROUND); patch.receiveShadow = true; g.add(patch);
+    { // the mouth the mega cup opens in the green: the hole is only cut as wide as the normal cup, so when the cup grows a dark disc with a pale lip is laid over the turf (it fades in as the cup widens)
+      const cv = document.createElement('canvas'); cv.width = cv.height = 128; const cx2 = cv.getContext('2d'), gr = cx2.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gr.addColorStop(0, '#030303'); gr.addColorStop(0.55, '#0d0c0a'); gr.addColorStop(0.82, '#2e2b24'); gr.addColorStop(0.93, '#9c978a'); gr.addColorStop(1, '#e4e0d4'); cx2.fillStyle = gr; cx2.beginPath(); cx2.arc(64, 64, 64, 0, 6.2832); cx2.fill();
+      const mt = new THREE.CanvasTexture(cv), mm = new THREE.MeshBasicMaterial({ map: mt, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); disposables.push(mt, mm);
+      const mouth = new THREE.Mesh(G.disc, mm); mouth.position.y = 0.05; mouth.visible = false; mouth.renderOrder = 3; cupMesh.add(mouth); cupMesh.userData.mouth = mouth; }
     const rim = new THREE.Mesh(track(new THREE.TorusGeometry(1.0, 0.08, 8, 32)), metal('#d5dbe3')); rim.rotation.x = Math.PI / 2; rim.position.y = 0.05; cupMesh.add(rim);
     { // the shaft: a pale plastic cup that fades to dark with depth, so looking down the hole you see its walls going down to a floor
       const wg = track(new THREE.CylinderGeometry(1.0, 0.94, 1.3, 32, 10, true)), wp = wg.attributes.position, wc = new Float32Array(wp.count * 3), top = new THREE.Color('#e4e0d4'), bot = new THREE.Color('#15140f'), cc = new THREE.Color();
