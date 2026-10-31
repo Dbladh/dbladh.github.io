@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031104821';
+import { heightAt, POND, pathX } from './world.js?v=20261031104851';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -524,7 +524,7 @@ function makeHauntings(ctx) {
   const bm = new THREE.SpriteMaterial({ map: batTex(), transparent: true, depthTest: false, depthWrite: false, fog: false, opacity: 0 }), bats = [];
   for (let i = 0; i < (ctx.low ? 0 : 5); i++) { const s = new THREE.Sprite(bm.clone()); s.renderOrder = -6; s.visible = false; ctx.skyScene.add(s); bats.push({ s, d: 0 }); }
   const gm = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: ghostTex() }, uT: { value: 0 }, uOp: { value: 0 }, uLean: { value: 0 }, uSize: { value: new THREE.Vector2(3.6, 6.3) } },
+    transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: ghostTex() }, uT: { value: 0 }, uOp: { value: 0 }, uLean: { value: 0 }, uSize: { value: new THREE.Vector2(2.5, 4.4) } },
     vertexShader: `uniform float uT, uLean; uniform vec2 uSize; varying vec2 vUv; varying float vH;
       void main() { vec2 p = position.xy; float h = 0.5 - p.y; vH = h; float w = h * h;
         // the cloth drifts as if under water: slow, wide, lagging waves that grow towards the hem, a long swell through the whole body, and sleeves that billow up and down
@@ -537,7 +537,7 @@ function makeHauntings(ctx) {
         vec3 c = mix(t.rgb, vec3(0.45, 1.0, 0.66) * (0.35 + l), 0.55); c += vec3(0.05, 0.4, 0.18) * (1.0 - vH) * 0.5;       // a cold green cast, and the head glowing from within
         float a = t.a * uOp * (0.8 + 0.2 * sin(uT * 2.1 + vH * 5.0)); gl_FragColor = vec4(c, a); }`,
   }), ghost = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 14, 26), gm); ghost.frustumCulled = false; ghost.renderOrder = 4; ghost.visible = false; ctx.scene.add(ghost);
-  const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, 128, (g) => { const q = g.createRadialGradient(64, 64, 4, 64, 64, 64); q.addColorStop(0, 'rgba(120,255,170,0.85)'); q.addColorStop(0.4, 'rgba(60,220,120,0.3)'); q.addColorStop(1, 'rgba(40,200,100,0)'); g.fillStyle = q; g.fillRect(0, 0, 128, 128); }), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false })); gl.scale.set(10, 10, 1); gl.visible = false; ctx.scene.add(gl);   // the eerie green light it gives off
+  const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, 128, (g) => { const q = g.createRadialGradient(64, 64, 4, 64, 64, 64); q.addColorStop(0, 'rgba(120,255,170,0.85)'); q.addColorStop(0.4, 'rgba(60,220,120,0.3)'); q.addColorStop(1, 'rgba(40,200,100,0)'); g.fillStyle = q; g.fillRect(0, 0, 128, 128); }), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false })); gl.scale.set(7, 7, 1); gl.visible = false; ctx.scene.add(gl);   // the eerie green light it gives off
   let gop = 0.4, gtar = 0.4, gnext = 0, lwait = 18 + Math.random() * 25; const flashes = [];
   let flight = -1, fdir = 1, fy = 0, gt = -1, gcx = 0, gcz = -20, gcy = 0, waitB = 14 + Math.random() * 20, waitG = 20 + Math.random() * 25, waitS = 10 + Math.random() * 15, clock = 0;
   const KINDS = ['wind', 'owl', 'creak', 'whisper', 'owl', 'wind'];
@@ -546,7 +546,7 @@ function makeHauntings(ctx) {
       if (name === 'sound') ctx.audio?.creepy?.(KINDS[(Math.random() * KINDS.length) | 0], (Math.random() * 2 - 1) * 0.8);
       if (name === 'lightning') { ctx.onLightning?.(0.5 + Math.random() * 0.4); if (Math.random() < 0.6) flashes.push(0.12 + Math.random() * 0.12); }
       if (name === 'bats' && flight < 0) { flight = 0; fdir = Math.random() < 0.5 ? 1 : -1; fy = (Math.random() - 0.5) * 8; bats.forEach((b, i) => { b.d = i * 0.35 + Math.random() * 0.2; b.s.visible = true; }); }
-      if (name === 'ghost' && gt < 0) { gt = 0; const sp = ctx.hallSpot?.(); gcx = sp ? sp.x : (Math.random() - 0.5) * 20; gcz = sp ? sp.z + 1 : -20; gcy = sp ? sp.y : heightAt(gcx, gcz); gl.visible = true; ghost.visible = true; }
+      if (name === 'ghost' && gt < 0) { gt = 0; const sp = ctx.hallSpot?.(); gcx = sp ? sp.x : (Math.random() - 0.5) * 20; gcz = sp ? sp.z + 1 : -20; gcy = sp ? sp.y : heightAt(gcx, gcz); gl.visible = true; ctx.audio?.creepy?.('moan', (Math.random() * 2 - 1) * 0.6); ghost.visible = true; }
     },
     update(dt, s) {
       clock += dt; for (let i = flashes.length - 1; i >= 0; i--) { flashes[i] -= dt; if (flashes[i] <= 0) { flashes.splice(i, 1); ctx.onLightning?.(0.3, true); } }          // (a second flicker of the same flash)
@@ -570,12 +570,12 @@ function makeHauntings(ctx) {
       if (gt >= 0) {
         gt += dt; const dur = 14, u = gt / dur; if (u >= 1) { gt = -1; ghost.visible = false; gl.visible = false; return; }
         const a = clock * 0.3, r = 4.8 + Math.sin(clock * 0.5) * 1.4, prev = ghost.position.x;
-        ghost.position.set(gcx + Math.cos(a) * r, gcy + 3.6 + Math.sin(clock * 0.9) * 0.6 + Math.sin(clock * 0.37) * 0.5, gcz + Math.sin(a) * r * 0.7);   // (it floats: a slow drift and a long, uneven bob)
+        ghost.position.set(gcx + Math.cos(a) * r, gcy + 2.7 + Math.sin(clock * 0.9) * 0.5 + Math.sin(clock * 0.37) * 0.5, gcz + Math.sin(a) * r * 0.7);   // (it floats: a slow drift and a long, uneven bob)
         gm.uniforms.uLean.value += ((ghost.position.x - prev) * -2.2 - gm.uniforms.uLean.value) * Math.min(1, dt * 2);
         gnext -= dt; if (gnext <= 0) { gnext = 0.5 + Math.random() * 2.2; gtar = Math.random() < 0.25 ? 0.05 + Math.random() * 0.1 : 0.25 + Math.random() * 0.6; }       // it fades to almost nothing and back, at random
         gop += (gtar - gop) * Math.min(1, dt * 1.6); const life = Math.min(1, Math.min(u * 6, (1 - u) * 6));
         gm.uniforms.uT.value = clock; gm.uniforms.uOp.value = life * gop * s.night; ghost.scale.set(1, 1, 1);
-        gl.position.copy(ghost.position); gl.position.y += 1.4; gl.material.opacity = life * (0.15 + 0.7 * gop) * s.night * (0.85 + 0.15 * Math.sin(clock * 6.1));
+        gl.position.copy(ghost.position); gl.position.y += 1.0; gl.material.opacity = life * (0.15 + 0.7 * gop) * s.night * (0.85 + 0.15 * Math.sin(clock * 6.1));
       }
     },
     dispose() { for (const b of bats) { ctx.skyScene.remove(b.s); b.s.material.dispose(); } ctx.scene.remove(ghost); ctx.scene.remove(gl); ghost.geometry.dispose(); gm.uniforms.uMap.value.dispose(); gm.dispose(); gl.material.map.dispose(); gl.material.dispose(); bm.map.dispose(); bm.dispose(); },

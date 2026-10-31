@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031104821';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031104851';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -292,10 +292,18 @@ export function createAudio({ base = 'audio/' } = {}) {
     },
     /** Something creepy and far away: 'wind' (a long hollow howl), 'owl' (two low hoots), 'creak' (a door on a dry hinge) or 'whisper' (breathy syllables). `pan` -1..1. */
     creepy(kind = 'wind', pan = 0) {
-      if (!ctx || !on || !scn || !gate('creepy', 4)) return;
+      if (!ctx || !on || !scn || !gate('creepy' + kind, 4)) return;
       const t0 = ctx.currentTime + 0.05, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = pan; p.connect(scn.out); } const dest = p || scn.out, nb = noise();
       const env = (g, pk, a, d) => { g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(pk, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); };
-      if (kind === 'wind') {
+      if (kind === 'moan') {                                              // a ghost's wail: two hollow voices that rise and sink, wavering, with a breath of whisper under them
+        for (const [f0, dl, pk] of [[196, 0, 0.07], [247, 0.35, 0.045]]) {
+          const o = ctx.createOscillator(), v = ctx.createOscillator(), vg = ctx.createGain(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = t0 + dl; o.type = 'triangle'; v.frequency.value = 5.2; vg.gain.value = 9; v.connect(vg); vg.connect(o.frequency);
+          o.frequency.setValueAtTime(f0 * 1.25, t); o.frequency.linearRampToValueAtTime(f0 * 1.6, t + 1.1); o.frequency.exponentialRampToValueAtTime(f0 * 0.7, t + 3.2);
+          f.type = 'bandpass'; f.Q.value = 3; f.frequency.setValueAtTime(500, t); f.frequency.linearRampToValueAtTime(950, t + 1.2); f.frequency.linearRampToValueAtTime(420, t + 3.2);
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(pk, t + 1.0); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.3); o.connect(f); f.connect(g); g.connect(dest); o.start(t); v.start(t); o.stop(t + 3.4); v.stop(t + 3.4);
+        }
+        const w = ctx.createBufferSource(), wf = ctx.createBiquadFilter(), wg = ctx.createGain(); w.buffer = nb; wf.type = 'bandpass'; wf.frequency.value = 3000; wf.Q.value = 1.5; env(wg, 0.05, 1.2, 2.0); w.connect(wf); wf.connect(wg); wg.connect(dest); w.start(t0, Math.random()); w.stop(t0 + 3.5);
+      } else if (kind === 'wind') {
         const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = nb; s.loop = true; f.type = 'bandpass'; f.Q.value = 6; f.frequency.setValueAtTime(260, t0); f.frequency.linearRampToValueAtTime(520, t0 + 2.2); f.frequency.linearRampToValueAtTime(300, t0 + 4.5);
         env(g, 0.2, 2.0, 2.8); s.connect(f); f.connect(g); g.connect(dest); s.start(t0, Math.random()); s.stop(t0 + 5);
       } else if (kind === 'owl') {
