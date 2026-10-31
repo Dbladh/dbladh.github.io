@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031003840';
-import { auroraColour } from './aurora.js?v=20261031003840';
+import { PAL } from './palette.js?v=20261031004909';
+import { auroraColour } from './aurora.js?v=20261031004909';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031003840';
+} from './houses.js?v=20261031004909';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2995,7 +2995,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
     setWeather(wx) {
-      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); mists.forEach((m, i) => { m.visible = (w.mist || 0) > 0.02 + 0.1 * i; });          // (the layers come in one by one as the mist builds) terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;
+      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); mists.forEach((m, i) => { m.visible = (w.mist || 0) > 0.02 + 0.1 * i; }); terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;          // (the mist layers come in one by one as it builds)
     },
     /** Show the mist layers for a moment so their shader is compiled ahead of time. */
     warmMist(on) { for (const m of mists) m.visible = on; },
