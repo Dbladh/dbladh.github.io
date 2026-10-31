@@ -275,11 +275,11 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     const s = sample(((hour % 24) + 24) % 24);
     let sunK = 1;
     if (wx) {                                              // the weather: overcast greys and darkens the sky and takes the sun's strength; a lightning flash lights it up
-      const oc = Math.min(0.92, wx.cloud * 0.6 + wx.storm * 0.3 + wx.fog * 0.25 + wx.rain * 0.15 + wx.snow * 0.1);
-      for (const c of [s.top, s.bot, s.sun]) { const l = c.r * 0.3 + c.g * 0.55 + c.b * 0.15; _grey.setRGB(l * 0.96, l * 0.99, l * 1.04); c.lerp(_grey, oc * (c === s.sun ? 0.8 : 0.7)); }
+      const oc = Math.min(0.95, wx.cloud * 0.85 + wx.storm * 0.3 + wx.fog * 0.25 + wx.rain * 0.15 + wx.snow * 0.1);
+      for (const c of [s.top, s.bot, s.sun]) { const l = c.r * 0.3 + c.g * 0.55 + c.b * 0.15; _grey.setRGB(l * 0.96, l * 0.99, l * 1.04); c.lerp(_grey, oc * (c === s.sun ? 0.9 : 0.82)); }
       const dark = 1 - 0.45 * wx.storm - 0.14 * wx.rain - 0.08 * wx.snow; s.top.multiplyScalar(dark); s.bot.multiplyScalar(1 - 0.5 * (1 - dark));
       if (wx.snow > 0.01) s.bot.lerp(_grey.setRGB(0.86, 0.9, 0.96), wx.snow * 0.3);
-      sunK = 1 - 0.78 * oc; s.sunI *= sunK; s.hemi *= 1 - 0.18 * oc;
+      sunK = 1 - 0.88 * oc; s.sunI *= sunK; s.hemi *= 1 - 0.24 * oc;
       if (wx.flash > 0.01) { const f = wx.flash * wx.flash; s.top.lerp(_grey.setRGB(0.9, 0.93, 1), f * 0.7); s.bot.lerp(_grey.setRGB(0.95, 0.97, 1), f * 0.8); s.hemi += f * 1.2; }
     }
     if (dim > 0) {

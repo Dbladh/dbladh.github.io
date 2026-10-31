@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031001835';
-import { auroraColour } from './aurora.js?v=20261031001835';
+import { PAL } from './palette.js?v=20261031002337';
+import { auroraColour } from './aurora.js?v=20261031002337';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031001835';
+} from './houses.js?v=20261031002337';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -697,21 +697,21 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const auroraU = { value: new THREE.Vector3() };                       // the colour the aurora is casting on the ground and the pond (zero when there is none)
-  const terrainWx = { uWet: { value: 0 }, uSnow: { value: 0 } };               // what the weather has left on the ground (0..1): rain darkens it, snow whitens it
+  const terrainWx = { uWet: { value: 0 }, uSnow: { value: 0 }, uDull: { value: 0 } };               // what the weather has left on the ground (0..1): rain darkens it, snow whitens it
   const terrainWind = { uWindTime: { value: 0 }, uDay: { value: 1 } };   // grass sway (desktop) and cloud shadows
   // Big soft cloud shadows drifting across the land by day: the same moving noise the clouds suggest, painted
   // straight into the terrain colour (no shadow maps, no geometry).
   const terrainHoles = { value: Array.from({ length: 9 }, () => new THREE.Vector3(0, 0, 0)) };       // the mini-golf's cups: round holes cut right through the ground ([x, z, radius], radius 0 = none)
   const addCloudShadows = (sh) => {
     sh.uniforms.uHoles = terrainHoles;
-    sh.uniforms.uShadowT = terrainWind.uWindTime; sh.uniforms.uWet = terrainWx.uWet; sh.uniforms.uSnow = terrainWx.uSnow;
+    sh.uniforms.uShadowT = terrainWind.uWindTime; sh.uniforms.uWet = terrainWx.uWet; sh.uniforms.uSnow = terrainWx.uSnow; sh.uniforms.uDull = terrainWx.uDull;
     sh.uniforms.uShadowDay = terrainWind.uDay; sh.uniforms.uAurora = auroraU;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uWet, uSnow; uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
+uniform float uWet, uSnow, uDull; uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
 float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -732,6 +732,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   float grassy = smoothstep(0.015, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
   float sd = stripe - 0.5; diffuseColor.rgb *= 1.0 + grassy * sd * (sd < 0.0 ? 0.19 : 0.32);                 // (the dark bands are held back, so the stripes stay subtle)
   diffuseColor.rgb *= 1.0 - 0.24 * uWet;                                                                       // (rain: the ground darkens)
+  { float lm = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lm) * 0.96, 0.4 * uDull); }          // (an overcast day: the colours of the land go flatter and greyer)
   if (uSnow > 0.002) {                                                                                           // (snow: it settles in patches and joins up as it builds)
     float sn = csF(vCWPos.xz * 0.33) * 0.62 + csF(vCWPos.xz * 1.9 + 5.0) * 0.38, th = mix(1.05, -0.12, uSnow);
     float cv = smoothstep(th, th + 0.18, sn);
@@ -2918,8 +2919,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         if (camera) { sp.quaternion.copy(camera.quaternion); sp.rotateZ(0.04 * Math.sin(t * 0.5 + u.ph)); }   // billboard
         sp.material.uniforms.uTime.value = time;
         if (u.thr === undefined) u.thr = sp.material.uniforms.uThr.value;
-        sp.material.uniforms.uThr.value = u.thr - 0.26 * cloudLook.cover;                                          // (a cloudy day: the same clouds, but they fill more of the sky)
-        sp.material.uniforms.uOpacity.value = Math.min(1, ((u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12) * (1 + 0.55 * cloudLook.cover)) * cloudLook.vis;
+        sp.material.uniforms.uThr.value = u.thr - 0.42 * cloudLook.cover;                                          // (a cloudy day: the same clouds, but they fill more of the sky)
+        sp.material.uniforms.uOpacity.value = Math.min(1, ((u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12) * (1 + 0.9 * cloudLook.cover)) * cloudLook.vis;
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       butterflies.forEach((bf, bi) => {
@@ -2993,7 +2994,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
     setWeather(wx) {
-      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); for (const m of mists) m.visible = (w.mist || 0) > 0.01; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;
+      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); for (const m of mists) m.visible = (w.mist || 0) > 0.01; terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;
     },
     setClouds(night, horizon, wx = null) {
       cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0.12; cloudLook.storm = wx ? wx.storm : 0;
@@ -3007,7 +3008,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       const day = new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.55, 0.46, 0.68), dusk * 0.9);
       const dark = new THREE.Color(0.42, 0.46, 0.72);
       cloudLook.tint.copy(day).lerp(dark, night);
-      if (wx) cloudLook.tint.lerp(new THREE.Color(0.52, 0.55, 0.62), Math.min(1, wx.cloud * 0.75 + wx.storm * 0.25)).multiplyScalar(1 - 0.35 * wx.storm);          // (grey, and darker in a storm)
+      if (wx) cloudLook.tint.lerp(new THREE.Color(0.5, 0.53, 0.6), Math.min(1, wx.cloud * 0.95 + wx.storm * 0.25)).multiplyScalar(1 - 0.35 * wx.storm);          // (grey, and darker in a storm)
       // Sunset lights the bottoms of the low layer: warm orange-pink undersides under paler tops.
       const glowAmt = Math.min(1, warm * 3) * (1 - night);
       const under = new THREE.Color(1.0, 0.55, 0.42);

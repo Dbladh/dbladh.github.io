@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031001835';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031001835';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031002337';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031002337';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031001835';
-import { createWeather } from './weather.js?v=20261031001835';
-import { PAL } from './palette.js?v=20261031001835';
-import { buildWorld } from './world.js?v=20261031001835';
-import { createSky } from './sky.js?v=20261031001835';
-import { createDOF } from './dof.js?v=20261031001835';
-import { createRide } from './ride.js?v=20261031001835';
-import { createGame } from './bikegame.js?v=20261031001835';
-import { createAurora, setWarm } from './aurora.js?v=20261031001835';
-import { createAudio, pickFlicker } from './audio.js?v=20261031001835';
+import { createPrecip } from './precip.js?v=20261031002337';
+import { createWeather } from './weather.js?v=20261031002337';
+import { PAL } from './palette.js?v=20261031002337';
+import { buildWorld } from './world.js?v=20261031002337';
+import { createSky } from './sky.js?v=20261031002337';
+import { createDOF } from './dof.js?v=20261031002337';
+import { createRide } from './ride.js?v=20261031002337';
+import { createGame } from './bikegame.js?v=20261031002337';
+import { createAurora, setWarm } from './aurora.js?v=20261031002337';
+import { createAudio, pickFlicker } from './audio.js?v=20261031002337';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -610,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031001835');
+        const mod = await import('./golf.js?v=20261031002337');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -786,7 +786,7 @@ function start() {
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
     world.setClouds(night, horizon, wxK < 0.004 ? null : wxEff);
-    world.setWeather(wxK < 0.004 ? null : { wet: wxEff.wet, cover: wxEff.cover, roof: wxEff.roof, tree: wxEff.tree, rain: wxEff.rain, fogK: sky.fogK, mist: wxEff.mist, mistColor: scene.fog.color });
+    world.setWeather(wxK < 0.004 ? null : { wet: wxEff.wet, cover: wxEff.cover, roof: wxEff.roof, tree: wxEff.tree, rain: wxEff.rain, fogK: sky.fogK, dull: wxEff.cloud * (1 - Math.min(1, wxEff.snow * 1.5)), mist: wxEff.mist, mistColor: scene.fog.color });
     dof?.setLook(horizon, lowEnd || quality.scale < 1 || game?.active ? 0 : 1);
     const minute = Math.floor(hour * 60);
     if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes
