@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030224335';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030224928';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -227,8 +227,8 @@ function stepChute(b, hole, h, ev) {
  */
 function cupStep(b, hole, cr, h, H0, ev) {
   const cx = hole.cup.x, cz = hole.cup.z, R = BALL_R;
-  if (!b.cm) { b.cm = true; b.cy = b.y - H0 + R; b.cvy = Math.max(-6, Math.min(6, b.vy || 0)); }
-  b.cvy -= GA * h; b.cy += b.cvy * h;
+  if (!b.cm) { b.cm = true; b.cy = b.y - H0 + R; b.cvy = Math.max(-6, Math.min(6, b.vy || 0)); b.cmDip = b.cy; }
+  b.cvy -= GA * h; b.cy += b.cvy * h; if (b.cy < b.cmDip) b.cmDip = b.cy;
   let dx = b.x - cx, dz = b.z - cz, d = Math.sqrt(dx * dx + dz * dz) || 1e-6, ux = dx / d, uz = dz / d;
   if (d >= cr) { if (b.cy < R) { b.cy = R; if (b.cvy < 0) b.cvy = 0; } }                 // (on the green again)
   else {
@@ -238,7 +238,7 @@ function cupStep(b, hole, cr, h, H0, ev) {
       if (b.cy > 0 && dist < R) {                                                       // (resting on the rim)
         const nr = gx / dist, ny = b.cy / dist, pen = R - dist; b.x += ux * nr * pen; b.z += uz * nr * pen; b.cy += ny * pen;
         const vr = b.vx * ux + b.vz * uz, vn = vr * nr + b.cvy * ny;
-        if (vn < 0) { const j = -(1 + 0.3) * vn; b.vx += j * nr * ux; b.vz += j * nr * uz; b.cvy += j * ny; }
+        if (vn < 0) { const j = -(1 + 0.3) * vn; b.vx += j * nr * ux; b.vz += j * nr * uz; b.cvy += j * ny; if (j > 0.8 && j > ev.rim) ev.rim = j; }
       }
     }
     dx = b.x - cx; dz = b.z - cz; d = Math.sqrt(dx * dx + dz * dz) || 1e-6; ux = dx / d; uz = dz / d;
@@ -248,12 +248,13 @@ function cupStep(b, hole, cr, h, H0, ev) {
     if (b.cy < -0.1 && d < cr - R * 0.3) { b.capX = b.x; b.capZ = b.z; b.holed = true; ev.holed = true; b.x = cx; b.z = cz; b.vx = b.vz = 0; b.cm = false; b.y = H0 + b.cy - R; return true; }
   }
   b.y = H0 + b.cy - R;
+  if (d > cr + R + 0.02 && b.cmDip < R - 0.1) ev.lip = 1;                       // (it dipped into the hole and came out again: a lip-out)
   if (d > cr + R + 0.02 && b.cy <= R + 0.02) { b.cm = false; b.y = hillH(hole, b.x, b.z); b.vy = 0; b.air = false; return false; }
   if (d > cr + R + 0.02) { b.cm = false; b.air = true; b.vy = b.cvy; return false; }             // (knocked up and out)
   b.air = false; b.vy = 0; return true;
 }
 export function stepBall(b, hole, ctx, dt, ev) {
-  ev.wall = 0; ev.post = 0; ev.hr = 0; ev.kick = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
+  ev.rim = 0; ev.lip = 0; ev.wall = 0; ev.post = 0; ev.hr = 0; ev.kick = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
   if (b.holed || b.sunk) return;
   const n = Math.max(1, Math.ceil(dt / STEP)), h = dt / n, W = hole.walls, hero = hole.hero, ghost = ctx.ghost;
   const fric = FRICTION * (ctx.turbo ? 0.55 : 1) * (ctx.drive ? 0.6 : 1) * (ctx.fricK === undefined ? 1 : ctx.fricK), maxV = ctx.turbo ? MAX_V * 1.35 : ctx.drive ? 9 : MAX_V;

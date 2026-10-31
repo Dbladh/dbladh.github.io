@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261030224335';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261030224928';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -511,6 +511,10 @@ export function createAudio({ base = 'audio/' } = {}) {
       else if (kind === 'post') { if (!gate('gpost', 0.05)) return; tone(880 + 300 * v, 0.1, { type: 'sine', gain: 0.05 + 0.05 * v, dest: soft }); }
       else if (kind === 'roll') { if (!gate('groll', 0.16)) return; swoosh(0.18, 260 + 700 * v, 200 + 500 * v, { gain: 0.012 + 0.03 * v, q: 0.7 }); }
       else if (kind === 'land') { if (!gate('gland', 0.1)) return; tone(130, 0.09, { type: 'sine', gain: 0.07, slide: 60, dest: soft }); swoosh(0.07, 900, 300, { gain: 0.035, q: 0.7 }); }
+      else if (kind === 'rim') { if (!gate('grim', 0.06)) return; tone(1500 + 500 * v, 0.07, { type: 'sine', gain: 0.05 + 0.04 * v, slide: -300, dest: soft }); tone(2300, 0.05, { type: 'triangle', gain: 0.025, delay: 0.02, dest: soft }); }
+      else if (kind === 'groan') { tone(330, 0.3, { type: 'triangle', gain: 0.08, slide: -140, dest: soft }); tone(247, 0.4, { type: 'triangle', gain: 0.06, delay: 0.1, slide: -90, dest: soft }); }
+      else if (kind === 'tick') { if (!gate('gtick', 0.2)) return; tone(900 + 500 * v, 0.03, { type: 'sine', gain: 0.03, dest: soft }); }
+      else if (kind === 'ace') { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => { tone(f, 0.45, { type: 'triangle', gain: 0.08, delay: i * 0.08, dest: soft }); tone(f * 2, 0.3, { type: 'sine', gain: 0.03, delay: i * 0.08, dest: soft }); }); }
       else if (kind === 'pbbump') { if (!gate('gpbb', 0.04)) return; tone(420 + 70 * v, 0.14, { type: 'triangle', gain: 0.1, slide: 520, dest: soft }); tone(1180 + 110 * v, 0.1, { type: 'sine', gain: 0.05, delay: 0.02, dest: soft }); }
       else if (kind === 'pbkick') { if (!gate('gpbk', 0.05)) return; tone(170, 0.08, { type: 'square', gain: 0.07, slide: 70, dest: soft }); swoosh(0.08, 3200, 900, { gain: 0.06, q: 0.7 }); }
       else if (kind === 'pbtarget') { if (!gate('gpbt', 0.05)) return; tone(620 + 90 * v, 0.1, { type: 'square', gain: 0.07, slide: -240, dest: soft }); tone(1480, 0.08, { type: 'sine', gain: 0.05, delay: 0.03, dest: soft }); }
