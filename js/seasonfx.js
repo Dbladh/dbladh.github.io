@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031113019';
+import { heightAt, POND, pathX } from './world.js?v=20261031113134';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -948,9 +948,30 @@ function makeEasterHunt(ctx) {
   const root = new THREE.Group(), r = rng(808), EGGS = 8; ctx.scene.add(root);
   const eg = eggGeo(1), eggs = [], used = [], ox = [];
   const mats = [], houses = ctx.world.houseList(), spots = [];
-  for (let tries = 0; tries < 400 && spots.length < EGGS; tries++) {
-    const x = (r() - 0.5) * 66, z = -4 - r() * 44; if (Math.abs(x - pathX(z)) < 1.8 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 2 || houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 1.2) || spots.some((q) => Math.hypot(q[0] - x, q[1] - z) < 9)) continue;
-    if (Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) > 0.8) continue; spots.push([x, z]);
+  // Every egg has to be findable: it must sit on screen on the overview view (landscape, tablet and portrait phone), clear of the header, the nav and the corner counter, and nothing (hill, house or tree) may stand between it and that camera.
+  const V3 = THREE.Vector3, views = [1.9, 1.35, 0.56].map((a) => { const hv = ctx.homeView?.(a) || { fov: a < 0.8 ? 70 : 55, pos: new V3(0, 7, 22), look: new V3(0, 17, -40) }, cam = new THREE.PerspectiveCamera(hv.fov, a, 0.5, 600); cam.position.copy(hv.pos); cam.lookAt(hv.look); cam.updateMatrixWorld(true); return cam; });
+  const eye = views[0].position, trees = ctx.world.treeList(), tv = new V3();
+  const onScreen = (x, z, lim) => { tv.set(x, heightAt(x, z) + 0.55, z); for (const cam of views) { const p = tv.clone().project(cam); if (p.z > 1 || p.z < -1 || Math.abs(p.x) > lim || p.y > 0.08 || p.y < -0.56) return false; } return true; };
+  const blocked = (x, z) => {
+    const ey = heightAt(x, z) + 0.55;
+    for (let t = 0.03; t < 0.97; t += 0.012) {
+      const px = eye.x + (x - eye.x) * t, py = eye.y + (ey - eye.y) * t, pz = eye.z + (z - eye.z) * t;
+      if (py < heightAt(px, pz) + 0.2) return true;
+      for (const h of houses) if (Math.hypot(px - h.x, pz - h.z) < (h.r || 3) + 0.4 && py < heightAt(h.x, h.z) + 7.5) return true;
+      for (const tr of trees) {
+        if (tr.t === 'round') { for (const L of tr.lobes) if (Math.hypot(px - L.x, py - L.y, pz - L.z) < L.r * 1.05) return true; }
+        else if (tr.t === 'cypress') { const cy = tr.y + tr.h * 0.05; if (((px - tr.x) / (tr.rx + 0.3)) ** 2 + ((py - cy) / tr.h) ** 2 + ((pz - tr.z) / (tr.rx + 0.3)) ** 2 < 1) return true; }
+        else if (py > tr.y && py < tr.y + tr.H && Math.hypot(px - tr.x, pz - tr.z) < tr.R * (1 - (py - tr.y) / tr.H) + 0.3) return true;
+      }
+    }
+    return false;
+  };
+  for (const [lim, gap, checkBlock] of [[0.72, 9, true], [0.82, 7, true], [0.92, 6, true], [0.95, 5, false]]) {
+    for (let tries = 0; tries < 2500 && spots.length < EGGS; tries++) {
+      const x = (r() - 0.5) * 60, z = -4 - r() * 40; if (Math.abs(x - pathX(z)) < 1.8 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 2 || houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 1.2) || spots.some((q) => Math.hypot(q[0] - x, q[1] - z) < gap)) continue;
+      if (Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) > 0.8 || !onScreen(x, z, lim) || (checkBlock && blocked(x, z))) continue; spots.push([x, z]);
+    }
+    if (spots.length >= EGGS) break;
   }
   spots.forEach(([x, z], i) => { const em = new THREE.MeshLambertMaterial({ map: eggTexture(i) }); mats.push(em); const m = new THREE.Mesh(eg, em); const s = 1.04; m.scale.setScalar(s); m.position.set(x, heightAt(x, z) + 0.3 * s * 0.9, z); m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5); m.castShadow = true; root.add(m); eggs.push({ m, x, y: m.position.y, z, found: false, t: 0, idx: i }); });
   const glint = bulbs(spots.map(([x, z]) => [x, heightAt(x, z) + 0.9, z]), PASTELS, 0.5); root.add(glint);                       // (a faint twinkle over each, so they can be found)
@@ -1068,9 +1089,9 @@ const makeBloomDrift = driftModule({ shape: 2, cols: ['#ffc9dd', '#ffffff', '#ff
 
 // ---------------------------------------------------------------- the manager
 const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], bloom: [makeBloom, makeBloomDrift], valentine: [makeValHouses, makeValDrift, makeValBoards], stpatrick: [makeStpHouses, makeStpDrift, makeStpLand, makeStpBoards], easter: [makeEasterHouses, makeEasterBoards, makeEasterHunt], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
-export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, onLightning, low = false, reduceMotion = false }) {
+export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, homeView, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
-  const ctx = { scene, skyScene, world, audio, sky, camera, canvas, onLightning, low, reduceMotion };
+  const ctx = { scene, skyScene, world, audio, sky, camera, canvas, homeView, onLightning, low, reduceMotion };
   const used = [];
   ctx.freeSpot = (clear = 5, bx = 0) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
     const hs = world.houseList(), cands = [];

@@ -1,20 +1,20 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031113019';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031113019';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031113134';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031113134';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031113019';
-import { createSeasons } from './seasons.js?v=20261031113019';
-import { createSeasonFx } from './seasonfx.js?v=20261031113019';
-import { createWeather } from './weather.js?v=20261031113019';
-import { PAL } from './palette.js?v=20261031113019';
-import { buildWorld } from './world.js?v=20261031113019';
-import { createSky } from './sky.js?v=20261031113019';
-import { createDOF } from './dof.js?v=20261031113019';
-import { createRide } from './ride.js?v=20261031113019';
-import { createGame } from './bikegame.js?v=20261031113019';
-import { createAurora, setWarm } from './aurora.js?v=20261031113019';
-import { createAudio, pickFlicker } from './audio.js?v=20261031113019';
+import { createPrecip } from './precip.js?v=20261031113134';
+import { createSeasons } from './seasons.js?v=20261031113134';
+import { createSeasonFx } from './seasonfx.js?v=20261031113134';
+import { createWeather } from './weather.js?v=20261031113134';
+import { PAL } from './palette.js?v=20261031113134';
+import { buildWorld } from './world.js?v=20261031113134';
+import { createSky } from './sky.js?v=20261031113134';
+import { createDOF } from './dof.js?v=20261031113134';
+import { createRide } from './ride.js?v=20261031113134';
+import { createGame } from './bikegame.js?v=20261031113134';
+import { createAurora, setWarm } from './aurora.js?v=20261031113134';
+import { createAudio, pickFlicker } from './audio.js?v=20261031113134';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -219,7 +219,7 @@ function start() {
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce, renderer });
   const bikeBtn = document.getElementById('bike-play'), bikeHint = document.getElementById('bike-hint');
   const audio = createAudio();                       // one sound system for the landscape and the game (silent until the player turns it on)
-  const seasonFx = createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, onLightning: (power, again) => { if (!reduceMotion) weather.state.flash = 1; if (!again) audio.thunder(0.6 + Math.random() * 4, power); }, low: lowEnd, reduceMotion });
+  const seasonFx = createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, homeView: (aspect) => ({ fov: aspect < 0.8 ? 70 : 55, pos: HOME.pos, look: new THREE.Vector3(0, 17 - 8 * (1 - THREE.MathUtils.smoothstep(aspect, 0.55, 1.0)) - (matchMedia('(max-height: 600px)').matches ? 13 : 0), HOME.look.z) }), onLightning: (power, again) => { if (!reduceMotion) weather.state.flash = 1; if (!again) audio.thunder(0.6 + Math.random() * 4, power); }, low: lowEnd, reduceMotion });
   const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world, { audio });
   if (game) game.compileHook = (sc, cam) => dof.compileAsync(sc, cam);        // (programs for the offscreen target the scene is drawn into)
 
@@ -614,7 +614,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031113019');
+        const mod = await import('./golf.js?v=20261031113134');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
