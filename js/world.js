@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031003010';
-import { auroraColour } from './aurora.js?v=20261031003010';
+import { PAL } from './palette.js?v=20261031003840';
+import { auroraColour } from './aurora.js?v=20261031003840';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031003010';
+} from './houses.js?v=20261031003840';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2091,7 +2091,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
             vec2 p = vUv * 2.0 - 1.0;
             float t = uTime * 0.045;
             float r = length(vec2(p.x * 0.92, p.y * 1.3));
-            float env = 1.0 - smoothstep(0.3, 1.0, r);
+            float env = 1.0 - smoothstep(0.25, 0.86, r);
             env *= mix(1.0, smoothstep(-0.6, -0.05, p.y), uFlat);               // flat-bottomed cumulus
             vec2 warp = vec2(fbm(p * 1.4 + uSeed + t), fbm(p * 1.4 + uSeed * 1.7 - t * 0.8));
             vec2 pp = p * uScale + (warp - 0.5) * 1.4 + vec2(t * 2.2, -t * 0.4) + uSeed;
@@ -2100,7 +2100,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
             float d2 = fbm(pp + vec2(-0.1, 0.14));                                   // light from upper left
             float lit = clamp(0.64 + (d - d2) * 3.4 + p.y * 0.12, 0.25, 1.0);
             vec3 col = mix(uColor * 0.6, uColor, lit);
-            gl_FragColor = vec4(col, dens * uOpacity);
+            float edgeF = smoothstep(1.0, 0.72, max(abs(p.x), abs(p.y)));                      // (a cloud never reaches the edge of its own quad, however thick the sky: no straight edges)
+            gl_FragColor = vec4(col, dens * uOpacity * edgeF);
             #include <colorspace_fragment>
           }`,
       });
