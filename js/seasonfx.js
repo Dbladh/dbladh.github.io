@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031104345';
+import { heightAt, POND, pathX } from './world.js?v=20261031104821';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -582,11 +582,75 @@ function makeHauntings(ctx) {
   };
 }
 
+// ---------------------------------------------------------------- autumn: leaves in the wind, piles of leaves, and the land turning (see world.setAutumn)
+const LEAF_COLS = ['#c9531a', '#e0942a', '#a8321c', '#d8b030', '#8a5a22', '#b86a20', '#e8742a'].map((c) => new THREE.Color(c));
+function makeAutumn(ctx) {
+  const root = new THREE.Group(); ctx.scene.add(root);
+  const N = ctx.low ? 90 : 240, seeds = new Float32Array(N * 4), cols = new Float32Array(N * 3), r = rng(77);
+  for (let i = 0; i < N; i++) { seeds.set([r(), r(), r(), r()], i * 4); const c = LEAF_COLS[Math.floor(r() * LEAF_COLS.length)]; cols.set([c.r, c.g, c.b], i * 3); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3)); geo.setAttribute('aS', new THREE.BufferAttribute(seeds, 4)); geo.setAttribute('aC', new THREE.BufferAttribute(cols, 3));
+  const lm = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, uniforms: { uCam: { value: new THREE.Vector3() }, uT: { value: 0 }, uShift: { value: new THREE.Vector2() }, uAmt: { value: 1 }, uLight: { value: 1 }, uPx: BU.uPx },
+    vertexShader: `uniform vec3 uCam; uniform float uT, uAmt, uPx; uniform vec2 uShift; attribute vec4 aS; attribute vec3 aC; varying vec3 vC; varying float vA, vRot, vTum;
+      void main() { float k = aS.w; vec2 box = vec2(64.0);
+        vec2 xz = mod(aS.xz * box + uShift * (0.7 + 0.6 * k) - uCam.xz + box * 0.5, box) - box * 0.5;
+        float H = 14.0, y = 0.3 + mod(aS.y * H - uT * (0.5 + 0.45 * k), H), ph = k * 60.0;
+        xz += vec2(sin(uT * (1.3 + k) + ph), cos(uT * (1.1 + k) + ph * 1.3)) * 0.9; y += sin(uT * (2.0 + k) + ph) * 0.3;
+        vec3 w = vec3(uCam.x + xz.x, y, uCam.z + xz.y); vec4 mv = viewMatrix * vec4(w, 1.0); gl_Position = projectionMatrix * mv;
+        vA = (1.0 - smoothstep(0.5, 1.0, length(xz) / 32.0)) * smoothstep(0.0, 1.5, y) * (1.0 - smoothstep(H - 3.0, H, y)) * step(k, uAmt);
+        vC = aC; vRot = ph + uT * (0.8 + k * 2.2); vTum = 0.3 + 0.7 * abs(cos(uT * (0.9 + k * 1.4) + ph));
+        gl_PointSize = clamp(0.55 * uPx / max(1.0, -mv.z), 3.0, 34.0); }`,
+    fragmentShader: `uniform float uLight; varying vec3 vC; varying float vA, vRot, vTum;
+      void main() { vec2 c = gl_PointCoord - 0.5; float cs = cos(vRot), sn = sin(vRot); vec2 q = vec2(cs * c.x - sn * c.y, sn * c.x + cs * c.y) * 2.0; q.x /= vTum;
+        float w = 0.5 * (1.0 - q.y * q.y), body = smoothstep(w, w - 0.14, abs(q.x)) * step(abs(q.y), 1.0), rib = smoothstep(0.07, 0.0, abs(q.x)) * 0.35;
+        gl_FragColor = vec4(vC * (1.0 - rib) * uLight, body * vA); }`,
+  });
+  const leaves = new THREE.Points(geo, lm); leaves.frustumCulled = false; leaves.renderOrder = 5; root.add(leaves);
+  // piles of leaves: low lumpy mounds of orange, red and gold, mostly round the trees that shed (and a few blown into the open), with loose leaves lying about them
+  const mound = new THREE.IcosahedronGeometry(1, 1), pp = mound.attributes.position, jr = rng(9);
+  for (let i = 0; i < pp.count; i++) { const f = 0.78 + jr() * 0.44; pp.setXYZ(i, pp.getX(i) * f, pp.getY(i) * (0.8 + jr() * 0.4), pp.getZ(i) * f); } mound.computeVertexNormals();
+  const houses = ctx.world.houseList(), spots = [], pr = rng(31);
+  const ok = (x, z) => Math.abs(x - pathX(z)) > 1.6 && Math.hypot(x - POND.x, z - POND.z) > POND.r + 2 && !houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 0.8) && Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) < 0.9;
+  for (const t of ctx.world.treeList()) {
+    if (t.t !== 'round') continue; let cx = 0, cz = 0, rr = 0; for (const L of t.lobes) { cx += L.x; cz += L.z; rr = Math.max(rr, L.r); } cx /= t.lobes.length; cz /= t.lobes.length;
+    for (let k = 0; k < (ctx.low ? 1 : 2); k++) { const a = pr() * 6.28, d = rr * (0.7 + pr() * 0.9), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; if (ok(x, z)) spots.push([x, z, 0.6 + pr() * 0.7]); }
+  }
+  for (let i = 0; i < (ctx.low ? 6 : 14); i++) { const x = (pr() - 0.5) * 70, z = -6 - pr() * 42; if (ok(x, z)) spots.push([x, z, 0.5 + pr() * 0.5]); }
+  const MAXP = spots.length * 3, piles = new THREE.InstancedMesh(mound, new THREE.MeshLambertMaterial({ flatShading: true }), Math.max(1, MAXP)), LOOSE = spots.length * 8;
+  const flat = new THREE.CircleGeometry(0.16, 5), loose = new THREE.InstancedMesh(flat, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), Math.max(1, LOOSE));
+  const plan = [], lplan = [];
+  for (const [x, z, s] of spots) {
+    for (let k = 0; k < 3; k++) { const a = pr() * 6.28, d = k ? s * (0.5 + pr() * 0.5) : 0; plan.push({ x: x + Math.cos(a) * d, z: z + Math.sin(a) * d, s: s * (k ? 0.55 + pr() * 0.3 : 1), c: LEAF_COLS[Math.floor(pr() * LEAF_COLS.length)], ry: pr() * 6.28 }); }
+    for (let k = 0; k < 8; k++) { const a = pr() * 6.28, d = s * (1.1 + pr() * 1.5); lplan.push({ x: x + Math.cos(a) * d, z: z + Math.sin(a) * d, c: LEAF_COLS[Math.floor(pr() * LEAF_COLS.length)], ry: pr() * 6.28, s: 0.8 + pr() * 0.6 }); }
+  }
+  const dm = new THREE.Object3D(), col = new THREE.Color(); let built = -1;
+  function layout(k) {
+    plan.forEach((p, i) => { const y = heightAt(p.x, p.z); dm.position.set(p.x, y + 0.02, p.z); dm.rotation.set(0, p.ry, 0); dm.scale.set(p.s * 1.25 * k, p.s * 0.32 * k, p.s * 1.25 * k); dm.updateMatrix(); piles.setMatrixAt(i, dm.matrix); piles.setColorAt(i, col.copy(p.c).multiplyScalar(0.8)); });
+    lplan.forEach((p, i) => { const y = heightAt(p.x, p.z); dm.position.set(p.x, y + 0.03, p.z); dm.rotation.set(-Math.PI / 2 + (Math.sin(i) * 0.15), 0, p.ry); dm.scale.setScalar(p.s * k); dm.updateMatrix(); loose.setMatrixAt(i, dm.matrix); loose.setColorAt(i, p.c); });
+    piles.count = plan.length; loose.count = lplan.length; piles.instanceMatrix.needsUpdate = loose.instanceMatrix.needsUpdate = true; if (piles.instanceColor) piles.instanceColor.needsUpdate = loose.instanceColor.needsUpdate = true;
+  }
+  piles.receiveShadow = true; piles.castShadow = false; root.add(piles, loose);
+  let kSm = 0, shift = new THREE.Vector2(), clock = 0;
+  return {
+    update(dt, s) {
+      const h = s.active.find((a) => a.id === 'harvest'), k = h ? h.k : 0; kSm += (k - kSm) * (1 - Math.exp(-dt * 1.5)); clock += dt;
+      ctx.world.setAutumn(kSm * (s.hide ? 0 : 1));                                                    // (the land turns as the season comes in)
+      const kb = Math.round(kSm * 20) / 20; if (kb !== built) { built = kb; layout(Math.max(0.001, kb)); }
+      const wnd = s.weather ? s.weather.wind : 0.12, gust = 0.5 + 0.5 * Math.sin(clock * 0.37) * Math.sin(clock * 0.91 + 1.0), sp = 1.0 + 9 * wnd + 5 * gust * gust;                  // (blown along by the wind, in gusts)
+      shift.x += sp * dt; shift.y += sp * 0.28 * dt * Math.sin(clock * 0.2 + 0.5);
+      const U = lm.uniforms, wet = s.weather ? Math.max(s.weather.rain, s.weather.snow) : 0;
+      U.uT.value = clock; U.uShift.value.copy(shift); if (ctx.camera) U.uCam.value.copy(ctx.camera.position); U.uAmt.value = Math.max(0, kSm * (1 - 0.9 * wet) * (ctx.reduceMotion ? 0.3 : 1)); U.uLight.value = 0.4 + 0.6 * (1 - s.night);
+    },
+    dispose() { ctx.world.setAutumn(0); ctx.scene.remove(root); geo.dispose(); lm.dispose(); mound.dispose(); flat.dispose(); piles.material.dispose(); loose.material.dispose(); piles.dispose(); loose.dispose(); },
+    root,
+  };
+}
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], newyear: [makeFireworks], july4: [makeFireworks] };
-export function createSeasonFx({ scene, skyScene, world, audio, sky, onLightning, low = false, reduceMotion = false }) {
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], harvest: [makeAutumn], newyear: [makeFireworks], july4: [makeFireworks] };
+export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
-  const ctx = { scene, skyScene, world, audio, sky, onLightning, low, reduceMotion };
+  const ctx = { scene, skyScene, world, audio, sky, camera, onLightning, low, reduceMotion };
   const used = [];
   ctx.freeSpot = (clear = 5) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
     const hs = world.houseList(), cands = [];

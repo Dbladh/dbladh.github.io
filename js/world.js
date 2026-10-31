@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031104345';
-import { auroraColour } from './aurora.js?v=20261031104345';
+import { PAL } from './palette.js?v=20261031104821';
+import { auroraColour } from './aurora.js?v=20261031104821';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031104345';
+} from './houses.js?v=20261031104821';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -697,21 +697,21 @@ export function buildWorld(scene, sections, opts = {}) {
   geo.computeVertexNormals();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const auroraU = { value: new THREE.Vector3() };                       // the colour the aurora is casting on the ground and the pond (zero when there is none)
-  const terrainWx = { uWet: { value: 0 }, uSnow: { value: 0 }, uDull: { value: 0 } };               // what the weather has left on the ground (0..1): rain darkens it, snow whitens it
+  const terrainWx = { uWet: { value: 0 }, uSnow: { value: 0 }, uDull: { value: 0 }, uAutumn: { value: 0 } };               // what the weather has left on the ground (0..1): rain darkens it, snow whitens it
   const terrainWind = { uWindTime: { value: 0 }, uDay: { value: 1 } };   // grass sway (desktop) and cloud shadows
   // Big soft cloud shadows drifting across the land by day: the same moving noise the clouds suggest, painted
   // straight into the terrain colour (no shadow maps, no geometry).
   const terrainHoles = { value: Array.from({ length: 9 }, () => new THREE.Vector3(0, 0, 0)) };       // the mini-golf's cups: round holes cut right through the ground ([x, z, radius], radius 0 = none)
   const addCloudShadows = (sh) => {
     sh.uniforms.uHoles = terrainHoles;
-    sh.uniforms.uShadowT = terrainWind.uWindTime; sh.uniforms.uWet = terrainWx.uWet; sh.uniforms.uSnow = terrainWx.uSnow; sh.uniforms.uDull = terrainWx.uDull;
+    sh.uniforms.uShadowT = terrainWind.uWindTime; sh.uniforms.uWet = terrainWx.uWet; sh.uniforms.uSnow = terrainWx.uSnow; sh.uniforms.uDull = terrainWx.uDull; sh.uniforms.uAutumn = terrainWx.uAutumn;
     sh.uniforms.uShadowDay = terrainWind.uDay; sh.uniforms.uAurora = auroraU;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uWet, uSnow, uDull; uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
+uniform float uWet, uSnow, uDull, uAutumn; uniform float uShadowT; uniform float uShadowDay; uniform vec3 uAurora; uniform vec3 uHoles[9]; varying vec3 vCWPos;
 float csH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float csN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(csH(i), csH(i + vec2(1.0, 0.0)), f.x), mix(csH(i + vec2(0.0, 1.0)), csH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -731,6 +731,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   float stripe = mix(sq, 0.5, smoothstep(0.2, 0.5, saa));                                                      // (far away the bands blend into an average instead of shimmering)
   float grassy = smoothstep(0.015, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
   float sd = stripe - 0.5; diffuseColor.rgb *= 1.0 + grassy * sd * (sd < 0.0 ? 0.19 : 0.32);                 // (the dark bands are held back, so the stripes stay subtle)
+  if (uAutumn > 0.001) {                                                                                           // (autumn: the grass dries out to straw and ochre, in patches, with some green left)
+    float lm2 = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)), pv = csF(vCWPos.xz * 0.09 + 3.0);
+    vec3 dry = lm2 * mix(vec3(1.55, 1.15, 0.55), vec3(1.3, 0.92, 0.5), pv) + vec3(0.03, 0.02, 0.0);
+    diffuseColor.rgb = mix(diffuseColor.rgb, dry, grassy * uAutumn * (0.6 + 0.32 * pv));
+  }
   diffuseColor.rgb *= 1.0 - 0.24 * uWet;                                                                       // (rain: the ground darkens)
   { float lm = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lm) * 0.96, 0.4 * uDull); }          // (an overcast day: the colours of the land go flatter and greyer)
   if (uSnow > 0.002) {                                                                                           // (snow: it settles in patches and joins up as it builds)
@@ -1850,10 +1855,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   // the same one the roofs use, so it comes and goes with the weather.
   /** Snow settles on a material's upward-facing faces (`k`: how readily: above 1 it settles on steeper faces too). */
   const TREE_SNOW = { value: 0 };
-  const snowTop = (m, k = 1) => {
-    m.customProgramCacheKey = () => 'snowTop' + k;
+  const TREE_AUTUMN = { value: 0 };
+  const snowTop = (m, k = 1, au = 0) => {         // `au`: 1 = autumn colours for the foliage, 2 = dried grass
+    m.customProgramCacheKey = () => 'snowTop' + k + 'a' + au;
     m.onBeforeCompile = (sh) => {
-      sh.uniforms.uSnow = TREE_SNOW;
+      sh.uniforms.uSnow = TREE_SNOW; sh.uniforms.uAutumn = TREE_AUTUMN;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSnowW;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           #ifdef USE_INSTANCING
@@ -1861,8 +1867,14 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           #else
             vSnowW = (modelMatrix * vec4(transformed, 1.0)).xyz;
           #endif`);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow; varying vec3 vSnowW;\nfloat snH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\nfloat snN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(snH(i), snH(i + vec3(1,0,0)), f.x), mix(snH(i + vec3(0,1,0)), snH(i + vec3(1,1,0)), f.x), f.y), mix(mix(snH(i + vec3(0,0,1)), snH(i + vec3(1,0,1)), f.x), mix(snH(i + vec3(0,1,1)), snH(i + vec3(1,1,1)), f.x), f.y), f.z); }')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow, uAutumn; varying vec3 vSnowW;\nfloat snH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\nfloat snN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(snH(i), snH(i + vec3(1,0,0)), f.x), mix(snH(i + vec3(0,1,0)), snH(i + vec3(1,1,0)), f.x), f.y), mix(mix(snH(i + vec3(0,0,1)), snH(i + vec3(1,0,1)), f.x), mix(snH(i + vec3(0,1,1)), snH(i + vec3(1,1,1)), f.x), f.y), f.z); }')
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          ${au === 1 ? `if (uAutumn > 0.001) {
+            float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), h = snH(floor(vSnowW / 5.5)), lum = dot(diffuseColor.rgb, vec3(0.33));
+            vec3 col = h < 0.28 ? vec3(0.95, 0.72, 0.18) : h < 0.52 ? vec3(0.92, 0.42, 0.1) : h < 0.7 ? vec3(0.74, 0.16, 0.1) : vec3(0.82, 0.58, 0.16);
+            vec3 au = h < 0.84 ? col * (0.5 + 1.1 * lum) : vec3(0.62, 0.66, 0.2) * (0.5 + lum);                    // (most trees turn gold, orange or red; a few only yellow)
+            diffuseColor.rgb = mix(diffuseColor.rgb, au, m * uAutumn);
+          }` : au === 2 ? `if (uAutumn > 0.001) { float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), lum = dot(diffuseColor.rgb, vec3(0.33)); diffuseColor.rgb = mix(diffuseColor.rgb, lum * vec3(1.7, 1.2, 0.55), m * uAutumn * 0.85); }` : ''}
           if (uSnow > 0.01) {
             float upT = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)), sn = snN(vSnowW * 1.3) * 0.65 + snN(vSnowW * 3.7) * 0.35;
             float thr = mix(0.95, 0.22, uSnow) - ${(k - 1).toFixed(2)} * 0.3 * uSnow, cv = smoothstep(thr, thr + 0.14, upT + (sn - 0.5) * 0.32);
@@ -1871,7 +1883,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     };
     return m;
   };
-  snowTop(foliageMat); snowTop(foliageMatDS); snowTop(logMat, 1.1);
+  snowTop(foliageMat, 1, 1); snowTop(foliageMatDS); snowTop(logMat, 1.1);
   /** Planar UVs for geometry that has none (the pine tiers): continuous, no seams. */
   const addPlanarUV = (geo, k = 0.5) => {
     const p = geo.attributes.position, uv = new Float32Array(p.count * 2);
@@ -1897,7 +1909,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     log: new THREE.CylinderGeometry(0.5, 0.5, 1, 8), reed: new THREE.CylinderGeometry(0.04, 0.05, 1, 5), reedTop: new THREE.CylinderGeometry(0.06, 0.06, 0.28, 6),
     lily: new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12), post: new THREE.BoxGeometry(0.12, 0.9, 0.12), rail: new THREE.BoxGeometry(1, 0.08, 0.06),
   };
-  const MAT = { flatWhite: white({ flatShading: true }), rock: snowTop(white({ flatShading: true }), 1.25), fence: snowTop(white(), 1.2), grass: snowTop(flat({ side: THREE.DoubleSide }), 0.9), plain: white() };
+  const MAT = { flatWhite: white({ flatShading: true }), rock: snowTop(white({ flatShading: true }), 1.25), fence: snowTop(white(), 1.2), grass: snowTop(flat({ side: THREE.DoubleSide }), 0.9, 2), plain: white() };
   // Flower heads that can light up (music mode): the screen is split into three zones, left / middle / right, and the left hand's notes light the flowers of their zone.
   // Done in the shader from where each flower is on screen, so it costs no per-flower data.
   const flowerGlow = { value: new THREE.Vector3() }, flowerMix = { value: new THREE.Vector2() };
@@ -2897,6 +2909,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     },
     setWarm(v) { ffUniforms.uWarm.value = v; dustU.uWarm.value = v; },
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
+    /** How far into autumn the land is (0..1): the grass dries out and the trees turn. */
+    setAutumn(k) { terrainWx.uAutumn.value = k; TREE_AUTUMN.value = k; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
     setHover(id, flick = null) {
