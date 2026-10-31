@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031105811';
+import { heightAt, POND, pathX } from './world.js?v=20261031111247';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -651,19 +651,106 @@ function makeAutumn(ctx) {
   };
 }
 
+// ---------------------------------------------------------------- the harvest: a pumpkin patch with corn and a scarecrow, hay bales and gourds by the houses, geese flying over, and the billboards dressed in corn, hay and leaves
+const PUMP_COLS = ['#e8741a', '#d9621a', '#f0a030', '#e6dcc0', '#c8561a'], HARVEST_BULBS = ['#ffb347', '#ff8a1f', '#ffd27a', '#e0642a'].map((c) => new THREE.Color(c));
+function makeHarvest(ctx) {
+  const root = new THREE.Group(), r = rng(123); ctx.scene.add(root);
+  const pg = new THREE.SphereGeometry(1, 12, 9), stemG = new THREE.CylinderGeometry(0.1, 0.15, 0.35, 6), pm = PUMP_COLS.map((c) => lam(c)), stemM = lam('#566a2a');
+  const straw = lam('#d9b45a'), strawD = lam('#b88f3c'), rope = lam('#6e4e24');
+  const pumpkin = (s, i) => { const g = new THREE.Group(), b = new THREE.Mesh(pg, pm[i % pm.length]); b.scale.set(1, 0.78, 1); b.castShadow = true; g.add(b); const st = new THREE.Mesh(stemG, stemM); st.position.y = 0.76; st.rotation.z = 0.3; g.add(st); g.scale.setScalar(s); g.rotation.y = r() * 6.28; return g; };
+  const roundBale = () => { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.95, 14), [straw, strawD, strawD]); m.rotation.z = Math.PI / 2; m.castShadow = true; g.add(m); for (const x of [-0.25, 0.25]) { const t = new THREE.Mesh(new THREE.TorusGeometry(0.555, 0.02, 4, 16), rope); t.rotation.y = Math.PI / 2; t.position.x = x; g.add(t); } g.position.y = 0.55; const o = new THREE.Group(); o.add(g); return o; };
+  const squareBale = () => { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.58, 0.65), straw); m.castShadow = true; m.position.y = 0.29; g.add(m); for (const x of [-0.3, 0.3]) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.6, 0.67), rope); b.position.set(x, 0.29, 0); g.add(b); } return g; };
+  const place = (o, x, z, ry = 0, lift = 0) => { o.position.set(x, heightAt(x, z) + lift, z); o.rotation.y = ry; root.add(o); return o; };
+  // the patch: pumpkins among vines, a ring of corn, a few bales, and a scarecrow in the middle
+  const spot = ctx.freeSpot(7, -17); let scare = null;
+  if (spot) {
+    const cx = spot.x, cz = spot.z;
+    const n = ctx.low ? 9 : 16; for (let i = 0; i < n; i++) { const a = r() * 6.28, d = 0.8 + Math.sqrt(r()) * 3.0, s = 0.3 + r() * 0.35, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; place(pumpkin(s, i), x, z, 0, s * 0.62); }
+    const ns = ctx.low ? 18 : 40, stalk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.06, 1.9, 5), lam('#a9a24a'), ns), tassel = new THREE.InstancedMesh(new THREE.ConeGeometry(0.1, 0.4, 5), lam('#c9a850'), ns), cob = new THREE.InstancedMesh(new THREE.SphereGeometry(0.1, 6, 5), lam('#e8c040'), ns), blade = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.02, 0.1), lam('#8a9a3a'), ns * 2), dm = new THREE.Object3D();
+    for (let i = 0; i < ns; i++) { const a = (i / ns) * 6.28 + r() * 0.2, d = 4.0 + r() * 1.0, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, y = heightAt(x, z), lean = (r() - 0.5) * 0.14;
+      dm.position.set(x, y + 0.95, z); dm.rotation.set(lean, 0, lean); dm.scale.set(1, 0.85 + r() * 0.3, 1); dm.updateMatrix(); stalk.setMatrixAt(i, dm.matrix);
+      dm.position.set(x - Math.sin(lean) * 1.0, y + 1.95, z + Math.sin(lean) * 0.0); dm.updateMatrix(); tassel.setMatrixAt(i, dm.matrix);
+      dm.position.set(x, y + 1.15, z); dm.rotation.set(lean, 0, lean + 0.2); dm.scale.set(1, 1.6, 1); dm.updateMatrix(); cob.setMatrixAt(i, dm.matrix);
+      for (let k = 0; k < 2; k++) { dm.position.set(x + (k ? 0.22 : -0.22), y + 0.9 + k * 0.35, z); dm.rotation.set(0, r() * 3, (k ? -1 : 1) * 0.5); dm.scale.setScalar(1); dm.updateMatrix(); blade.setMatrixAt(i * 2 + k, dm.matrix); } }
+    stalk.castShadow = true; root.add(stalk, tassel, cob, blade);
+    for (let i = 0; i < 3; i++) { const a = 0.6 + i * 2.1, o = i === 1 ? roundBale() : squareBale(); place(o, cx + Math.cos(a) * 3.4, cz + Math.sin(a) * 3.4, a + 1.2, 0.0); }
+    // the scarecrow
+    scare = new THREE.Group(); scare.position.set(cx, heightAt(cx, cz), cz); root.add(scare);
+    const part = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; scare.add(o); return o; };
+    const wood = lam('#6a4a2a'), shirt = lam('#a8452a'), jeans = lam('#4a5f86'), burlap = lam('#d6bd86'), hat = lam('#4a3a24'), tuft = lam('#e2c35e'), dark = lam('#1a1410');
+    part(new THREE.CylinderGeometry(0.06, 0.07, 2.7, 6), wood, 0, 1.35, 0); part(new THREE.CylinderGeometry(0.05, 0.05, 1.7, 6), wood, 0, 1.75, 0, 0, 0, Math.PI / 2);
+    part(new THREE.BoxGeometry(0.62, 0.78, 0.34), shirt, 0, 1.6, 0.03); part(new THREE.BoxGeometry(0.18, 0.7, 0.2), jeans, -0.14, 0.9, 0.03, 0, 0, 0.06); part(new THREE.BoxGeometry(0.18, 0.7, 0.2), jeans, 0.14, 0.9, 0.03, 0, 0, -0.06);
+    for (const sx of [-1, 1]) { part(new THREE.BoxGeometry(0.6, 0.15, 0.17), shirt, sx * 0.58, 1.78, 0.03, 0, 0, sx * 0.08); for (let k = 0; k < 5; k++) part(new THREE.ConeGeometry(0.035, 0.28, 4), tuft, sx * (0.92 + k * 0.03), 1.78 + (k - 2) * 0.05, 0.03, 0, 0, -sx * (1.4 + (k - 2) * 0.22)); }
+    part(new THREE.SphereGeometry(0.28, 10, 8), burlap, 0, 2.2, 0.05); for (const ex of [-0.1, 0.1]) part(new THREE.SphereGeometry(0.035, 5, 4), dark, ex, 2.25, 0.32); for (let k = 0; k < 5; k++) part(new THREE.BoxGeometry(0.025, 0.07, 0.02), dark, -0.12 + k * 0.06, 2.1 + (k % 2) * 0.015, 0.31);
+    part(new THREE.CylinderGeometry(0.4, 0.4, 0.04, 12), hat, 0, 2.42, 0.05); part(new THREE.ConeGeometry(0.24, 0.5, 10), hat, 0, 2.68, 0.05, 0, 0, 0.1); for (let k = 0; k < 6; k++) part(new THREE.ConeGeometry(0.03, 0.2, 4), tuft, -0.12 + k * 0.05, 1.28, 0.2, 2.6, 0, 0);
+    scare.rotation.y = 0.4;
+  }
+  // by the houses: a hay bale and a few gourds, off to the sides (the front is kept for the Halloween pumpkins)
+  ctx.world.houseList().forEach((h, i) => {
+    if (i % 3 === 2) return; const side = i % 2 ? 1 : -1, a = side > 0 ? 0.06 : 0.94, d = (h.r || 3) + 0.7, x = h.x + Math.cos(Math.PI * a) * d, z = h.z + Math.sin(Math.PI * a) * d * 0.9;
+    if (Math.abs(x - pathX(z)) < 1.5 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 1) return;
+    place(i % 2 ? roundBale() : squareBale(), x, z, Math.PI * a + 0.5); for (let k = 0; k < 3; k++) place(pumpkin(0.2 + r() * 0.15, i + k), x + (r() - 0.5) * 1.6, z + 0.9 + r() * 0.6, 0, 0.14);
+  });
+  // billboards: amber lights round the frame, corn and bales at the posts, a garland of leaves along the top, and pumpkins on the catwalk
+  const bset = makeBoardSets(ctx, (b) => {
+    const F = b.frame, g = new THREE.Group(), { lw, x, top, bot, lh, T, cwY, cwW } = F, pts = [], zf = 0.62, lc = LEAF_COLS;
+    const x0 = x - lw / 2 - T - 0.12, x1 = x + lw / 2 + T + 0.12, y0 = bot - T - 0.12, y1 = top + T + 0.12, step = ctx.low ? 1.1 : 0.75;
+    for (let xx = x0; xx <= x1; xx += step) pts.push([xx, y1, zf], [xx, y0, zf]); for (let yy = y0 + step; yy < y1; yy += step) pts.push([x0, yy, zf], [x1, yy, zf]);
+    g.add(bulbs(pts, HARVEST_BULBS, 0.5));
+    const lg = new THREE.SphereGeometry(0.16, 5, 4), nl = Math.round((lw + 2 * T) / 0.5), garland = new THREE.InstancedMesh(lg, new THREE.MeshLambertMaterial(), nl * 2), dm = new THREE.Object3D(), cc = new THREE.Color();
+    for (let i = 0; i < nl; i++) { const u = i / (nl - 1); for (let k = 0; k < 2; k++) { dm.position.set(x - lw / 2 - T + (lw + 2 * T) * u + (r() - 0.5) * 0.2, top + T + 0.22 + 0.14 * Math.sin(u * Math.PI * 7) + k * 0.1 - 0.05 + (r() - 0.5) * 0.1, 0.12 + (r() - 0.5) * 0.12); dm.rotation.set(r() * 3, r() * 3, r() * 3); dm.scale.set(1.4, 0.35, 1); dm.updateMatrix(); garland.setMatrixAt(i * 2 + k, dm.matrix); garland.setColorAt(i * 2 + k, cc.copy(lc[Math.floor(r() * lc.length)])); } }
+    g.add(garland);
+    const fy = cwY + 0.07; [[-0.36, 0.34, 0], [-0.05, 0.46, 1], [0.3, 0.38, 3]].forEach(([fx, s, ci]) => { const p = pumpkin(s, ci); p.position.set(x + cwW * fx, fy + s * 0.6, 0.75); g.add(p); });
+    for (const sx of [-1, 1]) {                                                              // corn and a bale at each post
+      const bale = i0 => (sx > 0 ? squareBale() : roundBale()); const bl = bale(); bl.position.set(sx * 6.9, 0.05, 1.1); bl.rotation.y = -sx * 0.4; g.add(bl);
+      for (let k = 0; k < 5; k++) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.9, 5), lam('#a9a24a')); s.position.set(sx * (6.0 + k * 0.16), 0.95, 0.9 + (k % 2) * 0.12); s.rotation.set(0, 0, sx * (0.05 + k * 0.025)); g.add(s); const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 5), lam('#c9a850')); t.position.set(sx * (6.0 + k * 0.16 - Math.sin(0.05 + k * 0.025) * 0.95), 1.95, 0.9 + (k % 2) * 0.12); g.add(t); }
+    }
+    return g;
+  });
+  return {
+    update(dt, s) { if (scare) scare.rotation.z = Math.sin(performance.now() * 0.0009) * 0.025 * (0.4 + 2 * (s.weather ? s.weather.wind : 0.1)); bset.sync(s.hide); },
+    dispose() { bset.dispose(); disposeTree(root); ctx.scene.remove(root); },
+    root,
+  };
+}
+// geese in a V, small and far off, crossing the sky by day now and then (a honk or two as they pass)
+const gooseTex = () => canvasTex(128, 64, (g) => {
+  g.fillStyle = '#23232b'; g.beginPath(); g.moveTo(64, 34); g.quadraticCurveTo(76, 14, 100, 6); g.quadraticCurveTo(116, 2, 126, 8); g.quadraticCurveTo(104, 12, 92, 30); g.quadraticCurveTo(84, 38, 74, 40); g.lineTo(64, 40);
+  g.quadraticCurveTo(54, 38, 44, 30); g.quadraticCurveTo(32, 12, 2, 8); g.quadraticCurveTo(12, 2, 28, 6); g.quadraticCurveTo(52, 14, 64, 34); g.closePath(); g.fill();
+  g.beginPath(); g.ellipse(64, 40, 9, 5, 0, 0, 6.3); g.fill(); g.lineWidth = 3; g.strokeStyle = '#23232b'; g.beginPath(); g.moveTo(66, 34); g.quadraticCurveTo(80, 28, 88, 38); g.stroke(); g.beginPath(); g.arc(90, 38, 3, 0, 6.3); g.fill();
+});
+function makeGeese(ctx) {
+  const tex = gooseTex(), geese = []; let t = -1, dur = 22, dir = 1, y0 = 40, wait = 25 + Math.random() * 40, honk = 0;
+  for (let i = 0; i < 9; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false, opacity: 0 })); s.renderOrder = -6; s.visible = false; ctx.skyScene.add(s); const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1; geese.push({ s, ox: -row * 2.4, oy: i ? side * row * 1.8 : 0, ph: Math.random() * 6.3, sp: 0.97 + Math.random() * 0.06 }); }
+  return {
+    go(name) { if ((name && name !== 'geese') || t >= 0) return; t = 0; dir = Math.random() < 0.5 ? 1 : -1; y0 = 34 + Math.random() * 14; dur = 20 + Math.random() * 6; honk = 1; ctx.audio?.honk?.((Math.random() * 2 - 1) * 0.5, 0.6); geese.forEach((g) => { g.s.visible = true; }); },
+    update(dt, s) {
+      if (t < 0) { if (s.night < 0.5 && !s.hide && !ctx.reduceMotion && !(s.weather && (s.weather.rain > 0.2 || s.weather.cloud > 0.9))) wait -= dt; if (wait <= 0) { wait = 70 + Math.random() * 90; this.go(); } return; }
+      t += dt; const u = t / dur; if (u >= 1) { t = -1; geese.forEach((g) => { g.s.visible = false; }); return; }
+      honk -= dt; if (honk <= 0) { honk = 1.2 + Math.random() * 2.5; ctx.audio?.honk?.((u - 0.5) * 1.6 * dir, 0.35 + 0.3 * Math.random()); }
+      const fl = performance.now() * 0.001;
+      for (const g of geese) {
+        const x = (-120 + 240 * Math.min(1, u * g.sp)) * dir + g.ox * dir, y = y0 + Math.sin(u * 3.1) * 3 + g.oy, f = Math.sin(fl * 7 + g.ph);
+        g.s.position.set(x, y, -122); g.s.scale.set(4.4 * dir, 2.2 * (0.55 + 0.45 * f), 1); g.s.material.opacity = Math.min(1, Math.min(u * 10, (1 - u) * 10)) * 0.8 * (1 - s.night);
+      }
+    },
+    dispose() { for (const g of geese) { ctx.skyScene.remove(g.s); g.s.material.dispose(); } tex.dispose(); },
+  };
+}
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], newyear: [makeFireworks], july4: [makeFireworks] };
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
 export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
   const ctx = { scene, skyScene, world, audio, sky, camera, onLightning, low, reduceMotion };
   const used = [];
-  ctx.freeSpot = (clear = 5) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
+  ctx.freeSpot = (clear = 5, bx = 0) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
     const hs = world.houseList(), cands = [];
     for (let z = -8; z >= -46; z -= 3) for (let x = -34; x <= 34; x += 3) {
       const y = heightAt(x, z); if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 3 || Math.abs(x - pathX(z)) < 3.2) continue;
       if (hs.some((h) => Math.hypot(x - h.x, z - h.z) < h.r + clear * 0.5) || used.some((u) => Math.hypot(x - u.x, z - u.z) < 8)) continue;
       const sl = (Math.abs(heightAt(x + 1.5, z) - y) + Math.abs(heightAt(x, z + 1.5) - y)) / 1.5; if (sl > 0.25) continue;
-      cands.push({ x, y, z, d: Math.hypot(x * 0.8, z + 16) });
+      cands.push({ x, y, z, d: Math.hypot((x - bx) * 0.8, z + 16) });
     }
     cands.sort((a, b) => a.d - b.d); const c = cands[0]; if (c) used.push(c); return c || null;
   };

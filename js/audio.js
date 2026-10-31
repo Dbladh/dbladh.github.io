@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031105811';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031111247';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -315,6 +315,15 @@ export function createAudio({ base = 'audio/' } = {}) {
       } else {
         for (let i = 0; i < 4; i++) { const t = t0 + i * 0.32 + Math.random() * 0.08, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = nb; f.type = 'bandpass'; f.frequency.value = 2400 + Math.random() * 1800; f.Q.value = 2.5;
           g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random()); s.stop(t + 0.35); }
+      }
+    },
+    /** A goose's honk, far off: a nasal two-note call. `pan` -1..1, `v` loudness 0..1. */
+    honk(pan = 0, v = 0.5) {
+      if (!ctx || !on || !scn || !gate('honk', 0.6)) return;
+      const t0 = ctx.currentTime + 0.03, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = pan; p.connect(scn.out); } const dest = p || scn.out;
+      for (const [dt, f0, f1] of [[0, 420, 330], [0.22, 480, 360]]) {
+        const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = t0 + dt; o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.2); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 2.2;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.045 * v, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24); o.connect(f); f.connect(g); g.connect(dest); o.start(t); o.stop(t + 0.28);
       }
     },
     /** Sleigh bells: a handful of bright little pings that shake across the sky from one side to the other (`dir` 1 left to right, -1 the other way). */
