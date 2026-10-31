@@ -115,13 +115,19 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   moonMesh.add(halo(0xaec4ff, 42, 0.35));
   skyScene.add(sunMesh, moonMesh);
   // A rainbow: a soft seven-colour band, a ring seen from inside, centred on the point opposite the sun (so it hangs in the sky away from it) and drawn in the sky layer, behind the hills, which hide its feet.
-  const BOW_R = 56, bowMat = new THREE.ShaderMaterial({
+  const BOW_R = 100, bowMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, depthTest: false, fog: false, uniforms: { uA: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform float uA; varying vec2 vUv;
       vec3 spec(float t) { vec3 c = vec3(1.0, 0.22, 0.18); c = mix(c, vec3(1.0, 0.6, 0.18), smoothstep(0.0, 0.2, t)); c = mix(c, vec3(1.0, 0.95, 0.35), smoothstep(0.15, 0.38, t)); c = mix(c, vec3(0.4, 0.85, 0.45), smoothstep(0.33, 0.55, t)); c = mix(c, vec3(0.3, 0.6, 1.0), smoothstep(0.5, 0.72, t)); return mix(c, vec3(0.55, 0.35, 0.88), smoothstep(0.7, 1.0, t)); }
-      void main() { float d = length(vUv * 2.0 - 1.0), t = (0.985 - d) / 0.15, band = smoothstep(0.0, 0.14, t) * (1.0 - smoothstep(0.86, 1.0, t));
-        gl_FragColor = vec4(spec(clamp(t, 0.0, 1.0)), band * uA * 0.72);
+      void main() {
+        float d = length(vUv * 2.0 - 1.0);
+        float t = (0.85 - d) / 0.15, band = smoothstep(0.0, 0.14, t) * (1.0 - smoothstep(0.86, 1.0, t));                      // the main bow: red outside, violet inside
+        float t2 = (0.995 - d) / 0.09, band2 = smoothstep(0.0, 0.2, t2) * (1.0 - smoothstep(0.8, 1.0, t2));                    // a fainter second bow outside it, with the colours the other way round
+        float glow = smoothstep(0.86, 0.6, d) * 0.07 * (1.0 - smoothstep(0.0, 0.4, d));                                       // (the sky inside a bow is a little brighter)
+        vec3 col = band > band2 * 0.3 ? spec(clamp(t, 0.0, 1.0)) : spec(clamp(1.0 - t2, 0.0, 1.0));
+        float a = max(band, band2 * 0.34) + glow;
+        gl_FragColor = vec4(col, a * uA);
         #include <colorspace_fragment>
       }`,
   });
@@ -330,7 +336,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     }
 
     { const k = THREE.MathUtils.smoothstep(arc, 0.03, 0.2) * (1 - 0.55 * THREE.MathUtils.smoothstep(arc, 0.55, 0.95)), a = wx ? wx.bow * k * (1 - dim) : 0;     // (a rainbow needs the sun up, and is best when it is low)
-      bowMat.uniforms.uA.value = a; bow.visible = a > 0.01; bow.position.set(-mx * 0.4, 2, -128); }
+      bowMat.uniforms.uA.value = a; bow.visible = a > 0.01; bow.position.set(-mx * 0.3, -14, -128); }
     updateEnv(hour, s, _sunTrue.set(sx, sy, sz), night, dim);
 
     root.style.setProperty('--sky-top', '#' + s.top.getHexString());
