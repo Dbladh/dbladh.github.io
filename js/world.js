@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031001653';
-import { auroraColour } from './aurora.js?v=20261031001653';
+import { PAL } from './palette.js?v=20261031001811';
+import { auroraColour } from './aurora.js?v=20261031001811';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031001653';
+} from './houses.js?v=20261031001811';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -834,11 +834,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           vec2 p = vW.xz * uScale + dv * uTime * 0.11 * uSpeed + uSeed;
           vec2 wv = vec2(mn(p * 0.8 + vec2(uTime * 0.021, 0.0)), mn(p * 0.8 + vec2(9.0, -uTime * 0.017))) - 0.5;          // (a slow swirl bends the pattern as it drifts, so it never just slides)
           p += wv * 1.7;
-          float n = mn(p) * 0.5 + mn(p * 2.1 + vec2(uTime * 0.035, 3.0 - uTime * 0.02)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.045) * 0.2;
-          float cov = smoothstep(0.44 - 0.1 * uAmt, 0.84 - 0.1 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
+          float n = mn(p) * 0.6 + mn(p * 2.1 + vec2(uTime * 0.035, 3.0 - uTime * 0.02)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.045) * 0.1;          // (mostly broad shapes; only a little fine detail, so the edges are soft)
+          float cov = smoothstep(0.2 - 0.1 * uAmt, 0.78 - 0.1 * uAmt, n); cov = cov * (1.5 - 0.5 * cov);                // (a long, gentle ramp from clear to fog)                         // (more of the sky fills with haze as it thickens, and the gaps close)
           float front = 0.72 + 0.28 * sin(dot(vW.xz, uDir * 0.021 + vec2(0.0, 0.012)) - uTime * 0.55 + uSeed);          // (broad banks of thicker fog roll through)
           float a = cov * uAmt * uW * front * (0.85 + 0.15 * sin(uTime * 0.3 + uSeed + vW.x * 0.01)) * smoothstep(2.0, 14.0, distance(cameraPosition, vW));          // (it thickens and thins a little as it drifts)
-          gl_FragColor = vec4(uColor, a * (0.1 + 0.09 * uAmt));
+          gl_FragColor = vec4(uColor, a * (0.14 + 0.12 * uAmt));
           #include <colorspace_fragment>
         }`,
     });
