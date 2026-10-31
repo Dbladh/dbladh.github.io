@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031101928';
-import { auroraColour } from './aurora.js?v=20261031101928';
+import { PAL } from './palette.js?v=20261031102106';
+import { auroraColour } from './aurora.js?v=20261031102106';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031101928';
+} from './houses.js?v=20261031102106';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1106,6 +1106,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
 
   // ---- Village: cottages along the path ----
   const houses = []; // { x, z, r }
+  const treeRecs = [];                                  // where the trees of the main scene are and how big (for the seasonal lights): { t: 'round' | 'cypress' | 'pine', ... }
+  let recordTrees = true, bridgeInfo = null;
   const windowMats = [];
   const houseLights = [];
   const houseCap = Math.min(6, Math.max(1, maxLights - 3));
@@ -1294,6 +1296,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           s: [ts, ts * 0.85, ts], c: base.clone().offsetHSL(0, 0.04, 0.05 + rand() * 0.07),
         });
       }
+      if (recordTrees) treeRecs.push({ t: 'round', lobes: lobes.map((L) => ({ x: L.x, y: L.y, z: L.z, r: L.r })) });
       if (roll >= 0.3 && rand() < 0.35) { // apple tree: red fruit among the leaves
         const fc = pick([new THREE.Color('#e2402f'), new THREE.Color('#f0883a'), new THREE.Color('#d9344a')]);
         for (let k = 0; k < 6; k++) {
@@ -1306,19 +1309,24 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       items.trunk.push({ p: [x, y + 0.5 * s, z], s: [0.25 * s, 1.0 * s, 0.25 * s] });
       const hgt = (3 + rand() * 2.2) * s;
       items.cypress.push({ p: [x, y + hgt * 0.9, z], s: [(0.8 + rand() * 0.35) * s, hgt, (0.8 + rand() * 0.35) * s], c: pick(DARK) });
+      if (recordTrees) treeRecs.push({ t: 'cypress', x, y: y + hgt * 0.9, z, rx: items.cypress[items.cypress.length - 1].s[0], h: hgt });
       if (rand() < 0.4) items.cypress.push({ p: [x + 1.0 * s, hAt(x + s, z) + hgt * 0.35, z + 0.4 * s], s: [0.55 * s, hgt * 0.5, 0.55 * s], c: pick(DARK) });
     } else if (kind < 0.84) { // layered pine: one jagged, drooping, multi-tier shape
       items.trunk.push({ p: [x, y + 0.7 * s, z], s: [0.3 * s, 1.4 * s, 0.3 * s] });
       const H = (4.6 + rand() * 1.4) * s, R = (1.55 + rand() * 0.4) * s;
       items.pine.push({ p: [x, y + 0.9 * s + H / 2, z], s: [R, H, R], ry: rand() * 6.28, c: pick(DARK).clone().offsetHSL(0, 0.02, 0.02) });
+      if (recordTrees) treeRecs.push({ t: 'pine', x, y: y + 0.9 * s, z, H, R });
     } else { // slender birch with a bright canopy and a couple of branches
       items.trunk.push({ p: [x, y + 1.5 * s, z], s: [0.2 * s, 3.0 * s, 0.2 * s], c: BIRCH });
       branch(x, y + 2.4 * s, z, s, 0.8);
       const col = rand() < 0.5 ? pick(FALL) : pick(GREENS);
+      const bl = [];
       for (let k = 0; k < 4; k++) {
         const ls = (0.8 + rand() * 0.4) * s;
         items.lobe.push({ p: [x + (rand() - 0.5) * 0.9 * s, y + (3.3 + k * 0.5) * s, z + (rand() - 0.5) * 0.9 * s], s: [ls, ls * 1.2, ls], c: col.clone().offsetHSL(0, 0, (rand() - 0.5) * 0.08) });
+        const li = items.lobe[items.lobe.length - 1]; bl.push({ x: li.p[0], y: li.p[1], z: li.p[2], r: ls });
       }
+      if (recordTrees) treeRecs.push({ t: 'round', lobes: bl });
     }
     // Undergrowth at the foot of the tree: ferns, mushrooms, now and then a fallen log.
     if (rand() < 0.55) {
@@ -1728,7 +1736,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         const xl = POND.x - POND.r * 0.95, xr = POND.x + POND.r * 0.95;
         const x0 = xl - 0.6, x1 = xr + 0.6, N = 16, planks = mat(PAL.timber), rail = mat(PAL.timberDeep);
         const baseY = (a) => Math.max(heightAt(a, bz), WATER_Y) + 0.12;
-        const yEnd0 = baseY(x0), yEnd1 = baseY(x1);
+        const yEnd0 = baseY(x0), yEnd1 = baseY(x1); bridgeInfo = { x0, x1, bz, yEnd0, yEnd1 };
         for (let k = 0; k < N; k++) {
           const t0 = k / N, t1 = (k + 1) / N, tm = (t0 + t1) / 2;
           const arch = Math.sin(tm * Math.PI) * 0.75;
@@ -1930,7 +1938,14 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     instanced(GEO.post, MAT.fence, src.post, o());
     instanced(GEO.rail, MAT.fence, src.rail, o());
   }
+  { // keep only the recorded trees that still stand (a plant that was taken out again, or that was on the water, leaves its record behind)
+    const key = (a, b, c) => `${a.toFixed(2)},${b.toFixed(2)},${c.toFixed(2)}`, have = (list) => new Set(list.map((it) => key(it.p[0], it.p[1], it.p[2])));
+    const L = have(items.lobe), C = have(items.cypress), P = have(items.pine);
+    const keep = treeRecs.filter((r) => (r.t === 'round' ? L.has(key(r.lobes[0].x, r.lobes[0].y, r.lobes[0].z)) : r.t === 'cypress' ? C.has(key(r.x, r.y, r.z)) : P.has(key(r.x, r.y + r.H / 2, r.z))));
+    treeRecs.length = 0; treeRecs.push(...keep);
+  }
   buildAll(items, scene);
+  recordTrees = false;
 
   /**
    * For the dirt-bike game: grow the same trees, bushes, rocks, wildflowers and grass tufts as the main scene on other ground.
@@ -3015,6 +3030,10 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     },
     /** The houses of the village: { x, z, r, w, d, rot, group, eaveY } (the group is the house itself, in local units; `eaveY` is the height of its eave). */
     houseList() { return houses; },
+    /** The trees of the main scene: { t: 'round', lobes: [{ x, y, z, r }] } | { t: 'cypress', x, y (centre), z, rx, h } | { t: 'pine', x, y (base), z, H, R }. */
+    treeList() { return treeRecs; },
+    /** The footbridge over the pond: { x0, x1, bz, yEnd0, yEnd1 } (its arch rises 0.75 in the middle). */
+    bridge() { return bridgeInfo; },
     /** Show the mist layers for a moment so their shader is compiled ahead of time. */
     warmMist(on) { for (const m of mists) m.visible = on; },
     setClouds(night, horizon, wx = null) {

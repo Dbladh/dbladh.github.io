@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031101928';
+import { heightAt, POND, pathX } from './world.js?v=20261031102106';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -56,6 +56,33 @@ function makeChristmas(ctx) {
     if (!pts.length) continue;
     const o = bulbs(pts, XMAS, 0.26); h.group.add(o); houseStrings.push([h.group, o]);
   }
+  // every tree wears a string of lights wound round it (a spiral over its crown; round trees get one over all their lobes, cypresses one down the flame, pines one round the cone), and the footbridge has lights along both handrails
+  const WARM = ['#ffd27a', '#ffe7b0', '#ffc15a'].map((c) => new THREE.Color(c)), COOL = ['#bfe3ff', '#ffffff', '#8fc4ff'].map((c) => new THREE.Color(c)), PALS = [XMAS, XMAS, WARM, COOL];
+  const treePts = [], treeCols = [];
+  const trees = ctx.world.treeList(), per = ctx.low ? 18 : 34;
+  trees.forEach((t, ti) => {
+    const pal = PALS[ti % PALS.length], n = per, wraps = 4.5, a0 = ti * 1.3;
+    let cx, cz, y0, y1, rAt;
+    if (t.t === 'round') {
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, ya = 1e9, yb = -1e9;
+      for (const L of t.lobes) { x0 = Math.min(x0, L.x - L.r); x1 = Math.max(x1, L.x + L.r); z0 = Math.min(z0, L.z - L.r); z1 = Math.max(z1, L.z + L.r); ya = Math.min(ya, L.y - L.r * 0.8); yb = Math.max(yb, L.y + L.r * 0.9); }
+      cx = (x0 + x1) / 2; cz = (z0 + z1) / 2; y0 = ya + 0.2; y1 = yb; const R = Math.max(x1 - x0, z1 - z0) / 2, hy = (y1 - y0) / 2, cy = (y0 + y1) / 2;
+      rAt = (y) => R * 1.0 * Math.sqrt(Math.max(0.02, 1 - Math.pow((y - cy) / (hy + 0.01), 2)));
+    } else if (t.t === 'cypress') {
+      cx = t.x; cz = t.z; y0 = t.y - t.h * 0.78; y1 = t.y + t.h * 0.92; const cy = t.y + t.h * 0.05, hy = t.h; rAt = (y) => t.rx * 0.98 * Math.sqrt(Math.max(0.02, 1 - Math.pow((y - cy) / hy, 2)));
+    } else {
+      cx = t.x; cz = t.z; y0 = t.y + 0.25; y1 = t.y + t.H * 0.97; rAt = (y) => Math.max(0.04, t.R * 1.0 * (1 - (y - t.y) / t.H));
+    }
+    for (let i = 0; i < n; i++) { const u = i / (n - 1), y = y0 + (y1 - y0) * u, r = rAt(y), a = a0 + u * wraps * Math.PI * 2; treePts.push([cx + Math.cos(a) * r, y, cz + Math.sin(a) * r]); treeCols.push(pal[i % pal.length]); }
+  });
+  if (treePts.length) { const o = bulbs(treePts, [XMAS[0]], 0.34), col = o.geometry.attributes.aCol; treeCols.forEach((c, i) => col.setXYZ(i, c.r, c.g, c.b)); col.needsUpdate = true; root.add(o); }
+  const br = ctx.world.bridge();
+  if (br) {                                                     // lights along both handrails, rising over the arch
+    const pts = [], n = 30;
+    for (let k = 0; k <= n; k++) { const t = k / n, x = br.x0 + (br.x1 - br.x0) * t, y = br.yEnd0 + (br.yEnd1 - br.yEnd0) * t + Math.sin(t * Math.PI) * 0.75 + 0.35 + 0.86; for (const sz of [-1, 1]) pts.push([x, y, br.bz + sz * 0.58]); }
+    root.add(bulbs(pts, XMAS, 0.26));
+  }
+
   // a lit tree on a free bit of ground
   const spot = ctx.freeSpot(5.5); let tree = null;
   if (spot) {
