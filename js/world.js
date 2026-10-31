@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031004909';
-import { auroraColour } from './aurora.js?v=20261031004909';
+import { PAL } from './palette.js?v=20261031095801';
+import { auroraColour } from './aurora.js?v=20261031095801';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031004909';
+} from './houses.js?v=20261031095801';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2298,6 +2298,17 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     return g;
   })();
 
+  // The snow that piles on top of each billboard: a lumpy, overhanging ridge of overlapping drifts along the top edge (built once, as one mesh), which grows from nothing as the snow builds. It sits above the frame, so it never covers the picture.
+  const snowCapGeo = (() => {
+    const pos = [], nor = [], idx = [], r = rng(777), N = 22;
+    for (let i = 0; i < N; i++) {
+      const u = (i + 0.5) / N - 0.5 + (r() - 0.5) * 0.02, sx = 0.075 + r() * 0.05, sy = 0.5 + r() * 0.55, sz = 0.42 + r() * 0.2, z = (r() - 0.5) * 0.22 + 0.1, g = new THREE.SphereGeometry(1, 10, 6), p = g.attributes.position, n = g.attributes.normal, base = pos.length / 3;
+      for (let k = 0; k < p.count; k++) { pos.push(u + p.getX(k) * sx, p.getY(k) * sy, z + p.getZ(k) * sz); nor.push(n.getX(k), n.getY(k), n.getZ(k)); }
+      for (const q of g.index.array) idx.push(base + q); g.dispose();
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); geo.setIndex(idx); return geo;
+  })();
+  const snowCapMat = new THREE.MeshLambertMaterial({ color: '#f2f7ff' });
   for (const [id, s] of Object.entries(STOPS)) {
     const sec = sections[id];
     if (!sec) continue;
@@ -2342,6 +2353,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     const walkway = [catwalk, railTop, railMid, ...railPosts, ...ladderRails, ...rungs];
     const postXs = [-BOARD_W / 2 + 2.2, BOARD_W / 2 - 2.2];
     const POST_H = BOARD_BOTTOM + 3;
+    const snowCap = new THREE.Mesh(snowCapGeo, snowCapMat); snowCap.visible = false; snowCap.receiveShadow = true; g.add(snowCap);
     const posts = postXs.map((px) => {
       const m = new THREE.Mesh(rampPost, metal);
       m.scale.set(1, POST_H, 1);
@@ -2416,7 +2428,9 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     let sc = s.scale;                 // current scale of this sign (bigger on large screens, see placeBoards)
     const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
     const board = {
-      id, face, accent: s.accent, scale: s.scale, layout: null,
+      id, face, accent: s.accent, scale: s.scale, layout: null, snowK: 0,
+      /** How much snow lies on top of the sign (0 to 1). */
+      setSnow(k) { this.snowK = k; snowCap.visible = k > 0.02; snowCap.scale.y = Math.max(0.001, k); },
       width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // default size at the current scale (world units)
       /**
        * Resize and shift the sign face. `w`/`h` are world units; `ox`/`oy` move it within the
@@ -2429,6 +2443,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         const top = y + lh / 2, bot = y - lh / 2;
         // rim (deep) and its lighter inner lip
         set(rim[0], lw + 2 * T, T, DEPTH, x, top + T / 2, 0);
+        set(snowCap, lw + 2 * T + 0.5, 1, DEPTH + 0.5, x, top + T - 0.12, 0); snowCap.scale.y = Math.max(0.001, board.snowK);
         set(rim[1], lw + 2 * T, T, DEPTH, x, bot - T / 2, 0);
         set(rim[2], T, lh, DEPTH, x - lw / 2 - T / 2, y, 0);
         set(rim[3], T, lh, DEPTH, x + lw / 2 + T / 2, y, 0);
@@ -2995,7 +3010,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
     setWeather(wx) {
-      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); mists.forEach((m, i) => { m.visible = (w.mist || 0) > 0.02 + 0.1 * i; }); terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;          // (the mist layers come in one by one as it builds)
+      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); mists.forEach((m, i) => { m.visible = (w.mist || 0) > 0.02 + 0.1 * i; }); for (const b of boards) b.setSnow(Math.min(1, (w.roof ?? w.cover) * 1.05)); terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;          // (the mist layers come in one by one as it builds)
     },
     /** Show the mist layers for a moment so their shader is compiled ahead of time. */
     warmMist(on) { for (const m of mists) m.visible = on; },
