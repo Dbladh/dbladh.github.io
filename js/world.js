@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031001532';
-import { auroraColour } from './aurora.js?v=20261031001532';
+import { PAL } from './palette.js?v=20261031001653';
+import { auroraColour } from './aurora.js?v=20261031001653';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031001532';
+} from './houses.js?v=20261031001653';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -836,7 +836,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           p += wv * 1.7;
           float n = mn(p) * 0.5 + mn(p * 2.1 + vec2(uTime * 0.035, 3.0 - uTime * 0.02)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.045) * 0.2;
           float cov = smoothstep(0.44 - 0.1 * uAmt, 0.84 - 0.1 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
-          float a = cov * uAmt * uW * (0.82 + 0.18 * sin(uTime * 0.16 + uSeed + vW.x * 0.01)) * smoothstep(2.0, 14.0, distance(cameraPosition, vW));          // (it thickens and thins a little as it drifts)
+          float front = 0.72 + 0.28 * sin(dot(vW.xz, uDir * 0.021 + vec2(0.0, 0.012)) - uTime * 0.55 + uSeed);          // (broad banks of thicker fog roll through)
+          float a = cov * uAmt * uW * front * (0.85 + 0.15 * sin(uTime * 0.3 + uSeed + vW.x * 0.01)) * smoothstep(2.0, 14.0, distance(cameraPosition, vW));          // (it thickens and thins a little as it drifts)
           gl_FragColor = vec4(uColor, a * (0.1 + 0.09 * uAmt));
           #include <colorspace_fragment>
         }`,
@@ -2271,7 +2272,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
-  let windClock = 0, windSpin = 0.7;
+  let windClock = 0, windSpin = 0.7, mistClock = 0;
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
   // Each closed sign carries a picture of real work beside its title (painted by paintBoard once it has loaded):
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
@@ -2877,7 +2878,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       if (camera) { camPos = camera.position; camObj = camera; }
       { const g = dance.w > 0.002 ? dance.w : 0; flowerGlow.value.set(dance.lh[0] * g, dance.lh[1] * g, dance.lh[2] * g); flowerMix.value.set(Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * g, dance.sweep); }
       ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
-      mistU.uTime.value = windClock; mistU.uDrift.value.set(0.9 + 3 * cloudLook.wind, 0.35);
+      mistClock += dt * (2.6 + 4 * cloudLook.wind); mistU.uTime.value = mistClock; mistU.uDrift.value.set(0.9 + 3 * cloudLook.wind, 0.35);          // (the mist has its own, faster clock: it rolls along at a few units a second even in still air)
       windClock += dt * (0.7 + 4.5 * cloudLook.wind * cloudLook.wind + 2.5 * cloudLook.wind); terrainWind.uWindTime.value = windClock;          // (the grass sways faster in a wind)
       pondU.uTime.value = time;
       { const wd = cloudLook.wind, gust = 0.75 + 0.25 * Math.sin(time * 0.37) * Math.sin(time * 0.11 + 1), sp = 0.7 * (0.5 + 3.6 * wd * wd + 1.4 * wd) * (wd > 0.3 ? gust : 1);          // (the sails turn faster in a wind, and surge a little in the gusts)

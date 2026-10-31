@@ -4,8 +4,8 @@
 //   rail  : a cyan rail from a mouth, over a canyon, to an exit: rolling into the mouth fast enough carries the ball across (the ledge beside the canyon is the plain way).
 //   door  : a button, then two tall walls in a zigzag with a gate in the middle of each: the button opens the gates for a few seconds for a straight run.
 // Every recipe is checked with a proof shot (proveRecipe) over a band of powers, and dropped if the intended route does not work.
-import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261031001532';
-import { TUNING } from './golftuning.js?v=20261031001532';
+import { newBall, newCtx, shoot, stepBall, hillH } from './golfphys.js?v=20261031001653';
+import { TUNING } from './golftuning.js?v=20261031001653';
 
 export { TUNING };                                         // (so the tester can sweep the numbers on the very copy the recipes read)
 const HALF_W = 2.3;
