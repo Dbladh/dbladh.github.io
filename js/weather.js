@@ -118,6 +118,7 @@ export function createWeather({ calm = false } = {}) {
         const bt = bowArm && bowT > 0 ? Math.min(1, bowT / 12) * (1 - Math.min(1, Math.max(0, (bowT - 60) / 45))) : 0;
         state.bow += (bt - state.bow) * (1 - Math.exp(-dt * 0.6));
       }
+      state.mist = Math.max(state.fog, state.rain * 0.65, state.wet * 0.3 * (1 - Math.min(1, state.snow * 2)));          // (the mist: thick in fog, thinner in rain, and a thin trace over wet ground)
       state.flash = Math.max(0, state.flash - dt * 3.2);
       api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004 || Math.abs(vel[k]) > 0.002);
       if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm && !api.quiet) state.flash = 1; onFlash?.(); } } else hold = null;

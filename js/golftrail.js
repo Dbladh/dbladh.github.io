@@ -1,7 +1,7 @@
 // The trail a rolling ball leaves on the ground: a ribbon along its path that fades away. On snow it is a groove that stays (a dark blue-grey line pressed into the snow with pale heaped edges); on sand a
 // shallow furrow; on grass a faint flattened streak that is gone in a couple of seconds. One ribbon per hole, a few hundred points; the points sit on the ground (golfphys.js hillH).
 import * as THREE from 'three';
-import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261030235755';
+import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261031000156';
 
 const MAXP = 700;
 /** How the ball marks each kind of ground (`ground` in golfthemes.js): groove colour, edge colour, strength, width, how long it lasts (s). */
