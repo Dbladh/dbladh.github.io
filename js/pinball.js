@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030225045';
-import { toWorld, YAWS } from './golfsites.js?v=20261030225045';
-import { M, G } from './golfvis.js?v=20261030225045';
-import { isLow } from './golfquality.js?v=20261030225045';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261030225045';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030225908';
+import { toWorld, YAWS } from './golfsites.js?v=20261030225908';
+import { M, G } from './golfvis.js?v=20261030225908';
+import { isLow } from './golfquality.js?v=20261030225908';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261030225908';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const hitAmt = (v) => 0.7 + 2.5 * Math.pow(Math.max(0, Math.min(1, (v - 0.8) / 9)), 0.85);       // (how hard the ball hit, 0.2 to 1)
@@ -122,7 +122,7 @@ export function createTable(env) {
     { const rg = new THREE.RingGeometry(1.0, 1.12, 48).rotateX(-Math.PI / 2), rg2 = new THREE.RingGeometry(0.7, 0.8, 40).rotateX(-Math.PI / 2), wm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); disposables.push(rg, rg2, wm);
       for (const g of [rg, rg2]) { const m = new THREE.Mesh(g, wm); m.position.set(hole.cup.x, hillH(hole, hole.cup.x, hole.cup.z) + 0.07, hole.cup.z); group.add(m); } }          // (painted rings round the hole on the deck)
     for (const tr of frame.tris) {                                                     // slingshots: a red wedge with a cream top
-      const sh = new THREE.Shape(tr.map((p) => new THREE.Vector2(p[0], -p[1]))), geo = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false }).rotateX(-Math.PI / 2), m = new THREE.Mesh(geo, red);
+      const sh = new THREE.Shape((tr.round || tr).map((p) => new THREE.Vector2(p[0], -p[1]))), geo = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false }).rotateX(-Math.PI / 2), m = new THREE.Mesh(geo, red);
       m.scale.set(0.97, 1, 0.97); m.castShadow = true; disposables.push(geo); group.add(m); const top = new THREE.Mesh(geo, cream); top.scale.set(0.93, 0.04, 0.93); top.position.y = 0.52; group.add(top); slingFs.push({ x: (tr[0][0] + tr[1][0] + tr[2][0]) / 3, z: (tr[0][1] + tr[1][1] + tr[2][1]) / 3, F: addFlasher([m, top], '#ffffff') });
     }
     buildWall();

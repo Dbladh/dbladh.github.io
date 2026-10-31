@@ -1,8 +1,8 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a compact playfield with a round top. At the bottom two flippers, a drain and two slingshots; above them
 // the tee (the skill shot is a golf putt), pop bumpers, a spinner, drop targets and two lock saucers; a straight ramp and two winding ramps climb to a raised deck with the cup, which stays covered
 // until the table's three lamps are lit. Everything is in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom).
-import { mulberry32 } from './golfhero.js?v=20261030225045';
-export const TILT = 3.4, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 5.5, PLAT_H = 1.1, SPIN_NEED = 8, SAVE_TIME = 8;
+import { mulberry32 } from './golfhero.js?v=20261030225908';
+export const TILT = 3.4, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 3.5, PLAT_H = 1.1, SPIN_NEED = 8, SAVE_TIME = 8;
 
 export const TABLE = { x0: -10, x1: 10, W: 5.5, arcX: 4.5, tee: { x: -4.6, z: 0 }, cup: { x: 7.4, z: 0 }, pivX: -7.4, pivZ: 1.78, pocketX: -9.8 };
 const FR = -Math.PI / 2 - 0.45;                                                  // (the flipper at rest points down and in; the funnel wall is that line moved up by the flipper's radius and run back to the side wall)
@@ -10,7 +10,12 @@ const FUN = (() => {
   const d = [Math.cos(FR), Math.sin(FR)], n = [-d[1], d[0]], ex = TABLE.pivX + n[0] * FLIP_RAD, ez = TABLE.pivZ + n[1] * FLIP_RAD, t = (TABLE.W - Math.abs(ez)) / Math.abs(d[1]);
   return { ex, ez, sideX: ex - d[0] * t, ox: TABLE.pivX - n[0] * FLIP_RAD, oz: TABLE.pivZ - n[1] * FLIP_RAD, k: Math.abs(d[0] / d[1]) };
 })();
-const tableHalf = (x) => (x > TABLE.arcX ? Math.sqrt(Math.max(0, TABLE.W * TABLE.W - (x - TABLE.arcX) * (x - TABLE.arcX))) : x > FUN.sideX ? TABLE.W : x > FUN.ex ? FUN.ez + (x - FUN.ex) / FUN.k : FUN.oz);
+/** The bottom corner of the arena, where the straight side turns in to the funnel, is a rounded fillet of radius FIL_R: it starts at (ax, W) on the side, ends at (bx, bz) on the funnel line, and its centre is (ax, W - FIL_R). */
+const FIL_R = 2.6, FIL = (() => {
+  const dx = FUN.ex - FUN.sideX, dz = FUN.ez - TABLE.W, l = Math.hypot(dx, dz), u2 = [dx / l, dz / l], phi = Math.acos(Math.max(-1, Math.min(1, -u2[0]))), tl = FIL_R * Math.tan(phi / 2);         // (the side runs towards -x, the funnel leaves along u2; the turn is phi)
+  return { ax: FUN.sideX + tl, bx: FUN.sideX + u2[0] * tl, bz: TABLE.W + u2[1] * tl, cx: FUN.sideX + tl, cz: TABLE.W - FIL_R, r: FIL_R };
+})();
+const tableHalf = (x) => (x > TABLE.arcX ? Math.sqrt(Math.max(0, TABLE.W * TABLE.W - (x - TABLE.arcX) * (x - TABLE.arcX))) : x > FIL.ax ? TABLE.W : x > FIL.bx ? FIL.cz + Math.sqrt(Math.max(0, FIL.r * FIL.r - (x - FIL.cx) * (x - FIL.cx))) : x > FUN.ex ? FUN.ez + (x - FUN.ex) / FUN.k : FUN.oz);
 
 /** A lane: a smooth path (Catmull-Rom through `ctrl`) as samples [x, z, distance along] with its half-width w, the height H it climbs to by smoothstep from s0 over `ramp`, and a soft edge. Read by hillH in golfphys.js. */
 function mkLane(ctrl, w, H, s0, ramp) {
@@ -73,16 +78,28 @@ export function prepareTable(hole, layout = 0, mirror = false, seed = null) {
   const LY = LAYOUTS[layout % LAYOUTS.length], mz = mirror ? -1 : 1, zf = (p) => [p[0], p[1] * mz, ...p.slice(2)];
   const { x0, x1, W, arcX } = TABLE, walls = [], rails = [], seg = (a, b, kick = 0) => { walls.push(kick ? [a[0], a[1], b[0], b[1], 0, 0, 0, 0, kick] : [a[0], a[1], b[0], b[1], 0, 0]); rails.push([{ x: a[0], z: a[1] }, { x: b[0], z: b[1] }]); };
   const T = (x, z) => [x, z], poly = [];
-  for (const s of [-1, 1]) { seg(T(arcX, s * W), T(FUN.sideX, s * W)); seg(T(FUN.sideX, s * W), T(FUN.ex, s * FUN.ez)); seg(T(FUN.ox, s * FUN.oz), T(TABLE.pocketX, s * FUN.oz)); }
+  for (const s of [-1, 1]) { seg(T(arcX, s * W), T(FIL.ax, s * W)); let pv = T(FIL.ax, s * W);
+    for (let k = 1; k <= 10; k++) { const x = FIL.ax + (FIL.bx - FIL.ax) * (k / 10), q = k === 10 ? T(FIL.bx, s * FIL.bz) : T(x, s * (FIL.cz + Math.sqrt(Math.max(0, FIL.r * FIL.r - (x - FIL.cx) * (x - FIL.cx))))); seg(pv, q); pv = q; }          // (the rounded corner)
+    seg(pv, T(FUN.ex, s * FUN.ez)); seg(T(FUN.ox, s * FUN.oz), T(TABLE.pocketX, s * FUN.oz)); }
   seg(T(TABLE.pocketX, -FUN.oz), T(TABLE.pocketX, FUN.oz));
   const ARC = 14; let prev = T(arcX, -W);                                          // the round top
   for (let k = 1; k <= ARC; k++) { const t = (k / ARC - 0.5) * Math.PI, q = T(arcX + Math.cos(t) * W, Math.sin(t) * W); seg(prev, q); prev = q; }
   const tris = [];                                                                 // the slingshots: a triangle above each funnel, its long side facing the middle
-  for (const s of [-1, 1]) { const tr = [T(-2.6, s * 4.5), T(-5.0, s * 4.5), T(-5.0, s * 2.4)]; tris.push(tr); for (let k = 0; k < 3; k++) seg(tr[k], tr[(k + 1) % 3], k === 2 ? SLING_KICK : 0); }
+  for (const s of [-1, 1]) {
+    const tr = [T(-2.6, s * 4.5), T(-5.0, s * 4.5), T(-5.0, s * 2.4)], R = 0.38, out = [], kickAt = []; tris.push(tr);       // (each corner is rounded; the long side, facing the middle, kicks)
+    for (let k = 0; k < 3; k++) {
+      const a = tr[(k + 2) % 3], b = tr[k], c = tr[(k + 1) % 3], u1 = [(a[0] - b[0]), (a[1] - b[1])], u2 = [(c[0] - b[0]), (c[1] - b[1])], l1 = Math.hypot(...u1), l2 = Math.hypot(...u2); u1[0] /= l1; u1[1] /= l1; u2[0] /= l2; u2[1] /= l2;
+      const ang = Math.acos(Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1]))), tl = Math.min(R / Math.tan(ang / 2), l1 * 0.45, l2 * 0.45), p1 = [b[0] + u1[0] * tl, b[1] + u1[1] * tl], p2 = [b[0] + u2[0] * tl, b[1] + u2[1] * tl];
+      out.push({ p: p1, kick: false, edge: (k + 2) % 3 }); for (let q = 1; q < 4; q++) { const f = q / 4, m = [p1[0] * (1 - f) * (1 - f) + 2 * b[0] * f * (1 - f) + p2[0] * f * f, p1[1] * (1 - f) * (1 - f) + 2 * b[1] * f * (1 - f) + p2[1] * f * f]; out.push({ p: m, kick: false, edge: -1 }); }
+      out.push({ p: p2, kick: false, edge: k });
+    }
+    tr.round = out.map((o) => o.p);                                                                                  // (the rounded outline, for drawing it)
+    for (let i = 0; i < out.length; i++) { const a = out[i], b = out[(i + 1) % out.length]; seg(a.p, b.p, a.edge === 2 && b.edge === 2 ? SLING_KICK : 0); }
+  }
   const ribbon = [], shape = [];
   for (let x = x0; x <= x1 + 1e-6; x += 0.5) { const w = tableHalf(x); ribbon.push([x, w, x, -w, x - x0]); }
   for (let x = x0; x <= x1 + 1e-6; x += 2.5) for (let z = -5.2; z <= 5.2; z += 2.2) if (Math.abs(z) <= tableHalf(x) + 0.4) shape.push([x, z, 2.4]);
-  for (let x = x0; x <= x1; x += 1) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 1) poly.push([x, -tableHalf(x)]);
+  for (let x = x0; x <= x1; x += 0.5) poly.push([x, tableHalf(x)]); for (let x = x1; x >= x0; x -= 0.5) poly.push([x, -tableHalf(x)]);
   const path = []; for (let x = -8; x <= 8; x += 1) path.push({ x, z: 0 });
   // the ramps: a straight one up the middle and two winding ones up the sides all climb to a raised deck at the top, where the cup is. Where lanes meet, their rails open into each other.
   const lanes = [mkLane(LY.centre, 1.5, PLAT_H, 0, LY.cramp), mkLane([[LY.centre[1][0] - 0.6, 0], [9.0, 0]], 2.9, PLAT_H, -1, 0.1)];
