@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031000156';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031000156';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031000723';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031000723';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031000156';
-import { createWeather } from './weather.js?v=20261031000156';
-import { PAL } from './palette.js?v=20261031000156';
-import { buildWorld } from './world.js?v=20261031000156';
-import { createSky } from './sky.js?v=20261031000156';
-import { createDOF } from './dof.js?v=20261031000156';
-import { createRide } from './ride.js?v=20261031000156';
-import { createGame } from './bikegame.js?v=20261031000156';
-import { createAurora, setWarm } from './aurora.js?v=20261031000156';
-import { createAudio, pickFlicker } from './audio.js?v=20261031000156';
+import { createPrecip } from './precip.js?v=20261031000723';
+import { createWeather } from './weather.js?v=20261031000723';
+import { PAL } from './palette.js?v=20261031000723';
+import { buildWorld } from './world.js?v=20261031000723';
+import { createSky } from './sky.js?v=20261031000723';
+import { createDOF } from './dof.js?v=20261031000723';
+import { createRide } from './ride.js?v=20261031000723';
+import { createGame } from './bikegame.js?v=20261031000723';
+import { createAurora, setWarm } from './aurora.js?v=20261031000723';
+import { createAudio, pickFlicker } from './audio.js?v=20261031000723';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -610,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031000156');
+        const mod = await import('./golf.js?v=20261031000723');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -857,7 +857,7 @@ function start() {
   // The landscape's sound button (sound is off until it is pressed)
   // ---- the weather chip: an icon for what the weather is (and the temperature when it is the visitor's own), and a small menu to choose ----
   { const chip = document.getElementById('wx-chip'), ico = document.getElementById('wx-ico'), tmp = document.getElementById('wx-temp'), menu = document.getElementById('wx-menu'), note = document.getElementById('wx-note');
-    const P = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`, CLOUD = 'M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.5 4.3 4.3 0 0 0 7 18z';
+    const P = (d) => `<svg viewBox="-3 -3 30 30" aria-hidden="true">${d}</svg>`, CLOUD = 'M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.5 4.3 4.3 0 0 0 7 18z';
     const ICONS = {
       sun: P('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>'),
       moon: P('<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>'),
@@ -957,7 +957,7 @@ function start() {
       dof.setBlur(golf?.active ? 0.5 : 1);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
-      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = sky.fogK; scene.fog.near = fn * (1 - 0.65 * wk); scene.fog.far = fn + 167 - (fn + 167 - 40) * 0.6 * wk; }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself
+      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = sky.fogK; scene.fog.near = fn * (1 - 0.82 * wk); scene.fog.far = fn + 167 - (fn + 167 - 36) * 0.8 * wk; }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);
     } else {

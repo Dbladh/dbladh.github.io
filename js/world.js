@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031000156';
-import { auroraColour } from './aurora.js?v=20261031000156';
+import { PAL } from './palette.js?v=20261031000723';
+import { auroraColour } from './aurora.js?v=20261031000723';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031000156';
+} from './houses.js?v=20261031000723';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -821,7 +821,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   const _white = new THREE.Color(1, 1, 1);
   const mistU = { uTime: { value: 0 }, uAmt: { value: 0 }, uColor: { value: new THREE.Color('#dfe9f2') }, uDrift: { value: new THREE.Vector2(1, 0.4) } };
   // Layers at different heights, scales and speeds, drifting in slightly different directions, so the haze has depth and parallax: it slides across the ground in sheets, not as one flat veil. [lift, noise scale, speed, direction (radians off the wind), weight]
-  const MIST_LAYERS = low ? [[0.9, 0.034, 1.0, 0.0, 1.0], [3.2, 0.02, 0.6, 0.5, 0.7]] : [[0.6, 0.036, 1.0, 0.0, 1.0], [1.7, 0.026, 0.72, 0.45, 0.85], [3.3, 0.018, 0.5, -0.4, 0.6], [5.6, 0.012, 0.34, 0.8, 0.45]];
+  const MIST_LAYERS = low ? [[0.9, 0.034, 1.0, 0.0, 1.0], [3.2, 0.02, 0.6, 0.5, 0.7]] : [[0.6, 0.036, 1.0, 0.0, 1.0], [1.7, 0.026, 0.72, 0.45, 0.95], [3.3, 0.018, 0.5, -0.4, 0.8], [5.6, 0.012, 0.34, 0.8, 0.6]];
   const mists = MIST_LAYERS.map(([lift, sc, sp, dir, wt], i) => {
     const m = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: false, uniforms: { ...mistU, uScale: { value: sc }, uSpeed: { value: sp }, uSeed: { value: i * 17.3 }, uDir: { value: new THREE.Vector2(Math.cos(dir), Math.sin(dir)) }, uW: { value: wt } },
@@ -833,9 +833,9 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           vec2 dv = vec2(uDrift.x * uDir.x - uDrift.y * uDir.y, uDrift.x * uDir.y + uDrift.y * uDir.x);
           vec2 p = vW.xz * uScale + dv * uTime * 0.05 * uSpeed + uSeed;
           float n = mn(p) * 0.5 + mn(p * 2.1 + vec2(uTime * 0.012, 3.0)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.02) * 0.2;
-          float cov = smoothstep(0.42 - 0.12 * uAmt, 0.82 - 0.1 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
+          float cov = smoothstep(0.36 - 0.18 * uAmt, 0.76 - 0.18 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
           float a = cov * uAmt * uW * smoothstep(2.0, 14.0, distance(cameraPosition, vW));
-          gl_FragColor = vec4(uColor, a * (0.3 + 0.3 * uAmt));
+          gl_FragColor = vec4(uColor, a * (0.42 + 0.4 * uAmt));
           #include <colorspace_fragment>
         }`,
     });

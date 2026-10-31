@@ -9,7 +9,7 @@ export const PRESETS = {
   rain: { cloud: 0.92, rain: 0.75, snow: 0, fog: 0.2, wind: 0.4, storm: 0 },
   storm: { cloud: 1, rain: 1, snow: 0, fog: 0.25, wind: 0.85, storm: 1 },
   snow: { cloud: 0.85, rain: 0, snow: 0.8, fog: 0.25, wind: 0.22, storm: 0 },
-  fog: { cloud: 0.55, rain: 0, snow: 0, fog: 0.95, wind: 0.04, storm: 0 },
+  fog: { cloud: 0.6, rain: 0, snow: 0, fog: 1, wind: 0.04, storm: 0 },
   shower: { cloud: 0.64, rain: 0.6, snow: 0, fog: 0.05, wind: 0.25, storm: 0 },                // a sun shower: rain falling through a bright, broken sky (a rainbow comes with it)
 };
 

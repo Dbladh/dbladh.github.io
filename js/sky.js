@@ -322,7 +322,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     skySun.position.set(sx * 1.25, Math.max(sy, 26), 20);
     fog.color.copy(s.bot);
     if (!classic) fog.color.lerp(s.sun, 0.12);
-    fogK = wx ? Math.min(0.88, Math.max(wx.fog, wx.rain * 0.45, wx.storm * 0.5, wx.snow * 0.5, wx.cloud * 0.12)) : 0;       // (how much of the view the weather swallows: main.js sets the fog's near and far from this)
+    fogK = wx ? Math.min(0.97, Math.max(wx.fog, wx.rain * 0.45, wx.storm * 0.5, wx.snow * 0.5, wx.cloud * 0.12)) : 0;       // (how much of the view the weather swallows: main.js sets the fog's near and far from this)
     starMat.uniforms.uNight.value = night * night * (1 - dim);
     // the sun, moon and their glows (and the stars above) fade away while a house song plays, leaving the sky to the aurora
     // Only one of the two is in the sky at a time: the sun is up from 6 am to 6 pm and the moon from 6 pm to 6 am, each rising at the hills as the other sets on the far side, and
