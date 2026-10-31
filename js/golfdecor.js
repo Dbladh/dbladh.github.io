@@ -1,8 +1,8 @@
 // The planting round the outside of a hole: shrubs, boulders, flower patches, small conifers and grass tufts, set in the ground in world coordinates (so each one sits at the real height of
 // the ground there). Placed along the hole's outline with a seeded generator, kept out of every other hole's corridor.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261030220201';
-import { toWorld } from './golfsites.js?v=20261030220201';
+import { mulberry32 } from './golfhero.js?v=20261030220526';
+import { toWorld } from './golfsites.js?v=20261030220526';
 
 const jitter = (geo, amt, seed) => {                       // roughen a shape so every boulder and bush is a little lumpy
   const r = mulberry32(seed), p = geo.attributes.position, seen = new Map();
