@@ -1027,6 +1027,14 @@ body.scene-mode .scene-sound.wx-chip { width: auto; min-width: 42px; gap: 6px; p
 .wx-note { margin: 4px 8px 2px; font-size: 0.75rem; opacity: 0.7; max-width: 200px; }
 @media (max-width: 480px) { body.scene-mode .scene-sound.wx-chip { min-width: 38px; padding: 0 9px 0 8px; } }
 
-/* the Easter egg hunt: a small pill under the header that says how many eggs have been found */
-.egg-chip { position: fixed; top: 76px; left: 50%; transform: translate(-50%, -6px); z-index: 24; padding: 7px 16px; border-radius: 999px; background: color-mix(in srgb, var(--ui-cream) 94%, transparent); border: 1.5px solid var(--ui-sage); color: inherit; font-family: var(--name-font); font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease; box-shadow: 0 6px 18px rgba(40, 52, 44, 0.2); white-space: nowrap; }
-.egg-chip.on { opacity: 1; transform: translate(-50%, 0); }
+/* the Easter egg hunt: a message pill and, once the first egg is found, a counter with a spinning egg; both sit in the bottom-left corner, clear of the header, the buttons and the nav (raised above the nav on narrow screens) */
+.egg-chip { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); transform: translateY(6px); z-index: 24; max-width: min(280px, calc(100vw - 32px)); padding: 7px 16px; border-radius: 18px; background: color-mix(in srgb, var(--ui-cream) 94%, transparent); border: 1.5px solid var(--ui-sage); color: inherit; font-family: var(--name-font); font-size: 14px; line-height: 1.25; pointer-events: none; opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease; box-shadow: 0 6px 18px rgba(40, 52, 44, 0.2); }
+.egg-chip.on { opacity: 1; transform: translateY(0); }
+.egg-counter { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); transform: translateY(8px) scale(0.92); transform-origin: left bottom; z-index: 24; display: flex; align-items: center; gap: 6px; padding: 4px 18px 4px 6px; border-radius: 999px; background: color-mix(in srgb, var(--ui-cream) 94%, transparent); border: 1.5px solid var(--ui-sage); font-family: var(--name-font); pointer-events: none; opacity: 0; transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.3, 1.5, 0.5, 1); box-shadow: 0 6px 18px rgba(40, 52, 44, 0.2); }
+.egg-counter.on { opacity: 1; transform: translateY(0) scale(1); }
+.egg-counter canvas { width: 46px; height: 46px; display: block; }
+.egg-counter-text { display: grid; line-height: 1.1; text-align: left; }
+.egg-counter-text b { font-size: 17px; }
+.egg-counter-text small { font-size: 12px; opacity: 0.7; }
+.egg-counter.done { border-color: #e8a838; box-shadow: 0 6px 22px rgba(232, 168, 56, 0.45); }
+@media (max-width: 760px) { .egg-counter { bottom: calc(env(safe-area-inset-bottom, 0px) + 88px); } .egg-chip { bottom: calc(env(safe-area-inset-bottom, 0px) + 148px); } }
