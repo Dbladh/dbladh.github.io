@@ -251,8 +251,19 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   function setView(aspect, fov) { orbit.halfW = THREE.MathUtils.clamp(-ORBIT_Z * Math.tan((fov * Math.PI) / 360) * aspect * 0.82, 28, 70); fillOrbit(); }
   /** Where the sun is on the oval at `hour` (the moon is on the opposite side), written into `out`. */
   function orbitPoint(hour, out) { const a = ((hour - 6) / 12) * Math.PI; return out.set(Math.cos(a) * orbit.halfW, SKY_LIFT + SKY_AMP * Math.sin(a), ORBIT_Z); }
-  function set(hour, dim = 0, warm = 0) {
+  const _grey = new THREE.Color();
+  let fogK = 0;
+  function set(hour, dim = 0, warm = 0, wx = null) {
     const s = sample(((hour % 24) + 24) % 24);
+    let sunK = 1;
+    if (wx) {                                              // the weather: overcast greys and darkens the sky and takes the sun's strength; a lightning flash lights it up
+      const oc = Math.min(0.92, wx.cloud * 0.6 + wx.storm * 0.3 + wx.fog * 0.25 + wx.rain * 0.15 + wx.snow * 0.1);
+      for (const c of [s.top, s.bot, s.sun]) { const l = c.r * 0.3 + c.g * 0.55 + c.b * 0.15; _grey.setRGB(l * 0.96, l * 0.99, l * 1.04); c.lerp(_grey, oc * (c === s.sun ? 0.8 : 0.7)); }
+      const dark = 1 - 0.45 * wx.storm - 0.14 * wx.rain - 0.08 * wx.snow; s.top.multiplyScalar(dark); s.bot.multiplyScalar(1 - 0.5 * (1 - dark));
+      if (wx.snow > 0.01) s.bot.lerp(_grey.setRGB(0.86, 0.9, 0.96), wx.snow * 0.3);
+      sunK = 1 - 0.78 * oc; s.sunI *= sunK; s.hemi *= 1 - 0.18 * oc;
+      if (wx.flash > 0.01) { const f = wx.flash * wx.flash; s.top.lerp(_grey.setRGB(0.9, 0.93, 1), f * 0.7); s.bot.lerp(_grey.setRGB(0.95, 0.97, 1), f * 0.8); s.hemi += f * 1.2; }
+    }
     if (dim > 0) {
       s.top.multiplyScalar(1 - 0.94 * dim); s.bot.multiplyScalar(1 - 0.94 * dim);
       if (warm > 0) { s.top.lerp(warmDark[0], 0.5 * warm * dim); s.bot.lerp(warmDark[1], 0.55 * warm * dim); }      // (a warm passage: the dark sky takes on a deep ember tone)
@@ -293,6 +304,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
     skySun.position.set(sx * 1.25, Math.max(sy, 26), 20);
     fog.color.copy(s.bot);
     if (!classic) fog.color.lerp(s.sun, 0.12);
+    fogK = wx ? Math.min(0.88, Math.max(wx.fog, wx.rain * 0.45, wx.storm * 0.5, wx.snow * 0.5, wx.cloud * 0.12)) : 0;       // (how much of the view the weather swallows: main.js sets the fog's near and far from this)
     starMat.uniforms.uNight.value = night * night * (1 - dim);
     // the sun, moon and their glows (and the stars above) fade away while a house song plays, leaving the sky to the aurora
     // Only one of the two is in the sky at a time: the sun is up from 6 am to 6 pm and the moon from 6 pm to 6 am, each rising at the hills as the other sets on the far side, and
@@ -323,5 +335,5 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   const setRes = (n) => { if (sunLight.shadow.mapSize.x === n) return; sunLight.shadow.mapSize.set(n, n); sunLight.shadow.map?.dispose(); sunLight.shadow.map = null; };           // (a new size needs a new shadow map)
   const shadowBox = (x, y, z, half, res = 2048) => { setRes(res); sunLight.target.position.set(x, y, z); sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.updateProjectionMatrix(); sunLight.shadow.normalBias = 0.025; };
   const shadowReset = () => { setRes(2048); sunLight.target.position.set(0, 0, -38); sc.left = -100; sc.right = 100; sc.top = 100; sc.bottom = -100; sc.updateProjectionMatrix(); sunLight.shadow.normalBias = 0.06; };
-  return { set, setHint, setHover, setOrbitAlpha, setView, orbitPoint, shadowBox, shadowReset, setLampKey, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  return { set, get fogK() { return fogK; }, setHint, setHover, setOrbitAlpha, setView, orbitPoint, shadowBox, shadowReset, setLampKey, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }

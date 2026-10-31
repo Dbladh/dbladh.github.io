@@ -1,16 +1,17 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030225908';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030225908';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231037';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231037';
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030225908';
-import { buildWorld } from './world.js?v=20261030225908';
-import { createSky } from './sky.js?v=20261030225908';
-import { createDOF } from './dof.js?v=20261030225908';
-import { createRide } from './ride.js?v=20261030225908';
-import { createGame } from './bikegame.js?v=20261030225908';
-import { createAurora, setWarm } from './aurora.js?v=20261030225908';
-import { createAudio, pickFlicker } from './audio.js?v=20261030225908';
+import { createWeather } from './weather.js?v=20261030231037';
+import { PAL } from './palette.js?v=20261030231037';
+import { buildWorld } from './world.js?v=20261030231037';
+import { createSky } from './sky.js?v=20261030231037';
+import { createDOF } from './dof.js?v=20261030231037';
+import { createRide } from './ride.js?v=20261030231037';
+import { createGame } from './bikegame.js?v=20261030231037';
+import { createAurora, setWarm } from './aurora.js?v=20261030231037';
+import { createAudio, pickFlicker } from './audio.js?v=20261030231037';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -184,6 +185,7 @@ function start() {
   camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
   const classic = new URLSearchParams(location.search).get('look') === 'classic'; // A/B: the original look
   const sky = createSky(scene, skyScene, renderer, { classic });
+  const weather = createWeather();
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
@@ -604,7 +606,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261030225908');
+        const mod = await import('./golf.js?v=20261030231037');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -776,10 +778,10 @@ function start() {
   let nightK = 0; const sndV = new THREE.Vector3(), sndB = new THREE.Vector3();
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
-    const { night, horizon } = sky.set(songHour(hour), songDim(), songWarm); nightK = night;
+    const { night, horizon } = sky.set(songHour(hour), songDim(), songWarm, game?.active || golf?.active ? null : weather.state); nightK = night;
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
-    world.setClouds(night, horizon);
+    world.setClouds(night, horizon, game?.active || golf?.active ? null : weather.state);
     dof?.setLook(horizon, lowEnd || quality.scale < 1 || game?.active ? 0 : 1);
     const minute = Math.floor(hour * 60);
     if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes
@@ -918,7 +920,7 @@ function start() {
       dof.setBlur(golf?.active ? 0.5 : 1);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
-      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48; scene.fog.near = fn; scene.fog.far = fn + 167; }   // the game's camera sits further back: start the fog beyond the ride itself
+      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = game?.active || golf?.active ? 0 : sky.fogK; scene.fog.near = fn * (1 - 0.65 * wk); scene.fog.far = fn + 167 - (fn + 167 - 40) * 0.6 * wk; }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);
     } else {
@@ -948,6 +950,7 @@ function start() {
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.1);
     prof.ft[prof.n++ % prof.ft.length] = rawDt * 1000;
 
+    weather.update(dt); if ((reduceMotion || dragging) && weather.busy) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
       const sT = performance.now(); setTime(hour + (dt * 24) / DAY_SECONDS); secT('time', sT);
@@ -1124,5 +1127,5 @@ function start() {
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); hideBoot(); }
   requestAnimationFrame(() => requestAnimationFrame(hideBoot)); setTimeout(hideBoot, 450);   // the first scene frame has been drawn: lift the splash (the timer covers a background tab, where frames do not run)
-  window.__portfolio = { get golf() { return golf; }, playGolf, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { weather, get golf() { return golf; }, playGolf, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }

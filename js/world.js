@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030225908';
-import { auroraColour } from './aurora.js?v=20261030225908';
+import { PAL } from './palette.js?v=20261030231037';
+import { auroraColour } from './aurora.js?v=20261030231037';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030225908';
+} from './houses.js?v=20261030231037';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2044,7 +2044,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     skyScene.add(g);
     clouds.push(g);
   }
-  const cloudLook = { night: 0, vis: 1, tint: new THREE.Color(1, 1, 1) };
+  const cloudLook = { night: 0, vis: 1, tint: new THREE.Color(1, 1, 1), cover: 0, wind: 0, storm: 0 };
 
   // ---- Fireflies: spread through the whole depth of the scene ----
   // Near ones sit right in front of the camera (big, soft bokeh), far ones twinkle on the hills.
@@ -2821,7 +2821,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         smoke.geometry.attributes.aAge.needsUpdate = true;
       }
       for (const cl of clouds) {
-        cl.position.x += cl.userData.speed * dt;
+        cl.position.x += cl.userData.speed * dt * (1 + 3 * cloudLook.wind);
         if (cl.position.x > 230) cl.position.x = -230;
       }
       // within a bank every wisp slides, swells and shears at its own slow rate, so the cloud keeps changing shape
@@ -2833,7 +2833,9 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         sp.scale.set(u.w * (1 + 0.07 * Math.sin(t * 0.8 + 2)), u.h * (1 + 0.14 * Math.cos(t * 0.6)), 1);
         if (camera) { sp.quaternion.copy(camera.quaternion); sp.rotateZ(0.04 * Math.sin(t * 0.5 + u.ph)); }   // billboard
         sp.material.uniforms.uTime.value = time;
-        sp.material.uniforms.uOpacity.value = Math.min(1, (u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12) * cloudLook.vis;
+        if (u.thr === undefined) u.thr = sp.material.uniforms.uThr.value;
+        sp.material.uniforms.uThr.value = u.thr - 0.26 * cloudLook.cover;                                          // (a cloudy day: the same clouds, but they fill more of the sky)
+        sp.material.uniforms.uOpacity.value = Math.min(1, ((u.base + 0.1 * Math.sin(t * 1.3 + u.ph * 2)) * (1 - 0.3 * nt) + 0.12) * (1 + 0.55 * cloudLook.cover)) * cloudLook.vis;
       }
       // butterflies flutter along looping paths; they roost (hide) once it gets dark
       butterflies.forEach((bf, bi) => {
@@ -2905,8 +2907,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       });
     },
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
-    setClouds(night, horizon) {
-      cloudLook.night = night;
+    setClouds(night, horizon, wx = null) {
+      cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0; cloudLook.storm = wx ? wx.storm : 0;
       pondU.uHorizon.value.copy(horizon);
       pondU.uSkyTop.value.set('#4a8cf0').lerp(new THREE.Color('#16206a'), night);
       // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
@@ -2917,6 +2919,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       const day = new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.55, 0.46, 0.68), dusk * 0.9);
       const dark = new THREE.Color(0.42, 0.46, 0.72);
       cloudLook.tint.copy(day).lerp(dark, night);
+      if (wx) cloudLook.tint.lerp(new THREE.Color(0.52, 0.55, 0.62), Math.min(1, wx.cloud * 0.75 + wx.storm * 0.25)).multiplyScalar(1 - 0.35 * wx.storm);          // (grey, and darker in a storm)
       // Sunset lights the bottoms of the low layer: warm orange-pink undersides under paler tops.
       const glowAmt = Math.min(1, warm * 3) * (1 - night);
       const under = new THREE.Color(1.0, 0.55, 0.42);
