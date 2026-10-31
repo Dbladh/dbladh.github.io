@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031105228';
+import { heightAt, POND, pathX } from './world.js?v=20261031105811';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -480,11 +480,11 @@ function makeHalloween(ctx) {
   });
   const glow = bulbs(glowPts, [HAL[0]], 0.9); root.add(glow);
   // the haunted house
-  const spot = ctx.freeSpot(12) || ctx.freeSpot(9); let hh = null, mansion = null, wins = [];
+  const spot = ctx.freeSpot(12) || ctx.freeSpot(9); let hh = null, mansion = null, wins = [], unclear = null;
   if (spot) {
     mansion = makeMansion(ctx); hh = mansion.group; wins = mansion.wins; hh.position.set(spot.x, spot.y, spot.z); hh.scale.setScalar(1.45); hh.rotation.y = 0.1; root.add(hh);
     for (const [x, z] of [[-0.8, 2.95], [0.85, 2.8]]) { const p = pumpkin(0.42); p.position.set(x, 1.05, z); hh.add(p); }
-    ctx.hallSpot = () => ({ x: spot.x, y: spot.y, z: spot.z });
+    ctx.hallSpot = () => ({ x: spot.x, y: spot.y, z: spot.z }); unclear = ctx.world.mistClearAdd(spot.x, spot.z, 8.5);
   }
   // a big orange glow round the moon
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 8, 64, 64, 64); r.addColorStop(0, 'rgba(255,150,40,0.95)'); r.addColorStop(0.35, 'rgba(255,120,30,0.45)'); r.addColorStop(1, 'rgba(255,90,20,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); }), transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 }));
@@ -517,7 +517,7 @@ function makeHalloween(ctx) {
       bset.sync(s.hide);
     },
     spot: hh ? { x: spot.x, y: spot.y, z: spot.z } : null,
-    dispose() { bset.dispose(); ctx.skyScene.remove(halo); halo.material.map.dispose(); halo.material.dispose(); if (mansion) mansion.dispose(); disposeTree(root); ctx.scene.remove(root); glow.geometry.dispose(); },
+    dispose() { bset.dispose(); ctx.skyScene.remove(halo); halo.material.map.dispose(); halo.material.dispose(); if (mansion) mansion.dispose(); unclear?.(); disposeTree(root); ctx.scene.remove(root); glow.geometry.dispose(); },
     root,
   };
 }

@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031105228';
-import { auroraColour } from './aurora.js?v=20261031105228';
+import { PAL } from './palette.js?v=20261031105811';
+import { auroraColour } from './aurora.js?v=20261031105811';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031105228';
+} from './houses.js?v=20261031105811';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -825,14 +825,28 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   scene.add(terrain);
   // Mist: thin layers of drifting haze laid over the ground. Each is the ground's own mesh lifted a little, so it follows every hill and dip exactly, with a slow noise sliding across it (the wind sets which way and how fast).
   const _white = new THREE.Color(1, 1, 1);
-  const mistU = { uTime: { value: 0 }, uAmt: { value: 0 }, uColor: { value: new THREE.Color('#dfe9f2') }, uDrift: { value: new THREE.Vector2(1, 0.4) } };
+  // Where the mist thins out: round each house, tree, sign and the bridge it eases off (a soft, blurred patch painted into a small top-down map), so a layer of haze does not cut across the walls and crowns
+  // in a hard line where the two meet. Lit by the same few shapes as stand there; things added later (the haunted house) register with `mistClearAdd`.
+  const CL = { W: 256, H: 200, ox: -70, oz: -75, sx: 140, sz: 110 }, clearCv = document.createElement('canvas'); clearCv.width = CL.W; clearCv.height = CL.H;
+  const clearTex = new THREE.CanvasTexture(clearCv), clearExtra = new Set(); let clearDirty = true;
+  function rebuildClear() {
+    clearDirty = false; const g = clearCv.getContext('2d'); g.globalCompositeOperation = 'source-over'; g.fillStyle = '#000'; g.fillRect(0, 0, CL.W, CL.H); g.globalCompositeOperation = 'lighter';
+    const blob = (x, z, r, a = 0.9) => { const cx = (x - CL.ox) / CL.sx * CL.W, cy = (z - CL.oz) / CL.sz * CL.H, rr = (r + 3) / CL.sx * CL.W, gr = g.createRadialGradient(cx, cy, 0, cx, cy, rr); gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(r / (r + 3) * 0.75, `rgba(255,255,255,${a * 0.8})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2); };
+    for (const h of houses) blob(h.x, h.z, (h.r || 3) + 0.5);
+    for (const t of treeRecs) { if (t.t === 'round') for (const L of t.lobes) blob(L.x, L.z, L.r * 0.9, 0.5); else blob(t.x, t.z, (t.R || t.rx || 1.5), 0.6); }
+    for (const b of boards) if (b.group) for (const dx of [-5, 0, 5]) blob(b.group.position.x + dx, b.group.position.z, 2.5, 0.6);
+    if (bridgeInfo) for (let k = 0; k <= 4; k++) blob(bridgeInfo.x0 + (bridgeInfo.x1 - bridgeInfo.x0) * k / 4, bridgeInfo.bz, 2.2, 0.7);
+    for (const e of clearExtra) blob(e.x, e.z, e.r);
+    clearTex.needsUpdate = true;
+  }
+  const mistU = { uClear: { value: clearTex }, uClO: { value: new THREE.Vector4(CL.ox, CL.oz, CL.sx, CL.sz) }, uTime: { value: 0 }, uAmt: { value: 0 }, uColor: { value: new THREE.Color('#dfe9f2') }, uDrift: { value: new THREE.Vector2(1, 0.4) } };
   // Layers at different heights, scales and speeds, drifting in slightly different directions, so the haze has depth and parallax: it slides across the ground in sheets, not as one flat veil. [lift, noise scale, speed, direction (radians off the wind), weight]
   const MIST_LAYERS = low ? [[0.9, 0.034, 1.0, 0.0, 1.0], [3.2, 0.02, 0.6, 0.5, 0.7]] : [[0.6, 0.036, 1.0, 0.0, 1.0], [1.7, 0.026, 0.72, 0.45, 0.95], [3.3, 0.018, 0.5, -0.4, 0.8], [5.6, 0.012, 0.34, 0.8, 0.6]];
   const mists = MIST_LAYERS.map(([lift, sc, sp, dir, wt], i) => {
     const m = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: false, uniforms: { ...mistU, uScale: { value: sc }, uSpeed: { value: sp }, uSeed: { value: i * 17.3 }, uDir: { value: new THREE.Vector2(Math.cos(dir), Math.sin(dir)) }, uW: { value: wt } },
       vertexShader: 'varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-      fragmentShader: `uniform float uTime, uAmt, uScale, uSpeed, uSeed, uW; uniform vec3 uColor; uniform vec2 uDrift, uDir; varying vec3 vW;
+      fragmentShader: `uniform float uTime, uAmt, uScale, uSpeed, uSeed, uW; uniform vec3 uColor; uniform vec2 uDrift, uDir; uniform sampler2D uClear; uniform vec4 uClO; varying vec3 vW;
         float mh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float mn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1.0, 0.0)), f.x), mix(mh(i + vec2(0.0, 1.0)), mh(i + vec2(1.0, 1.0)), f.x), f.y); }
         void main() {
@@ -844,6 +858,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           float cov = smoothstep(0.2 - 0.1 * uAmt, 0.78 - 0.1 * uAmt, n); cov = cov * (1.5 - 0.5 * cov);                // (a long, gentle ramp from clear to fog)                         // (more of the sky fills with haze as it thickens, and the gaps close)
           float front = 0.72 + 0.28 * sin(dot(vW.xz, uDir * 0.021 + vec2(0.0, 0.012)) - uTime * 0.55 + uSeed);          // (broad banks of thicker fog roll through)
           float a = cov * uAmt * uW * front * (0.85 + 0.15 * sin(uTime * 0.3 + uSeed + vW.x * 0.01)) * smoothstep(2.0, 14.0, distance(cameraPosition, vW));          // (it thickens and thins a little as it drifts)
+          vec2 cuv = (vW.xz - uClO.xy) / uClO.zw; float cl = (cuv.x > 0.0 && cuv.x < 1.0 && cuv.y > 0.0 && cuv.y < 1.0) ? texture2D(uClear, cuv).r : 0.0; a *= 1.0 - 0.85 * min(1.0, cl);          // (thinner round the houses, trees and signs: no hard line where the haze meets them)
           gl_FragColor = vec4(uColor, a * (0.26 + 0.22 * uAmt));
           #include <colorspace_fragment>
         }`,
@@ -3039,7 +3054,10 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     },
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
+    /** Make the mist thin out round a new object (x, z, radius); returns a function that takes it away again. */
+    mistClearAdd(x, z, rad) { const e = { x, z, r: rad }; clearExtra.add(e); clearDirty = true; return () => { clearExtra.delete(e); clearDirty = true; }; },
     setWeather(wx) {
+      if (clearDirty) rebuildClear();
       const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); mists.forEach((m, i) => { m.visible = (w.mist || 0) > 0.02 + 0.1 * i; }); for (const b of boards) b.setSnow(Math.min(1, (w.roof ?? w.cover) * 1.05)); terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;          // (the mist layers come in one by one as it builds)
     },
     /** The houses of the village: { x, z, r, w, d, rot, group, eaveY } (the group is the house itself, in local units; `eaveY` is the height of its eave). */
