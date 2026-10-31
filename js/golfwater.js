@@ -1,7 +1,7 @@
 // Water for the mini-golf: the same soft cartoon look as the village pond (sky reflection, shallows that go light, glints, foam at the edge, the same day/night and aurora), drawn on
 // irregular shapes: blob-shaped ponds and winding rivers that visibly flow. The sky colours and the clock are the village pond's own uniforms (world.waterLook), so the two always match.
 import * as THREE from 'three';
-import { mulberry32 } from './golfhero.js?v=20261031001304';
+import { mulberry32 } from './golfhero.js?v=20261031001532';
 
 /** A water material. `flow` is the direction the water runs (world x, z; zero for still water) and `speed` how fast. */
 export function waterMaterial(look, flowX = 0, flowZ = 0, speed = 0, tint = 0) {

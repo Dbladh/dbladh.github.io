@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031001304';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031001304';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031001532';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031001532';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031001304';
-import { createWeather } from './weather.js?v=20261031001304';
-import { PAL } from './palette.js?v=20261031001304';
-import { buildWorld } from './world.js?v=20261031001304';
-import { createSky } from './sky.js?v=20261031001304';
-import { createDOF } from './dof.js?v=20261031001304';
-import { createRide } from './ride.js?v=20261031001304';
-import { createGame } from './bikegame.js?v=20261031001304';
-import { createAurora, setWarm } from './aurora.js?v=20261031001304';
-import { createAudio, pickFlicker } from './audio.js?v=20261031001304';
+import { createPrecip } from './precip.js?v=20261031001532';
+import { createWeather } from './weather.js?v=20261031001532';
+import { PAL } from './palette.js?v=20261031001532';
+import { buildWorld } from './world.js?v=20261031001532';
+import { createSky } from './sky.js?v=20261031001532';
+import { createDOF } from './dof.js?v=20261031001532';
+import { createRide } from './ride.js?v=20261031001532';
+import { createGame } from './bikegame.js?v=20261031001532';
+import { createAurora, setWarm } from './aurora.js?v=20261031001532';
+import { createAudio, pickFlicker } from './audio.js?v=20261031001532';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -610,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031001304');
+        const mod = await import('./golf.js?v=20261031001532');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -957,7 +957,7 @@ function start() {
       dof.setBlur(golf?.active ? 0.5 : 1);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
-      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = sky.fogK; scene.fog.near = fn * (1 - 0.28 * wk); scene.fog.far = fn + 167 - (fn + 167 - 36) * 0.28 * wk; }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself
+      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = sky.fogK; { const br = 1 + 0.16 * Math.sin(performance.now() * 0.00018) + 0.07 * Math.sin(performance.now() * 0.00051 + 2); scene.fog.near = fn * (1 - 0.15 * wk * br); scene.fog.far = fn + 167 - (fn + 167 - 36) * 0.15 * wk * br; } }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself          // (the weather pulls the fog in, and the distance haze breathes slowly)
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);
     } else {

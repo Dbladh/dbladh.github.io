@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031001304';
-import { auroraColour } from './aurora.js?v=20261031001304';
+import { PAL } from './palette.js?v=20261031001532';
+import { auroraColour } from './aurora.js?v=20261031001532';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031001304';
+} from './houses.js?v=20261031001532';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -831,11 +831,13 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         float mn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1.0, 0.0)), f.x), mix(mh(i + vec2(0.0, 1.0)), mh(i + vec2(1.0, 1.0)), f.x), f.y); }
         void main() {
           vec2 dv = vec2(uDrift.x * uDir.x - uDrift.y * uDir.y, uDrift.x * uDir.y + uDrift.y * uDir.x);
-          vec2 p = vW.xz * uScale + dv * uTime * 0.05 * uSpeed + uSeed;
-          float n = mn(p) * 0.5 + mn(p * 2.1 + vec2(uTime * 0.012, 3.0)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.02) * 0.2;
+          vec2 p = vW.xz * uScale + dv * uTime * 0.11 * uSpeed + uSeed;
+          vec2 wv = vec2(mn(p * 0.8 + vec2(uTime * 0.021, 0.0)), mn(p * 0.8 + vec2(9.0, -uTime * 0.017))) - 0.5;          // (a slow swirl bends the pattern as it drifts, so it never just slides)
+          p += wv * 1.7;
+          float n = mn(p) * 0.5 + mn(p * 2.1 + vec2(uTime * 0.035, 3.0 - uTime * 0.02)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.045) * 0.2;
           float cov = smoothstep(0.44 - 0.1 * uAmt, 0.84 - 0.1 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
-          float a = cov * uAmt * uW * smoothstep(2.0, 14.0, distance(cameraPosition, vW));
-          gl_FragColor = vec4(uColor, a * (0.17 + 0.15 * uAmt));
+          float a = cov * uAmt * uW * (0.82 + 0.18 * sin(uTime * 0.16 + uSeed + vW.x * 0.01)) * smoothstep(2.0, 14.0, distance(cameraPosition, vW));          // (it thickens and thins a little as it drifts)
+          gl_FragColor = vec4(uColor, a * (0.1 + 0.09 * uAmt));
           #include <colorspace_fragment>
         }`,
     });
