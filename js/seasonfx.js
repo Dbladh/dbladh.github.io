@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031103345';
+import { heightAt, POND, pathX } from './world.js?v=20261031104345';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -256,6 +256,160 @@ function makeBoardSets(ctx, build) {
     dispose() { for (const [b, e] of sets) if (e.g) { b.group.remove(e.g); disposeTree(e.g); } sets.clear(); },
   };
 }
+// ---------------------------------------------------------------- the haunted mansion: old, abandoned, run down
+// Everything is drawn here (no image files): weathered clapboard and slate shingles with their normal maps made from the same drawing, gothic windows (leaded amber, stained glass, boarded up, broken), and a wrought-iron fence.
+function rng(seed) { let s = seed >>> 0; return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296; }
+function normalMapFrom(src, k = 2.2) {
+  const w = src.width, h = src.height, d = src.getContext('2d').getImageData(0, 0, w, h).data, out = document.createElement('canvas'); out.width = w; out.height = h;
+  const og = out.getContext('2d'), im = og.createImageData(w, h), o = im.data, H = (x, y) => d[(((y + h) % h) * w + ((x + w) % w)) * 4] / 255;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k, l = Math.hypot(dx, dy, 1), i = (y * w + x) * 4;
+    o[i] = (-dx / l * 0.5 + 0.5) * 255; o[i + 1] = (dy / l * 0.5 + 0.5) * 255; o[i + 2] = (1 / l * 0.5 + 0.5) * 255; o[i + 3] = 255;
+  }
+  og.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(out); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+function surfaceTex(height, tint, finish) {                    // height: draws the relief in greys; tint: the colour laid over it; finish: stains, peeling paint, moss on top
+  const S = 256, hc = document.createElement('canvas'); hc.width = hc.height = S; height(hc.getContext('2d'), S);
+  const cc = document.createElement('canvas'); cc.width = cc.height = S; const c = cc.getContext('2d'); c.drawImage(hc, 0, 0); c.globalCompositeOperation = 'overlay'; c.fillStyle = tint; c.fillRect(0, 0, S, S); c.globalCompositeOperation = 'source-over'; finish(c, S);
+  const map = new THREE.CanvasTexture(cc); map.colorSpace = THREE.SRGBColorSpace; map.wrapS = map.wrapT = THREE.RepeatWrapping; map.anisotropy = 4; return { map, normal: normalMapFrom(hc) };
+}
+function woodTextures() {
+  const r = rng(11), rows = 6;
+  return surfaceTex((g, S) => {
+    const bh = S / rows; g.fillStyle = '#808080'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < rows; i++) {
+      const y = i * bh, gr = g.createLinearGradient(0, y, 0, y + bh); gr.addColorStop(0, '#a0a0a0'); gr.addColorStop(0.86, '#7a7a7a'); gr.addColorStop(1, '#262626'); g.fillStyle = gr; g.fillRect(0, y, S, bh);
+      for (let k = 0; k < 30; k++) { g.strokeStyle = r() < 0.5 ? 'rgba(0,0,0,0.13)' : 'rgba(255,255,255,0.09)'; g.lineWidth = 1; const yy = y + 2 + r() * (bh - 6); g.beginPath(); g.moveTo(0, yy); for (let x = 0; x <= S; x += 32) g.lineTo(x, yy + Math.sin(x * 0.05 + k) * 1.4 + (r() - 0.5)); g.stroke(); }
+      g.fillStyle = '#1c1c1c'; g.fillRect(r() * S, y, 2, bh * 0.88);                                  // a butt joint
+      if (r() < 0.6) { const kx = r() * S, ky = y + bh * 0.45; g.fillStyle = '#585858'; g.beginPath(); g.ellipse(kx, ky, 5, 3, 0, 0, 6.3); g.fill(); g.strokeStyle = '#303030'; g.lineWidth = 1.5; g.stroke(); }
+      if (r() < 0.5) { g.strokeStyle = '#161616'; g.lineWidth = 1.5; g.beginPath(); let x = r() * S, yy = y + 2; g.moveTo(x, yy); for (let k = 0; k < 6; k++) { x += (r() - 0.5) * 6; yy += bh / 7; g.lineTo(x, yy); } g.stroke(); }   // a split
+      g.fillStyle = '#101010'; for (const nx of [20, 100, 180]) g.fillRect(nx + r() * 8, y + bh * 0.3, 2, 2);   // nail heads
+    }
+  }, '#625b72', (c, S) => {
+    for (let i = 0; i < rows; i++) { c.fillStyle = `rgba(${40 + r() * 40},${50 + r() * 30},${40 + r() * 30},${0.08 + r() * 0.12})`; c.fillRect(0, i * S / rows, S, S / rows); }
+    for (let k = 0; k < 7; k++) { c.fillStyle = 'rgba(190,190,180,0.22)'; c.beginPath(); const x = r() * S, y = r() * S; c.moveTo(x, y); for (let j = 0; j < 6; j++) c.lineTo(x + (r() - 0.5) * 46, y + (r() - 0.5) * 20); c.fill(); }   // peeling paint
+    for (let k = 0; k < 9; k++) { const x = r() * S, gr = c.createLinearGradient(0, 0, 0, 90); gr.addColorStop(0, 'rgba(8,6,10,0.42)'); gr.addColorStop(1, 'rgba(8,6,10,0)'); c.fillStyle = gr; c.fillRect(x, 0, 4 + r() * 12, 40 + r() * 80); }   // rain streaks
+    const gm = c.createLinearGradient(0, S, 0, S * 0.7); gm.addColorStop(0, 'rgba(40,70,30,0.25)'); gm.addColorStop(1, 'rgba(40,70,30,0)'); c.fillStyle = gm; c.fillRect(0, S * 0.7, S, S * 0.3);
+  });
+}
+function shingleTextures() {
+  const r = rng(23);
+  return surfaceTex((g, S) => {
+    g.fillStyle = '#101010'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 8; i++) for (let x = -16; x < S + 16; x += 32) {
+      const sx = x + (i % 2) * 16, y = i * 32; g.beginPath(); g.moveTo(sx + 1, y); g.lineTo(sx + 31, y); g.lineTo(sx + 31, y + 22); g.quadraticCurveTo(sx + 16, y + 38, sx + 1, y + 22); g.closePath();
+      if (r() < 0.06) { g.fillStyle = '#0a0a0a'; g.fill(); continue; }                                  // a shingle gone
+      const gr = g.createLinearGradient(0, y, 0, y + 34); gr.addColorStop(0, '#6a6a6a'); gr.addColorStop(0.6, '#9a9a9a'); gr.addColorStop(1, '#4a4a4a'); g.fillStyle = gr; g.fill();
+    }
+  }, '#3c4458', (c, S) => {
+    for (let k = 0; k < 40; k++) { c.fillStyle = `rgba(${r() < 0.5 ? '30,50,30' : '70,60,60'},${0.1 + r() * 0.16})`; c.fillRect(r() * S, r() * S, 20 + r() * 30, 14 + r() * 16); }
+  });
+}
+const archPath = (g, x0, y0, x1, y1, pointed) => {
+  const cx = (x0 + x1) / 2, rad = (x1 - x0) / 2; g.beginPath(); g.moveTo(x0, y1);
+  if (pointed) { const sh = y0 + rad * 1.5; g.lineTo(x0, sh); g.quadraticCurveTo(x0, y0 + rad * 0.5, cx, y0); g.quadraticCurveTo(x1, y0 + rad * 0.5, x1, sh); } else { g.lineTo(x0, y0 + rad); g.arc(cx, y0 + rad, rad, Math.PI, 0); }
+  g.lineTo(x1, y1); g.closePath();
+};
+const JEWEL = ['#c0222e', '#e0a52a', '#2457c8', '#238a5c', '#8a2fb0', '#e0652a'];
+function windowTexture(kind, seed) {
+  const W = 96, Hh = 160, r = rng(seed), c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
+  archPath(g, 2, 2, W - 2, Hh - 2, kind === 'stain' || seed % 2 === 0); g.fillStyle = '#2a1e22'; g.fill();                                   // the frame
+  g.save(); archPath(g, 9, 9, W - 9, Hh - 9, kind === 'stain' || seed % 2 === 0); g.clip();
+  if (kind === 'dark' || kind === 'boarded') { g.fillStyle = '#0a0810'; g.fillRect(0, 0, W, Hh); g.strokeStyle = 'rgba(160,170,190,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(20, 30); g.lineTo(60, 80); g.lineTo(46, 140); g.moveTo(60, 80); g.lineTo(84, 70); g.stroke(); if (kind === 'boarded') { g.fillStyle = 'rgba(255,170,70,0.35)'; g.fillRect(0, 0, W, Hh); } }
+  else {
+    const cell = kind === 'stain' ? 22 : 20;
+    for (let j = -2; j < 10; j++) for (let i = -2; i < 6; i++) {
+      const x = i * cell + (j % 2) * cell / 2, y = j * cell, col = kind === 'stain' ? JEWEL[Math.floor(r() * JEWEL.length)] : ['#ffb347', '#ffcf6a', '#e8942a', '#ffd98a'][Math.floor(r() * 4)];
+      g.fillStyle = kind === 'amber' && r() < 0.18 ? '#150f0a' : col; g.beginPath(); g.moveTo(x, y - cell / 2); g.lineTo(x + cell / 2, y); g.lineTo(x, y + cell / 2); g.lineTo(x - cell / 2, y); g.closePath(); g.fill(); g.strokeStyle = '#0c0a0c'; g.lineWidth = 2.5; g.stroke();
+    }
+    if (kind === 'stain') { g.strokeStyle = '#0c0a0c'; g.lineWidth = 3; g.fillStyle = '#f0c040'; g.beginPath(); g.arc(W / 2, 52, 14, 0, 6.3); g.fill(); g.stroke(); g.fillStyle = '#c0222e'; g.beginPath(); g.arc(W / 2, 52, 7, 0, 6.3); g.fill(); g.stroke(); }
+    if (kind === 'amber' && seed % 3 === 0) { g.strokeStyle = '#0a0a0a'; g.lineWidth = 2; g.beginPath(); g.moveTo(30, 40); g.lineTo(52, 90); g.lineTo(40, 150); g.stroke(); }   // a cracked pane
+  }
+  g.restore(); g.strokeStyle = '#2a1e22'; g.lineWidth = 4; g.beginPath(); g.moveTo(W / 2, 4); g.lineTo(W / 2, Hh - 4); g.moveTo(8, Hh * 0.55); g.lineTo(W - 8, Hh * 0.55); g.stroke();   // the mullion and transom
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function makeMansion(ctx) {
+  const W = woodTextures(), SH = shingleTextures(), cache = new Map(), wins = [], hh = new THREE.Group(), disposables = [];
+  const mat = (T, rx, ry, color = '#ffffff') => { const key = T === W ? 'w' : 's', k2 = key + rx.toFixed(1) + ry.toFixed(1) + color; let m = cache.get(k2); if (m) return m;
+    const map = T.map.clone(), nm = T.normal.clone(); for (const t of [map, nm]) { t.repeat.set(rx, ry); t.needsUpdate = true; }
+    m = new THREE.MeshStandardMaterial({ map, normalMap: nm, normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.95, metalness: 0, color }); cache.set(k2, m); disposables.push(map, nm, m); return m; };
+  const wood = (w, h, color) => mat(W, Math.max(1, w / 1.5), Math.max(1, h / 1.5), color), slate = (w, h) => mat(SH, Math.max(1, w / 2), Math.max(1, h / 2));
+  const stone = new THREE.MeshStandardMaterial({ color: '#4a4650', roughness: 1 }), iron = new THREE.MeshStandardMaterial({ color: '#1c1618', roughness: 0.7, metalness: 0.5 }), brick = new THREE.MeshStandardMaterial({ color: '#5a3a38', roughness: 1 }), dark = new THREE.MeshStandardMaterial({ color: '#0e0b12', roughness: 1 }), trim = wood(1.5, 1.5, '#9a94a8');
+  disposables.push(stone, iron, brick, dark);
+  const box = (par, w, h, d, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; par.add(o); return o; };
+  const walls = (w, h, d, x, y, z, ry = 0) => { const m = [wood(d, h), wood(d, h), wood(w, d), wood(w, d), wood(w, h), wood(w, h)]; const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = true; hh.add(o); return o; };
+  function gable(len, span, rise, ov, x, y, z, ry = 0, sag = 0) {       // a gable roof, its ridge along x: two slate panels and a board gable end at each end
+    const g = new THREE.Group(), ang = Math.atan2(rise, span / 2), Ls = Math.hypot(span / 2, rise) + ov;
+    for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(len + ov * 2, 0.1, Ls), slate(len + ov * 2, Ls)); p.position.set(0, rise / 2 - ov * 0.2, s * (span / 4 + ov * 0.45)); p.rotation.x = s * ang; p.castShadow = true; g.add(p); }
+    const sh = new THREE.Shape(); sh.moveTo(-span / 2, 0); sh.lineTo(span / 2, 0); sh.lineTo(0, rise); sh.closePath();
+    for (const e of [-1, 1]) { const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.08, bevelEnabled: false }), mat(W, 1 / 1.5, 1 / 1.5)); m.rotation.y = Math.PI / 2; m.position.set(e * len / 2 - (e > 0 ? 0 : 0.08), 0, 0); g.add(m); }
+    box(g, len + ov * 2 + 0.1, 0.1, 0.16, dark, 0, rise + 0.02, 0);                                              // the ridge
+    g.position.set(x, y, z); g.rotation.set(0, ry, sag); hh.add(g); return g;
+  }
+  function win(kind, x, y, z, w, h, ry = 0, planks = 0, seed = 1) {
+    const m = new THREE.MeshBasicMaterial({ map: windowTexture(kind, seed), transparent: true, alphaTest: 0.5, fog: false }), o = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); o.position.set(x, y, z); o.rotation.y = ry; hh.add(o); disposables.push(m.map, m);
+    wins.push({ m, ph: seed * 3.7, k: kind === 'stain' ? 0.85 : kind === 'amber' ? 1 : kind === 'boarded' ? 0.5 : 0 });
+    const q = new THREE.Group(); q.position.set(x, y, z); q.rotation.y = ry; hh.add(q);
+    box(q, w + 0.22, 0.1, 0.22, stone, 0, -h / 2 - 0.05, 0.08);                                                    // the sill
+    if (planks) { const pm = wood(1, 0.3, '#8a8478'); for (let i = 0; i < planks; i++) box(q, w * 1.25, 0.2, 0.05, pm, (i % 2 ? 0.03 : -0.03), (i - (planks - 1) / 2) * h * 0.3, 0.1 + i * 0.015, 0, 0, (i % 2 ? 1 : -1) * (0.05 + 0.05 * i) + (i === 1 ? 0.5 : 0)); }
+    return o;
+  }
+  // body
+  box(hh, 4.9, 0.55, 3.9, stone, 0, 0.27, 0.15);                                                                  // the stone footing
+  walls(4.2, 2.9, 3.2, 0, 2.0, 0);
+  walls(1.9, 2.9, 0.7, 0, 2.0, 1.8);                                                                               // the front bay
+  walls(1.9, 2.3, 2.5, 3.0, 1.7, -0.1);                                                                           // the right wing
+  gable(4.2, 3.4, 1.7, 0.45, 0, 3.45, 0);
+  gable(0.7, 2.0, 1.2, 0.3, 0, 3.45, 1.9, Math.PI / 2);                                                            // the gable over the bay (ridge along z)
+  gable(2.5, 2.1, 1.0, 0.3, 3.0, 2.85, -0.1, Math.PI / 2);
+  // the tower: a tilted drum with a cone, a spire on top
+  const tw = new THREE.Group(); tw.position.set(-2.55, 0.5, 0.45); tw.rotation.z = 0.03; hh.add(tw);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.05, 4.9, 10), wood(6, 4.9)); drum.position.y = 2.45; drum.castShadow = true; tw.add(drum);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(1.35, 2.6, 10), slate(6, 3)); cap.position.y = 6.2; cap.rotation.z = 0.05; cap.castShadow = true; tw.add(cap);
+  const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.07, 1.4, 5), iron); sp.position.y = 8.0; tw.add(sp);
+  // chimneys, finials and spires
+  [[1.2, 5.3, -0.7, 0.95], [3.4, 4.1, -0.9, 0.7]].forEach(([x, y, z, hgt], i) => { box(hh, 0.6, hgt * 1.6, 0.6, brick, x, y, z, 0, 0, i ? 0.09 : -0.07); box(hh, 0.8, 0.14, 0.8, stone, x + (i ? 0.07 : -0.05), y + hgt * 0.82, z, 0, 0, i ? 0.09 : -0.07); });
+  for (const [x, y, z] of [[-2.35, 5.15, 0], [2.35, 5.15, 0], [0, 4.85, 2.65]]) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.9, 5), iron); f.position.set(x, y, z); f.rotation.z = (x * 0.05); hh.add(f); }
+  // the porch: a deck, turned posts with missing balusters, a sagging roof of slate and steps
+  box(hh, 4.5, 0.14, 1.3, wood(4.5, 1.3, '#8a8478'), 0, 0.62, 2.55); box(hh, 1.6, 0.14, 0.7, wood(1.6, 0.7, '#8a8478'), 0, 0.5, 3.4); box(hh, 1.6, 0.14, 0.5, wood(1.6, 0.5, '#8a8478'), 0, 0.38, 3.8);
+  const postXs = [-2.1, -1.1, 1.1, 2.1]; for (const px of postXs) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.2, 8), trim); p.position.set(px, 1.25, 3.1); p.castShadow = true; hh.add(p); }
+  for (const [x0, x1] of [[-2.1, -1.1], [1.1, 2.1]]) { box(hh, x1 - x0, 0.08, 0.08, trim, (x0 + x1) / 2, 1.1, 3.1); for (let i = 0; i < 6; i++) if (!((x0 < 0 && i === 2) || (x0 > 0 && i === 4))) box(hh, 0.05, 0.5, 0.05, trim, x0 + 0.1 + i * (x1 - x0 - 0.2) / 5, 0.85, 3.1); }
+  for (const [x0, x1, sag] of [[-2.35, -0.95, 0.07], [0.95, 2.35, -0.1]]) { const pr = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.09, 1.9), slate(x1 - x0, 1.9)); pr.position.set((x0 + x1) / 2, 1.95, 2.45); pr.rotation.set(0.2, 0, sag); pr.castShadow = true; hh.add(pr); }
+  // the front door and the big stained window over it
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.7), new THREE.MeshStandardMaterial({ color: '#241a18', roughness: 1, normalMap: W.normal.clone(), map: W.map.clone() })); door.position.set(0.0, 1.5, 2.16); hh.add(door); disposables.push(door.material);
+  win('stain', 0, 2.95, 2.17, 0.8, 1.0, 0, 0, 2); win('stain', 0, 3.95, 2.27, 0.45, 0.85, 0, 0, 4);                                // (the high window of the bay's gable)
+  // windows of the main block (front), the wing and the tower
+  win('amber', -1.45, 2.85, 1.62, 0.8, 1.2, 0, 0, 3); win('boarded', 1.45, 2.85, 1.62, 0.8, 1.2, 0, 3, 5); win('amber', -1.45, 1.2, 1.62, 0.75, 1.1, 0, 0, 6); win('dark', 1.45, 1.2, 1.62, 0.75, 1.1, 0, 2, 7);
+  win('amber', 2.5, 1.95, 1.17, 0.7, 1.15, 0, 0, 8); win('boarded', 3.5, 1.95, 1.17, 0.7, 1.15, 0, 2, 9); win('stain', -2.55, 3.9, 1.5, 0.6, 1.0, 0.0, 0, 10);
+  win('amber', -3.07, 1.3, 1.39, 0.55, 0.9, -0.5, 0, 11); win('dark', -2.55, 1.3, 1.5, 0.55, 0.9, 0, 1, 12); win('amber', -2.55, 4.95, 1.45, 0.34, 0.55, 0, 0, 13);
+  win('stain', 0.0, 3.0, -1.62, 0.9, 1.4, Math.PI, 0, 14);
+  // shutters hanging crooked
+  for (const [x, y, z, rz] of [[-2.05, 2.85, 1.65, 0.12], [-0.85, 2.85, 1.65, -0.07], [2.0, 2.85, 1.65, 0.2], [0.8, 1.2, 1.65, -0.1]]) box(hh, 0.36, 1.3, 0.05, wood(0.4, 1.3, '#6f6a70'), x, y, z, 0, 0, rz);
+  // an iron fence along the front with a gate, and returns down both sides: spear pickets and rails, some bent, some fallen, some gone
+  const r = rng(5), N = 60, pk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 5), iron, N), fin = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.26, 4), iron, N), dm = new THREE.Object3D();
+  const spots = []; for (let i = 0; i <= 26; i++) { const x = -5.2 + i * 0.4; if (Math.abs(x) < 0.95) continue; spots.push([x, 5.3]); }
+  for (let i = 1; i <= 11; i++) { spots.push([-5.2, 5.3 - i * 0.4]); spots.push([5.2, 5.3 - i * 0.4]); }
+  let n = 0;
+  for (const [x, z] of spots) {
+    if (n >= N || r() < 0.1) continue;
+    const fall = r() < 0.05, lean = fall ? 1.45 : (r() - 0.5) * 0.1 + (r() < 0.1 ? (r() - 0.5) * 1.0 : 0), y = fall ? 0.06 : 0.75;
+    dm.position.set(x, y, z); dm.rotation.set(0, 0, lean); dm.updateMatrix(); pk.setMatrixAt(n, dm.matrix);
+    dm.position.set(x - Math.sin(lean) * 0.88, y + Math.cos(lean) * 0.88, z); dm.rotation.set(0, 0, lean); dm.updateMatrix(); fin.setMatrixAt(n, dm.matrix); n++;
+  }
+  pk.count = fin.count = n; pk.castShadow = true; hh.add(pk, fin);
+  for (const [x0, x1] of [[-5.3, -1.0], [1.0, 5.3]]) for (const y of [0.35, 1.15]) box(hh, x1 - x0, 0.05, 0.05, iron, (x0 + x1) / 2, y, 5.3, 0, 0, (x0 < 0 ? 1 : -1) * 0.012);
+  for (const sx of [-1, 1]) for (const y of [0.35, 1.15]) box(hh, 0.05, 0.05, 4.6, iron, sx * 5.2, y, 3.0);
+  for (const sx of [-1, 1]) { const g = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), iron), p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.9, 6), iron); p.position.set(sx * 0.95, 0.95, 5.3); g.position.set(sx * 0.95, 1.98, 5.3); hh.add(p, g); }
+  const arc = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.03, 5, 20, Math.PI), iron); arc.position.set(0, 1.95, 5.3); arc.rotation.z = 0.03; hh.add(arc);           // the gate's arch
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.4, 0.04), iron); leaf.position.set(-0.55, 0.75, 5.5); leaf.rotation.y = -0.9; hh.add(leaf);       // a gate hanging open
+  // a dead tree with a crowd of thin bare limbs
+  const tr = new THREE.Group(); tr.position.set(5.9, 0, 0.9); hh.add(tr);
+  const limb = (x, y, z, len, r0, ax, az, depth) => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(ax, 0, az); tr.add(g); const m = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.55, r0, len, 5), dark); m.position.y = len / 2; g.add(m);
+    if (depth > 0) for (let k = 0; k < 2 + (depth > 1); k++) { const a = (r() - 0.5) * 1.5, b = (r() - 0.5) * 1.2, t = 0.55 + r() * 0.4; const pos = new THREE.Vector3(0, len * t, 0).applyEuler(new THREE.Euler(ax, 0, az)); limb(x + pos.x, y + pos.y, z + pos.z, len * (0.55 + r() * 0.2), r0 * 0.55, ax + b, az + a * (k % 2 ? 1 : -1) + (k % 2 ? 0.6 : -0.6), depth - 1); } };
+  limb(0, 0, 0, 3.0, 0.2, 0, 0.04, 3);
+  return { group: hh, wins, dispose() { disposeTree(hh); for (const d of disposables) d.dispose(); W.map.dispose(); W.normal.dispose(); SH.map.dispose(); SH.normal.dispose(); } };
+}
+
 // ---------------------------------------------------------------- Halloween
 // A haunted house on a free bit of ground (crooked tower, glowing windows that flicker, a dead tree, a fence), carved pumpkins with candle-lit faces by the houses, a big orange glow round the moon, bats that cross it,
 // a ghost that drifts about the haunted house now and then, and the odd creepy sound; the billboards get pumpkins, cobwebs, orange and purple lights, a perched bat and a skeleton hand.
@@ -272,10 +426,27 @@ const batTex = () => canvasTex(128, 64, (g) => {
   g.lineTo(58, 52); g.quadraticCurveTo(52, 36, 44, 46); g.quadraticCurveTo(34, 34, 22, 46); g.quadraticCurveTo(20, 28, 4, 14); g.quadraticCurveTo(48, 6, 64, 20); g.closePath(); g.fill();
   g.beginPath(); g.moveTo(58, 22); g.lineTo(56, 8); g.lineTo(62, 16); g.lineTo(66, 16); g.lineTo(72, 8); g.lineTo(70, 22); g.closePath(); g.fill();
 });
-const ghostTex = () => canvasTex(128, 192, (g) => {
-  const gr = g.createLinearGradient(0, 0, 0, 192); gr.addColorStop(0, 'rgba(235,245,255,0.95)'); gr.addColorStop(1, 'rgba(235,245,255,0.05)'); g.fillStyle = gr;
-  g.beginPath(); g.moveTo(20, 190); g.quadraticCurveTo(10, 90, 30, 52); g.quadraticCurveTo(64, -6, 98, 52); g.quadraticCurveTo(118, 90, 108, 190); g.quadraticCurveTo(92, 170, 84, 190); g.quadraticCurveTo(70, 168, 56, 190); g.quadraticCurveTo(42, 168, 20, 190); g.fill();
-  g.fillStyle = '#10121c'; g.beginPath(); g.ellipse(48, 74, 7, 11, 0, 0, 6.3); g.ellipse(80, 74, 7, 11, 0, 0, 6.3); g.fill(); g.beginPath(); g.ellipse(64, 106, 8, 12, 0, 0, 6.3); g.fill();
+const ghostTex = () => canvasTex(256, 448, (g) => {
+  const r = rng(3); g.lineJoin = 'round'; g.lineCap = 'round';
+  const shroud = new Path2D();                                  // the hooded shroud, its sleeves held out to the sides, and a ragged hem of tatters
+  shroud.moveTo(128, 14); shroud.bezierCurveTo(96, 14, 84, 52, 86, 92); shroud.bezierCurveTo(70, 104, 40, 112, 16, 118); shroud.lineTo(8, 150); shroud.bezierCurveTo(40, 144, 70, 150, 80, 168);
+  shroud.bezierCurveTo(66, 250, 52, 330, 38, 440);
+  for (let i = 0; i < 9; i++) { const x = 38 + (i + 0.5) * (180 / 9); shroud.lineTo(x - 7, 440 - r() * 30); shroud.lineTo(x, 380 + r() * 50 + (i % 3) * 14); shroud.lineTo(x + 7, 440 - r() * 30 + (i % 2) * 8); }
+  shroud.lineTo(218, 440); shroud.bezierCurveTo(204, 330, 190, 250, 176, 168); shroud.bezierCurveTo(186, 150, 216, 144, 248, 150); shroud.lineTo(240, 118); shroud.bezierCurveTo(216, 112, 186, 104, 170, 92); shroud.bezierCurveTo(172, 52, 160, 14, 128, 14); shroud.closePath();
+  const gr = g.createLinearGradient(0, 0, 0, 448); gr.addColorStop(0, 'rgba(206,214,208,0.95)'); gr.addColorStop(0.55, 'rgba(176,186,182,0.7)'); gr.addColorStop(1, 'rgba(150,164,160,0)'); g.fillStyle = gr; g.fill(shroud);
+  g.save(); g.clip(shroud);                                      // folds and creases in the cloth
+  for (let k = 0; k < 34; k++) { const x = 20 + r() * 216, w = 3 + r() * 9; g.strokeStyle = r() < 0.55 ? 'rgba(20,28,30,0.28)' : 'rgba(255,255,255,0.2)'; g.lineWidth = w; g.beginPath(); g.moveTo(x, 90 + r() * 60); g.bezierCurveTo(x + (r() - 0.5) * 50, 200, x + (r() - 0.5) * 70, 320, x + (r() - 0.5) * 60, 450); g.stroke(); }
+  for (let k = 0; k < 12; k++) { g.strokeStyle = 'rgba(20,28,30,0.22)'; g.lineWidth = 4 + r() * 6; g.beginPath(); const y = 110 + r() * 40, s = r() < 0.5 ? 1 : -1; g.moveTo(128 + s * 40, y); g.quadraticCurveTo(128 + s * 100, y + 14 + r() * 20, 128 + s * (116 + r() * 10), y + 36); g.stroke(); }   // sleeves
+  g.restore();
+  const hood = g.createRadialGradient(128, 62, 4, 128, 62, 40); hood.addColorStop(0, '#000'); hood.addColorStop(0.7, 'rgba(2,4,6,0.96)'); hood.addColorStop(1, 'rgba(2,4,6,0)');   // the hood's black void
+  g.fillStyle = hood; g.beginPath(); g.ellipse(128, 64, 28, 42, 0, 0, 6.3); g.fill();
+  g.shadowColor = '#b6ffd0'; g.shadowBlur = 12; g.fillStyle = '#e6fff0'; for (const ex of [117, 139]) { g.beginPath(); g.ellipse(ex, 56, 3, 6, ex < 128 ? -0.25 : 0.25, 0, 6.3); g.fill(); } g.shadowBlur = 0;      // two cold eyes
+  g.fillStyle = 'rgba(0,0,0,0.9)'; g.beginPath(); g.ellipse(128, 86, 4, 9, 0, 0, 6.3); g.fill();
+  const hand = (x, y, s) => { g.save(); g.translate(x, y); g.scale(s, 1); g.strokeStyle = '#d4d8cc'; g.lineWidth = 3.2;                  // a skeletal hand with long thin fingers
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(-4, -16); g.stroke(); const F = [[-14, -30], [-6, -42], [5, -44], [14, -34]];
+    F.forEach(([fx, fy], i) => { g.lineWidth = 2.4; g.beginPath(); g.moveTo(-4 + i * 3, -16); g.lineTo(fx * 0.7, fy * 0.65); g.lineTo(fx + (i - 1.5) * 2, fy - 14); g.stroke(); g.fillStyle = '#eef0e4'; g.beginPath(); g.arc(fx * 0.7, fy * 0.65, 1.8, 0, 6.3); g.fill(); });
+    g.lineWidth = 2.4; g.beginPath(); g.moveTo(-3, -6); g.lineTo(-18, -14); g.lineTo(-26, -26); g.stroke(); g.restore(); };
+  hand(18, 120, 1); hand(238, 120, -1);
 });
 const webTex = () => canvasTex(128, 128, (g) => {
   g.strokeStyle = 'rgba(240,240,255,0.8)'; g.lineWidth = 1.6; g.beginPath();
@@ -307,29 +478,10 @@ function makeHalloween(ctx) {
   });
   const glow = bulbs(glowPts, [HAL[0]], 0.9); root.add(glow);
   // the haunted house
-  const spot = ctx.freeSpot(9); let hh = null; const wins = [];
+  const spot = ctx.freeSpot(12) || ctx.freeSpot(9); let hh = null, mansion = null, wins = [];
   if (spot) {
-    hh = new THREE.Group(); hh.position.set(spot.x, spot.y, spot.z); hh.scale.setScalar(1.55); hh.rotation.y = 0.15;
-    const wall = lam('#403850'), roof = lam('#1c1724'), dark = lam('#0e0b14'), wood = lam('#2c2230');
-    const box = (w, h, d, m, x, y, z, ry = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(0, ry, rz); o.castShadow = true; hh.add(o); return o; };
-    box(4.2, 2.8, 3.2, wall, 0, 1.4, 0); box(1.8, 2.2, 2.6, wall, 2.6, 1.1, -0.2, 0, 0.0);
-    const mainRoof = new THREE.Mesh(new THREE.ConeGeometry(3.5, 1.9, 4), roof); mainRoof.position.set(0, 3.7, 0); mainRoof.rotation.y = Math.PI / 4; mainRoof.scale.set(1, 1, 0.82); mainRoof.castShadow = true; hh.add(mainRoof);
-    const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.0, 4.6, 8), wall); tower.position.set(-2.5, 2.3, 0.2); tower.rotation.z = 0.05; tower.castShadow = true; hh.add(tower);
-    const tcap = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.3, 8), roof); tcap.position.set(-2.62, 5.8, 0.2); tcap.rotation.z = 0.09; hh.add(tcap);
-    const sRoof = new THREE.Mesh(new THREE.ConeGeometry(1.7, 1.2, 4), roof); sRoof.position.set(2.6, 2.7, -0.2); sRoof.rotation.y = Math.PI / 4; hh.add(sRoof);
-    box(0.5, 1.4, 0.5, dark, 1.1, 4.3, -0.4, 0, -0.12);                                       // a crooked chimney
-    box(0.9, 1.7, 0.12, dark, 0.3, 0.85, 1.63);                                              // the door
-    box(1.8, 0.14, 1.0, wood, 0.3, 0.07, 2.1); box(0.14, 1.4, 0.14, wood, -0.5, 0.75, 2.5, 0, 0.06); box(0.14, 1.4, 0.14, wood, 1.1, 0.75, 2.5, 0, -0.05);   // the porch
-    const win = (x, y, z, col, w = 0.7, h = 0.9, ry = 0, d = 0) => { const m = new THREE.MeshBasicMaterial({ color: col, fog: false }), o = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); o.position.set(x, y, z + 0.01); o.rotation.y = ry; hh.add(o); wins.push({ m, c: new THREE.Color(col), ph: Math.random() * 20 + d }); };
-    win(-1.1, 1.9, 1.62, '#ffb347'); win(1.5, 1.9, 1.62, '#9dff6a'); win(-1.1, 0.8, 1.62, '#ff8a1f', 0.7, 0.7); win(-2.5, 3.4, 1.05, '#9dff6a', 0.45, 0.8); win(3.0, 1.4, 1.14, '#ffb347', 0.6, 0.7);
-    win(-2.5, 4.6, 0.95, '#ff8a1f', 0.32, 0.55);
-    for (let i = 0; i < 9; i++) { const x = -3.4 + i * 1.05; box(0.12, 1.0 + (i % 3) * 0.12, 0.12, wood, x, 0.5, 3.9, 0, ((i * 5) % 7 - 3) * 0.04); } box(7.6, 0.1, 0.08, wood, 0.0, 0.75, 3.9);        // the fence
-    // a dead tree with bare branches
-    const tr = new THREE.Group(); tr.position.set(4.7, 0, 2.6);
-    const lim = (x, y, z, l, r0, rx, rz) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.6, r0, l, 5), dark); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); tr.add(o); };
-    lim(0, 1.5, 0, 3.0, 0.2, 0, 0.05); lim(0.6, 3.0, 0, 1.6, 0.1, 0, -0.9); lim(-0.5, 2.7, 0.1, 1.4, 0.09, 0.2, 0.8); lim(1.2, 3.8, 0, 1.0, 0.06, 0, -0.5); lim(-0.9, 3.4, 0, 1.0, 0.06, 0, 0.5); lim(0.1, 3.8, 0.2, 1.1, 0.07, 0.4, 0.1);
-    hh.add(tr); root.add(hh);
-    for (const [x, z] of [[-1.8, 4.5], [2.6, 4.2]]) { const p = pumpkin(0.45); p.position.set(x, 0.36, z); hh.add(p); }
+    mansion = makeMansion(ctx); hh = mansion.group; wins = mansion.wins; hh.position.set(spot.x, spot.y, spot.z); hh.scale.setScalar(1.45); hh.rotation.y = 0.1; root.add(hh);
+    for (const [x, z] of [[-0.8, 2.95], [0.85, 2.8]]) { const p = pumpkin(0.42); p.position.set(x, 1.05, z); hh.add(p); }
     ctx.hallSpot = () => ({ x: spot.x, y: spot.y, z: spot.z });
   }
   // a big orange glow round the moon
@@ -344,7 +496,7 @@ function makeHalloween(ctx) {
     const fy = cwY + 0.07; [[-0.36, 0.34], [-0.05, 0.46], [0.3, 0.38]].forEach(([fx, s], i) => { const p = pumpkin(s); p.position.set(x + cwW * fx, fy + s * 0.64, 0.75); p.rotation.y = (i - 1) * 0.15; g.add(p); });
     for (const sx of [-1, 1]) { const p = pumpkin(0.5); p.position.set(sx * 6.9, 0.45, 1.0); p.rotation.y = -sx * 0.4; g.add(p); }
     const wm = new THREE.MeshBasicMaterial({ map: webTex(), transparent: true, depthWrite: false, opacity: 0.8 });
-    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), wm); w.scale.x = sx; w.position.set(x + sx * (lw / 2 + T + 1.3), top + T - 1.3, 0.3); g.add(w); }       // (cobwebs hang from the outer corners, off the picture)
+    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), wm); w.scale.x = -sx; w.position.set(x + sx * (lw / 2 + T) - sx * 1.3, top + T - 1.3, 0.64); w.rotation.z = 0; if (sx === -1) { w.position.x = x - lw / 2 - T + 1.3; } g.add(w); }
     const bm = new THREE.MeshBasicMaterial({ map: batTex(), transparent: true, side: THREE.DoubleSide }), bat = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), bm); bat.position.set(x + lw * 0.22, top + T + 0.5, 0.2); g.add(bat);
     for (const ex of [-0.1, 0.1]) { const e = new THREE.Mesh(new THREE.CircleGeometry(0.04, 6), new THREE.MeshBasicMaterial({ color: '#ff3030' })); e.position.set(x + lw * 0.22 + ex, top + T + 0.46, 0.22); g.add(e); }
     const bone = lam('#e6e0cc'), hand = new THREE.Group(); hand.position.set(x + lw / 2 + T - 0.2, top + T + 0.1, 0.7);          // a skeleton hand over the top corner
@@ -357,12 +509,13 @@ function makeHalloween(ctx) {
     update(dt, s) {
       const n = s.night, flick = 0.8 + 0.2 * Math.sin(performance.now() * 0.013) * Math.sin(performance.now() * 0.0071 + 1);
       faceMat.color.setScalar((0.35 + 0.65 * n) * flick);
-      for (const w of wins) { const t = performance.now() * 0.001 + w.ph, f = 0.55 + 0.45 * Math.max(0, Math.sin(t * 3.1) * Math.sin(t * 1.3 + 2)) + (Math.sin(t * 17) > 0.96 ? 0.4 : 0); w.m.color.copy(w.c).multiplyScalar((0.15 + 0.85 * n) * f); }
+      for (const w of wins) { const t = performance.now() * 0.001 + w.ph, f = 0.55 + 0.45 * Math.max(0, Math.sin(t * 3.1) * Math.sin(t * 1.3 + 2)) + (Math.sin(t * 17) > 0.96 ? 0.4 : 0); w.m.color.setScalar(w.k ? (0.15 + 0.85 * n) * f * w.k : 1); }
       const moon = ctx.sky?.bodies.moon;
-      if (moon) { halo.position.copy(moon.position); halo.position.z -= 1; halo.material.opacity = 0.7 * (moon.material.opacity ?? 1) * n * (0.5 + 0.5 * s.peak); }
+      if (moon) { halo.position.copy(moon.position); halo.position.z -= 1; halo.material.opacity = 0.7 * (moon.material.opacity ?? 1) * n * s.peak; }
       bset.sync(s.hide);
     },
-    dispose() { bset.dispose(); ctx.skyScene.remove(halo); halo.material.map.dispose(); halo.material.dispose(); if (hh) disposeTree(hh); disposeTree(root); ctx.scene.remove(root); glow.geometry.dispose(); },
+    spot: hh ? { x: spot.x, y: spot.y, z: spot.z } : null,
+    dispose() { bset.dispose(); ctx.skyScene.remove(halo); halo.material.map.dispose(); halo.material.dispose(); if (mansion) mansion.dispose(); disposeTree(root); ctx.scene.remove(root); glow.geometry.dispose(); },
     root,
   };
 }
@@ -370,22 +523,39 @@ function makeHalloween(ctx) {
 function makeHauntings(ctx) {
   const bm = new THREE.SpriteMaterial({ map: batTex(), transparent: true, depthTest: false, depthWrite: false, fog: false, opacity: 0 }), bats = [];
   for (let i = 0; i < (ctx.low ? 0 : 5); i++) { const s = new THREE.Sprite(bm.clone()); s.renderOrder = -6; s.visible = false; ctx.skyScene.add(s); bats.push({ s, d: 0 }); }
-  const gm = new THREE.SpriteMaterial({ map: ghostTex(), transparent: true, depthWrite: false, opacity: 0 }), ghost = new THREE.Sprite(gm); ghost.scale.set(2.2, 3.3, 1); ghost.visible = false; ctx.scene.add(ghost);
+  const gm = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: ghostTex() }, uT: { value: 0 }, uOp: { value: 0 }, uLean: { value: 0 }, uSize: { value: new THREE.Vector2(3.6, 6.3) } },
+    vertexShader: `uniform float uT, uLean; uniform vec2 uSize; varying vec2 vUv; varying float vH;
+      void main() { vec2 p = position.xy; float h = 0.5 - p.y; vH = h; float w = h * h;
+        // the cloth drifts as if under water: slow, wide, lagging waves that grow towards the hem, a long swell through the whole body, and sleeves that billow up and down
+        float dx = (sin(uT * 0.8 + p.y * 3.2) * 0.1 + sin(uT * 0.5 - p.y * 6.0 + 1.7) * 0.06 + sin(uT * 1.3 + p.y * 9.0) * 0.025) * w + uLean * w * 1.4 + sin(uT * 0.45) * 0.03 * h;
+        float up = sin(uT * 0.9 + p.x * 5.0) * 0.03 * smoothstep(0.15, 0.5, abs(p.x)) * smoothstep(0.55, 0.3, h) + sin(uT * 0.7 + p.x * 8.0) * 0.015 * h;
+        p.x += dx + p.x * sin(uT * 0.6 + h * 4.0) * 0.07 * h; p.y += up - 0.02 * sin(uT * 0.8) * h; vUv = uv;
+        vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0); mv.xy += p * uSize; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform sampler2D uMap; uniform float uT, uOp; varying vec2 vUv; varying float vH;
+      void main() { vec2 uv = vUv; uv.x += sin(uT * 0.7 + uv.y * 9.0) * 0.012 * vH; vec4 t = texture2D(uMap, uv); float l = dot(t.rgb, vec3(0.33));
+        vec3 c = mix(t.rgb, vec3(0.45, 1.0, 0.66) * (0.35 + l), 0.55); c += vec3(0.05, 0.4, 0.18) * (1.0 - vH) * 0.5;       // a cold green cast, and the head glowing from within
+        float a = t.a * uOp * (0.8 + 0.2 * sin(uT * 2.1 + vH * 5.0)); gl_FragColor = vec4(c, a); }`,
+  }), ghost = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 14, 26), gm); ghost.frustumCulled = false; ghost.renderOrder = 4; ghost.visible = false; ctx.scene.add(ghost);
+  const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, 128, (g) => { const q = g.createRadialGradient(64, 64, 4, 64, 64, 64); q.addColorStop(0, 'rgba(120,255,170,0.85)'); q.addColorStop(0.4, 'rgba(60,220,120,0.3)'); q.addColorStop(1, 'rgba(40,200,100,0)'); g.fillStyle = q; g.fillRect(0, 0, 128, 128); }), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false })); gl.scale.set(10, 10, 1); gl.visible = false; ctx.scene.add(gl);   // the eerie green light it gives off
+  let gop = 0.4, gtar = 0.4, gnext = 0, lwait = 18 + Math.random() * 25; const flashes = [];
   let flight = -1, fdir = 1, fy = 0, gt = -1, gcx = 0, gcz = -20, gcy = 0, waitB = 14 + Math.random() * 20, waitG = 20 + Math.random() * 25, waitS = 10 + Math.random() * 15, clock = 0;
   const KINDS = ['wind', 'owl', 'creak', 'whisper', 'owl', 'wind'];
   return {
     go(name) {
       if (name === 'sound') ctx.audio?.creepy?.(KINDS[(Math.random() * KINDS.length) | 0], (Math.random() * 2 - 1) * 0.8);
+      if (name === 'lightning') { ctx.onLightning?.(0.5 + Math.random() * 0.4); if (Math.random() < 0.6) flashes.push(0.12 + Math.random() * 0.12); }
       if (name === 'bats' && flight < 0) { flight = 0; fdir = Math.random() < 0.5 ? 1 : -1; fy = (Math.random() - 0.5) * 8; bats.forEach((b, i) => { b.d = i * 0.35 + Math.random() * 0.2; b.s.visible = true; }); }
-      if (name === 'ghost' && gt < 0) { gt = 0; const sp = ctx.hallSpot?.(); gcx = sp ? sp.x : (Math.random() - 0.5) * 20; gcz = sp ? sp.z + 1 : -20; gcy = sp ? sp.y : heightAt(gcx, gcz); ghost.visible = true; }
+      if (name === 'ghost' && gt < 0) { gt = 0; const sp = ctx.hallSpot?.(); gcx = sp ? sp.x : (Math.random() - 0.5) * 20; gcz = sp ? sp.z + 1 : -20; gcy = sp ? sp.y : heightAt(gcx, gcz); gl.visible = true; ghost.visible = true; }
     },
     update(dt, s) {
-      clock += dt;
+      clock += dt; for (let i = flashes.length - 1; i >= 0; i--) { flashes[i] -= dt; if (flashes[i] <= 0) { flashes.splice(i, 1); ctx.onLightning?.(0.3, true); } }          // (a second flicker of the same flash)
       if (s.night > 0.5 && !s.hide) {
         waitB -= dt; waitG -= dt; waitS -= dt;
         if (waitB <= 0) { waitB = 25 + Math.random() * 40; if (!ctx.reduceMotion) this.go('bats'); }
         if (waitG <= 0) { waitG = 30 + Math.random() * 40; if (!ctx.reduceMotion) this.go('ghost'); }
         if (waitS <= 0) { waitS = 20 + Math.random() * 20; this.go('sound'); }
+        lwait -= dt * (0.6 + 0.8 * s.peak); if (lwait <= 0) { lwait = 22 + Math.random() * 45; this.go('lightning'); }
       }
       const moon = ctx.sky?.bodies.moon;
       if (flight >= 0) {
@@ -398,20 +568,25 @@ function makeHauntings(ctx) {
         if (u > 1.3) { flight = -1; bats.forEach((b) => { b.s.visible = false; }); }
       }
       if (gt >= 0) {
-        gt += dt; const dur = 14, u = gt / dur; if (u >= 1) { gt = -1; ghost.visible = false; return; }
-        const a = clock * 0.35, r = 4.8 + Math.sin(clock * 0.6) * 1.2; ghost.position.set(gcx + Math.cos(a) * r, gcy + 2.4 + Math.sin(clock * 1.4) * 0.35, gcz + Math.sin(a) * r * 0.7);
-        gm.opacity = Math.min(1, Math.min(u * 6, (1 - u) * 6)) * (0.35 + 0.15 * Math.sin(clock * 5)) * s.night;
+        gt += dt; const dur = 14, u = gt / dur; if (u >= 1) { gt = -1; ghost.visible = false; gl.visible = false; return; }
+        const a = clock * 0.3, r = 4.8 + Math.sin(clock * 0.5) * 1.4, prev = ghost.position.x;
+        ghost.position.set(gcx + Math.cos(a) * r, gcy + 3.6 + Math.sin(clock * 0.9) * 0.6 + Math.sin(clock * 0.37) * 0.5, gcz + Math.sin(a) * r * 0.7);   // (it floats: a slow drift and a long, uneven bob)
+        gm.uniforms.uLean.value += ((ghost.position.x - prev) * -2.2 - gm.uniforms.uLean.value) * Math.min(1, dt * 2);
+        gnext -= dt; if (gnext <= 0) { gnext = 0.5 + Math.random() * 2.2; gtar = Math.random() < 0.25 ? 0.05 + Math.random() * 0.1 : 0.25 + Math.random() * 0.6; }       // it fades to almost nothing and back, at random
+        gop += (gtar - gop) * Math.min(1, dt * 1.6); const life = Math.min(1, Math.min(u * 6, (1 - u) * 6));
+        gm.uniforms.uT.value = clock; gm.uniforms.uOp.value = life * gop * s.night; ghost.scale.set(1, 1, 1);
+        gl.position.copy(ghost.position); gl.position.y += 1.4; gl.material.opacity = life * (0.15 + 0.7 * gop) * s.night * (0.85 + 0.15 * Math.sin(clock * 6.1));
       }
     },
-    dispose() { for (const b of bats) { ctx.skyScene.remove(b.s); b.s.material.dispose(); } ctx.scene.remove(ghost); gm.map.dispose(); gm.dispose(); bm.map.dispose(); bm.dispose(); },
+    dispose() { for (const b of bats) { ctx.skyScene.remove(b.s); b.s.material.dispose(); } ctx.scene.remove(ghost); ctx.scene.remove(gl); ghost.geometry.dispose(); gm.uniforms.uMap.value.dispose(); gm.dispose(); gl.material.map.dispose(); gl.material.dispose(); bm.map.dispose(); bm.dispose(); },
   };
 }
 
 // ---------------------------------------------------------------- the manager
 const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], newyear: [makeFireworks], july4: [makeFireworks] };
-export function createSeasonFx({ scene, skyScene, world, audio, sky, low = false, reduceMotion = false }) {
+export function createSeasonFx({ scene, skyScene, world, audio, sky, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
-  const ctx = { scene, skyScene, world, audio, sky, low, reduceMotion };
+  const ctx = { scene, skyScene, world, audio, sky, onLightning, low, reduceMotion };
   const used = [];
   ctx.freeSpot = (clear = 5) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
     const hs = world.houseList(), cands = [];
