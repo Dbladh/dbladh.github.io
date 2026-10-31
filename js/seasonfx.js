@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031101817';
+import { heightAt, POND, pathX } from './world.js?v=20261031101928';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -27,14 +27,34 @@ const swag = (x0, x1, y, z, dip, n) => { const out = []; for (let i = 0; i <= n;
 // ---------------------------------------------------------------- Christmas
 function makeChristmas(ctx) {
   const root = new THREE.Group(), houseStrings = [], boardSets = new Map(); ctx.scene.add(root);
-  // lights along the eaves of every house: a swag across the front and a run down each side
+  // lights along the edges of every roof, following its pitch: the eaves, the sloping edges of each gable end, and the hips of a hip roof
+  const polylines = (r) => {
+    const c = Math.cos(r.yaw), sn = Math.sin(r.yaw), T = (x, y, z) => [r.cx + x * c + z * sn, r.base + y, r.cz - x * sn + z * c], out = [];
+    if (r.type === 'gable') {
+      const e = r.ends || [r.ov, r.ov], L = r.len + e[0] + e[1], sh = (e[1] - e[0]) / 2, half = r.span / 2 + r.ov, x0 = sh - L / 2 - 0.05, x1 = sh + L / 2 + 0.05, yE = 0.1, yR = r.rh + 0.14;
+      out.push([T(x0, yE, half + 0.04), T(x1, yE, half + 0.04)], [T(x0, yE, -half - 0.04), T(x1, yE, -half - 0.04)]);
+      for (const x of [x0, x1]) out.push([T(x, yE, half + 0.04), T(x, yR, 0), T(x, yE, -half - 0.04)]);
+    } else {
+      const ex = r.len / 2 + r.ov + 0.04, ez = r.span / 2 + r.ov + 0.04, rx = Math.max(0.05, r.len / 2 - r.span / 2), yE = 0.08, yR = r.rh + 0.1;
+      const A = T(-ex, yE, -ez), B = T(ex, yE, -ez), C = T(ex, yE, ez), D = T(-ex, yE, ez), R1 = T(-rx, yR, 0), R2 = T(rx, yR, 0);
+      out.push([A, B, C, D, A], [A, R1], [D, R1], [B, R2], [C, R2]);
+    }
+    return out;
+  };
+  const along = (line, gap) => {                                  // bulbs spaced evenly along a polyline
+    const pts = []; let carry = 0;
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i], b = line[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); let d = i === 0 ? 0 : carry;
+      for (; d <= l + 1e-6; d += gap) { const u = l ? d / l : 0; pts.push([a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u]); }
+      carry = d - l;
+    }
+    return pts;
+  };
   for (const h of ctx.world.houseList()) {
-    if (!h.group || h.w < 2) continue;
-    const s = h.group.scale.x || 1, lw = h.w / s, ld = h.d / s, y = (h.eaveY || 3) - 0.02, zf = ld / 2 + 0.12, pts = [];
-    const nSw = Math.max(2, Math.round(lw / 1.8));
-    for (let k = 0; k < nSw; k++) { const x0 = -lw / 2 - 0.1 + ((lw + 0.2) * k) / nSw, x1 = -lw / 2 - 0.1 + ((lw + 0.2) * (k + 1)) / nSw; pts.push(...swag(x0, x1, y, zf, 0.2, Math.max(2, Math.round((x1 - x0) / 0.42))).slice(k ? 1 : 0)); }
-    for (const sx of [-1, 1]) for (let z = zf - 0.45; z > -ld / 2; z -= 0.45) pts.push([sx * (lw / 2 + 0.12), y, z]);
-    const o = bulbs(ctx.low ? pts.filter((_, i) => i % 2 === 0) : pts, XMAS, 0.3); h.group.add(o); houseStrings.push([h.group, o]);
+    if (!h.group || !h.roofs || !h.roofs.length) continue;
+    const pts = []; for (const r of h.roofs) { if (r.len < 1.8) continue; for (const line of polylines(r)) pts.push(...along(line, ctx.low ? 0.8 : 0.45)); }
+    if (!pts.length) continue;
+    const o = bulbs(pts, XMAS, 0.26); h.group.add(o); houseStrings.push([h.group, o]);
   }
   // a lit tree on a free bit of ground
   const spot = ctx.freeSpot(5.5); let tree = null;

@@ -3,7 +3,7 @@
 // so the same seed always builds the same village. `mergeByMaterial` then collapses each house into a
 // handful of draw calls.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031101817';
+import { PAL } from './palette.js?v=20261031101928';
 
 // ---------------------------------------------------------------- small helpers
 
@@ -421,6 +421,7 @@ export function addGable(group, o) {
     tri.translate(len / 2, 0, 0);
     g.add(new THREE.Mesh(tri, wallMat));
   }
+  (group.userData.roofs ||= []).push({ type: 'gable', cx, cz, base, yaw, len, span, ov, ends, rh });          // (remembered for the seasonal lights that follow the roof's edges)
   const half = span / 2 + ov;
   const slope = Math.hypot(half, rh);
   const ang = Math.atan2(rh, half);
@@ -450,6 +451,7 @@ export function addGable(group, o) {
 
 /** Hip roof: slopes on all four sides (a pyramid when the plan is square). */
 export function addHip(group, { cx, cz, len, span, base, rh, ov, yaw = 0, roofMat, tile = 1.7, ridge = '#b8451f', plateMat = null, wallTileSize = 2.4 }) {
+  (group.userData.roofs ||= []).push({ type: 'hip', cx, cz, base, yaw, len, span, ov, rh });
   const ex = len / 2 + ov, ez = span / 2 + ov;
   const rx = Math.max(0.05, len / 2 - span / 2);
   const P = {
@@ -1114,7 +1116,7 @@ function makeHouse(R, theme, opts) {
   g.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = !o.userData.noShadow; } });
   const merged = mergeByMaterial(g);
   return {
-    group: merged, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d, eaveY: top,
+    group: merged, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d, eaveY: top, roofs: g.userData.roofs || [],
     chimneys, smoke: chimneys.length > 0 && !low && R() < 0.5,
     sig: `${wallSpec.kind}${wallSpec.hex}${mix}${spec2.kind}|${roofSpec.kind}${roofSpec.hex}|${shape}`,
   };

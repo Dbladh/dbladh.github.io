@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031101817';
-import { auroraColour } from './aurora.js?v=20261031101817';
+import { PAL } from './palette.js?v=20261031101928';
+import { auroraColour } from './aurora.js?v=20261031101928';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031101817';
+} from './houses.js?v=20261031101928';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1129,7 +1129,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (TR() - 0.5) * 0.16; // front door faces the path
     scene.add(hs.group);
     hs.group.updateMatrixWorld(true);
-    houses.push({ eaveY: hs.eaveY, x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y, group: hs.group, glass: hs.glassMat });
+    houses.push({ eaveY: hs.eaveY, roofs: hs.roofs, x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y, group: hs.group, glass: hs.glassMat });
     windowMats.push(hs.glassMat);
     if (hs.smoke) for (const c of hs.chimneys) smokeSrc.push(new THREE.Vector3(c[0], c[1], c[2]).applyMatrix4(hs.group.matrixWorld));
     if (houseLights.length < houseCap) {
