@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031113134';
+import { heightAt, POND, pathX } from './world.js?v=20261031113457';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -1087,8 +1087,89 @@ function makeBloom(ctx) {
 }
 const makeBloomDrift = driftModule({ shape: 2, cols: ['#ffc9dd', '#ffffff', '#ffb3d0', '#ffe3ee'].map((c) => new THREE.Color(c)), n: 120, size: 0.45 });
 
+// ---------------------------------------------------------------- summer evenings: fireflies, lanterns floating on the pond, a hot-air balloon by day
+const FFU = { uT: { value: 0 }, uN: { value: 0 } };
+function makeFireflies(ctx) {
+  const N = ctx.low ? 70 : 190, r = rng(606), base = new Float32Array(N * 3), sd = new Float32Array(N * 2);
+  for (let i = 0; i < N; i++) { const x = (r() - 0.5) * 90, z = 10 - r() * 62; base.set([x, heightAt(x, z) + 0.5 + r() * 2.4, z], i * 3); sd.set([r(), r()], i * 2); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(base, 3)); geo.setAttribute('aS', new THREE.BufferAttribute(sd, 2));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, uniforms: { ...FFU, uPx: BU.uPx },
+    vertexShader: `uniform float uT, uN, uPx; attribute vec2 aS; varying float vA;
+      void main() { float k = aS.x, ph = aS.y * 40.0; vec3 p = position + vec3(sin(uT * 0.45 * (0.6 + k) + ph) * 1.4, sin(uT * 0.8 + ph * 2.0) * 0.45, cos(uT * 0.4 * (0.6 + k) + ph * 1.3) * 1.4);
+        vec4 mv = viewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; float blink = smoothstep(0.35, 0.9, sin(uT * (0.9 + k * 1.2) + ph) * 0.5 + 0.5); vA = blink * uN;
+        gl_PointSize = clamp((0.42 + 0.3 * k) * uPx / max(1.0, -mv.z), 2.0, 16.0); }`,
+    fragmentShader: `varying float vA; void main() { float d = length(gl_PointCoord - 0.5); float core = smoothstep(0.22, 0.0, d), halo = smoothstep(0.5, 0.05, d); gl_FragColor = vec4(mix(vec3(0.75, 1.0, 0.35), vec3(1.0, 0.98, 0.7), core), (halo * 0.7 + core) * vA); }`,
+  });
+  const pts = new THREE.Points(geo, m); pts.frustumCulled = false; pts.renderOrder = 6; ctx.scene.add(pts); let clock = 0;
+  return { update(dt, s) { clock += dt; FFU.uT.value = clock; const n = Math.min(1, Math.max(0, (s.night - 0.2) / 0.5)); FFU.uN.value = n * (s.hide ? 0 : 1) * (s.weather && s.weather.rain > 0.3 ? 0.3 : 1); pts.visible = FFU.uN.value > 0.01; }, dispose() { ctx.scene.remove(pts); geo.dispose(); m.dispose(); } };
+}
+function makeLanterns(ctx) {
+  const root = new THREE.Group(), r = rng(77), list = [], cols = ['#ff9a3c', '#ff6f91', '#ffd24a', '#5fd6c4', '#ff8a4a', '#c49bff']; ctx.scene.add(root);
+  const wy = ctx.world.waterY?.() ?? heightAt(POND.x, POND.z), glowTex = canvasTex(64, 64, (g) => { const q = g.createRadialGradient(32, 32, 2, 32, 32, 32); q.addColorStop(0, 'rgba(255,230,160,0.9)'); q.addColorStop(1, 'rgba(255,170,60,0)'); g.fillStyle = q; g.fillRect(0, 0, 64, 64); });
+  for (let i = 0; i < (ctx.low ? 5 : 10); i++) {
+    const g = new THREE.Group(), c = new THREE.Color(cols[i % cols.length]), body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.3, 8), new THREE.MeshBasicMaterial({ color: c })), base = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.05, 10), lam('#4a3626')), top = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.08, 8), lam('#4a3626'));
+    body.position.y = 0.2; top.position.y = 0.39; g.add(base, body, top); const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: c.clone().lerp(new THREE.Color('#ffd89a'), 0.5), fog: false })); glow.scale.setScalar(1.6); glow.position.y = 0.2; g.add(glow); root.add(g);
+    list.push({ g, body, glow, a: r() * 6.28, rr: 1.2 + r() * (POND.r - 2.6), sp: (0.03 + r() * 0.05) * (r() < 0.5 ? 1 : -1), ph: r() * 6.28, c });
+  }
+  let clock = 0;
+  return {
+    update(dt, s) {
+      clock += dt; const n = Math.min(1, Math.max(0, (s.night - 0.15) / 0.5)); root.visible = !s.hide;
+      for (const l of list) { l.a += l.sp * dt; l.g.position.set(POND.x + Math.cos(l.a) * l.rr * 1.05, wy + 0.03 + Math.sin(clock * 1.3 + l.ph) * 0.025, POND.z + Math.sin(l.a) * l.rr * 0.85); l.g.rotation.set(Math.sin(clock + l.ph) * 0.05, l.a, Math.cos(clock * 0.8 + l.ph) * 0.05); l.body.material.color.copy(l.c).multiplyScalar(0.25 + 0.95 * n * (0.88 + 0.12 * Math.sin(clock * 5 + l.ph))); l.glow.material.opacity = n * (0.7 + 0.2 * Math.sin(clock * 4 + l.ph)); }
+    },
+    dispose() { ctx.scene.remove(root); disposeTree(root); glowTex.dispose(); for (const l of list) { l.body.material.dispose(); l.glow.material.dispose(); } },
+  };
+}
+function makeBalloon(ctx) {
+  const g = new THREE.Group(), tex = canvasTex(256, 64, (c) => { const cols = ['#e8423a', '#fff4e0', '#f2b632', '#2f8fe0', '#fff4e0', '#e8423a', '#4cb86a', '#fff4e0']; cols.forEach((col, i) => { c.fillStyle = col; c.fillRect(i * 32, 0, 32, 64); }); });
+  tex.wrapS = THREE.RepeatWrapping; const prof = []; for (let i = 0; i <= 16; i++) { const u = i / 16, a = u * Math.PI; prof.push(new THREE.Vector2(Math.sin(a) * (1.0 - 0.3 * Math.max(0, 0.45 - u) ** 1.2 * 2.2) * 1.0 + (u > 0.82 ? -0.5 * (u - 0.82) ** 1.1 : 0), 1.1 - u * 2.3)); }
+  const env = new THREE.Mesh(new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(Math.max(0.02, p.x), p.y)), 24), new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide })); env.position.y = 1.6; g.add(env);
+  const basket = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 0.46), lam('#8a5a30')); basket.position.y = -0.3; g.add(basket);
+  for (const [x, z] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) { const rp = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.0, 3), lam('#3a2a1a')); rp.position.set(x * 1.4, 0.2, z * 1.4); rp.rotation.set(z * 0.9, 0, -x * 0.9); g.add(rp); }
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 6), new THREE.MeshBasicMaterial({ color: '#ffb347' })); flame.position.y = 0.45; g.add(flame);
+  g.scale.setScalar(2.6); g.visible = false; ctx.scene.add(g);
+  let t = -1, wait = 20 + Math.random() * 40, dir = 1, z0 = -70, y0 = 26, dur = 80;
+  return {
+    go(name) { if ((name && name !== 'balloon') || t >= 0) return; t = 0; dir = Math.random() < 0.5 ? 1 : -1; z0 = -55 - Math.random() * 30; y0 = 22 + Math.random() * 10; dur = 70 + Math.random() * 30; g.visible = true; },
+    update(dt, s) {
+      if (t < 0) { if (s.night < 0.35 && !s.hide && !ctx.reduceMotion && !(s.weather && (s.weather.rain > 0.2 || s.weather.storm > 0.1))) wait -= dt; if (wait <= 0) { wait = 90 + Math.random() * 120; this.go(); } return; }
+      t += dt; const u = t / dur; if (u >= 1 || s.hide) { t = -1; g.visible = false; return; }
+      g.position.set((-100 + 200 * u) * dir, y0 + Math.sin(t * 0.35) * 1.2 + Math.sin(u * Math.PI) * 4, z0 + Math.sin(u * 5) * 6); g.rotation.y = t * 0.08; flame.scale.set(1, 0.7 + 0.5 * Math.abs(Math.sin(t * 9)) * (Math.sin(t * 0.7) > 0.3 ? 1 : 0.2), 1);
+    },
+    dispose() { ctx.scene.remove(g); disposeTree(g); tex.dispose(); },
+  };
+}
+// ---------------------------------------------------------------- the Fourth of July: bunting and flags on the houses and the signs
+const RWB = ['#d8232a', '#ffffff', '#2a4fb8'].map((c) => new THREE.Color(c)), JU = { uT: { value: 0 } };
+const buntGeo = () => { const sh = new THREE.Shape(); sh.moveTo(-0.22, 0); sh.lineTo(0.22, 0); sh.lineTo(0, -0.42); sh.closePath(); return new THREE.ShapeGeometry(sh); };
+const starGeo = () => { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = (i / 10) * 6.2832 + Math.PI / 2, rr = i % 2 ? 0.2 : 0.5; i ? sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : sh.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } sh.closePath(); return new THREE.ShapeGeometry(sh); };
+const flagTex = () => canvasTex(130, 80, (g) => { for (let i = 0; i < 13; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#d8232a'; g.fillRect(0, i * 80 / 13, 130, 80 / 13 + 1); } g.fillStyle = '#2a4fb8'; g.fillRect(0, 0, 54, 43); g.fillStyle = '#ffffff'; for (let y = 0; y < 5; y++) for (let x = 0; x < 6; x++) g.fillRect(5 + x * 8.5, 5 + y * 7.5, 2.4, 2.4); });
+const flagMat = (tex) => { const m = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }); m.onBeforeCompile = (sh) => { sh.uniforms.uT = JU.uT; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uT;').replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.z += sin(transformed.x * 5.0 - uT * 4.0) * 0.09 * (transformed.x + 0.5); transformed.y += sin(transformed.x * 4.0 - uT * 3.0) * 0.03 * (transformed.x + 0.5);'); }; m.customProgramCacheKey = () => 'flag'; return m; };
+function makeJulyHouses(ctx) {
+  const strings = [], bg = buntGeo(), tex = flagTex(), fm = flagMat(tex), poles = new THREE.Group(), houses = ctx.world.houseList(); ctx.scene.add(poles); let clock = 0;
+  for (const h of houses) {
+    if (!h.group || !h.roofs || !h.roofs.length) continue; const roof = h.roofs.reduce((a, b) => (b.len > a.len ? b : a)), lines = polylines(roof); if (!lines.length) continue; const ln = lines[0], a = ln[0], b = ln[ln.length - 1];
+    const n = Math.max(6, Math.round(Math.hypot(b[0] - a[0], b[2] - a[2]) / 0.42)), mesh = new THREE.InstancedMesh(bg, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), n), dm = new THREE.Object3D();
+    for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, sag = Math.sin(u * Math.PI * 3) * 0.06; dm.position.set(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u - 0.06 - Math.abs(sag), a[2] + (b[2] - a[2]) * u + 0.06); dm.rotation.set(0, 0, 0); dm.scale.setScalar(1); dm.updateMatrix(); mesh.setMatrixAt(i, dm.matrix); mesh.setColorAt(i, RWB[i % 3]); }
+    h.group.add(mesh); strings.push([h.group, mesh]);
+  }
+  houses.forEach((h, i) => { if (i % 3 === 1) return; const a = Math.PI * (i % 2 ? 0.1 : 0.9), x = h.x + Math.cos(a) * ((h.r || 3) + 1.0), z = h.z + Math.sin(a) * ((h.r || 3) + 1.0) * 0.9; if (Math.abs(x - pathX(z)) < 1.5 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 1) return;
+    const y = heightAt(x, z), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 3.8, 6), lam('#d6d2c8')), tip = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), lam('#e8c040')), flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.86, 10, 4), fm);
+    pole.position.set(x, y + 1.9, z); tip.position.set(x, y + 3.85, z); flag.position.set(x + 0.7, y + 3.3, z); poles.add(pole, tip, flag); });
+  return { update(dt, s) { clock += dt; JU.uT.value = clock; poles.visible = !s.hide; }, dispose() { for (const [g, m] of strings) { g.remove(m); m.dispose(); } ctx.scene.remove(poles); disposeTree(poles); fm.dispose(); tex.dispose(); bg.dispose(); } };
+}
+const makeJulyBoards = boardsModule((ctx, b) => {
+  const F = b.frame, g = new THREE.Group(), { x, cwY, cwW } = F; g.add(frameBulbs(ctx, F, RWB)); g.add(instAlongTop(ctx, F, buntGeo(), 1.0, RWB, 0.5, 0.15, 0.2)); g.add(instAlongTop(ctx, F, starGeo(), 0.34, [new THREE.Color('#ffffff'), new THREE.Color('#ffd84a')], 1.5, 0.62, 0.22));
+  const fl = buntGeo(), n = 16, rail = new THREE.InstancedMesh(fl, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), n), dm = new THREE.Object3D();
+  for (let i = 0; i < n; i++) { const u = i / (n - 1); dm.position.set(x - cwW / 2 + cwW * u, cwY + 1.05 - 0.15 * Math.abs(Math.sin(u * Math.PI * 3)), 1.2); dm.rotation.set(0, 0, 0); dm.scale.setScalar(1); dm.updateMatrix(); rail.setMatrixAt(i, dm.matrix); rail.setColorAt(i, RWB[i % 3]); } g.add(rail);
+  for (const sx of [-1, 1]) { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 2.2, 5), lam('#d6d2c8')); pole.position.set(sx * 6.3, cwY + 1.2, 0.6); g.add(pole); const f = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.68, 8, 3), JFLAG()); f.position.set(sx * 6.3 + 0.55, cwY + 2.0, 0.6); g.add(f); }
+  return g;
+});
+let _jf = null; const JFLAG = () => (_jf ||= flagMat(flagTex()));
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], bloom: [makeBloom, makeBloomDrift], valentine: [makeValHouses, makeValDrift, makeValBoards], stpatrick: [makeStpHouses, makeStpDrift, makeStpLand, makeStpBoards], easter: [makeEasterHouses, makeEasterBoards, makeEasterHunt], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], bloom: [makeBloom, makeBloomDrift], valentine: [makeValHouses, makeValDrift, makeValBoards], stpatrick: [makeStpHouses, makeStpDrift, makeStpLand, makeStpBoards], easter: [makeEasterHouses, makeEasterBoards, makeEasterHunt], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks, makeJulyHouses, makeJulyBoards], summer: [makeFireflies, makeLanterns, makeBalloon] };
 export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, homeView, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
   const ctx = { scene, skyScene, world, audio, sky, camera, canvas, homeView, onLightning, low, reduceMotion };

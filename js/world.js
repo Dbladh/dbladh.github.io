@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031113134';
-import { auroraColour } from './aurora.js?v=20261031113134';
+import { PAL } from './palette.js?v=20261031113457';
+import { auroraColour } from './aurora.js?v=20261031113457';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031113134';
+} from './houses.js?v=20261031113457';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -3072,6 +3072,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     },
     /** The houses of the village: { x, z, r, w, d, rot, group, eaveY } (the group is the house itself, in local units; `eaveY` is the height of its eave). */
     houseList() { return houses; },
+    waterY() { return WATER_Y; },
     /** The trees of the main scene: { t: 'round', lobes: [{ x, y, z, r }] } | { t: 'cypress', x, y (centre), z, rx, h } | { t: 'pine', x, y (base), z, H, R }. */
     treeList() { return treeRecs; },
     /** The footbridge over the pond: { x0, x1, bz, yEnd0, yEnd1 } (its arch rises 0.75 in the middle). */
