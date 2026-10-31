@@ -2,11 +2,11 @@
 // pinball: one button swings the flippers; bumpers, slingshots, a spinner, drop targets and ramps knock the ball about. Light the three lamps (reach the deck by a ramp, spin the spinner, clear the drop targets)
 // and the cup on the raised deck opens; sink it to finish. A ball that drops into a lock saucer is held for an aimed putt, so the golf skill pays off inside the pinball. Balls are the strokes.
 import * as THREE from 'three';
-import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030224928';
-import { toWorld, YAWS } from './golfsites.js?v=20261030224928';
-import { M, G } from './golfvis.js?v=20261030224928';
-import { isLow } from './golfquality.js?v=20261030224928';
-import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261030224928';
+import { newBall, newCtx, shoot, stepBall, collideFlippers, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030225045';
+import { toWorld, YAWS } from './golfsites.js?v=20261030225045';
+import { M, G } from './golfvis.js?v=20261030225045';
+import { isLow } from './golfquality.js?v=20261030225045';
+import { stepFlips, isDrained, TABLE, PLAT_H, SPIN_NEED, SAVE_TIME } from './pbtable.js?v=20261030225045';
 
 const COMBO_NEED = 3, TRAIL = 22, SUB = 4, LAMP_TEXT = { ramp: 'RAMP', spin: 'SPIN', tgt: 'TARGETS', bump: 'BUMPERS', lock: 'LOCK', combo: 'COMBO' };
 const hitAmt = (v) => 0.7 + 2.5 * Math.pow(Math.max(0, Math.min(1, (v - 0.8) / 9)), 0.85);       // (how hard the ball hit, 0.2 to 1)

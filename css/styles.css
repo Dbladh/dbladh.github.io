@@ -1000,3 +1000,11 @@ body.scene-mode .bike-hint { display: block; }
 @media (max-width: 380px) { .pb-dock { gap: 8px; padding: 0 10px; } .pb-nudge { padding: 10px 10px; font-size: 12px; } .pb-flip { min-width: 80px; letter-spacing: 0.06em; } }
 
 @media (max-width: 420px) { .golf-quit { padding: 7px 12px; font-size: 0.8rem; } .golf-left { max-width: calc(100% - 84px); } .golf-info { padding: 6px 10px; font-size: 0.8rem; } .golf-info b { font-size: 0.92rem; } .golf-info .golf-chal { font-size: 0.76rem; } .pb-lamps i { padding: 4px 8px; } }
+
+/* mini-golf: words that float up from the ball (tricks), and the scorecard's stars popping in */
+.golf-pop { position: fixed; z-index: 45; transform: translate(-50%, -50%); pointer-events: none; font-weight: 800; font-size: 1.15rem; color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 0 12px rgba(255, 210, 63, 0.6); white-space: nowrap; animation: golfPop 1.5s ease-out forwards; }
+.golf-pop.trick { color: #ffe14a; }
+@keyframes golfPop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -190%) scale(1); } }
+.golf-stars { animation: golfStars 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes golfStars { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .golf-pop, .golf-stars { animation: none; } }
