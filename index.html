@@ -13,7 +13,7 @@
   <title>Danny Bladh</title>
   <meta name="description" content="Danny Bladh: creative problem solver, AI-curious builder, always learning. Explore the landscape.">
   <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261031100151">
+  <link rel="stylesheet" href="css/styles.css?v=20261031101817">
   <!-- Start-up splash: when the scene view will run, hide the plain page from the very first paint (main.js lifts it after the first scene frame). Falls back after 12 s. -->
   <script>
     (function () {
@@ -41,7 +41,7 @@
   <div class="edge edge-top" aria-hidden="true"></div>
   <div class="edge edge-bottom" aria-hidden="true"></div>
 
-  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261031100151 drives --cine and --cine-v while a house song plays). -->
+  <!-- Music mode: letterbox bars, vignette and grain (CSS only; js/main.js?v=20261031101817 drives --cine and --cine-v while a house song plays). -->
   <div id="cine-fade" class="cine-fade" aria-hidden="true"></div>
   <div id="cine" class="cine" aria-hidden="true"><i class="cine-bar cine-top"></i><i class="cine-bar cine-bot"></i><i class="cine-vig"></i><i class="cine-grain"></i></div>
 
@@ -74,10 +74,15 @@
       <button id="wx-chip" class="scene-sound wx-chip" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Weather" title="Weather"><span class="wx-ico" id="wx-ico" aria-hidden="true"></span><span class="wx-temp" id="wx-temp" hidden></span></button>
       <div class="wx-menu" id="wx-menu" role="menu" hidden>
         <button type="button" role="menuitem" data-wx="local">My weather</button>
-        <button type="button" role="menuitem" data-wx="auto">Seasonal</button>
+        <button type="button" role="menuitem" data-wx="auto">By the time of year</button>
         <hr>
         <button type="button" role="menuitem" data-wx="clear">Clear</button><button type="button" role="menuitem" data-wx="cloudy">Cloudy</button><button type="button" role="menuitem" data-wx="overcast">Overcast</button><button type="button" role="menuitem" data-wx="rain">Rain</button><button type="button" role="menuitem" data-wx="shower">Sun shower</button>
         <button type="button" role="menuitem" data-wx="storm">Storm</button><button type="button" role="menuitem" data-wx="snow">Snow</button><button type="button" role="menuitem" data-wx="fog">Fog</button>
+        <hr><p class="wx-head">Season</p>
+        <button type="button" role="menuitem" data-season="auto">By the calendar</button><button type="button" role="menuitem" data-season="christmas">Christmas</button><button type="button" role="menuitem" data-season="newyear">New Year</button>
+        <button type="button" role="menuitem" data-season="valentine">Valentine’s</button><button type="button" role="menuitem" data-season="stpatrick">St Patrick’s</button><button type="button" role="menuitem" data-season="easter">Easter</button>
+        <button type="button" role="menuitem" data-season="spring">Spring blossoms</button><button type="button" role="menuitem" data-season="summer">Summer evenings</button><button type="button" role="menuitem" data-season="july4">July 4th</button>
+        <button type="button" role="menuitem" data-season="halloween">Halloween</button><button type="button" role="menuitem" data-season="harvest">Harvest</button><button type="button" role="menuitem" data-season="none">No season</button>
         <p class="wx-note" id="wx-note" hidden></p>
       </div>
     </div>
@@ -332,6 +337,6 @@
     <figure><img alt=""><figcaption></figcaption></figure>
   </dialog>
 
-  <script type="module" src="js/main.js?v=20261031100151"></script>
+  <script type="module" src="js/main.js?v=20261031101817"></script>
 </body>
 </html>

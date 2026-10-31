@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031100151';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031101817';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -273,6 +273,15 @@ export function createAudio({ base = 'audio/' } = {}) {
       if (kind === 'frog') { const big = 0.8 + Math.random() * 0.6, n = 2 + ((Math.random() * 3) | 0); for (let k = 0; k < n; k++) voice('sawtooth', 210 * big, 120 * big, t0 + k * 0.12, 0.09, 0.07, 4, 540 * big); }
       else if (kind === 'peep') { const f = 2200 + Math.random() * 700, n = 3 + ((Math.random() * 3) | 0); for (let k = 0; k < n; k++) voice('sine', f, f * 1.18, t0 + k * 0.1, 0.05, 0.03); }
       else { voice('sine', 1300 + Math.random() * 400, 650, t0, 0.07, 0.04); }
+    },
+    /** Sleigh bells: a handful of bright little pings that shake across the sky from one side to the other (`dir` 1 left to right, -1 the other way). */
+    sleigh(dir = 1) {
+      if (!ctx || !on || !scn || !gate('sleigh', 4)) return;
+      const t0 = ctx.currentTime + 0.1, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.setValueAtTime(-0.8 * dir, t0); p.pan.linearRampToValueAtTime(0.8 * dir, t0 + 9); p.connect(scn.out); }
+      for (let i = 0; i < 26; i++) {
+        const t = t0 + i * 0.34 + Math.random() * 0.12, f = 3000 + Math.random() * 1600, o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.012 * Math.sin(Math.PI * i / 25) + 0.003, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(p || scn.out); o.start(t); o.stop(t + 0.4);
+      }
     },
     /** A clap of thunder `delay` seconds after the flash (the farther the lightning, the longer the wait and the softer and lower the sound). */
     thunder(delay = 1.5, power = 1) {

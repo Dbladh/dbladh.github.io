@@ -3,7 +3,7 @@
 // so the same seed always builds the same village. `mergeByMaterial` then collapses each house into a
 // handful of draw calls.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031100151';
+import { PAL } from './palette.js?v=20261031101817';
 
 // ---------------------------------------------------------------- small helpers
 
@@ -1114,7 +1114,7 @@ function makeHouse(R, theme, opts) {
   g.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = !o.userData.noShadow; } });
   const merged = mergeByMaterial(g);
   return {
-    group: merged, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d,
+    group: merged, glassMat, lightAnchor: new THREE.Vector3(0, 1.5, d / 2 + 1.4), radius, w, d, eaveY: top,
     chimneys, smoke: chimneys.length > 0 && !low && R() < 0.5,
     sig: `${wallSpec.kind}${wallSpec.hex}${mix}${spec2.kind}|${roofSpec.kind}${roofSpec.hex}|${shape}`,
   };

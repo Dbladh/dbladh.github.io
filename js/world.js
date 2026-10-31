@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031100151';
-import { auroraColour } from './aurora.js?v=20261031100151';
+import { PAL } from './palette.js?v=20261031101817';
+import { auroraColour } from './aurora.js?v=20261031101817';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031100151';
+} from './houses.js?v=20261031101817';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1129,7 +1129,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     hs.group.rotation.y = Math.atan2(st.fx, st.fz) + (TR() - 0.5) * 0.16; // front door faces the path
     scene.add(hs.group);
     hs.group.updateMatrixWorld(true);
-    houses.push({ x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y, group: hs.group, glass: hs.glassMat });
+    houses.push({ eaveY: hs.eaveY, x: st.x, z: st.z, r: hs.radius * sc, w: hs.w * sc, d: hs.d * sc, rot: hs.group.rotation.y, group: hs.group, glass: hs.glassMat });
     windowMats.push(hs.glassMat);
     if (hs.smoke) for (const c of hs.chimneys) smokeSrc.push(new THREE.Vector3(c[0], c[1], c[2]).applyMatrix4(hs.group.matrixWorld));
     if (houseLights.length < houseCap) {
@@ -2428,7 +2428,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     let sc = s.scale;                 // current scale of this sign (bigger on large screens, see placeBoards)
     const set = (m, w, h, d, x, y, z) => { m.scale.set(w, h, d); m.position.set(x, y, z); };
     const board = {
-      id, face, accent: s.accent, scale: s.scale, layout: null, snowK: 0,
+      id, face, group: g, frame: null, frameV: 0, accent: s.accent, scale: s.scale, layout: null, snowK: 0,
       /** How much snow lies on top of the sign (0 to 1). */
       setSnow(k) { this.snowK = k; snowCap.visible = k > 0.02; snowCap.scale.y = Math.max(0.001, k); },
       width: BOARD_W * s.scale, height: BOARD_H * s.scale,   // default size at the current scale (world units)
@@ -2455,6 +2455,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         set(beam, lw + 2 * T, 0.32, 0.32, x, bot + lh * 0.18, -0.62);          // beam tying the posts together
         // catwalk under the sign, projecting forward, with railing and a ladder at the right end
         const cwY = bot - T - 0.1, cwW = lw + 1.2;
+        board.frame = { lw, lh, x, y, top, bot, T, DEPTH, cwY, cwW }; board.frameV++;          // (where the sign's parts are now, for the seasonal decorations)
         set(catwalk, cwW, 0.14, 1.15, x, cwY, 0.62);
         set(railTop, cwW, 0.09, 0.09, x, cwY + 0.98, 1.14);
         set(railMid, cwW, 0.07, 0.07, x, cwY + 0.52, 1.14);
@@ -3012,6 +3013,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     setWeather(wx) {
       const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); mists.forEach((m, i) => { m.visible = (w.mist || 0) > 0.02 + 0.1 * i; }); for (const b of boards) b.setSnow(Math.min(1, (w.roof ?? w.cover) * 1.05)); terrainWx.uWet.value = w.wet; terrainWx.uDull.value = w.dull || 0; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;          // (the mist layers come in one by one as it builds)
     },
+    /** The houses of the village: { x, z, r, w, d, rot, group, eaveY } (the group is the house itself, in local units; `eaveY` is the height of its eave). */
+    houseList() { return houses; },
     /** Show the mist layers for a moment so their shader is compiled ahead of time. */
     warmMist(on) { for (const m of mists) m.visible = on; },
     setClouds(night, horizon, wx = null) {

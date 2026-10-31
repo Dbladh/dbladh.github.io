@@ -1,18 +1,20 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031100151';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031100151';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031101817';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031101817';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031100151';
-import { createWeather } from './weather.js?v=20261031100151';
-import { PAL } from './palette.js?v=20261031100151';
-import { buildWorld } from './world.js?v=20261031100151';
-import { createSky } from './sky.js?v=20261031100151';
-import { createDOF } from './dof.js?v=20261031100151';
-import { createRide } from './ride.js?v=20261031100151';
-import { createGame } from './bikegame.js?v=20261031100151';
-import { createAurora, setWarm } from './aurora.js?v=20261031100151';
-import { createAudio, pickFlicker } from './audio.js?v=20261031100151';
+import { createPrecip } from './precip.js?v=20261031101817';
+import { createSeasons } from './seasons.js?v=20261031101817';
+import { createSeasonFx } from './seasonfx.js?v=20261031101817';
+import { createWeather } from './weather.js?v=20261031101817';
+import { PAL } from './palette.js?v=20261031101817';
+import { buildWorld } from './world.js?v=20261031101817';
+import { createSky } from './sky.js?v=20261031101817';
+import { createDOF } from './dof.js?v=20261031101817';
+import { createRide } from './ride.js?v=20261031101817';
+import { createGame } from './bikegame.js?v=20261031101817';
+import { createAurora, setWarm } from './aurora.js?v=20261031101817';
+import { createAudio, pickFlicker } from './audio.js?v=20261031101817';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -190,6 +192,7 @@ function start() {
   const wxEff = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, roof: 0, tree: 0, bow: 0, mist: 0, flash: 0 };
   const weather = createWeather({ calm: matchMedia('(prefers-reduced-motion: reduce)').matches });
   const precip = createPrecip({ low: lowEnd }); scene.add(precip.group);
+  const seasons = createSeasons();                                                  // (which seasons and holidays are on, and the touches they bring)
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
   const seed = Number.isFinite(seedParam) ? seedParam >>> 0 : Math.floor(Math.random() * 1e6);
@@ -216,6 +219,7 @@ function start() {
   const ride = reduceMotion ? null : createRide(scene, world, camera, { force: bikeForce, renderer });
   const bikeBtn = document.getElementById('bike-play'), bikeHint = document.getElementById('bike-hint');
   const audio = createAudio();                       // one sound system for the landscape and the game (silent until the player turns it on)
+  const seasonFx = createSeasonFx({ scene, skyScene, world, audio, low: lowEnd, reduceMotion });
   const game = reduceMotion || !dof ? null : createGame(scene, camera, renderer, world, { audio });
   if (game) game.compileHook = (sc, cam) => dof.compileAsync(sc, cam);        // (programs for the offscreen target the scene is drawn into)
 
@@ -610,7 +614,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031100151');
+        const mod = await import('./golf.js?v=20261031101817');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -875,7 +879,8 @@ function start() {
       const k = weather.kind(nightK > 0.5), mine = weather.mode === 'local' && weather.temp !== null; if (k !== shown) { shown = k; ico.innerHTML = ICONS[k]; }
       tmp.hidden = !mine; if (mine) tmp.textContent = `${deg(weather.temp)}°`;
       const what = mine ? `${LABEL[k]} where you are, ${deg(weather.temp)} degrees` : weather.mode === 'auto' ? `${LABEL[k]} (seasonal)` : LABEL[k]; chip.title = chip.ariaLabel = `Weather: ${what}`;
-      for (const b of menu.querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.wx === (weather.mode === 'preset' ? weather.name : weather.mode)));
+      for (const b of menu.querySelectorAll('button[data-wx]')) b.setAttribute('aria-checked', String(b.dataset.wx === (weather.mode === 'preset' ? weather.name : weather.mode)));
+      for (const b of menu.querySelectorAll('button[data-season]')) b.setAttribute('aria-checked', String(b.dataset.season === seasons.mode));
     };
     weather.onChange(refresh); setInterval(refresh, 4000); refresh();
     const close = () => { menu.hidden = true; chip.setAttribute('aria-expanded', 'false'); };
@@ -883,6 +888,7 @@ function start() {
     document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('#wx')) close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { close(); chip.focus(); } });
     menu.addEventListener('click', async (e) => {
+      const sb = e.target.closest('button[data-season]'); if (sb) { audio.ui('click'); seasons.set(sb.dataset.season); close(); refresh(); return; }
       const b = e.target.closest('button[data-wx]'); if (!b) return; const m = b.dataset.wx; audio.ui('click');
       if (m === 'local') { note.hidden = false; note.textContent = 'Asking where you are (rounded to about 10 km)...'; const r = await weather.setMode('local'); if (r === 'ok') { close(); refresh(); } else note.textContent = r === 'denied' ? 'Location is off for this site, so I can’t check your weather.' : 'Couldn’t reach the weather service. Try again later.'; return; }
       await weather.setMode(m); close(); refresh();
@@ -1000,6 +1006,7 @@ function start() {
 
     { const inGame = !!(game?.active || golf?.active) && !(game?.leaving || golf?.leaving), tk = inGame ? 0 : 1; wxMoving = Math.abs(wxK - tk) > 0.002; wxK += (tk - wxK) * (1 - Math.exp(-dt * (inGame ? 2.4 : 1.15))); if (!wxMoving) wxK = tk;
       let sig = 0, n = 1; for (const k in wxEff) { wxEff[k] = weather.state[k] * wxK; sig += wxEff[k] * n++; } wxEff.wind = 0.12 + (weather.state.wind - 0.12) * wxK; wxDirty = Math.abs(sig - wxSig) > 1e-4; wxSig = sig; }          // (wxDirty: the weather changed since the last frame)
+    seasons.tick(dt); { const inGame = !!(game?.active || golf?.active) && !(game?.leaving || golf?.leaving); seasonFx.update(dt, { active: seasons.active, night: nightK, hide: inGame, fade: wxK, px: canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360)) }); }
     weather.tick(dt); weather.update(dt, () => { if (weather.quiet) audio.thunder(2 + Math.random() * 4, 0.35); else if (!reduceMotion) audio.thunder(1 + Math.random() * 4, 0.7 + Math.random() * 0.4); else audio.thunder(2 + Math.random() * 4, 0.6); }); { const inGame = !!(game?.active || golf?.active); weather.quiet = inGame; precip.update(dt, camera, weather.state, false, canvas.height, reduceMotion, lowEnd ? wxK : 0.5 + 0.5 * wxK); }          // (in the games: half the rain and snow, and none at all on a weak machine) if ((reduceMotion || dragging) && (weather.busy || wxMoving || wxDirty)) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
@@ -1177,5 +1184,5 @@ function start() {
   }
   try { frame(); } catch (err) { console.error('Render loop failed:', err); hideBoot(); }
   requestAnimationFrame(() => requestAnimationFrame(hideBoot)); setTimeout(hideBoot, 450);   // the first scene frame has been drawn: lift the splash (the timer covers a background tab, where frames do not run)
-  window.__portfolio = { weather, get golf() { return golf; }, playGolf, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
+  window.__portfolio = { weather, seasons, seasonFx, get golf() { return golf; }, playGolf, dyn, dynTick, prof, ride, game, scene, skyScene, camera, renderer, world, dof, slow, THREE, get focus() { return focus; }, cur };
 }
