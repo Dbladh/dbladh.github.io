@@ -4,11 +4,11 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261030185113';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261030185113';
-import { aceSearch } from './golface.js?v=20261030185113';
-import { hillH } from './golfphys.js?v=20261030185113';
-import { BAKED } from './golfbake.js?v=20261030185113';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261030185625';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261030185625';
+import { aceSearch } from './golface.js?v=20261030185625';
+import { hillH } from './golfphys.js?v=20261030185625';
+import { BAKED } from './golfbake.js?v=20261030185625';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;

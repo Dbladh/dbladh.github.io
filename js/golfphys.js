@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030185113';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030185625';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -342,7 +342,8 @@ export function stepBall(b, hole, ctx, dt, ev) {
   if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
   const ptc = patchAt(hole, b), tiltPull = ctx.tilt || 0, grip = FRICTION * (inSand(hole, b) ? 3.2 : 1) * (ptc ? ptc.fric : 1);                        // (sand holds the ball on a slope that would roll it on grass)
   const calm = !b.loop && !b.rail && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive && !(ptc && (ptc.push || (ptc.pull && Math.hypot(b.x - ptc.x, b.z - ptc.z) > 0.3))), slow = grip > FRICTION * 1.5;       // (a ball in sand, mud or caramel is held by it: it counts as stopped sooner)
-  if (s < (slow ? 0.25 : 0.07) && slope + tiltPull < grip * 0.9 && calm) b.still += dt; else b.still = 0;
-  if (s < (slow ? 0.5 : 0.2) && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
+  const hold = Math.min(grip * 0.9, 0.6 * (grip / FRICTION));            // (a ball only stays put on gentle ground, about a one in eight slope on turf; sand and mud hold more. On the side of a hill it keeps rolling to the bottom)
+  if (s < (slow ? 0.25 : 0.07) && slope + tiltPull < hold && calm) b.still += dt; else b.still = 0;
+  if (s < (slow ? 0.5 : 0.2) && slope < hold * 1.4 && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
   if (b.still > (slow ? 0.12 : 0.3) || b.dawdle > (slow ? 0.45 : 1.5)) { b.rest = true; b.vx = b.vz = 0; b.dawdle = 0; }
 }
