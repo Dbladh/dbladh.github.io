@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031095801';
-import { auroraColour } from './aurora.js?v=20261031095801';
+import { PAL } from './palette.js?v=20261031100151';
+import { auroraColour } from './aurora.js?v=20261031100151';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031095801';
+} from './houses.js?v=20261031100151';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2300,9 +2300,9 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
 
   // The snow that piles on top of each billboard: a lumpy, overhanging ridge of overlapping drifts along the top edge (built once, as one mesh), which grows from nothing as the snow builds. It sits above the frame, so it never covers the picture.
   const snowCapGeo = (() => {
-    const pos = [], nor = [], idx = [], r = rng(777), N = 22;
+    const pos = [], nor = [], idx = [], r = rng(777), N = 30;
     for (let i = 0; i < N; i++) {
-      const u = (i + 0.5) / N - 0.5 + (r() - 0.5) * 0.02, sx = 0.075 + r() * 0.05, sy = 0.5 + r() * 0.55, sz = 0.42 + r() * 0.2, z = (r() - 0.5) * 0.22 + 0.1, g = new THREE.SphereGeometry(1, 10, 6), p = g.attributes.position, n = g.attributes.normal, base = pos.length / 3;
+      const sx = 0.034 + r() * 0.014, u = -0.5 + sx + (i / (N - 1)) * (1 - 2 * sx), sy = 0.42 + r() * 0.32, sz = 0.36 + r() * 0.1, z = (r() - 0.5) * 0.06, g = new THREE.SphereGeometry(1, 10, 6), p = g.attributes.position, n = g.attributes.normal, base = pos.length / 3;
       for (let k = 0; k < p.count; k++) { pos.push(u + p.getX(k) * sx, p.getY(k) * sy, z + p.getZ(k) * sz); nor.push(n.getX(k), n.getY(k), n.getZ(k)); }
       for (const q of g.index.array) idx.push(base + q); g.dispose();
     }
@@ -2443,7 +2443,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         const top = y + lh / 2, bot = y - lh / 2;
         // rim (deep) and its lighter inner lip
         set(rim[0], lw + 2 * T, T, DEPTH, x, top + T / 2, 0);
-        set(snowCap, lw + 2 * T + 0.5, 1, DEPTH + 0.5, x, top + T - 0.12, 0); snowCap.scale.y = Math.max(0.001, board.snowK);
+        set(snowCap, lw + 2 * T, 1, DEPTH, x, top + T - 0.08, 0); snowCap.scale.y = Math.max(0.001, board.snowK);
         set(rim[1], lw + 2 * T, T, DEPTH, x, bot - T / 2, 0);
         set(rim[2], T, lh, DEPTH, x - lw / 2 - T / 2, y, 0);
         set(rim[3], T, lh, DEPTH, x + lw / 2 + T / 2, y, 0);
