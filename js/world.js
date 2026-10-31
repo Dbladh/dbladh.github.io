@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030232537';
-import { auroraColour } from './aurora.js?v=20261030232537';
+import { PAL } from './palette.js?v=20261030232841';
+import { auroraColour } from './aurora.js?v=20261030232841';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030232537';
+} from './houses.js?v=20261030232841';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1803,10 +1803,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   // Snow on the trees: the faces of the foliage that look up turn white, in patches that join up as the snow builds (a few of the highest tufts first, then whole tops of the canopy). One shared amount (SNOW),
   // the same one the roofs use, so it comes and goes with the weather.
   /** Snow settles on a material's upward-facing faces (`k`: how readily: above 1 it settles on steeper faces too). */
+  const TREE_SNOW = { value: 0 };
   const snowTop = (m, k = 1) => {
     m.customProgramCacheKey = () => 'snowTop' + k;
     m.onBeforeCompile = (sh) => {
-      sh.uniforms.uSnow = SNOW;
+      sh.uniforms.uSnow = TREE_SNOW;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSnowW;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           #ifdef USE_INSTANCING
@@ -2953,7 +2954,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
     setWeather(wx) {
-      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0 }; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.cover; pondU.uRain.value = w.rain;
+      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0 }; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;
     },
     setClouds(night, horizon, wx = null) {
       cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0; cloudLook.storm = wx ? wx.storm : 0;

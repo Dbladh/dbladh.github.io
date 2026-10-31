@@ -43,7 +43,7 @@ export function fromReading({ code = 0, cloud = 0, wind = 0 }) {
 export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
 
 export function createWeather({ calm = false } = {}) {
-  const vel = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0, storm: 0 }, state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, flash: 0 }, target = { ...PRESETS.clear };
+  const vel = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0, storm: 0 }, state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, roof: 0, tree: 0, flash: 0 }, target = { ...PRESETS.clear };
   let name = 'clear', hold = null, rate = 0.16, mode = 'auto', temp = null, place = null;
   const subs = new Set(), store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
   const changed = () => { for (const f of subs) f(api); };
@@ -94,7 +94,7 @@ export function createWeather({ calm = false } = {}) {
     set(preset, instant = false) {
       const p = typeof preset === 'string' ? PRESETS[preset] : preset; if (!p) return false;
       name = typeof preset === 'string' ? preset : 'custom'; for (const k of KEYS) target[k] = p[k] ?? 0;
-      if (instant) { for (const k of KEYS) { state[k] = target[k]; vel[k] = 0; } state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.snow > 0.3 ? 1 : 0; }
+      if (instant) { for (const k of KEYS) { state[k] = target[k]; vel[k] = 0; } state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.roof = state.tree = state.snow > 0.3 ? 1 : 0; }
       return true;
     },
     /** One step: the numbers ease towards the target, the ground gets wet or snowy (and dries or melts more slowly), a lightning flash dies away. */
@@ -106,7 +106,11 @@ export function createWeather({ calm = false } = {}) {
         const w = OMEGA[k]; vel[k] += ((tg - state[k]) * w * w - 2 * w * vel[k]) * step; state[k] += vel[k] * step;
       }
       state.wet += ((state.rain > 0.15 ? 1 : 0) - state.wet) * (1 - Math.exp(-dt * (state.rain > 0.15 ? 0.12 : 0.012)));
-      state.cover += ((state.snow > 0.15 ? 1 : 0) - state.cover) * (1 - Math.exp(-dt * (state.snow > 0.15 ? 0.02 : 0.006)));
+      { // snow lies down while it falls and melts away steadily afterwards, for good: the trees and roofs shed it first, the ground keeps it longest; rain and a clear sky thaw it faster
+      const snowing = state.snow > 0.15, thaw = 1 + 2.5 * state.rain + 0.8 * (1 - state.cloud) + 1.5 * state.wind * (1 - state.cloud);
+      if (snowing) { const up = 1 - Math.exp(-dt * 0.02); state.cover += (1 - state.cover) * up; state.roof += (1 - state.roof) * up * 1.4; state.tree += (1 - state.tree) * up * 1.8; }
+      else { state.cover = Math.max(0, state.cover - dt * thaw / 360); state.roof = Math.max(0, state.roof - dt * thaw / 200); state.tree = Math.max(0, state.tree - dt * thaw / 120); }
+    }
       state.flash = Math.max(0, state.flash - dt * 3.2);
       api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004 || Math.abs(vel[k]) > 0.002);
       if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm && !api.quiet) state.flash = 1; onFlash?.(); } } else hold = null;
@@ -115,7 +119,7 @@ export function createWeather({ calm = false } = {}) {
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null, saved = store.get('wx.mode');
   if (q && PRESETS[q]) { mode = 'preset'; api.set(q, true); }
   else if (q === 'auto' || !saved || saved === 'auto') { mode = 'auto'; autoName = baseline(); api.set(autoName, true); }
-  else if (saved === 'local') { mode = 'local'; api.useLocal(true).then((r) => { if (r === 'ok') { for (const k of KEYS) state[k] = target[k]; state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.snow > 0.3 ? 1 : 0; } else { mode = 'auto'; autoName = baseline(); api.set(autoName, true); } changed(); }); }
+  else if (saved === 'local') { mode = 'local'; api.useLocal(true).then((r) => { if (r === 'ok') { for (const k of KEYS) state[k] = target[k]; state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.roof = state.tree = state.snow > 0.3 ? 1 : 0; } else { mode = 'auto'; autoName = baseline(); api.set(autoName, true); } changed(); }); }
   else if (PRESETS[saved]) { mode = 'preset'; api.set(saved, true); }
   return api;
 }
