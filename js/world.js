@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031000952';
-import { auroraColour } from './aurora.js?v=20261031000952';
+import { PAL } from './palette.js?v=20261031001141';
+import { auroraColour } from './aurora.js?v=20261031001141';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031000952';
+} from './houses.js?v=20261031001141';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -833,9 +833,9 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           vec2 dv = vec2(uDrift.x * uDir.x - uDrift.y * uDir.y, uDrift.x * uDir.y + uDrift.y * uDir.x);
           vec2 p = vW.xz * uScale + dv * uTime * 0.05 * uSpeed + uSeed;
           float n = mn(p) * 0.5 + mn(p * 2.1 + vec2(uTime * 0.012, 3.0)) * 0.3 + mn(p * 4.3 - dv * uTime * 0.02) * 0.2;
-          float cov = smoothstep(0.36 - 0.18 * uAmt, 0.76 - 0.18 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
+          float cov = smoothstep(0.4 - 0.14 * uAmt, 0.8 - 0.14 * uAmt, n);                         // (more of the sky fills with haze as it thickens, and the gaps close)
           float a = cov * uAmt * uW * smoothstep(2.0, 14.0, distance(cameraPosition, vW));
-          gl_FragColor = vec4(uColor, a * (0.42 + 0.4 * uAmt));
+          gl_FragColor = vec4(uColor, a * (0.28 + 0.26 * uAmt));
           #include <colorspace_fragment>
         }`,
     });
