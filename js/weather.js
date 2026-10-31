@@ -10,6 +10,7 @@ export const PRESETS = {
   storm: { cloud: 1, rain: 1, snow: 0, fog: 0.25, wind: 0.85, storm: 1 },
   snow: { cloud: 0.85, rain: 0, snow: 0.8, fog: 0.25, wind: 0.22, storm: 0 },
   fog: { cloud: 0.55, rain: 0, snow: 0, fog: 0.95, wind: 0.04, storm: 0 },
+  shower: { cloud: 0.64, rain: 0.6, snow: 0, fog: 0.05, wind: 0.25, storm: 0 },                // a sun shower: rain falling through a bright, broken sky (a rainbow comes with it)
 };
 
 // ---- where the weather comes from ----
@@ -26,7 +27,7 @@ export function baseline(date = new Date()) {
   const m = date.getMonth(), block = Math.floor(date.getHours() / 3), key = date.getFullYear() * 10000 + (m + 1) * 100 + date.getDate();
   const w = SEASON[m].slice(); if (date.getHours() < 13 || date.getHours() > 22) w[3] *= 0.2; if (date.getHours() > 9 && date.getHours() < 17) w[5] *= 0.15;      // (storms build in the afternoon, fog lies in the early hours)
   let r = hashS(key * 8 + block) * w.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < 6; i++) { r -= w[i]; if (r <= 0) return NAMES[i]; }
+  for (let i = 0; i < 6; i++) { r -= w[i]; if (r <= 0) return NAMES[i] === 'rain' && m >= 2 && m <= 8 && hashS(key * 3 + block) < 0.4 ? 'shower' : NAMES[i]; }
   return 'clear';
 }
 /** Turn a reading of the weather outside (Open-Meteo's WMO code, cloud cover, wind) into the numbers the landscape uses. */
@@ -40,10 +41,10 @@ export function fromReading({ code = 0, cloud = 0, wind = 0 }) {
   return o;
 }
 /** The simple icon for a set of numbers: sun, moon, partly cloudy, cloud, rain, storm, snow or fog. */
-export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
+export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 && t.cloud < 0.72 && !night ? 'shower' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
 
 export function createWeather({ calm = false } = {}) {
-  const vel = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0, storm: 0 }, state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, roof: 0, tree: 0, flash: 0 }, target = { ...PRESETS.clear };
+  const vel = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0, storm: 0 }, state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, roof: 0, tree: 0, bow: 0, mist: 0, flash: 0 }, target = { ...PRESETS.clear };
   let name = 'clear', hold = null, rate = 0.16, mode = 'auto', temp = null, place = null;
   const subs = new Set(), store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
   const changed = () => { for (const f of subs) f(api); };
@@ -111,6 +112,11 @@ export function createWeather({ calm = false } = {}) {
       if (snowing) { const up = 1 - Math.exp(-dt * 0.02); state.cover += (1 - state.cover) * up; state.roof += (1 - state.roof) * up * 1.4; state.tree += (1 - state.tree) * up * 1.8; }
       else { state.cover = Math.max(0, state.cover - dt * thaw / 360); state.roof = Math.max(0, state.roof - dt * thaw / 200); state.tree = Math.max(0, state.tree - dt * thaw / 120); }
     }
+      { // a rainbow: while the ground is still wet and the rain has eased, under a sky that is not shut (the sky also needs the sun up and on the far side)
+        const bt = Math.min(1, state.wet) * Math.min(1, Math.max(0, 1 - state.rain * 1.6)) * (1 - Math.min(1, Math.max(0, (state.cloud - 0.55) / 0.35))) * (state.snow > 0.1 ? 0 : 1), up = bt > state.bow ? 0.25 : 0.4;
+        state.bow += (bt - state.bow) * (1 - Math.exp(-dt * up));
+      }
+      state.mist = Math.max(state.fog, state.rain * 0.65, state.wet * 0.3 * (1 - Math.min(1, state.snow * 2)));          // (the mist: thick in fog, thinner in rain, and a thin trace over wet ground)
       state.flash = Math.max(0, state.flash - dt * 3.2);
       api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004 || Math.abs(vel[k]) > 0.002);
       if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm && !api.quiet) state.flash = 1; onFlash?.(); } } else hold = null;

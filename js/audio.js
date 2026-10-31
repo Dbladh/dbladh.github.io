@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261030232841';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261030233656';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -246,6 +246,10 @@ export function createAudio({ base = 'audio/' } = {}) {
       at(other.gain, duck, song ? 0.3 : 1.2);
       const wx = s.wx || { rain: 0, wind: 0, snow: 0, storm: 0 }, wet = Math.max(wx.rain, wx.storm * 0.8), mute = 1 - 0.75 * Math.max(wet, 0.6 * wx.snow);      // (birds and crickets go quiet in rain and snow)
       at(scn.day.g.gain, 0.13 * (1 - s.night) * k * mute, 1.4); at(scn.night.g.gain, 0.11 * s.night * k * mute, 1.4);
+      if (scn.rain) {                                                         // after dark and in the rain the frogs start up, tree frogs peep and the odd drip falls
+        const crit = Math.max(wx.rain > 0.08 ? wx.rain * 0.8 : 0, wx.wet * 0.5 * (1 - wx.snow)) * (wx.storm > 0.6 ? 0.3 : 1), ct = ctx.currentTime;
+        if (crit > 0.05 && !s.quiet && ct > (scn.nextCrit || 0)) { scn.nextCrit = ct + (1.1 + Math.random() * 3.2) / crit; const r = Math.random(), pan = (Math.random() * 2 - 1) * 0.8, vol = (0.5 + 0.5 * crit) * (0.6 + 0.4 * s.night); this.critter(r < 0.42 ? 'frog' : r < 0.72 ? 'peep' : 'drip', vol, pan); }
+      }
       if (scn.rain) {
         const tt = ctx.currentTime, gust = 0.5 + 0.5 * Math.sin(tt * 0.6) * Math.sin(tt * 0.23 + 1), wd = wx.wind;
         at(scn.rain.g.gain, 0.15 * wet * k, 0.8); at(scn.hiss.g.gain, 0.05 * wet * k, 0.8);
@@ -256,6 +260,19 @@ export function createAudio({ base = 'audio/' } = {}) {
         const g = !s.quiet && s.bike ? s.bike.gain : 0; at(scn.bike.g.gain, g, 0.3);
         if (g > 0.002) { if (scn.bike.p) at(scn.bike.p.pan, clamp(s.bike.pan, -1, 1) * 0.8, 0.2); pump(scn.bike.layer); }
       }
+    },
+    /** The small sounds of a wet evening, made here (no recordings): a frog's ribbit, a tree frog's peeping, and a drip. `v` is the loudness (0..1), `pan` -1..1. */
+    critter(kind = 'frog', v = 1, pan = 0) {
+      if (!ctx || !on || !scn || !gate('crit' + kind, 0.25)) return;
+      const t0 = ctx.currentTime + 0.02, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = pan; p.connect(scn.out); }
+      const dest = p || scn.out, voice = (type, f0, f1, t, dur, peak, q = 0, bp = 0) => {
+        const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak * v, t + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        let out = o; if (bp) { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = bp; f.Q.value = q; o.connect(f); out = f; } out.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.05);
+      };
+      if (kind === 'frog') { const big = 0.8 + Math.random() * 0.6, n = 2 + ((Math.random() * 3) | 0); for (let k = 0; k < n; k++) voice('sawtooth', 210 * big, 120 * big, t0 + k * 0.12, 0.09, 0.07, 4, 540 * big); }
+      else if (kind === 'peep') { const f = 2200 + Math.random() * 700, n = 3 + ((Math.random() * 3) | 0); for (let k = 0; k < n; k++) voice('sine', f, f * 1.18, t0 + k * 0.1, 0.05, 0.03); }
+      else { voice('sine', 1300 + Math.random() * 400, 650, t0, 0.07, 0.04); }
     },
     /** A clap of thunder `delay` seconds after the flash (the farther the lightning, the longer the wait and the softer and lower the sound). */
     thunder(delay = 1.5, power = 1) {

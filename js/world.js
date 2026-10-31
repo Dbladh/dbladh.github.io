@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030232841';
-import { auroraColour } from './aurora.js?v=20261030232841';
+import { PAL } from './palette.js?v=20261030233656';
+import { auroraColour } from './aurora.js?v=20261030233656';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030232841';
+} from './houses.js?v=20261030233656';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -817,6 +817,26 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
   scene.add(terrain);
+  // Mist: thin layers of drifting haze laid over the ground. Each is the ground's own mesh lifted a little, so it follows every hill and dip exactly, with a slow noise sliding across it (the wind sets which way and how fast).
+  const _white = new THREE.Color(1, 1, 1);
+  const mistU = { uTime: { value: 0 }, uAmt: { value: 0 }, uColor: { value: new THREE.Color('#dfe9f2') }, uDrift: { value: new THREE.Vector2(1, 0.4) } };
+  const mists = (low ? [[0.9, 0.034, 1.0]] : [[0.8, 0.034, 1.0], [2.5, 0.021, 0.62]]).map(([lift, sc, sp], i) => {
+    const m = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, fog: false, uniforms: { ...mistU, uScale: { value: sc }, uSpeed: { value: sp }, uSeed: { value: i * 17.3 } },
+      vertexShader: 'varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: `uniform float uTime, uAmt, uScale, uSpeed, uSeed; uniform vec3 uColor; uniform vec2 uDrift; varying vec3 vW;
+        float mh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float mn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1.0, 0.0)), f.x), mix(mh(i + vec2(0.0, 1.0)), mh(i + vec2(1.0, 1.0)), f.x), f.y); }
+        void main() {
+          vec2 p = vW.xz * uScale + uDrift * uTime * 0.05 * uSpeed + uSeed;
+          float n = mn(p) * 0.55 + mn(p * 2.1 + vec2(uTime * 0.012, 3.0)) * 0.3 + mn(p * 4.3 - uDrift * uTime * 0.02) * 0.15;
+          float a = smoothstep(0.3, 0.72, n) * uAmt * smoothstep(3.0, 16.0, distance(cameraPosition, vW));
+          gl_FragColor = vec4(uColor, a * 0.62);
+          #include <colorspace_fragment>
+        }`,
+    });
+    const mesh = new THREE.Mesh(geo, m); mesh.position.y = lift; mesh.renderOrder = 3; mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh); return mesh;
+  });
 
   // ---- Carving (for the mini-golf): the ground under each hole's course is levelled into a lawn (flat within a set distance of the hole's centre line, with the old hillside blending back in
   // around it) and everything standing there is hidden. Several sites can be carved at once, each brought in separately (`set`). Where two blends overlap they are averaged.
@@ -2087,7 +2107,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     skyScene.add(g);
     clouds.push(g);
   }
-  const cloudLook = { night: 0, vis: 1, tint: new THREE.Color(1, 1, 1), cover: 0, wind: 0, storm: 0 };
+  const cloudLook = { night: 0, vis: 1, tint: new THREE.Color(1, 1, 1), cover: 0, wind: 0.12, storm: 0 };
 
   // ---- Fireflies: spread through the whole depth of the scene ----
   // Near ones sit right in front of the camera (big, soft bokeh), far ones twinkle on the hills.
@@ -2235,7 +2255,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
-  let windClock = 0;
+  let windClock = 0, windSpin = 0.7;
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
   // Each closed sign carries a picture of real work beside its title (painted by paintBoard once it has loaded):
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
@@ -2841,9 +2861,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       if (camera) { camPos = camera.position; camObj = camera; }
       { const g = dance.w > 0.002 ? dance.w : 0; flowerGlow.value.set(dance.lh[0] * g, dance.lh[1] * g, dance.lh[2] * g); flowerMix.value.set(Math.max(dance.lh[0], dance.lh[1], dance.lh[2]) * g, dance.sweep); }
       ffUniforms.uTime.value = time; if (dust.visible) { dustU.uTime.value = time; if (camera) dustU.uCam.value.copy(camera.position); }
+      mistU.uTime.value = windClock; mistU.uDrift.value.set(0.9 + 3 * cloudLook.wind, 0.35);
       windClock += dt * (0.7 + 4.5 * cloudLook.wind * cloudLook.wind + 2.5 * cloudLook.wind); terrainWind.uWindTime.value = windClock;          // (the grass sways faster in a wind)
       pondU.uTime.value = time;
-      for (const wr of windmills) wr.rotation.z -= dt * 0.7;
+      { const wd = cloudLook.wind, gust = 0.75 + 0.25 * Math.sin(time * 0.37) * Math.sin(time * 0.11 + 1), sp = 0.7 * (0.5 + 3.6 * wd * wd + 1.4 * wd) * (wd > 0.3 ? gust : 1);          // (the sails turn faster in a wind, and surge a little in the gusts)
+        windSpin += (sp - windSpin) * (1 - Math.exp(-dt * 0.8)); for (const wr of windmills) wr.rotation.z -= dt * windSpin; }
       for (const b of boards) b.tickHover?.(dt);
       if (smoke) {
         smokeMat.uniforms.uTime.value = time;
@@ -2866,7 +2888,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         smoke.geometry.attributes.aAge.needsUpdate = true;
       }
       for (const cl of clouds) {
-        cl.position.x += cl.userData.speed * dt * (1 + 3 * cloudLook.wind);
+        cl.position.x += cl.userData.speed * dt * (1 + 3 * Math.max(0, cloudLook.wind - 0.12));
         if (cl.position.x > 230) cl.position.x = -230;
       }
       // within a bank every wisp slides, swells and shears at its own slow rate, so the cloud keeps changing shape
@@ -2954,10 +2976,10 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     /** Colours the clouds from the horizon colour (warm at sunset) and the night amount. */
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
     setWeather(wx) {
-      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0 }; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;
+      const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0, mist: 0 }; mistU.uAmt.value = w.mist || 0; if (w.mistColor) mistU.uColor.value.copy(w.mistColor).lerp(_white, 0.35); for (const m of mists) m.visible = (w.mist || 0) > 0.01; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.roof ?? w.cover; TREE_SNOW.value = w.tree ?? w.cover; pondU.uRain.value = w.rain;
     },
     setClouds(night, horizon, wx = null) {
-      cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0; cloudLook.storm = wx ? wx.storm : 0;
+      cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0.12; cloudLook.storm = wx ? wx.storm : 0;
       pondU.uHorizon.value.copy(horizon);
       pondU.uSkyTop.value.set('#4a8cf0').lerp(new THREE.Color('#16206a'), night);
       // Bright white by day, warmed only a little by the horizon colour (more at sunset), blue-grey at night.
