@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031104851';
+import { heightAt, POND, pathX } from './world.js?v=20261031105228';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -421,10 +421,12 @@ const faceTex = () => canvasTex(128, 128, (g) => {
   g.beginPath(); g.moveTo(62, 66); g.lineTo(70, 80); g.lineTo(54, 80); g.closePath(); g.fill();                                                                                         // nose
   g.beginPath(); g.moveTo(26, 88); g.quadraticCurveTo(64, 118, 102, 88); g.lineTo(94, 86); g.lineTo(86, 98); g.lineTo(76, 90); g.lineTo(64, 102); g.lineTo(52, 90); g.lineTo(42, 98); g.lineTo(34, 86); g.closePath(); g.fill();   // grin
 });
-const batTex = () => canvasTex(128, 64, (g) => {
-  g.fillStyle = '#07050c'; g.beginPath(); g.moveTo(64, 20); g.quadraticCurveTo(80, 6, 124, 14); g.quadraticCurveTo(108, 28, 106, 46); g.quadraticCurveTo(94, 34, 84, 46); g.quadraticCurveTo(76, 36, 70, 52); g.lineTo(64, 40);
-  g.lineTo(58, 52); g.quadraticCurveTo(52, 36, 44, 46); g.quadraticCurveTo(34, 34, 22, 46); g.quadraticCurveTo(20, 28, 4, 14); g.quadraticCurveTo(48, 6, 64, 20); g.closePath(); g.fill();
-  g.beginPath(); g.moveTo(58, 22); g.lineTo(56, 8); g.lineTo(62, 16); g.lineTo(66, 16); g.lineTo(72, 8); g.lineTo(70, 22); g.closePath(); g.fill();
+const batTex = () => canvasTex(192, 96, (g) => {
+  g.fillStyle = '#07050c'; g.beginPath(); g.moveTo(96, 34);
+  g.quadraticCurveTo(116, 14, 150, 8); g.quadraticCurveTo(176, 2, 190, 12); g.quadraticCurveTo(170, 20, 168, 40); g.quadraticCurveTo(156, 32, 148, 50); g.quadraticCurveTo(138, 40, 126, 58); g.quadraticCurveTo(116, 46, 106, 62); g.lineTo(96, 52);
+  g.lineTo(86, 62); g.quadraticCurveTo(76, 46, 66, 58); g.quadraticCurveTo(54, 40, 44, 50); g.quadraticCurveTo(36, 32, 24, 40); g.quadraticCurveTo(22, 20, 2, 12); g.quadraticCurveTo(16, 2, 42, 8); g.quadraticCurveTo(76, 14, 96, 34); g.closePath(); g.fill();
+  g.beginPath(); g.ellipse(96, 44, 7, 14, 0, 0, 6.3); g.fill(); g.beginPath(); g.arc(96, 30, 7, 0, 6.3); g.fill();
+  g.beginPath(); g.moveTo(90, 28); g.lineTo(88, 14); g.lineTo(95, 24); g.lineTo(97, 24); g.lineTo(104, 14); g.lineTo(102, 28); g.closePath(); g.fill();
 });
 const ghostTex = () => canvasTex(256, 448, (g) => {
   const r = rng(3); g.lineJoin = 'round'; g.lineCap = 'round';
@@ -522,7 +524,7 @@ function makeHalloween(ctx) {
 // bats cross the moon, a ghost drifts round the haunted house, and now and then something creepy is heard
 function makeHauntings(ctx) {
   const bm = new THREE.SpriteMaterial({ map: batTex(), transparent: true, depthTest: false, depthWrite: false, fog: false, opacity: 0 }), bats = [];
-  for (let i = 0; i < (ctx.low ? 0 : 5); i++) { const s = new THREE.Sprite(bm.clone()); s.renderOrder = -6; s.visible = false; ctx.skyScene.add(s); bats.push({ s, d: 0 }); }
+  for (let i = 0; i < (ctx.low ? 14 : 38); i++) { const s = new THREE.Sprite(bm.clone()); s.renderOrder = -6; s.visible = false; ctx.skyScene.add(s); bats.push({ s, d: 0, z: 0, start: 0, dur: 10, off: 0, ph: 0, fl: 20, sz: 2 }); }
   const gm = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: false, uniforms: { uMap: { value: ghostTex() }, uT: { value: 0 }, uOp: { value: 0 }, uLean: { value: 0 }, uSize: { value: new THREE.Vector2(2.5, 4.4) } },
     vertexShader: `uniform float uT, uLean; uniform vec2 uSize; varying vec2 vUv; varying float vH;
@@ -545,7 +547,7 @@ function makeHauntings(ctx) {
     go(name) {
       if (name === 'sound') ctx.audio?.creepy?.(KINDS[(Math.random() * KINDS.length) | 0], (Math.random() * 2 - 1) * 0.8);
       if (name === 'lightning') { ctx.onLightning?.(0.5 + Math.random() * 0.4); if (Math.random() < 0.6) flashes.push(0.12 + Math.random() * 0.12); }
-      if (name === 'bats' && flight < 0) { flight = 0; fdir = Math.random() < 0.5 ? 1 : -1; fy = (Math.random() - 0.5) * 8; bats.forEach((b, i) => { b.d = i * 0.35 + Math.random() * 0.2; b.s.visible = true; }); }
+      if (name === 'bats' && flight < 0) { flight = 0; fdir = Math.random() < 0.5 ? 1 : -1; fy = (Math.random() - 0.5) * 8; bats.forEach((b) => { b.z = Math.random() * Math.random(); b.start = Math.random() * 5 + (1 - b.z) * 1.5; b.dur = 9 + (1 - b.z) * 9 + Math.random() * 2; b.off = (Math.random() - 0.5) * 20 * (0.5 + b.z * 0.5); b.ph = Math.random() * 6.3; b.fl = 14 + Math.random() * 14 + b.z * 6; b.sz = 1.1 + b.z * 2.6; b.s.visible = false; }); }
       if (name === 'ghost' && gt < 0) { gt = 0; const sp = ctx.hallSpot?.(); gcx = sp ? sp.x : (Math.random() - 0.5) * 20; gcz = sp ? sp.z + 1 : -20; gcy = sp ? sp.y : heightAt(gcx, gcz); gl.visible = true; ctx.audio?.creepy?.('moan', (Math.random() * 2 - 1) * 0.6); ghost.visible = true; }
     },
     update(dt, s) {
@@ -559,13 +561,16 @@ function makeHauntings(ctx) {
       }
       const moon = ctx.sky?.bodies.moon;
       if (flight >= 0) {
-        flight += dt; const dur = 9, u = flight / dur, mp = moon ? moon.position : { x: 0, y: 40, z: -125 };
-        for (const b of bats) {
-          const k = u - b.d / dur * 0.4, sc = 7 + Math.sin(b.d * 9) * 1.5; b.s.visible = k > 0 && k < 1;
-          b.s.position.set(mp.x + (k - 0.5) * 230 * fdir, mp.y + fy + Math.sin(k * 11 + b.d * 7) * 3.5 + b.d * 3, mp.z + 0.5); b.s.scale.set(sc * (1 + 0.4 * Math.sin(clock * 22 + b.d * 20)), sc * 0.5 * (1 - 0.45 * Math.sin(clock * 22 + b.d * 20)), 1);
-          b.s.material.opacity = Math.min(1, Math.max(0, Math.min(k * 8, (1 - k) * 8))) * 0.95;
+        flight += dt; const mp = moon ? moon.position : { x: 0, y: 40, z: -125 }; let live = false;
+        for (const b of bats) {                                    // a swarm of small bats, each its own size and speed: the far ones small and slow, the near ones larger and quicker, so the flock has depth
+          const k = (flight - b.start) / b.dur; b.s.visible = k > 0 && k < 1; if (k >= 1) continue; live = true; if (!b.s.visible) continue;
+          const sw = Math.sin(k * 7 + b.ph) * (2 + 3 * b.z) + Math.sin(k * 17 + b.ph * 2) * 0.8;
+          b.s.position.set(mp.x + (k - 0.5) * 240 * fdir, mp.y + fy + b.off + sw + (k - 0.5) * 6, mp.z + 0.5);
+          const f = Math.sin(flight * b.fl + b.ph); b.s.scale.set(b.sz * 2 * (1 + 0.12 * f), b.sz * (1 - 0.5 * f) * 0.9, 1);
+          b.s.material.opacity = Math.min(1, Math.min(k * 8, (1 - k) * 8)) * (0.55 + 0.4 * b.z);
         }
-        if (u > 1.3) { flight = -1; bats.forEach((b) => { b.s.visible = false; }); }
+        if (!live) flight = 1e9;
+        if (flight > 1e8) { flight = -1; bats.forEach((b) => { b.s.visible = false; }); }
       }
       if (gt >= 0) {
         gt += dt; const dur = 14, u = gt / dur; if (u >= 1) { gt = -1; ghost.visible = false; gl.visible = false; return; }
@@ -633,7 +638,7 @@ function makeAutumn(ctx) {
   let kSm = 0, shift = new THREE.Vector2(), clock = 0;
   return {
     update(dt, s) {
-      const h = s.active.find((a) => a.id === 'harvest'), k = h ? h.k : 0; kSm += (k - kSm) * (1 - Math.exp(-dt * 1.5)); clock += dt;
+      const h = s.active.find((a) => a.id === 'autumn'), k = h ? h.k : 0; kSm += (k - kSm) * (1 - Math.exp(-dt * 1.5)); clock += dt;
       ctx.world.setAutumn(kSm * (s.hide ? 0 : 1));                                                    // (the land turns as the season comes in)
       const kb = Math.round(kSm * 20) / 20; if (kb !== built) { built = kb; layout(Math.max(0.001, kb)); }
       const wnd = s.weather ? s.weather.wind : 0.12, gust = 0.5 + 0.5 * Math.sin(clock * 0.37) * Math.sin(clock * 0.91 + 1.0), sp = 1.0 + 9 * wnd + 5 * gust * gust;                  // (blown along by the wind, in gusts)
@@ -647,7 +652,7 @@ function makeAutumn(ctx) {
 }
 
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], harvest: [makeAutumn], newyear: [makeFireworks], july4: [makeFireworks] };
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], newyear: [makeFireworks], july4: [makeFireworks] };
 export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
   const ctx = { scene, skyScene, world, audio, sky, camera, onLightning, low, reduceMotion };

@@ -44,7 +44,9 @@ export function seasonAt(date = new Date()) {
 export function createSeasons() {
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('season') : null;
   let mode = q && (q === 'none' || SEASONS.some((s) => s.id === q)) ? q : 'auto', list = [], t = 0; const subs = new Set();
-  const compute = () => { list = mode === 'none' ? [] : mode === 'auto' ? seasonAt(new Date()) : [{ id: mode, k: 1, peak: 0.7 }]; };
+  const AUTUMNAL = ['harvest', 'halloween'];                                  // (every autumn holiday brings the autumn land with it: dry grass, turning trees, blowing leaves)
+  const withAutumn = (l) => { const a = l.filter((x) => AUTUMNAL.includes(x.id)); return a.length && !l.some((x) => x.id === 'autumn') ? [...l, { id: 'autumn', k: Math.max(...a.map((x) => x.k)), peak: Math.max(...a.map((x) => x.peak)) }] : l; };
+  const compute = () => { list = mode === 'none' ? [] : withAutumn(mode === 'auto' ? seasonAt(new Date()) : [{ id: mode, k: 1, peak: 0.7 }]); };
   compute();
   return {
     get mode() { return mode; }, get active() { return list; },
