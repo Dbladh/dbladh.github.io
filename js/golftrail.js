@@ -1,15 +1,15 @@
 // The trail a rolling ball leaves on the ground: a ribbon along its path that fades away. On snow it is a groove that stays (a dark blue-grey line pressed into the snow with pale heaped edges); on sand a
 // shallow furrow; on grass a faint flattened streak that is gone in a couple of seconds. One ribbon per hole, a few hundred points; the points sit on the ground (golfphys.js hillH).
 import * as THREE from 'three';
-import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261030222613';
+import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261030222759';
 
 const MAXP = 700;
 /** How the ball marks each kind of ground (`ground` in golfthemes.js): groove colour, edge colour, strength, width, how long it lasts (s). */
 const STYLES = {
-  snow: { mid: '#4c6c9e', edge: '#f4f8ff', a: 0.24, ea: 0.1, w: 0.2, life: 600, lift: 0.045 },
-  sand: { mid: '#a77c43', edge: '#f4dca2', a: 0.15, ea: 0.09, w: 0.18, life: 30, lift: 0.04 },
-  grass: { mid: '#e6f7b0', edge: '#e6f7b0', a: 0.07, ea: 0.0, w: 0.16, life: 2.2, lift: 0.04 },
-  other: { mid: '#ffffff', edge: '#ffffff', a: 0.06, ea: 0.0, w: 0.15, life: 1.5, lift: 0.04 },
+  snow: { mid: '#4c6c9e', edge: '#f4f8ff', a: 0.17, ea: 0.06, w: 0.12, life: 600, lift: 0.045 },
+  sand: { mid: '#a77c43', edge: '#f4dca2', a: 0.11, ea: 0.06, w: 0.11, life: 30, lift: 0.04 },
+  grass: { mid: '#e6f7b0', edge: '#e6f7b0', a: 0.05, ea: 0.0, w: 0.1, life: 2.2, lift: 0.04 },
+  other: { mid: '#ffffff', edge: '#ffffff', a: 0.04, ea: 0.0, w: 0.09, life: 1.5, lift: 0.04 },
 };
 
 /** Places where a mark on the ground makes no sense: over the cup, water, a pit of sand, a patch of ice, mud, rough or the like, and the floor buttons, boost strips and pads. */
@@ -63,7 +63,7 @@ export function createTrail() {
       for (let i = n - 1; i >= 0; i--) re[i] = i === n - 1 || pts[i + 1].brk ? i : re[i + 1];
       for (let i = 0; i < n; i++) {
         const p = pts[i], fade = Math.max(0, 1 - p.age / style.life), tk = Math.min(i - rs[i], re[i] - i) / 9, taper = tk <= 0 ? 0 : tk >= 1 ? 1 : tk * tk * (3 - 2 * tk), sf = Math.min(1, p.sp / 9), am = style.a * Math.pow(fade, 0.7) * (0.3 + 1.0 * sf), ae = style.ea * Math.pow(fade, 0.7) * (0.3 + 1.0 * sf);          // (a slow ball leaves a faint mark, a fast one a strong one)
-        const w = style.w * (0.7 + 0.6 * sf) * (style.life > 100 ? 1 : 0.9 + 0.1 * fade);
+        const w = style.w * (0.75 + 0.4 * sf) * (style.life > 100 ? 1 : 0.9 + 0.1 * fade);
         const y = hillH(hole, p.x, p.z) + style.lift;
         for (let c = 0; c < 3; c++) {
           const off = c === 1 ? 0 : (c === 0 ? 1 : -1) * (w * 0.5 + (style.ea ? w * 0.35 : 0)), k = i * 3 + c, o = k * 3, q = k * 4;

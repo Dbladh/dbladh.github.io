@@ -1,6 +1,6 @@
 // Is a hole in one possible? One stroke from the tee, over many aims, powers and hero timings, that holes out (and, when `need` lists bonus points, passes within reach of every one of them).
 // The generator uses it so that no hole, and no bonus on a hole, ever needs an extra stroke.
-import { newBall, newCtx, shoot, stepBall } from './golfphys.js?v=20261030222613';
+import { newBall, newCtx, shoot, stepBall } from './golfphys.js?v=20261030222759';
 
 const POWERS = [0.5, 0.7, 0.9, 0.35, 1.0], TIMES = [0, 0.9, 1.8];
 /** Returns the successful shot { angle, power, t } or null. `base` is the angle to try first (radians); `budget` the most simulated strokes. */
