@@ -143,7 +143,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
         vec2 p = vUv * vec2(3.2, 2.0) + vec2(uTime * 0.004, 0.0);
         float n = dn(p) * 0.55 + dn(p * 2.3 + 4.0 - vec2(uTime * 0.006, 0.0)) * 0.3 + dn(p * 5.1) * 0.15;
         vec3 col = mix(uBot, uTop, smoothstep(0.0, 1.0, vUv.y)) * (0.9 + 0.2 * n);
-        gl_FragColor = vec4(col, uA * (0.86 + 0.14 * n));
+        gl_FragColor = vec4(col, uA * (0.985 + 0.015 * n));
         #include <colorspace_fragment>
       }`,
   }));
@@ -352,8 +352,8 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
       m.visible = f > 0.01 && dim < 0.995;
     }
 
-    { const ov = wx ? THREE.MathUtils.smoothstep(wx.cloud, 0.8, 1.0) * (1 - 0.7 * wx.storm * 0) : 0;        // (how much of the sky the overcast lid covers)
-      deckU.uA.value = ov * 0.93; deck.visible = ov > 0.01; deckU.uTop.value.copy(s.top).multiplyScalar(0.98); deckU.uBot.value.copy(s.bot).lerp(_grey.setRGB(0.8, 0.83, 0.88), 0.25); deckU.uTime.value = performance.now() / 1000; starMat.uniforms.uNight.value *= 1 - ov; }
+    { const ov = wx ? THREE.MathUtils.smoothstep(wx.cloud, 0.7, 0.97) * (1 - 0.7 * wx.storm * 0) : 0;        // (how much of the sky the overcast lid covers)
+      deckU.uA.value = ov; deck.visible = ov > 0.01; deckU.uTop.value.copy(s.top).multiplyScalar(0.98); deckU.uBot.value.copy(s.bot).lerp(_grey.setRGB(0.8, 0.83, 0.88), 0.25); deckU.uTime.value = performance.now() / 1000; starMat.uniforms.uNight.value *= 1 - ov; }
     { const k = THREE.MathUtils.smoothstep(arc, 0.03, 0.2) * (1 - 0.55 * THREE.MathUtils.smoothstep(arc, 0.55, 0.95)), a = wx ? wx.bow * k * (1 - dim) : 0;     // (a rainbow needs the sun up, and is best when it is low)
       bowMat.uniforms.uA.value = a; bow.visible = a > 0.01; bow.position.set(-mx * 0.3, -14, -128); }
     updateEnv(hour, s, _sunTrue.set(sx, sy, sz), night, dim);
