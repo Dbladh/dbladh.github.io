@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231611';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231611';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030231649';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030231649';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261030231611';
-import { createWeather } from './weather.js?v=20261030231611';
-import { PAL } from './palette.js?v=20261030231611';
-import { buildWorld } from './world.js?v=20261030231611';
-import { createSky } from './sky.js?v=20261030231611';
-import { createDOF } from './dof.js?v=20261030231611';
-import { createRide } from './ride.js?v=20261030231611';
-import { createGame } from './bikegame.js?v=20261030231611';
-import { createAurora, setWarm } from './aurora.js?v=20261030231611';
-import { createAudio, pickFlicker } from './audio.js?v=20261030231611';
+import { createPrecip } from './precip.js?v=20261030231649';
+import { createWeather } from './weather.js?v=20261030231649';
+import { PAL } from './palette.js?v=20261030231649';
+import { buildWorld } from './world.js?v=20261030231649';
+import { createSky } from './sky.js?v=20261030231649';
+import { createDOF } from './dof.js?v=20261030231649';
+import { createRide } from './ride.js?v=20261030231649';
+import { createGame } from './bikegame.js?v=20261030231649';
+import { createAurora, setWarm } from './aurora.js?v=20261030231649';
+import { createAudio, pickFlicker } from './audio.js?v=20261030231649';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -186,7 +186,7 @@ function start() {
   camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
   const classic = new URLSearchParams(location.search).get('look') === 'classic'; // A/B: the original look
   const sky = createSky(scene, skyScene, renderer, { classic });
-  const weather = createWeather();
+  const weather = createWeather({ calm: matchMedia('(prefers-reduced-motion: reduce)').matches });
   const precip = createPrecip({ low: lowEnd }); scene.add(precip.group);
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
   const seedParam = parseInt(new URLSearchParams(location.search).get('seed'), 10);
@@ -608,7 +608,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261030231611');
+        const mod = await import('./golf.js?v=20261030231649');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -984,7 +984,7 @@ function start() {
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.1);
     prof.ft[prof.n++ % prof.ft.length] = rawDt * 1000;
 
-    weather.tick(dt); weather.update(dt); precip.update(dt, camera, weather.state, !!(game?.active || golf?.active), canvas.height, reduceMotion); if ((reduceMotion || dragging) && weather.busy) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
+    weather.tick(dt); weather.update(dt, () => { if (!reduceMotion) audio.thunder(1 + Math.random() * 4, 0.7 + Math.random() * 0.4); else audio.thunder(2 + Math.random() * 4, 0.6); }); precip.update(dt, camera, weather.state, !!(game?.active || golf?.active), canvas.height, reduceMotion); if ((reduceMotion || dragging) && weather.busy) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
       const sT = performance.now(); setTime(hour + (dt * 24) / DAY_SECONDS); secT('time', sT);
@@ -1098,7 +1098,7 @@ function start() {
         sndB.copy(ride.position); const d = camera.position.distanceTo(sndB); sndB.project(camera);
         const q = Math.max(0, 1 - d / 190); bike = { gain: 0.38 * Math.pow(q, 1.5), pan: sndB.x };
       }
-      audio.sceneUpdate({ night: nightK, quiet: gameOn, windPan: sndV.x, bike });
+      audio.sceneUpdate({ night: nightK, quiet: gameOn, windPan: sndV.x, bike, wx: weather.state });
     }
     if (!!game?.active !== gameWasActive) { gameWasActive = !!game?.active; applyPixelRatio(); if (dof) { dof.samples = gameWasActive ? 0 : 2; dof.half = gameWasActive || halfForced; dof.setLook(null, gameWasActive || lowEnd || quality.scale < 1 ? 0 : 1); } }          // the game draws fewer pixels
 

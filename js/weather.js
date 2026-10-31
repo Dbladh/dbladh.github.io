@@ -41,7 +41,7 @@ export function fromReading({ code = 0, cloud = 0, wind = 0 }) {
 /** The simple icon for a set of numbers: sun, moon, partly cloudy, cloud, rain, storm, snow or fog. */
 export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
 
-export function createWeather() {
+export function createWeather({ calm = false } = {}) {
   const state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, flash: 0 }, target = { ...PRESETS.clear };
   let name = 'clear', hold = null, rate = 0.16, mode = 'auto', temp = null, place = null;
   const subs = new Set(), store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
@@ -103,7 +103,7 @@ export function createWeather() {
       state.cover += ((state.snow > 0.15 ? 1 : 0) - state.cover) * (1 - Math.exp(-dt * (state.snow > 0.15 ? 0.02 : 0.006)));
       state.flash = Math.max(0, state.flash - dt * 3.2);
       api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004);
-      if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; state.flash = 1; onFlash?.(); } } else hold = null;
+      if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm) state.flash = 1; onFlash?.(); } } else hold = null;
     },
   };
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null, saved = store.get('wx.mode');

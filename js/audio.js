@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261030231611';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261030231649';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -181,6 +181,8 @@ export function createAudio({ base = 'audio/' } = {}) {
       return { src, g, p };
     };
     scn = { out, day: loop('amb_day', { lpf: 5200 }), night: loop('amb_night', { lpf: 3400 }), wind: buf.amb_windmill ? loop('amb_windmill', { lpf: 2400, pan: true }) : null, bike: null };
+    { const mk = (type, f, q) => { const sr = loopSrc(noise()), fl = ctx.createBiquadFilter(), g = ctx.createGain(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0; sr.connect(fl); fl.connect(g); g.connect(out); sr.start(0, Math.random() * 1.5); return { fl, g }; };
+      scn.rain = mk('bandpass', 3600, 0.45); scn.hiss = mk('highpass', 7000, 0.5); scn.gust = mk('bandpass', 420, 0.6); }                // (the weather: the patter of rain, its hiss, and gusts of wind)
     if (buf.engine_idle) {                                                  // the bike far off: the same engine, muffled, quiet and panned
       const g = ctx.createGain(); g.gain.value = 0; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 950; g.connect(f);
       let p = null; if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); f.connect(p); p.connect(out); } else f.connect(out);
@@ -242,12 +244,26 @@ export function createAudio({ base = 'audio/' } = {}) {
       const ts = song ? ctx.currentTime - song.t0 : -1, sm = (a, b, x) => { const u = clamp((x - a) / (b - a)); return u * u * (3 - 2 * u); };
       const duck = song ? 1 - 0.97 * sm(0, 70, ts) * (1 - sm(115, 123, ts)) : 1;
       at(other.gain, duck, song ? 0.3 : 1.2);
-      at(scn.day.g.gain, 0.13 * (1 - s.night) * k, 1.4); at(scn.night.g.gain, 0.11 * s.night * k, 1.4);
+      const wx = s.wx || { rain: 0, wind: 0, snow: 0, storm: 0 }, wet = Math.max(wx.rain, wx.storm * 0.8), mute = 1 - 0.75 * Math.max(wet, 0.6 * wx.snow);      // (birds and crickets go quiet in rain and snow)
+      at(scn.day.g.gain, 0.13 * (1 - s.night) * k * mute, 1.4); at(scn.night.g.gain, 0.11 * s.night * k * mute, 1.4);
+      if (scn.rain) {
+        const tt = ctx.currentTime, gust = 0.5 + 0.5 * Math.sin(tt * 0.6) * Math.sin(tt * 0.23 + 1), wd = wx.wind;
+        at(scn.rain.g.gain, 0.15 * wet * k, 0.8); at(scn.hiss.g.gain, 0.05 * wet * k, 0.8);
+        at(scn.gust.g.gain, (0.03 * wd * wd + 0.07 * wd * wd * gust) * k, 0.5); at(scn.gust.fl.frequency, 280 + 520 * wd + 300 * gust * wd, 0.5);
+      }
       if (scn.wind) { at(scn.wind.g.gain, s.quiet ? 0 : 0.045, 0.9); if (scn.wind.p) at(scn.wind.p.pan, clamp(s.windPan || 0, -1, 1) * 0.7, 0.4); }
       if (scn.bike) {
         const g = !s.quiet && s.bike ? s.bike.gain : 0; at(scn.bike.g.gain, g, 0.3);
         if (g > 0.002) { if (scn.bike.p) at(scn.bike.p.pan, clamp(s.bike.pan, -1, 1) * 0.8, 0.2); pump(scn.bike.layer); }
       }
+    },
+    /** A clap of thunder `delay` seconds after the flash (the farther the lightning, the longer the wait and the softer and lower the sound). */
+    thunder(delay = 1.5, power = 1) {
+      if (!ctx || !on || !scn || !gate('thunder', 1)) return;
+      const t0 = ctx.currentTime + delay, near = clamp(1 - delay / 6), nb = noise();
+      const rumble = ctx.createBufferSource(), lf = ctx.createBiquadFilter(), g = ctx.createGain(); rumble.buffer = nb; rumble.loop = true; lf.type = 'lowpass'; lf.frequency.setValueAtTime(240 + 400 * near, t0); lf.frequency.exponentialRampToValueAtTime(70, t0 + 3.6); lf.Q.value = 0.7;
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime((0.22 + 0.3 * near) * power, t0 + 0.12); g.gain.setTargetAtTime(0.0001, t0 + 0.4, 1.1); rumble.connect(lf); lf.connect(g); g.connect(scn.out); rumble.start(t0, Math.random()); rumble.stop(t0 + 4.5);
+      if (near > 0.3) { const cr = ctx.createBufferSource(), hf = ctx.createBiquadFilter(), cg = ctx.createGain(); cr.buffer = nb; hf.type = 'bandpass'; hf.frequency.value = 1800; hf.Q.value = 0.6; cg.gain.setValueAtTime(0, t0); cg.gain.linearRampToValueAtTime(0.28 * near * power, t0 + 0.01); cg.gain.setTargetAtTime(0.0001, t0 + 0.02, 0.09); cr.connect(hf); hf.connect(cg); cg.connect(scn.out); cr.start(t0, Math.random()); cr.stop(t0 + 0.6); }
     },
     /** The camera flies into a billboard ('in'), back out to the view ('out') or between billboards ('across'): a big whoosh that swells and fades over the
      *  whole flight (`dur` seconds, the length of the animation). */
