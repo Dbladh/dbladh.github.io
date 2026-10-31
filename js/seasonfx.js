@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031112519';
+import { heightAt, POND, pathX } from './world.js?v=20261031112705';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -937,6 +937,12 @@ function eggTexture(i) {                                    // a painted egg: ba
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t;
 }
+function bakeBunnyGeometry() {                 // the rigged bunny in its sitting pose, joined into one geometry (with its colours and fur UVs), so a crowd of them can be drawn as one instanced mesh
+  const rig = bunnyRig('#ffffff', '#f4eadb'); rig.pose(BPOSE.rest, 0, 0); rig.root.updateMatrixWorld(true); const P = [], N = [], U = [], C = [];
+  rig.root.traverse((o) => { if (!o.isMesh) return; const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); const col = o.material.color || new THREE.Color(1, 1, 1), pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv;
+    for (let i = 0; i < pos.count; i++) { P.push(pos.getX(i), pos.getY(i), pos.getZ(i)); N.push(nor.getX(i), nor.getY(i), nor.getZ(i)); U.push(uv ? uv.getX(i) : 0, uv ? uv.getY(i) : 0); C.push(col.r, col.g, col.b); } g.dispose(); });
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); out.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); out.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); return out;
+}
 function makeEasterHunt(ctx) {
   const root = new THREE.Group(), r = rng(808), EGGS = 8; ctx.scene.add(root);
   const eg = eggGeo(1), eggs = [], used = [], ox = [];
@@ -962,30 +968,48 @@ function makeEasterHunt(ctx) {
   // bunnies hopping about
   const bun = [], bcol = ['#f2ede6', '#c9a27a', '#b8b4b0'], home = ctx.freeSpot(5, 17) || { x: 12, z: -20 };
   for (let i = 0; i < (ctx.low ? 2 : 3); i++) { const rig = bunnyRig(bcol[i % 3], i === 1 ? '#e8d8c0' : '#f6f0e8'), b = rig.root; b.scale.setScalar(0.58); const x = home.x + (r() - 0.5) * 6, z = home.z + (r() - 0.5) * 6; b.position.set(x, heightAt(x, z), z); root.add(b); bun.push({ rig, b, tx: x, tz: z, x, z, t: r() * 2, hop: -1, from: [x, z], yaw: r() * 6.28, dx: 0, dz: 1 }); }
+  for (const k of bun) k.home = home;
+  // and a crowd of them across the meadow: dozens of baked bunnies drawn as one mesh, in family groups, each group with its own patch of grass to wander
+  const M = ctx.low ? 16 : 40, T = furTextures(), cmap = T.map.clone(), cnm = T.normal.clone(); for (const t of [cmap, cnm]) { t.repeat.set(3, 2); t.needsUpdate = true; }
+  const cgeo = bakeBunnyGeometry(), cmesh = new THREE.InstancedMesh(cgeo, new THREE.MeshStandardMaterial({ vertexColors: true, map: cmap, normalMap: cnm, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 1 }), M);
+  cmesh.frustumCulled = false; root.add(cmesh);
+  const tints = ['#f6f0e8', '#f6f0e8', '#d9b48a', '#c9a27a', '#bdb8b2', '#8a7560', '#efe3d0'].map((c) => new THREE.Color(c)), groups = [], crowd = [];
+  const okB = (x, z) => Math.abs(x - pathX(z)) > 2.0 && Math.hypot(x - POND.x, z - POND.z) > POND.r + 2 && !houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 1.0) && Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) < 0.9;
+  for (let tries = 0; tries < 300 && groups.length < Math.ceil(M / 5); tries++) { const x = (r() - 0.5) * 52, z = -4 - r() * 40; if (okB(x, z) && groups.every((g) => Math.hypot(g.x - x, g.z - z) > 10)) groups.push({ x, z }); }
+  if (!groups.length) groups.push(home);
+  for (let i = 0; i < M; i++) { const g = groups[i % groups.length]; let x = g.x, z = g.z; for (let t = 0; t < 8; t++) { const a = r() * 6.28, d = r() * 5, xx = g.x + Math.cos(a) * d, zz = g.z + Math.sin(a) * d; if (okB(xx, zz)) { x = xx; z = zz; break; } }
+    crowd.push({ x, z, home: g, t: r() * 3, hop: -1, from: [x, z], tx: x, tz: z, yaw: r() * 6.28, dx: 0, dz: 1, air: 0, u: -1 }); cmesh.setColorAt(i, tints[Math.floor(r() * tints.length)]); }
+  const wander = (k, dt) => {                                                      // one bunny's life: sit a while, then a few hops towards somewhere nearby, never far from home
+    const hm = k.home;
+    if (k.hop >= 0) { k.hop += dt / 0.8; const u = Math.min(1, k.hop), tr = smooth01(Math.min(1, Math.max(0, (u - 0.26) / 0.5))); k.x = k.from[0] + (k.tx - k.from[0]) * tr; k.z = k.from[1] + (k.tz - k.from[1]) * tr; k.air = Math.sin(Math.PI * Math.min(1, Math.max(0, (u - 0.28) / 0.46))); k.u = u; if (u >= 1) { k.hop = -1; k.t = r() < 0.4 ? 0.15 : 0.8 + r() * 2.6; k.n = (k.n || 0) - 1; k.u = -1; k.air = 0; } }
+    else {
+      k.u = -1; k.air = 0; k.t -= dt;
+      if (k.t <= 0) {
+        if (!(k.n > 0)) { k.n = 2 + Math.floor(r() * 3); const a = r() * 6.28; k.dx = Math.cos(a); k.dz = Math.sin(a); }
+        let nx = k.x + k.dx * 0.85, nz = k.z + k.dz * 0.85;
+        if (Math.hypot(nx - hm.x, nz - hm.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { const l = Math.hypot(hm.x - k.x, hm.z - k.z) || 1; k.dx = (hm.x - k.x) / l; k.dz = (hm.z - k.z) / l; nx = k.x + k.dx * 0.85; nz = k.z + k.dz * 0.85; }
+        k.from = [k.x, k.z]; k.tx = nx; k.tz = nz; k.hop = 0;
+      }
+    }
+    let dy = Math.atan2(k.dx, k.dz) - k.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); k.yaw += dy * Math.min(1, dt * (k.hop >= 0 ? 10 : 3));
+  };
+  const cdm = new THREE.Object3D();
   return {
     update(dt, s) {
       root.visible = !s.hide; chip.style.display = s.hide ? 'none' : '';
       for (const q of eggs) { if (!q.found) continue; q.t += dt; const u = Math.min(1, q.t / 0.7); q.m.scale.setScalar(1.04 * (1 + 1.2 * Math.sin(u * Math.PI) * (1 - u)) * (1 - u * u)); q.m.position.y = q.y + u * 1.6; q.m.rotation.y += dt * 8; q.m.visible = u < 1; }
       if (chipT > 0) { chipT -= dt; if (chipT <= 0) chip.classList.remove('on'); } else if (found === 0 && !s.hide && (hint -= dt) <= 0) { say(`Eggs are hidden in the grass: find ${total()}`, 6); hint = 1e9; }
       for (const k of bun) {
-        const rg = k.rig;
-        if (k.hop >= 0) {                                                  // a hop: crouch, push off, stretch through the air, land on the front paws, settle
-          k.hop += dt / 0.8; const u = Math.min(1, k.hop), tr = smooth01(Math.min(1, Math.max(0, (u - 0.26) / 0.5))), x = k.from[0] + (k.tx - k.from[0]) * tr, z = k.from[1] + (k.tz - k.from[1]) * tr, air = Math.sin(Math.PI * Math.min(1, Math.max(0, (u - 0.28) / 0.46)));
-          k.x = x; k.z = z; k.b.position.set(x, heightAt(x, z) + air * 0.28, z); rg.pose(posePoint(u), dt, 0);
-          if (u >= 1) { k.hop = -1; k.t = r() < 0.4 ? 0.15 : 0.8 + r() * 2.6; k.n = (k.n || 0) - 1; }
-        } else {
-          rg.pose(BPOSE.rest, dt, 1); k.t -= dt;
-          if (k.t <= 0) {
-            if (!(k.n > 0)) { k.n = 2 + Math.floor(r() * 3); const a = r() * 6.28; k.dx = Math.cos(a); k.dz = Math.sin(a); }
-            let nx = k.x + k.dx * 0.85, nz = k.z + k.dz * 0.85;
-            if (Math.hypot(nx - home.x, nz - home.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { const l = Math.hypot(home.x - k.x, home.z - k.z) || 1; k.dx = (home.x - k.x) / l; k.dz = (home.z - k.z) / l; nx = k.x + k.dx * 0.85; nz = k.z + k.dz * 0.85; }
-            k.from = [k.x, k.z]; k.tx = nx; k.tz = nz; k.hop = 0;
-          }
-        }
-        let dy = Math.atan2(k.dx, k.dz) - k.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); k.yaw += dy * Math.min(1, dt * (k.hop >= 0 ? 10 : 3)); k.b.rotation.y = k.yaw;
+        wander(k, dt); k.b.position.set(k.x, heightAt(k.x, k.z) + k.air * 0.28, k.z); k.b.rotation.y = k.yaw;
+        if (k.u >= 0) k.rig.pose(posePoint(k.u), dt, 0); else k.rig.pose(BPOSE.rest, dt, 1);                      // (the full skeleton: a hop through crouch, push-off, air and landing; at rest it breathes and twitches)
       }
+      for (let i = 0; i < crowd.length; i++) {
+        const k = crowd[i]; wander(k, dt); const u = k.u, crouch = u > 0.04 && u < 0.28 ? Math.sin(((u - 0.04) / 0.24) * Math.PI) : 0, rise = u >= 0 && u < 0.5 ? 1 : -1;
+        cdm.position.set(k.x, heightAt(k.x, k.z) + k.air * 0.28, k.z); cdm.rotation.set(-0.45 * k.air * rise, k.yaw, 0, 'YXZ'); cdm.scale.set(0.58, 0.58 * (1 - 0.14 * crouch - 0.08 * k.air), 0.58 * (1 + 0.28 * k.air)); cdm.updateMatrix(); cmesh.setMatrixAt(i, cdm.matrix);
+      }
+      cmesh.instanceMatrix.needsUpdate = true;
     },
-    dispose() { ctx.canvas?.removeEventListener('click', click); chip.remove(); ctx.scene.remove(root); eg.dispose(); for (const em of mats) { em.map.dispose(); em.dispose(); } glint.geometry.dispose(); },
+    dispose() { ctx.canvas?.removeEventListener('click', click); chip.remove(); ctx.scene.remove(root); eg.dispose(); for (const em of mats) { em.map.dispose(); em.dispose(); } glint.geometry.dispose(); cgeo.dispose(); cmesh.material.dispose(); cmap.dispose(); cnm.dispose(); cmesh.dispose(); },
     go(name) { if (name === 'eggs') say(`Eggs found: ${found} of ${total()}`, 4); },
   };
 }
