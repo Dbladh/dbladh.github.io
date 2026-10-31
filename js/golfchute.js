@@ -1,7 +1,7 @@
 // The secret chute: a clear winding channel that leaves a hole through a gap in its wall, runs round the outside of the course and drops the ball back near the cup.
 // The gap is shut by a gate that a button on the course opens for a few seconds (the same button and gate as a door machine, flagged `secret`). Pure data like golfgen.js, and deterministic:
 // it uses only + - * / sqrt, and rounds every point. The ball's physics in the chute is in golfphys.js (stepChute); the channel itself is drawn by golfvis.js.
-import { inPoly, newBall, newCtx, shoot, stepBall } from './golfphys.js?v=20261030213455';
+import { inPoly, newBall, newCtx, shoot, stepBall } from './golfphys.js?v=20261030214926';
 
 export const CHUTE = { hw: 0.85, acc: 1.3, fric: 0.2, vmax: 10, kick: 3, e: 0.6, exitH: 1.0, gap: 0.78, scatter: 0.2, scatterV: 0.026 };
 const q = (v) => Math.round(v * 2) / 2, q2 = (v) => Math.round(v * 100) / 100;
@@ -94,34 +94,41 @@ export function makeChute(H, r) {
     H.bounds = { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2 };
     for (const sp of H.shape) { let m = 1e9; for (const p of pts) { const d = Math.sqrt((p[0] - sp[0]) * (p[0] - sp[0]) + (p[1] - sp[1]) * (p[1] - sp[1])); if (d < m) m = d; } if (m < 7) sp[2] = Math.max(sp[2], q2(m + hw + 0.8)); }
     // one stroke must be able to do it all: roll over the button, on through the gap and into the chute. A shot from the tee that gets in with the gate held open is found first, then the button is laid on its path.
-    if (++searches > 4) { H.walls.length = 0; H.walls.push(...bak.walls); H.doors.pop(); H.chute = undefined; H.bounds = bak.bounds; H.shape.forEach((sp, i) => { sp[2] = bak.shape[i]; }); return false; }
-    const shot = findShot(H, mouthShot);
-    let placed = false;
-    if (shot) for (const fr of [0.5, 0.35, 0.65, 0.25, 0.8]) {
+    if (++searches > 3) { H.walls.length = 0; H.walls.push(...bak.walls); H.doors.pop(); H.chute = undefined; H.bounds = bak.bounds; H.shape.forEach((sp, i) => { sp[2] = bak.shape[i]; }); return false; }
+    const shots = findShots(H, mouthShot);
+    let placed = false, bestScore = 0, bestBtn = null;
+    for (const shot of shots) for (const fr of [0.5, 0.35, 0.7]) {
       const k = Math.floor(shot.path.length * fr), [bx, bz] = shot.path[k];
       if (!buttonOk(bx, bz)) continue;
       door.button = { x: q2(bx), z: q2(bz), r: 0.55 };
-      if (replay(H, shot)) { placed = true; break; }
+      const sc = robust(H, shot);
+      if (sc > bestScore) { bestScore = sc; bestBtn = door.button; }
+      if (sc >= 8) break;
     }
+    if (bestBtn && bestScore >= 6) { door.button = bestBtn; placed = true; }
     if (placed) return true;
     H.walls.length = 0; H.walls.push(...bak.walls); H.doors.pop(); H.chute = undefined; H.bounds = bak.bounds; H.shape.forEach((sp, i) => { sp[2] = bak.shape[i]; });
   }
   return false;
 }
 
-/** The first shot from the tee (angles nearest the mouth first, a few powers) that ends with the ball in the chute while the gate is held open; its path is returned as [x, z] points before it went in. */
-function findShot(H, goal) {
-  const M = H.chute.mouth, a0 = Math.atan2(M.z - H.ball.z, M.x - H.ball.x), angs = [0];
-  for (let k = 1; k <= 15; k++) angs.push(k * 0.2, -k * 0.2);
-  for (const power of [0.6, 0.85, 0.4]) for (const da of angs) {
+/** Shots from the tee (angles nearest the mouth first, a few powers) that end with the ball in the chute while the gate is held open, up to six that differ from one another; each comes with its path as [x, z] points before the ball went in. */
+function findShots(H, goal) {
+  const M = H.chute.mouth, a0 = Math.atan2(M.z - H.ball.z, M.x - H.ball.x), angs = [0], out = [];
+  for (let k = 1; k <= 10; k++) angs.push(k * 0.25, -k * 0.25);
+  for (const power of [0.65, 0.9]) for (const da of angs) {
     const b = newBall(H), ctx = newCtx(), ev = {}, a = a0 + da, path = []; ctx.gateT = 1e4; shoot(b, Math.cos(a), Math.sin(a), power, false);
-    for (let i = 0; i < 120 && !b.holed && !b.sunk && !b.rest; i++) { ctx.t = i / 30; stepBall(b, H, ctx, 1 / 30, ev); if (goal(b)) return path.length > 8 ? { a, power, path } : null; path.push([b.x, b.z]); }
+    for (let i = 0; i < 80 && !b.holed && !b.sunk && !b.rest; i++) { ctx.t = i / 20; stepBall(b, H, ctx, 1 / 20, ev); if (goal(b)) { if (path.length > 8 && !out.some((o) => Math.abs(o.a - a) < 0.1 && Math.abs(o.power - power) < 0.1)) out.push({ a, power, path }); break; } path.push([b.x, b.z]); }
+    if (out.length >= 4) return out;
   }
-  return null;
+  return out;
 }
-/** The same shot with the gate shut and the button laid: does it still end in the chute? */
-function replay(H, shot) {
-  const b = newBall(H), ctx = newCtx(), ev = {}; ctx.gateT = 0; shoot(b, Math.cos(shot.a), Math.sin(shot.a), shot.power, false);
-  for (let i = 0; i < 200 && !b.holed && !b.sunk && !b.rest; i++) { ctx.t = i / 30; stepBall(b, H, ctx, 1 / 30, ev); if (b.chute) return true; }
-  return false;
+/** The same shot with the gate shut and the button laid, tried a little off (angle, power) and at three moments of the hole's clock (a hero obstacle moves): how many of the nine still end in the chute? */
+function robust(H, shot) {
+  let n = 0;
+  for (const [da, dp, t0] of [[0, 0, 0], [0.03, 0, 1.5], [-0.03, 0, 3], [0, 0.07, 1.5], [0, -0.07, 0], [0.03, 0.07, 3], [-0.03, -0.07, 1.5], [0.03, -0.07, 0], [-0.03, 0.07, 3]]) {
+    const b = newBall(H), ctx = newCtx(), ev = {}; ctx.gateT = 0; shoot(b, Math.cos(shot.a + da), Math.sin(shot.a + da), Math.min(1, shot.power + dp), false);
+    for (let i = 0; i < 80 && !b.holed && !b.sunk && !b.rest; i++) { ctx.t = t0 + i / 20; stepBall(b, H, ctx, 1 / 20, ev); if (b.chute) { n++; break; } }
+  }
+  return n;
 }
