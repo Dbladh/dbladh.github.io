@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030192715';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030192715';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261030192715';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030192715';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030192715';
-import { isLow } from './golfquality.js?v=20261030192715';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030201253';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030201253';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261030201253';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030201253';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030201253';
+import { isLow } from './golfquality.js?v=20261030201253';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -236,27 +236,31 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     for (const [x, z, y] of [[R.ax, R.az, 0.45], [R.bx, R.bz, 0.45]]) { const ring = torus(cyan, 0.55, 0.07, x, y, z, 0, Math.atan2(R.ux, R.uz) + Math.PI / 2, 0); g.add(ring); const pad = cyl(paint('#16405a'), 0.6, 0.05, x, 0.04, z); g.add(pad); updaters.push((heroT, t) => { ring.scale.setScalar(1 + 0.06 * Math.sin(t * 5 + x)); }); }
   }
   if (h.chute) {                                          // the secret chute: a clear channel on legs that winds round the outside of the course. Hidden (but for a glint at the mouth) until the button has opened the gate once; then it lights up in a chase, and brightens behind the ball as it rides
-    const C = h.chute, P = C.pts, n = P.length, cg = new THREE.Group(); cg.visible = false; g.add(cg);
-    const L = new Float32Array(n * 6), F = new Float32Array(n * 6), idx = [], col = new Float32Array(n * 6), trail = new Float32Array(n);
+    const C = h.chute, P = C.pts, n = P.length, cg = new THREE.Group(); g.add(cg);
+    const F = new Float32Array(n * 6), idx = [], col = new Float32Array(n * 6), trail = new Float32Array(n), grow = [];          // `grow`: [geometry, indices per sample] for each part that is drawn only as far as the reveal has come
     for (let i = 0; i < n; i++) { const a = C.left[Math.min(i, n - 2)], b = C.right[Math.min(i, n - 2)], y = C.ly[i] + 0.02; F.set([a[i < n - 1 ? 0 : 2], y, a[i < n - 1 ? 1 : 3], b[i < n - 1 ? 0 : 2], y, b[i < n - 1 ? 1 : 3]], i * 6); if (i < n - 1) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2); }
-    const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.BufferAttribute(F, 3)); fg.setAttribute('color', new THREE.BufferAttribute(col, 3)); fg.setIndex(idx);
-    const fm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, side: THREE.DoubleSide }); disposables.push(fm); const floor = new THREE.Mesh(fg, fm); cg.add(floor);
+    const fg = track(new THREE.BufferGeometry()); fg.setAttribute('position', new THREE.BufferAttribute(F, 3)); fg.setAttribute('color', new THREE.BufferAttribute(col, 3)); fg.setIndex(idx); grow.push([fg, 6]);
+    const fm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, side: THREE.DoubleSide }); disposables.push(fm); cg.add(new THREE.Mesh(fg, fm));
     const glass = new THREE.MeshStandardMaterial({ color: '#bfe8ff', transparent: true, opacity: 0.28, roughness: 0.1, metalness: 0, side: THREE.DoubleSide, depthWrite: false }); disposables.push(glass);
     for (const side of [C.left, C.right]) {                // a clear wall each side, and a steel rail along the top
       const W = new Float32Array(n * 6), wi = []; for (let i = 0; i < n; i++) { const e = side[Math.min(i, n - 2)], x = e[i < n - 1 ? 0 : 2], z = e[i < n - 1 ? 1 : 3]; W.set([x, C.ly[i], z, x, C.ly[i] + 0.55, z], i * 6); if (i < n - 1) wi.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2); }
-      const wg = track(new THREE.BufferGeometry()); wg.setAttribute('position', new THREE.BufferAttribute(W, 3)); wg.setIndex(wi); wg.computeVertexNormals(); cg.add(new THREE.Mesh(wg, glass));
-      const rp = []; for (let i = 0; i < n; i += 2) rp.push(new THREE.Vector3(W[i * 6 + 3], W[i * 6 + 4], W[i * 6 + 5])); const rt = new THREE.Mesh(track(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rp), Math.min(120, n), 0.05, 5, false)), metal('#d7dce4')); rt.castShadow = true; cg.add(rt);
+      const wg = track(new THREE.BufferGeometry()); wg.setAttribute('position', new THREE.BufferAttribute(W, 3)); wg.setIndex(wi); wg.computeVertexNormals(); cg.add(new THREE.Mesh(wg, glass)); grow.push([wg, 6]);
+      const rp = []; for (let i = 0; i < n; i += 2) rp.push(new THREE.Vector3(W[i * 6 + 3], W[i * 6 + 4], W[i * 6 + 5])); const tg = track(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rp), Math.min(120, n), 0.05, 5, false)); const rt = new THREE.Mesh(tg, metal('#d7dce4')); rt.castShadow = true; cg.add(rt); grow.push([tg, tg.index.count / (n - 1)]);
     }
-    for (let i = 4; i < n - 2; i += 8) { const y = C.ly[i]; cg.add(rbox(metal('#aab2bd'), 0.12, y, 0.12, P[i][0], y / 2, P[i][1], 0.02)); }
+    const legs = []; for (let i = 4; i < n - 2; i += 8) { const y = C.ly[i], lg = rbox(metal('#aab2bd'), 0.12, y, 0.12, P[i][0], y / 2, P[i][1], 0.02); lg.visible = false; cg.add(lg); legs.push([i, lg]); }
     const M = C.mouth, ring = torus(paint('#7fe9ff'), 0.62, 0.07, M.x, 0.45, M.z, 0, Math.atan2(M.ux, M.uz) + Math.PI / 2, 0); g.add(ring);          // (the glint at the mouth: a faint ring that is always there)
-    const ex = torus(paint('#7fe9ff'), 0.5, 0.06, P[n - 1][0], C.ly[n - 1] + 0.3, P[n - 1][1], 0, Math.atan2(P[n - 1][0] - P[n - 2][0], P[n - 1][1] - P[n - 2][1]) + Math.PI / 2, 0); cg.add(ex);
-    let open = 0, seen = false;
+    const ex = torus(paint('#7fe9ff'), 0.5, 0.06, P[n - 1][0], C.ly[n - 1] + 0.3, P[n - 1][1], 0, Math.atan2(P[n - 1][0] - P[n - 2][0], P[n - 1][1] - P[n - 2][1]) + Math.PI / 2, 0); ex.visible = false; cg.add(ex);
+    let front = 0;                                          // how many samples of the channel are showing: it grows just ahead of the ball while the ball is in it, and folds away again once the gate has shut
     updaters.push((heroT, t, dt, st) => {
-      open += ((st && st.gateOpen ? 1 : 0) - open) * Math.min(1, dt * 5); if (open > 0.5) seen = true; cg.visible = seen; ring.scale.setScalar(1 + 0.08 * Math.sin(t * 4));
-      const k = st && st.chuteK >= 0 ? st.chuteK : -1, kk = Math.exp(-dt * 2.2);
+      const k = st && st.chuteK >= 0 ? st.chuteK : -1, open = st && st.gateOpen;
+      if (k >= 0) front = Math.max(front, Math.min(n - 1, k + 7)); else if (!open && front > 0) front = Math.max(0, front - dt * 40);
+      const fr = Math.floor(front); cg.visible = fr > 1;
+      for (const [gm, per] of grow) gm.setDrawRange(0, Math.max(0, Math.min(Math.floor(fr * per / 3) * 3, gm.index.count)));
+      for (const [i, lg] of legs) lg.visible = i < fr; ex.visible = fr >= n - 2; ring.scale.setScalar(1 + 0.08 * Math.sin(t * 4));
+      const kk = Math.exp(-dt * 2.2);
       for (let i = 0; i < n; i++) {
         if (k >= 0) { const d = (i - k) / 6, bump = Math.exp(-d * d) * (i >= k - 6 ? 1 : 0.55); if (bump > trail[i]) trail[i] = bump; }
-        trail[i] *= kk; const chase = 0.5 + 0.5 * Math.sin(t * 5 - i * 0.35), base = 0.14 + 0.3 * open * chase, tr = trail[i];
+        trail[i] *= kk; const chase = 0.5 + 0.5 * Math.sin(t * 5 - i * 0.35), base = 0.2 + 0.25 * chase, tr = trail[i];
         col[i * 6] = col[i * 6 + 3] = base * 0.45 + tr * 1.0; col[i * 6 + 1] = col[i * 6 + 4] = base * 0.9 + tr * 0.95; col[i * 6 + 2] = col[i * 6 + 5] = base * 1.3 + tr * 0.8;
       }
       fg.attributes.color.needsUpdate = true; ex.scale.setScalar(1 + 0.1 * Math.sin(t * 6));

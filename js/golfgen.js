@@ -4,12 +4,12 @@
 // A hole is a winding corridor across the lawn: straight legs joined by rounded bends (the hero obstacle sits on a straight run), a round tee green and a round cup green, chambers
 // where the corridor swells, walls offset from the centre line, gentle hills, water (a river that carries the ball, or a pond), posts, bumpers, sand, and a couple of power-up orbs placed off the best line.
 // Local coordinates: x runs left to right, z toward the viewer, the course's centre is (0, 0), and the lawn is at height 0.
-import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261030192715';
-import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261030192715';
-import { aceSearch } from './golface.js?v=20261030192715';
-import { makeChute } from './golfchute.js?v=20261030192715';
-import { hillH } from './golfphys.js?v=20261030192715';
-import { BAKED } from './golfbake.js?v=20261030192715';
+import { mulberry32, heroOrder, buildHero, NEED } from './golfhero.js?v=20261030201253';
+import { placeRecipes, removeRecipe, proveRecipe, necessityOf } from './golfrecipes.js?v=20261030201253';
+import { aceSearch } from './golface.js?v=20261030201253';
+import { makeChute } from './golfchute.js?v=20261030201253';
+import { hillH } from './golfphys.js?v=20261030201253';
+import { BAKED } from './golfbake.js?v=20261030201253';
 export { mulberry32, heroOrder };
 
 export const HOLES = 9;
@@ -180,8 +180,11 @@ export function plainHole(seed, index, type = 'windmill') { for (let a = 0; a < 
 /** Make hole number `index` (0-based) with hero `type` (from the baked answer when there is one, else by searching). */
 export function makeHole(seed, index, type = 'windmill', shape = 'zigzag', ext = null) {
   const baked = BAKED[`${seed}.${index}`];
-  if (baked !== undefined) { const h = build(attemptSeed(seed, baked >> 1), index, type, false, attemptShape(shape, baked >> 1), ext); if (h) { if (baked & 1) dropBonuses(h); return h; } }
-  return findHole(seed, index, type, shape, ext).h;
+  let h = null;
+  if (baked !== undefined) { h = build(attemptSeed(seed, baked >> 1), index, type, false, attemptShape(shape, baked >> 1), ext); if (h && baked & 1) dropBonuses(h); }
+  if (!h) h = findHole(seed, index, type, shape, ext).h;
+  if (ext) makeChute(h, mulberry32((seed ^ 0x6a09e667) >>> 0));          // (a secret chute on about one hole in three: added last, once the hole is known to be good)
+  return h;
 }
 
 /** Take the bonuses that need a trick (the secret coin, the caged orb) off a hole: they stay only where one stroke can collect them and still hole out. */
@@ -558,7 +561,6 @@ function build(seed, index, type, force, family = 'zigzag', ext = null) {
   const shape = cl.map((p, i) => [p.x, p.z, w[i]]);       // the centre line with the half-width at each point (for levelling the ground and for keeping holes apart)
   const H = { recipeLog, rails, barriers, doors, recipes, patches, magnets, tunnels, ghosts, islands, gates1, rollers, lanes: hero.lane ? [hero.lane] : [], dense: !!hero.lane, theme: ['pirate', 'jungle', 'castle', 'space', 'garden'][(seed >>> 9) % 5], cage, boosts, pads, feats, seed, index, type, tee: { x: tee.x, z: tee.z }, cup: { x: cup.x, z: cup.z }, ball, path: cl, left, right, ribbon, outline, bounds, shape, widths: w, hw: HALF_W, walls, hills, posts, bumpers, sands, rivers, ponds, hero, pickups, par, length };
   tidyTriggers(H);
-  makeChute(H, mulberry32((seed ^ 0x6a09e667) >>> 0));          // (a secret chute on about one hole in three)
   if (!teeClear(H)) return null;                          // (a start that would run into a wall, a hill, sand or an obstacle is not allowed: another layout is tried)
   for (const rec of recipes.slice()) {                    // every machine is proved on the finished hole: a recipe whose intended shot does not work (for a band of powers) is taken out again
     const res = proveRecipe(H, rec);

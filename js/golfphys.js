@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030192715';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030201253';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -214,7 +214,7 @@ function stepChute(b, hole, h, ev) {
     const lat = ((b.x - P[bk][0]) * -tz + (b.z - P[bk][1]) * tx) / C.hw, cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1;
     const ang = lat * C.scatter + (sp - 5) * C.scatterV, ca = Math.cos(ang), sa = Math.sin(ang), dx2 = (cx * ca - cz * sa) / cd, dz2 = (cx * sa + cz * ca) / cd;
     const v = (-0.47 + Math.sqrt(0.2209 + 0.676 * Math.max(0.5, cd))) / 0.338;                // (the speed that carries the dropped ball just to the cup: the fall takes 0.47 s, the roll after it loses 0.19 of the speed squared)
-    b.vx = dx2 * v; b.vz = dz2 * v; b.y = hillH(hole, b.x, b.z) + C.exitH; b.air = true; b.vy = 0.3; b.ly = 0; b.chute = null; b.tcool = 0.3; ev.fx = 12;
+    b.vx = dx2 * v; b.vz = dz2 * v; b.y = hillH(hole, b.x, b.z) + C.exitH; b.air = true; b.vy = 0.3; b.ly = 0; b.chute = null; b.over = true; b.tcool = 0.3; ev.fx = 12;
   }
 }
 export function stepBall(b, hole, ctx, dt, ev) {
@@ -276,7 +276,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
         else { b.vy = Math.max(-6, Math.min(6, (H1 - b.y) / h)); b.y = H1; }
       } else {
         b.vy -= GA * h; b.y += b.vy * h;
-        if (b.y <= H1) { b.y = H1; b.air = false; b.vy = 0; b.vx *= 0.9; b.vz *= 0.9; if (H1 < -0.7) { b.sunk = true; ev.splash = true; ev.fall = true; return; } }
+        if (b.y <= H1) { b.y = H1; b.air = false; b.over = false; b.vy = 0; b.vx *= 0.9; b.vz *= 0.9; if (H1 < -0.7) { b.sunk = true; ev.splash = true; ev.fall = true; return; } }
       }
     }
     // walls, the gate, posts and bumpers (a ghost passes through everything but the outer rails)
@@ -289,7 +289,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       collideCircle(b, m.x + m.nx * off, m.z + m.nz * off, m.rad, 0.95, ev, m.nx * v, m.nz * v);
     }
     if (hole.ghosts && !ghost) for (const g of hole.ghosts) if (((tt + g.phase) % g.period) / g.period < g.duty) collideSeg(b, g.ax, g.az, g.bx, g.bz, 0.5, ev);        // (a ghost wall is solid for part of every period, then fades away)
-    for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev, w[8] || 0); }
+    for (let j = 0; j < W.length; j++) { const w = W[j]; if (ghost && w[5]) continue; if (w[6] && b.air && b.y - hillH(hole, b.x, b.z) > 0.5) continue; if (b.over && w[4]) continue; collideSeg(b, w[0], w[1], w[2], w[3], wallE, ev, w[8] || 0); }
     if (hole.boosts && !b.air) for (const o of hole.boosts) { if (o.powered && ctx.gateT <= 0) continue; const rx = b.x - o.x, rz = b.z - o.z, s2 = rx * o.ux + rz * o.uz, c2 = rx * -o.uz + rz * o.ux; if (Math.abs(s2) < o.len / 2 && Math.abs(c2) < o.wid / 2) { b.vx += o.ux * 16 * h; b.vz += o.uz * 16 * h; if (b.boostK !== o) { b.boostK = o; ev.fx = 8; } } else if (b.boostK === o) b.boostK = null; }
     if (b.padCool > 0) b.padCool -= h;
     if (hole.pads && !b.air && !(b.padCool > 0)) for (const o of hole.pads) if (onTrigger(hole, o, b)) { b.air = true; b.vy = o.tramp ? 7.4 : 5.0; if (o.tramp) { b.vx += o.ux * 2.6; b.vz += o.uz * 2.6; } b.padCool = 0.6; ev.fx = 6; }
@@ -367,9 +367,9 @@ export function stepBall(b, hole, ctx, dt, ev) {
   _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
   if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
   const ptc = patchAt(hole, b), tiltPull = ctx.tilt || 0, grip = FRICTION * (inSand(hole, b) ? 3.2 : 1) * (ptc ? ptc.fric : 1);                        // (sand holds the ball on a slope that would roll it on grass)
-  const calm = !b.loop && !b.rail && !b.chute && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive && !(ptc && (ptc.push || (ptc.pull && Math.hypot(b.x - ptc.x, b.z - ptc.z) > 0.3))), slow = grip > FRICTION * 1.5;       // (a ball in sand, mud or caramel is held by it: it counts as stopped sooner)
-  const hold = Math.min(grip * 0.9, 0.6 * (grip / FRICTION));            // (a ball only stays put on gentle ground, about a one in eight slope on turf; sand and mud hold more. On the side of a hill it keeps rolling to the bottom)
-  if (s < (slow ? 0.25 : 0.07) && slope + tiltPull < hold && calm) b.still += dt; else b.still = 0;
-  if (s < (slow ? 0.5 : 0.2) && slope < hold * 1.4 && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
+  const calm = !b.loop && !b.rail && !b.chute && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive && !(ptc && ((ptc.push || 0) > grip * 0.9 || ((ptc.pull || 0) > grip * 0.9 && Math.hypot(b.x - ptc.x, b.z - ptc.z) > 0.3))), slow = grip > FRICTION * 1.5;       // (a ball in sand, mud or caramel is held by it: it counts as stopped sooner)
+  const hold = Math.min(grip * 0.9, 1.1 * (grip / FRICTION));            // (a ball only stays put on gentle ground, about a one in five slope on turf; sand and mud hold more. On the side of a hill it keeps rolling to the bottom)
+  if (s < (slow ? 0.25 : 0.07) && slope + tiltPull < grip * 0.9 && calm) b.still += dt; else b.still = 0;
+  if (s < (slow ? 0.5 : 0.2) && slope < hold * 2.2 && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
   if (b.still > (slow ? 0.12 : 0.3) || b.dawdle > (slow ? 0.45 : 1.5)) { b.rest = true; b.vx = b.vz = 0; b.dawdle = 0; }
 }
