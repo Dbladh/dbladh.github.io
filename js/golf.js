@@ -5,22 +5,22 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030224202';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030224202';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030224202';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030224202';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030224202';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030224202';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261030224202';
-import { createTrail } from './golftrail.js?v=20261030224202';
-import { createNeon } from './golfneon.js?v=20261030224202';
-import { createFx } from './golffx.js?v=20261030224202';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261030224202';
-import { buildDecor } from './golfdecor.js?v=20261030224202';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030224202';
-import { isLow } from './golfquality.js?v=20261030224202';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030224202';
-import { createTable } from './pinball.js?v=20261030224202';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030224335';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030224335';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030224335';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030224335';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030224335';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030224335';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261030224335';
+import { createTrail } from './golftrail.js?v=20261030224335';
+import { createNeon } from './golfneon.js?v=20261030224335';
+import { createFx } from './golffx.js?v=20261030224335';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261030224335';
+import { buildDecor } from './golfdecor.js?v=20261030224335';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030224335';
+import { isLow } from './golfquality.js?v=20261030224335';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030224335';
+import { createTable } from './pinball.js?v=20261030224335';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -48,6 +48,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const frame = { pos: new THREE.Vector3(), look: new THREE.Vector3(), dist: 40 };           // the full view of the current hole
   const trip = { pos: new THREE.Vector3(), look: new THREE.Vector3(), dist: 40, ctrl: new THREE.Vector3(), from: new THREE.Vector3(), fromLook: new THREE.Vector3(), to: -1 };   // the camera travelling to the next hole
   const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), vp: new THREE.Vector3(), vl: new THREE.Vector3(), dx: 1, dz: 0, phase: 'overview', t: 0, slow: 0, kk: 0, lead: 0, gy: 0, gyHole: -1 };
+  const juice = { kick: 0, shake: 0, stop: 0, wasAir: false, streakT: 0 }, calm = !!reduceMotion || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches), kv = new THREE.Vector3();          // (the punch of a stroke and a hard hit; `calm` switches the camera effects off)
+  const groundCol = () => { const g = themeOf(hole?.theme)?.ground; return g === 'snow' ? '#f2f7ff' : g === 'sand' ? '#e8c98a' : g === 'grass' || g === 'moss' ? '#9ad66a' : '#d8d4cc'; };
   /** One step of a critically damped spring (like SmoothDamp): `cur` moves towards `target` with velocity `vel` in about `smooth` seconds, with no jerk at the start or the end of a move. */
   const springTo = (cur, vel, target, smooth, dt) => {
     const om = 2 / Math.max(0.05, smooth), x = om * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
@@ -366,6 +368,8 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function fire(a) {
     const b = balls[0], l = Math.hypot(a.dx, a.dz) || 1, pw = Math.pow(a.power, 1.15);
     st.lastX = b.x; st.lastZ = b.z; st.strokes++; st.mode = 'roll'; st.rollT = 0; audio?.golf?.('putt', a.power);
+    if (fxs) { const w = wp(b.x, 0.12, b.z); fxs.sparks(w.x, w.y, w.z, groundCol(), 4 + Math.round(a.power * 10), 0.7 + a.power * 1.6, 0.9, 0.5); }
+    if (!calm) juice.kick = 0.25 + 0.75 * a.power;
     (st.shots[st.hole] ||= []).push({ x: b.x, z: b.z, dx: a.dx, dz: a.dz, pw, t: ctx.t, gate: ctx.gateT, multi: st.multi, f: { homing: ctx.homing, ghost: ctx.ghost, bounce: ctx.bounce, turbo: ctx.turbo, drive: false, cupR: ctx.cupR } });      // (every stroke is kept so the best hole can be replayed)
     shoot(b, a.dx, a.dz, pw, fx.turbo > 0);
     if (st.multi) {                                        // multi-ball: four more balls fly off at slightly different angles; the one nearest the cup is kept
@@ -463,7 +467,13 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     cam.kk = cam.kk > 0 ? cam.kk + (k - cam.kk) * (1 - Math.exp(-dt * 3)) : k;                                      // (the speed of the camera changes smoothly between phases)
     if (dt > 0.2) { cam.vp.set(0, 0, 0); cam.vl.set(0, 0, 0); }
     springTo(cam.pos, cam.vp, want.pos, 1.5 / cam.kk, dt); springTo(cam.look, cam.vl, want.look, 1.2 / cam.kk, dt);
-    camera.position.copy(cam.pos); camera.up.copy(up0); camera.lookAt(cam.look);
+    camera.position.copy(cam.pos);
+    if (!calm && (juice.kick > 0.002 || juice.shake > 0.002)) {                  // (the camera is knocked back a little by a stroke and shaken by a hard hit; both die away quickly)
+      kv.subVectors(cam.look, cam.pos).normalize(); camera.position.addScaledVector(kv, -juice.kick * 0.45);
+      camera.position.x += (Math.random() - 0.5) * juice.shake; camera.position.y += (Math.random() - 0.5) * juice.shake; camera.position.z += (Math.random() - 0.5) * juice.shake;
+      juice.kick *= Math.exp(-dt * 9); juice.shake *= Math.exp(-dt * 11);
+    }
+    camera.up.copy(up0); camera.lookAt(cam.look);
   }
   function fly(k) {                                        // between the camera we came from (or go back to) and where it is heading
     camera.position.lerpVectors(flyFrom.pos, want.pos, k); tmpV.lerpVectors(flyFrom.look, want.look, k); camera.up.copy(up0); camera.lookAt(tmpV);
@@ -501,7 +511,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261030224202', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261030224335', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -531,7 +541,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
     /** Every frame (after the page has set the camera): moves the game on and, while it is active, owns the camera. */
     update(dt) {
       if (st.mode === 'off') return false;
-      dt = Math.min(dt, 0.05); if (st.moment > 0) { st.moment -= dt; dt *= 0.5; } st.t += dt; st.idle += dt; if (hole) for (const q of hole.bumpers) if (q.pop) q.pop = q.pop < 0.01 ? 0 : q.pop * Math.exp(-dt * 9); if (table?.group) table.leanTable(); lamps?.update(world.night); fxs?.update(dt); scenery?.update(dt, fxs);
+      dt = Math.min(dt, 0.05); if (juice.stop > 0) { juice.stop -= dt; dt *= 0.08; } if (st.moment > 0) { st.moment -= dt; dt *= 0.5; } st.t += dt; st.idle += dt; if (hole) for (const q of hole.bumpers) if (q.pop) q.pop = q.pop < 0.01 ? 0 : q.pop * Math.exp(-dt * 9); if (table?.group) table.leanTable(); lamps?.update(world.night); fxs?.update(dt); scenery?.update(dt, fxs);
       { const u = Math.min(1, Math.max(0, (world.night - 0.35) / 0.5)); neonK = u * u * (3 - 2 * u); neon?.set(neonK); const L = lights(); if (L.length && lampSpotsAll.length) for (const l of L) l.color.set('#ffc27a').lerp(UVC, neonK); }
       if (st.mode === 'exit') {
         const k = reduceMotion ? 1 : ease(clamp01(st.t / EXIT));
@@ -597,6 +607,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
             const b = balls[i]; if (b.holed) { holedBall = b; continue; } if (b.sunk) continue;
             stepBall(b, hole, ctx, dt, ev);
             if (ev.wall > 1.5) cs.wall++; if (ev.splash || (!b.air && inSand(hole, b))) cs.hazard = true;
+            if (ev.wall > 8.5 && !calm) { juice.stop = Math.max(juice.stop, 0.04); juice.shake = Math.max(juice.shake, Math.min(0.14, ev.wall / 110)); }          // (a hard hit: a freeze of a few frames and a shake)
             if (ev.wall > 1.2) { audio?.golf?.('wall', Math.min(1, ev.wall / 12)); if (!vis.flashWall(ev.sax, ev.saz, ev.sbx, ev.sbz, ev.wall)) { const sx = ev.sbx - ev.sax, sz = ev.sbz - ev.saz, t = Math.max(0, Math.min(1, ((b.x - ev.sax) * sx + (b.z - ev.saz) * sz) / (sx * sx + sz * sz || 1))); vis.flashHero(ev.sax + sx * t, Math.max(0, b.y) + 0.2, ev.saz + sz * t, ev.wall); } }
             if (ev.post > 1.2) { const bp = hole.bumpers.find((q) => q.x === ev.hx && q.z === ev.hz); if (!vis.flashAt(ev.hx, ev.hz, ev.post)) vis.flashHero(ev.hx, Math.max(0, b.y) + 0.3, ev.hz, ev.post); if (bp) bp.pop = 0.28; } if (ev.post > 1.2) audio?.golf?.('post', Math.min(1, ev.post / 12));
             if (fxs) {                                           // the effects of what the ball hits
@@ -642,7 +653,14 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         } else if (st.mode === 'done') { if (st.t > 1.7) beginTravel(st.hole + 1); }
         else { placeBalls(); ballMeshes[0].scale.setScalar(1); }
         if (hamster.visible) { const b = balls[0], sp = Math.hypot(b.vx, b.vz); hamster.userData.run(st.holeT, sp); if (sp > 0.3) hamster.userData.hm.rotation.y = Math.atan2(b.vx, b.vz); }
-        if (st.hole !== TABLE_HOLE) trail.update(dt, balls[0]); st.flagNear = balls.some((bb) => !bb.sunk && Math.hypot(bb.x - hole.cup.x, bb.z - hole.cup.z) < ctx.cupR + 1.15); st.gateOpen = ctx.gateT > 0; st.chuteK = balls[0].chute ? balls[0].chute.k : -1; vis.update(st.holeT, st.holeT, dt, st);
+        if (st.hole !== TABLE_HOLE) trail.update(dt, balls[0]);
+        { const b0 = balls[0]; if (b0 && st.mode === 'roll' && fxs) {                     // (a puff where the ball lands, faint streaks behind a fast ball, and the sound of it rolling)
+          const sp0 = Math.hypot(b0.vx, b0.vz); juice.streakT += dt;
+          if (juice.wasAir && !b0.air && !b0.holed) { const w = wp(b0.x, 0.12, b0.z); fxs.sparks(w.x, w.y, w.z, groundCol(), 8, 1.4, 1.1, 0.5); audio?.golf?.('land', 0.5); }
+          juice.wasAir = !!b0.air;
+          if (sp0 > 7 && !b0.air && !lowEnd && juice.streakT > 0.045) { juice.streakT = 0; const w = wp(b0.x - b0.vx * 0.04, 0.2, b0.z - b0.vz * 0.04); fxs.sparks(w.x, w.y, w.z, '#ffffff', 1, 0.25, 0.1, 0.3); }
+          if (!b0.air && sp0 > 0.8) audio?.golf?.('roll', Math.min(1, sp0 / 12));
+        } } st.flagNear = balls.some((bb) => !bb.sunk && Math.hypot(bb.x - hole.cup.x, bb.z - hole.cup.z) < ctx.cupR + 1.15); st.gateOpen = ctx.gateT > 0; st.chuteK = balls[0].chute ? balls[0].chute.k : -1; vis.update(st.holeT, st.holeT, dt, st);
       }
       updateScenery(dt); updateOcclusion(dt);
       updateHud();
