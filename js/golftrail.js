@@ -1,7 +1,7 @@
 // The trail a rolling ball leaves on the ground: a ribbon along its path that fades away. On snow it is a groove that stays (a dark blue-grey line pressed into the snow with pale heaped edges); on sand a
 // shallow furrow; on grass a faint flattened streak that is gone in a couple of seconds. One ribbon per hole, a few hundred points; the points sit on the ground (golfphys.js hillH).
 import * as THREE from 'three';
-import { hillH } from './golfphys.js?v=20261030215905';
+import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261030220201';
 
 const MAXP = 700;
 /** How the ball marks each kind of ground (`ground` in golfthemes.js): groove colour, edge colour, strength, width, how long it lasts (s). */
@@ -12,12 +12,23 @@ const STYLES = {
   other: { mid: '#ffffff', edge: '#ffffff', a: 0.12, ea: 0.0, w: 0.26, life: 1.5, lift: 0.04 },
 };
 
+/** Places where a mark on the ground makes no sense: over the cup, water, a pit of sand, a patch of ice, mud, rough or the like, and the floor buttons, boost strips and pads. */
+function unmarkable(h, b) {
+  if (Math.hypot(b.x - h.cup.x, b.z - h.cup.z) < CUP_R + 0.6) return true;
+  for (const p of h.ponds) if (Math.hypot(b.x - p.x, b.z - p.z) < p.r * 1.2 && inPoly(p.poly, b.x, b.z)) return true;
+  for (const rv of h.rivers) { const dx = rv.b.x - rv.a.x, dz = rv.b.z - rv.a.z, l2 = dx * dx + dz * dz || 1; let t = ((b.x - rv.a.x) * dx + (b.z - rv.a.z) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; if (Math.hypot(b.x - rv.a.x - dx * t, b.z - rv.a.z - dz * t) < rv.hw + 0.2) return true; }
+  if (inSand(h, b) || patchAt(h, b)) return true;
+  for (const o of h.boosts || []) { const rx = b.x - o.x, rz = b.z - o.z; if (Math.abs(rx * o.ux + rz * o.uz) < o.len / 2 + 0.3 && Math.abs(-rx * o.uz + rz * o.ux) < o.wid / 2 + 0.3) return true; }
+  for (const o of [...(h.pads || []), ...(h.doors || []).map((d) => d.button)]) if (o && Math.hypot(b.x - o.x, b.z - o.z) < 3 && onTrigger(h, o, b)) return true;
+  return false;
+}
+
 export function createTrail() {
   const pos = new Float32Array(MAXP * 9), col = new Float32Array(MAXP * 12), idx = new Uint32Array((MAXP - 1) * 12), geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 4)); geo.setIndex(new THREE.BufferAttribute(idx, 1)); geo.setDrawRange(0, 0);
   const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 2;
-  let pts = [], style = STYLES.other, hole = null, cMid = new THREE.Color(), cEdge = new THREE.Color();
+  let gap = false, pts = [], style = STYLES.other, hole = null, cMid = new THREE.Color(), cEdge = new THREE.Color();
   const setStyle = (ground) => { style = STYLES[ground] || STYLES.other; cMid.set(style.mid); cEdge.set(style.edge); };
   setStyle('other');
   const api = {
@@ -29,6 +40,7 @@ export function createTrail() {
     update(dt, b) {
       if (!hole) return;
       const last = pts[pts.length - 1];
+      if (b && unmarkable(hole, b)) { gap = true; this.rebuild(); return; }
       for (const p of pts) p.age += dt;
       while (pts.length && pts[0].age > style.life) pts.shift();
       if (b && !b.air && !b.holed && !b.sunk && !b.chute && !b.rail && !b.loop && !(b.ly > 0.05)) {
@@ -37,7 +49,7 @@ export function createTrail() {
           const dx = last ? b.x - last.x : 0, dz = last ? b.z - last.z : 0, d = Math.hypot(dx, dz);
           if (!last || d > 0.13) {
             let nx = -b.vz / sp, nz = b.vx / sp;                                    // (across the way the ball is going)
-            pts.push({ x: b.x, z: b.z, nx, nz, age: 0, brk: !last || d > 1.6, sp });
+            pts.push({ x: b.x, z: b.z, nx, nz, age: 0, brk: !last || d > 1.6 || gap, sp }); gap = false;
             if (pts.length > MAXP) pts.shift();
           }
         }
