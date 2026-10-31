@@ -1,15 +1,15 @@
 // The trail a rolling ball leaves on the ground: a ribbon along its path that fades away. On snow it is a groove that stays (a dark blue-grey line pressed into the snow with pale heaped edges); on sand a
 // shallow furrow; on grass a faint flattened streak that is gone in a couple of seconds. One ribbon per hole, a few hundred points; the points sit on the ground (golfphys.js hillH).
 import * as THREE from 'three';
-import { hillH } from './golfphys.js?v=20261030215605';
+import { hillH } from './golfphys.js?v=20261030215905';
 
 const MAXP = 700;
 /** How the ball marks each kind of ground (`ground` in golfthemes.js): groove colour, edge colour, strength, width, how long it lasts (s). */
 const STYLES = {
-  snow: { mid: '#4c6c9e', edge: '#f4f8ff', a: 0.9, ea: 0.4, w: 0.46, life: 600, lift: 0.045 },
-  sand: { mid: '#a77c43', edge: '#f4dca2', a: 0.5, ea: 0.4, w: 0.4, life: 30, lift: 0.04 },
-  grass: { mid: '#e6f7b0', edge: '#e6f7b0', a: 0.3, ea: 0.0, w: 0.34, life: 2.6, lift: 0.04 },
-  other: { mid: '#ffffff', edge: '#ffffff', a: 0.22, ea: 0.0, w: 0.3, life: 1.8, lift: 0.04 },
+  snow: { mid: '#4c6c9e', edge: '#f4f8ff', a: 0.5, ea: 0.22, w: 0.36, life: 600, lift: 0.045 },
+  sand: { mid: '#a77c43', edge: '#f4dca2', a: 0.3, ea: 0.2, w: 0.32, life: 30, lift: 0.04 },
+  grass: { mid: '#e6f7b0', edge: '#e6f7b0', a: 0.16, ea: 0.0, w: 0.28, life: 2.2, lift: 0.04 },
+  other: { mid: '#ffffff', edge: '#ffffff', a: 0.12, ea: 0.0, w: 0.26, life: 1.5, lift: 0.04 },
 };
 
 export function createTrail() {
