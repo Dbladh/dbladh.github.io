@@ -5,21 +5,21 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030185625';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030185625';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030185625';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030185625';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030185625';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030185625';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261030185625';
-import { createNeon } from './golfneon.js?v=20261030185625';
-import { createFx } from './golffx.js?v=20261030185625';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261030185625';
-import { buildDecor } from './golfdecor.js?v=20261030185625';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030185625';
-import { isLow } from './golfquality.js?v=20261030185625';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030185625';
-import { createTable } from './pinball.js?v=20261030185625';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030192715';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030192715';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030192715';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030192715';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030192715';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030192715';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261030192715';
+import { createNeon } from './golfneon.js?v=20261030192715';
+import { createFx } from './golffx.js?v=20261030192715';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261030192715';
+import { buildDecor } from './golfdecor.js?v=20261030192715';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030192715';
+import { isLow } from './golfquality.js?v=20261030192715';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030192715';
+import { createTable } from './pinball.js?v=20261030192715';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -223,7 +223,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   function noteRest() {                                    // a ball that stops where it started twice in a row may be penned in: offer a reset to the tee
     const b = balls[0]; if (!b) return; if (Math.hypot(b.x - st.lastX, b.z - st.lastZ) < 0.35) st.stuck = (st.stuck || 0) + 1; else st.stuck = 0; elReset.hidden = st.stuck < 2;
   }
-  const announce = () => { say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${st.hole === TABLE_HOLE ? 'Pinball Golf' : HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast'); const m = (hole.recipes || [])[0]; if (m) setTimeout(() => { if (st.mode === 'aim' && vis === vises[st.hole]) say(elBanner, `Machine: ${MACHINE_HINTS[m.kind]}`, 3200, 'banner'); }, 2700); };
+  const announce = () => { say(elToast, `Hole ${st.hole + 1} · Par ${hole.par} · ${st.hole === TABLE_HOLE ? 'Pinball Golf' : HERO_NAMES[hole.type] || ''} · ${THEME_NAMES[hole.theme] || ''}`, 2600, 'toast'); const m = (hole.recipes || [])[0], hint = m ? `Machine: ${MACHINE_HINTS[m.kind]}` : hole.chute ? 'Secret chute: roll over the button, then into the gap in the wall' : ''; if (hint) setTimeout(() => { if (st.mode === 'aim' && vis === vises[st.hole]) say(elBanner, hint, 3200, 'banner'); }, 2700); };
   function placeBalls() {
     balls.forEach((b, i) => {
       const m = ballMeshes[i], s = ballShadows[i]; if (!m) return;
@@ -489,7 +489,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261030185625', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261030192715', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -598,10 +598,12 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
               if (ev.fx === 7) { const bt = (hole.cage && hole.cage.button) || ((hole.doors || []).find((dr) => dr.button && Math.hypot(dr.button.x - b.x, dr.button.z - b.z) < 2) || {}).button || b, w = wp(bt.x, 0.15, bt.z); fxs.sparks(w.x, w.y, w.z, '#6dff9a', 20, 2.2, 2.6, 0.7); fxs.ring(w.x, w.y, w.z, 1.3, 0.7, '#6dff9a'); }
               if (ev.fx === 8) { const w = wp(b.x, 0.2, b.z); fxs.sparks(w.x, w.y, w.z, '#ffe14a', 8, 1.8, 1.2, 0.4); }
               if (ev.fx === 10) { const w = wp(b.x, 0.5, b.z); fxs.sparks(w.x, w.y, w.z, '#7fe9ff', 14, 1.8, 2.2, 0.6); fxs.ring(w.x, w.y - 0.4, w.z, 1.1, 0.6, '#7fe9ff'); }
+              if (ev.fx === 11) { const w = wp(b.x, 0.5, b.z); fxs.sparks(w.x, w.y, w.z, '#7fe9ff', 16, 2.0, 2.4, 0.6); fxs.ring(w.x, w.y - 0.3, w.z, 1.2, 0.6, '#7fe9ff'); st.moment = Math.max(st.moment || 0, 0.4); }
+              if (ev.fx === 12) { const w = wp(b.x, b.y + 0.3, b.z); fxs.sparks(w.x, w.y, w.z, '#ffe14a', 18, 2.4, 2.0, 0.7); fxs.ring(w.x, w.y - 0.2, w.z, 1.4, 0.7, '#ffe14a'); }
               if (ev.fx === 9) { const w = wp(b.x, 0.3, b.z); fxs.sparks(w.x, w.y, w.z, '#7fe9ff', 14, 2.4, 1.8, 0.6); }
               if (ev.fx === 4) { const w = wp(b.x, 0.3, b.z); fxs.sparks(w.x, w.y, w.z, '#bff4ff', 14, 2.4, 2, 0.5); }
             }
-            if (ev.fx) audio?.golf?.(ev.fx === 1 ? 'tele' : ev.fx === 2 ? 'load' : ev.fx === 3 ? 'boom' : ev.fx === 4 ? 'loop' : ev.fx === 6 ? 'pickup' : ev.fx === 7 ? 'load' : ev.fx === 8 ? 'wall' : ev.fx === 9 ? 'wall' : ev.fx === 10 ? 'tele' : 'geyser');
+            if (ev.fx) audio?.golf?.(ev.fx === 1 ? 'tele' : ev.fx === 2 ? 'load' : ev.fx === 3 ? 'boom' : ev.fx === 4 ? 'loop' : ev.fx === 6 ? 'pickup' : ev.fx === 7 ? 'load' : ev.fx === 8 ? 'wall' : ev.fx === 9 ? 'wall' : ev.fx === 10 || ev.fx === 11 ? 'tele' : ev.fx === 12 ? 'pickup' : 'geyser');
             if (fxs && !b.air && !b.rest) { const sp0 = Math.hypot(b.vx, b.vz); if (sp0 > 0.7 && inSand(hole, b)) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, b.y + 0.05, b.z)); fxs.sand(p.x, p.y, p.z, b.vx, b.vz, dt); } }
             if (ev.fx === 5 && fxs) { const p = holeGroup.localToWorld(new THREE.Vector3(b.x, 0.2, b.z)); fxs.burst('kick', p.x, p.y, p.z); }
             { const hr = hole.hero; if (hr && hr.type === 'turntable' && !b.rest && (b.x - hr.x) ** 2 + (b.z - hr.z) ** 2 < hr.r * hr.r) { const sp1 = Math.hypot(b.vx, b.vz); if (sp1 > 0.6 && (st.tFlash = (st.tFlash || 0) - dt) <= 0) { st.tFlash = 0.18; vis.flashHeroAll(Math.min(8, 1.5 + sp1)); } } }
@@ -628,7 +630,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
         } else if (st.mode === 'done') { if (st.t > 1.7) beginTravel(st.hole + 1); }
         else { placeBalls(); ballMeshes[0].scale.setScalar(1); }
         if (hamster.visible) { const b = balls[0], sp = Math.hypot(b.vx, b.vz); hamster.userData.run(st.holeT, sp); if (sp > 0.3) hamster.userData.hm.rotation.y = Math.atan2(b.vx, b.vz); }
-        st.gateOpen = ctx.gateT > 0; vis.update(st.holeT, st.holeT, dt, st);
+        st.gateOpen = ctx.gateT > 0; st.chuteK = balls[0].chute ? balls[0].chute.k : -1; vis.update(st.holeT, st.holeT, dt, st);
       }
       updateScenery(dt); updateOcclusion(dt);
       updateHud();

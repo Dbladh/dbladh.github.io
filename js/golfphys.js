@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030185625';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030192715';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -193,6 +193,30 @@ const dist2 = (b, x, z) => { const dx = b.x - x, dz = b.z - z; return dx * dx + 
  * Move the ball on by `dt` seconds (in small fixed steps). `ctx.t` is the hero clock. Fills `ev`: wall / post (the hardest knock), holed, splash (into water),
  * fx (a special moment: 1 teleport, 2 cannon loads, 3 cannon fires, 4 loop entered, 5 geyser kick).
  */
+/** The ball in the secret chute (golfchute.js): it rolls under the pull of the track's slope on slick plastic, bounces between its two walls, and at the end is dropped towards the cup. */
+function stepChute(b, hole, h, ev) {
+  const C = hole.chute, P = C.pts, n = P.length, k0 = Math.max(0, b.chute.k - 6), k1 = Math.min(n - 2, b.chute.k + 10);
+  let best = 1e9, bk = k0, bt = 0;
+  for (let k = k0; k <= k1; k++) {
+    const dx = P[k + 1][0] - P[k][0], dz = P[k + 1][1] - P[k][1], l2 = dx * dx + dz * dz || 1e-9; let t = ((b.x - P[k][0]) * dx + (b.z - P[k][1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ex = b.x - P[k][0] - dx * t, ez = b.z - P[k][1] - dz * t, d = ex * ex + ez * ez; if (d < best) { best = d; bk = k; bt = t; }
+  }
+  b.chute.k = bk;
+  const dx = P[bk + 1][0] - P[bk][0], dz = P[bk + 1][1] - P[bk][1], l = Math.sqrt(dx * dx + dz * dz) || 1, tx = dx / l, tz = dz / l;
+  b.vx += tx * C.acc * h; b.vz += tz * C.acc * h;
+  let sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz); if (sp > 0) { const ns = Math.max(0, sp - C.fric * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; } if (sp > C.vmax) { const k = C.vmax / sp; b.vx *= k; b.vz *= k; sp = C.vmax; }
+  b.x += b.vx * h; b.z += b.vz * h;
+  for (let k = Math.max(0, bk - 3); k <= Math.min(n - 2, bk + 4); k++) { collideSeg(b, C.left[k][0], C.left[k][1], C.left[k][2], C.left[k][3], C.e, ev); collideSeg(b, C.right[k][0], C.right[k][1], C.right[k][2], C.right[k][3], C.e, ev); }
+  { const px = P[bk][0] + dx * bt, pz = P[bk][1] + dz * bt, ex = b.x - px, ez = b.z - pz, d = Math.sqrt(ex * ex + ez * ez);       // (never out through a wall: a ball that got past one, at the mouth or round a tight bend, is put back inside)
+    if (d > C.hw - BALL_R + 0.12) { const lim = C.hw - BALL_R, k = lim / d; b.x = px + ex * k; b.z = pz + ez * k; const vn = (b.vx * ex + b.vz * ez) / d; if (vn > 0) { b.vx -= (1 + C.e) * vn * (ex / d); b.vz -= (1 + C.e) * vn * (ez / d); } } }
+  const s = P[bk][2] + bt * l; b.ly = C.ly[bk] + (C.ly[bk + 1] - C.ly[bk]) * bt; b.y = hillH(hole, b.x, b.z); b.air = false; b.vy = 0;
+  if (bk >= n - 2 && bt > 0.97 || s >= C.len - 0.15) {                       // the end: dropped towards the cup, a little off from where in the channel it was and how fast
+    const lat = ((b.x - P[bk][0]) * -tz + (b.z - P[bk][1]) * tx) / C.hw, cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1;
+    const ang = lat * C.scatter + (sp - 5) * C.scatterV, ca = Math.cos(ang), sa = Math.sin(ang), dx2 = (cx * ca - cz * sa) / cd, dz2 = (cx * sa + cz * ca) / cd;
+    const v = (-0.47 + Math.sqrt(0.2209 + 0.676 * Math.max(0.5, cd))) / 0.338;                // (the speed that carries the dropped ball just to the cup: the fall takes 0.47 s, the roll after it loses 0.19 of the speed squared)
+    b.vx = dx2 * v; b.vz = dz2 * v; b.y = hillH(hole, b.x, b.z) + C.exitH; b.air = true; b.vy = 0.3; b.ly = 0; b.chute = null; b.tcool = 0.3; ev.fx = 12;
+  }
+}
 export function stepBall(b, hole, ctx, dt, ev) {
   ev.wall = 0; ev.post = 0; ev.hr = 0; ev.kick = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
   if (b.holed || b.sunk) return;
@@ -208,6 +232,8 @@ export function stepBall(b, hole, ctx, dt, ev) {
       if (b.loaded <= 0) { const a = Math.atan2(hero.uz, hero.ux) + hero.wobble * Math.sin(tt * 1.3); b.vx = Math.cos(a) * hero.speed; b.vz = Math.sin(a) * hero.speed; b.tcool = 0.9; b.x += b.vx * 0.06; b.z += b.vz * 0.06; ev.fx = 3; }
       continue;
     }
+    if (b.chute) { stepChute(b, hole, h, ev); continue; }
+    if (hole.chute && ctx.gateT > 0 && (!b.air || b.y - hillH(hole, b.x, b.z) < 0.8)) { const M = hole.chute.mouth, rx = b.x - M.x, rz = b.z - M.z, f = rx * M.ux + rz * M.uz, vn = b.vx * M.ux + b.vz * M.uz; if (f > 0.05 && f < 0.9 && Math.abs(rx * -M.uz + rz * M.ux) < M.hw && vn > 1.0) { b.chute = { k: 0 }; ev.fx = 11; continue; } }       // (through the open gap and into the secret chute)
     // riding round the loop
     if (b.rail) {                                       // riding a rail: carried along it over whatever lies below, then let go at the far end
       const R = b.rail.r; b.rail.s += (b.rail.v * h) / R.len;
@@ -271,7 +297,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
     hole.cover = ctx.gateT > 0 ? 1 : 0;                 // (a retractable bridge covers its canyon while the button's time lasts)
     if (hole.feats && !b.air) for (const f of hole.feats) if (f.bridge) { const rx = b.x - f.x, rz = b.z - f.z, s2 = rx * f.ux + rz * f.uz, c2 = rx * f.nx + rz * f.nz; if (Math.abs(s2) < f.len / 2 + 0.5 && c2 > f.c0 && c2 < f.c1 && ctx.gateT > 0) ctx.gateT = Math.max(ctx.gateT, 0.8); }       // (a bridge stays out while a ball is on it)
     if (hole.doors) for (const dr of hole.doors) {
-      if (!b.air && onTrigger(hole, dr.button, b)) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = 7; }
+      if (!b.air && onTrigger(hole, dr.button, b)) { if (ctx.gateT <= 0) ev.fx = 7; ctx.gateT = dr.secret ? 12 : 7; }
       if (dr.gate && ctx.gateT <= 0 && !ghost) collideSeg(b, dr.gate[0], dr.gate[1], dr.gate[2], dr.gate[3], 0.5, ev);
     }
     if (hole.cage) {
@@ -341,7 +367,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
   _push.x = 0; _push.z = 0; b.inside = ctx.ghost && overlapPush(b, hole, _push);
   if (b.inside) { const l = Math.sqrt(_push.x * _push.x + _push.z * _push.z) || 1; b.vx += (_push.x / l) * 5 * dt; b.vz += (_push.z / l) * 5 * dt; }          // (a ghost that has stopped inside something drifts out of it)
   const ptc = patchAt(hole, b), tiltPull = ctx.tilt || 0, grip = FRICTION * (inSand(hole, b) ? 3.2 : 1) * (ptc ? ptc.fric : 1);                        // (sand holds the ball on a slope that would roll it on grass)
-  const calm = !b.loop && !b.rail && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive && !(ptc && (ptc.push || (ptc.pull && Math.hypot(b.x - ptc.x, b.z - ptc.z) > 0.3))), slow = grip > FRICTION * 1.5;       // (a ball in sand, mud or caramel is held by it: it counts as stopped sooner)
+  const calm = !b.loop && !b.rail && !b.chute && !b.air && !b.inside && b.loaded <= 0 && !ctx.drive && !(ptc && (ptc.push || (ptc.pull && Math.hypot(b.x - ptc.x, b.z - ptc.z) > 0.3))), slow = grip > FRICTION * 1.5;       // (a ball in sand, mud or caramel is held by it: it counts as stopped sooner)
   const hold = Math.min(grip * 0.9, 0.6 * (grip / FRICTION));            // (a ball only stays put on gentle ground, about a one in eight slope on turf; sand and mud hold more. On the side of a hill it keeps rolling to the bottom)
   if (s < (slow ? 0.25 : 0.07) && slope + tiltPull < hold && calm) b.still += dt; else b.still = 0;
   if (s < (slow ? 0.5 : 0.2) && slope < hold * 1.4 && tiltPull < grip * 0.9 && calm) b.dawdle = (b.dawdle || 0) + dt; else b.dawdle = 0;       // (barely moving for a second and a half, whatever the slope: it has stopped)
