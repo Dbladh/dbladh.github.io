@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031102106';
+import { heightAt, POND, pathX } from './world.js?v=20261031102513';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -169,7 +169,7 @@ function makeSanta(ctx) {
   let t = -1, wait = 25 + Math.random() * 40, dur = 11, dir = 1, y0 = 38;
   return {
     /** Start a fly-by now. */
-    go() { if (t >= 0) return; t = 0; dir = Math.random() < 0.5 ? 1 : -1; y0 = 30 + Math.random() * 14; dur = 10 + Math.random() * 3; mesh.scale.x = 46 * dir; mesh.visible = true; ctx.audio?.sleigh?.(dir); },
+    go(name) { if ((name && name !== 'santa') || t >= 0) return; t = 0; dir = Math.random() < 0.5 ? 1 : -1; y0 = 30 + Math.random() * 14; dur = 10 + Math.random() * 3; mesh.scale.x = 46 * dir; mesh.visible = true; ctx.audio?.sleigh?.(dir); },
     update(dt, s) {
       if (t < 0) { if (s.night > 0.4 && !s.hide) wait -= dt * (0.7 + 1.1 * s.peak); if (wait <= 0) { wait = 80 + Math.random() * 100; this.go(); } return; }
       t += dt; const u = t / dur; if (u >= 1) { t = -1; mesh.visible = false; return; }
@@ -181,8 +181,69 @@ function makeSanta(ctx) {
   };
 }
 
+// ---------------------------------------------------------------- fireworks (New Year, July 4th)
+// Rockets climb in the sky layer (behind the hills, so they burst over the skyline) and burst into a ball of glowing sparks that fall and fade; each burst briefly lights the ground in its colour and is
+// followed, a moment later, by a boom and some crackle. A "show" is a short run of bursts every half minute or so on a clear night, more often and with a finale on the holiday itself.
+const FW_COLS = [['#ff4d4d', '#ffd24a'], ['#4dd2ff', '#ffffff'], ['#7dff6a', '#ffe94a'], ['#ff6ad5', '#8f6bff'], ['#ffb347', '#ff4d4d'], ['#ffffff', '#9fd4ff'], ['#4a6bff', '#ff4dd2']].map((p) => p.map((c) => new THREE.Color(c)));
+const fwBurstMat = (low) => new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  uniforms: { uT: { value: 0 }, uO: { value: new THREE.Vector3() }, uSpd: { value: 16 }, uLife: { value: 2.2 }, uC1: { value: new THREE.Color() }, uC2: { value: new THREE.Color() }, uPx: BU.uPx, uSize: { value: 0.9 }, uK: { value: 1 } },
+  vertexShader: `uniform float uT, uSpd, uLife, uPx, uSize; uniform vec3 uO; attribute vec3 aDir; attribute float aR; varying float vA; varying float vH; varying float vK;
+    void main() { float t = uT, sp = uSpd * (0.5 + 0.5 * aR), life = uLife * (0.65 + 0.35 * aR), k = clamp(t / life, 0.0, 1.0);
+      vec3 p = uO + aDir * sp * (1.0 - exp(-t * 2.4)) / 2.4; p.y -= 3.2 * t * t;
+      vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+      float tw = k > 0.45 ? 0.55 + 0.45 * sin(t * 38.0 + aR * 60.0) : 1.0;
+      vA = (1.0 - k) * (1.0 - k) * smoothstep(0.0, 0.05, t) * tw; vH = step(0.5, fract(aR * 7.3)); vK = k;
+      gl_PointSize = clamp(uSize * (1.0 - 0.55 * k) * uPx / max(1.0, -mv.z), 1.5, 24.0); }`,
+  fragmentShader: `uniform vec3 uC1, uC2; varying float vA; varying float vH; varying float vK;
+    void main() { float d = length(gl_PointCoord - 0.5), core = smoothstep(0.18, 0.0, d), halo = smoothstep(0.5, 0.05, d); vec3 c = mix(uC1, uC2, vH); gl_FragColor = vec4(mix(c, vec3(1.0), core * (1.0 - vK)) * (0.9 + 0.8 * core), halo * vA); }`,
+});
+function makeFireworks(ctx) {
+  const N = ctx.low ? 56 : 120, POOL = ctx.low ? 3 : 5, bursts = [], rnd = Math.random;
+  const dirs = new Float32Array(N * 3), rr = new Float32Array(N);
+  for (let i = 0; i < N; i++) { const z = rnd() * 2 - 1, a = rnd() * 6.2832, s = Math.sqrt(1 - z * z); dirs.set([s * Math.cos(a), s * Math.sin(a), z], i * 3); rr[i] = rnd(); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3)); geo.setAttribute('aDir', new THREE.BufferAttribute(dirs, 3)); geo.setAttribute('aR', new THREE.BufferAttribute(rr, 1));
+  for (let i = 0; i < POOL; i++) {
+    const mat = fwBurstMat(ctx.low), pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = -5; pts.visible = false; ctx.skyScene.add(pts);
+    const rg = new THREE.BufferGeometry(); const rp = new Float32Array(10 * 3); rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
+    const rocket = new THREE.Points(rg, new THREE.PointsMaterial({ color: '#ffe9b0', size: 1.4, sizeAttenuation: false, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 })); rocket.frustumCulled = false; rocket.renderOrder = -5; rocket.visible = false; ctx.skyScene.add(rocket);
+    bursts.push({ pts, mat, rocket, rp, rg, busy: false, t: 0, phase: 0, x0: 0, x1: 0, y1: 0, delay: 0, power: 1, pan: 0 });
+  }
+  let queue = [], wait = 6 + rnd() * 10, glow = 0; const glowCol = new THREE.Color();
+  const launch = (delay, big) => {
+    const b = bursts.find((q) => !q.busy); if (!b) return false;
+    b.busy = true; b.phase = delay > 0 ? -1 : 0; b.delay = delay; b.t = 0; b.x1 = (rnd() * 2 - 1) * 62; b.x0 = b.x1 + (rnd() - 0.5) * 18; b.y1 = 34 + rnd() * 36; b.power = big ? 1.25 : 0.8 + rnd() * 0.5; b.pan = b.x1 / 70;
+    const p = FW_COLS[(rnd() * FW_COLS.length) | 0]; b.mat.uniforms.uC1.value.copy(p[0]); b.mat.uniforms.uC2.value.copy(p[1]); b.mat.uniforms.uSpd.value = 15 * b.power; b.mat.uniforms.uSize.value = ctx.low ? 1.1 : 0.85; b.mat.uniforms.uLife.value = 2.0 + rnd() * 0.8; return true;
+  };
+  const show = (peak) => { const n = 3 + Math.floor(rnd() * 4 + peak * 8); let t = 0; for (let i = 0; i < n; i++) { t += 0.35 + rnd() * 1.0; queue.push({ at: t, big: false }); } if (peak > 0.5) { for (let i = 0; i < 5; i++) queue.push({ at: t + 1.2 + i * 0.18, big: true }); } };   // (a finale of bigger bursts together on the day itself)
+  let clock = 0;
+  return {
+    go(name) { if (name && name !== 'fireworks') return; show(0.4); },
+    update(dt, s) {
+      clock += dt;
+      const clear = s.night > 0.55 && !s.hide && !(s.weather && (s.weather.rain > 0.2 || s.weather.storm > 0.1 || s.weather.cloud > 0.92));
+      if (clear) { wait -= dt * (0.8 + 1.8 * s.peak); if (wait <= 0) { wait = 28 + rnd() * 50; show(s.peak); } }
+      for (const q of queue) q.at -= dt; while (queue.length && queue[0].at <= 0) { const q = queue.shift(); launch(0, q.big); }
+      for (const b of bursts) {
+        if (!b.busy) continue; b.t += dt;
+        if (b.phase === 0) {                                    // the rocket climbs
+          const dur = 0.85, u = Math.min(1, b.t / dur);
+          for (let i = 0; i < 10; i++) { const w = Math.max(0, u - i * 0.018), e = 1 - Math.pow(1 - w, 2); b.rp[i * 3] = b.x0 + (b.x1 - b.x0) * e; b.rp[i * 3 + 1] = -8 + (b.y1 + 8) * e; b.rp[i * 3 + 2] = -105; }
+          b.rg.attributes.position.needsUpdate = true; b.rocket.visible = true; b.rocket.material.opacity = 0.9;
+          if (b.t === dt) ctx.audio?.firework?.('launch', 0, 0.6, b.pan);
+          if (u >= 1) { b.phase = 1; b.t = 0; b.rocket.visible = false; b.pts.visible = true; b.mat.uniforms.uO.value.set(b.x1, b.y1, -105); glow = Math.max(glow, 0.9 * b.power); glowCol.copy(b.mat.uniforms.uC1.value); ctx.audio?.firework?.('boom', 0.35 + Math.random() * 0.5, b.power, b.pan); }
+        } else {
+          b.mat.uniforms.uT.value = b.t; if (b.t > b.mat.uniforms.uLife.value + 0.2) { b.busy = false; b.pts.visible = false; }
+        }
+      }
+      glow = Math.max(0, glow - dt * 1.8); ctx.world.setAurora(glow > 0.01 && !s.hide && !ctx.auroraBusy?.() ? glowCol : null, glow * 0.22);
+    },
+    dispose() { for (const b of bursts) { ctx.skyScene.remove(b.pts); ctx.skyScene.remove(b.rocket); b.mat.dispose(); b.rg.dispose(); b.rocket.material.dispose(); } geo.dispose(); ctx.world.setAurora(null, 0); },
+  };
+}
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta] };
+const BUILDERS = { christmas: [makeChristmas, makeSanta], newyear: [makeFireworks], july4: [makeFireworks] };
 export function createSeasonFx({ scene, skyScene, world, audio, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
   const ctx = { scene, skyScene, world, audio, low, reduceMotion };

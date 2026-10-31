@@ -1,20 +1,20 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031102106';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031102106';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031102513';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031102513';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031102106';
-import { createSeasons } from './seasons.js?v=20261031102106';
-import { createSeasonFx } from './seasonfx.js?v=20261031102106';
-import { createWeather } from './weather.js?v=20261031102106';
-import { PAL } from './palette.js?v=20261031102106';
-import { buildWorld } from './world.js?v=20261031102106';
-import { createSky } from './sky.js?v=20261031102106';
-import { createDOF } from './dof.js?v=20261031102106';
-import { createRide } from './ride.js?v=20261031102106';
-import { createGame } from './bikegame.js?v=20261031102106';
-import { createAurora, setWarm } from './aurora.js?v=20261031102106';
-import { createAudio, pickFlicker } from './audio.js?v=20261031102106';
+import { createPrecip } from './precip.js?v=20261031102513';
+import { createSeasons } from './seasons.js?v=20261031102513';
+import { createSeasonFx } from './seasonfx.js?v=20261031102513';
+import { createWeather } from './weather.js?v=20261031102513';
+import { PAL } from './palette.js?v=20261031102513';
+import { buildWorld } from './world.js?v=20261031102513';
+import { createSky } from './sky.js?v=20261031102513';
+import { createDOF } from './dof.js?v=20261031102513';
+import { createRide } from './ride.js?v=20261031102513';
+import { createGame } from './bikegame.js?v=20261031102513';
+import { createAurora, setWarm } from './aurora.js?v=20261031102513';
+import { createAudio, pickFlicker } from './audio.js?v=20261031102513';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -614,7 +614,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031102106');
+        const mod = await import('./golf.js?v=20261031102513');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -1006,7 +1006,7 @@ function start() {
 
     { const inGame = !!(game?.active || golf?.active) && !(game?.leaving || golf?.leaving), tk = inGame ? 0 : 1; wxMoving = Math.abs(wxK - tk) > 0.002; wxK += (tk - wxK) * (1 - Math.exp(-dt * (inGame ? 2.4 : 1.15))); if (!wxMoving) wxK = tk;
       let sig = 0, n = 1; for (const k in wxEff) { wxEff[k] = weather.state[k] * wxK; sig += wxEff[k] * n++; } wxEff.wind = 0.12 + (weather.state.wind - 0.12) * wxK; wxDirty = Math.abs(sig - wxSig) > 1e-4; wxSig = sig; }          // (wxDirty: the weather changed since the last frame)
-    seasons.tick(dt); { const inGame = !!(game?.active || golf?.active) && !(game?.leaving || golf?.leaving); seasonFx.update(dt, { active: seasons.active, night: nightK, hide: inGame, fade: wxK, px: canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360)) }); }
+    seasons.tick(dt); { const inGame = !!(game?.active || golf?.active) && !(game?.leaving || golf?.leaving); seasonFx.update(dt, { active: seasons.active, night: nightK, hide: inGame, fade: wxK, weather: weather.state, px: canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360)) }); }
     weather.tick(dt); weather.update(dt, () => { if (weather.quiet) audio.thunder(2 + Math.random() * 4, 0.35); else if (!reduceMotion) audio.thunder(1 + Math.random() * 4, 0.7 + Math.random() * 0.4); else audio.thunder(2 + Math.random() * 4, 0.6); }); { const inGame = !!(game?.active || golf?.active); weather.quiet = inGame; precip.update(dt, camera, weather.state, false, canvas.height, reduceMotion, lowEnd ? wxK : 0.5 + 0.5 * wxK); }          // (in the games: half the rain and snow, and none at all on a weak machine) if ((reduceMotion || dragging) && (weather.busy || wxMoving || wxDirty)) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
