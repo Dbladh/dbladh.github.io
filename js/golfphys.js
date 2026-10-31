@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030201253';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030203557';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -217,6 +217,39 @@ function stepChute(b, hole, h, ev) {
     b.vx = dx2 * v; b.vz = dz2 * v; b.y = hillH(hole, b.x, b.z) + C.exitH; b.air = true; b.vy = 0.3; b.ly = 0; b.chute = null; b.over = true; b.tcool = 0.3; ev.fx = 12;
   }
 }
+/**
+ * The ball over the cup, in three dimensions (the cup is a real hole, not a circle on the ground). The ball is a sphere of radius BALL_R whose centre is at height `cy` above the green; the hole is a cylinder of radius `cr`
+ * with a thin rim at ground level. Where the ball overlaps the rim circle the rim pushes it away along the line from the rim to the ball's centre (so a ball that is only partly over the edge is pushed in or out and spun
+ * round the rim); with its centre past the edge it has nothing under it and falls; below the rim the wall of the cylinder keeps it in. A ball that falls past the rim level is holed; one that crosses too fast drops too
+ * little before the far rim and is knocked across or out. Returns true while the ball is in this state.
+ */
+function cupStep(b, hole, cr, h, H0, ev) {
+  const cx = hole.cup.x, cz = hole.cup.z, R = BALL_R;
+  if (!b.cm) { b.cm = true; b.cy = b.y - H0 + R; b.cvy = Math.max(-6, Math.min(6, b.vy || 0)); }
+  b.cvy -= GA * h; b.cy += b.cvy * h;
+  let dx = b.x - cx, dz = b.z - cz, d = Math.sqrt(dx * dx + dz * dz) || 1e-6, ux = dx / d, uz = dz / d;
+  if (d >= cr) { if (b.cy < R) { b.cy = R; if (b.cvy < 0) b.cvy = 0; } }                 // (on the green again)
+  else {
+    for (let it = 0; it < 2; it++) {
+      dx = b.x - cx; dz = b.z - cz; d = Math.sqrt(dx * dx + dz * dz) || 1e-6; ux = dx / d; uz = dz / d;
+      const gx = d - cr, dist = Math.sqrt(gx * gx + b.cy * b.cy) || 1e-6;
+      if (b.cy > 0 && dist < R) {                                                       // (resting on the rim)
+        const nr = gx / dist, ny = b.cy / dist, pen = R - dist; b.x += ux * nr * pen; b.z += uz * nr * pen; b.cy += ny * pen;
+        const vr = b.vx * ux + b.vz * uz, vn = vr * nr + b.cvy * ny;
+        if (vn < 0) { const j = -(1 + 0.3) * vn; b.vx += j * nr * ux; b.vz += j * nr * uz; b.cvy += j * ny; }
+      }
+    }
+    dx = b.x - cx; dz = b.z - cz; d = Math.sqrt(dx * dx + dz * dz) || 1e-6; ux = dx / d; uz = dz / d;
+    if (b.cy <= 0 && d > cr - R) {                                                      // (below the rim: the wall of the hole)
+      b.x = cx + ux * (cr - R); b.z = cz + uz * (cr - R); const vr = b.vx * ux + b.vz * uz; if (vr > 0) { b.vx -= 1.4 * vr * ux; b.vz -= 1.4 * vr * uz; }
+    }
+    if (b.cy < -0.1 && d < cr - R * 0.3) { b.capX = b.x; b.capZ = b.z; b.holed = true; ev.holed = true; b.x = cx; b.z = cz; b.vx = b.vz = 0; b.cm = false; b.y = H0 + b.cy - R; return true; }
+  }
+  b.y = H0 + b.cy - R;
+  if (d > cr + R + 0.02 && b.cy <= R + 0.02) { b.cm = false; b.y = hillH(hole, b.x, b.z); b.vy = 0; b.air = false; return false; }
+  if (d > cr + R + 0.02) { b.cm = false; b.air = true; b.vy = b.cvy; return false; }             // (knocked up and out)
+  b.air = false; b.vy = 0; return true;
+}
 export function stepBall(b, hole, ctx, dt, ev) {
   ev.wall = 0; ev.post = 0; ev.hr = 0; ev.kick = 0; ev.holed = false; ev.splash = false; ev.fx = 0; ev.fall = false;
   if (b.holed || b.sunk) return;
@@ -250,7 +283,7 @@ export function stepBall(b, hole, ctx, dt, ev) {
       continue;
     }
     // slopes, rivers, the turntable, the power-ups
-    if (!b.air) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; if (ctx.tilt && hole.tiltDir) { b.vx += hole.tiltDir.x * ctx.tilt * h; b.vz += hole.tiltDir.z * ctx.tilt * h; } }
+    if (!b.air && !(b.cm && b.cy < BALL_R - 0.02)) { const g = hillGrad(hole, b.x, b.z); b.vx -= G * g.x * h; b.vz -= G * g.z * h; if (ctx.tilt && hole.tiltDir) { b.vx += hole.tiltDir.x * ctx.tilt * h; b.vz += hole.tiltDir.z * ctx.tilt * h; } }
     const pt = b.air ? null : patchAt(hole, b);                         // (a patch of ice, mud, caramel, quicksand or a conveyor under the ball)
     if (pt) { if (pt.pull) { const cx = pt.x - b.x, cz = pt.z - b.z, cd = Math.sqrt(cx * cx + cz * cz) || 1; b.vx += (cx / cd) * pt.pull * h; b.vz += (cz / cd) * pt.pull * h; } if (pt.push) { b.vx += pt.ux * pt.push * h; b.vz += pt.uz * pt.push * h; } }
     if (hole.magnets && !b.air) for (const m of hole.magnets) { const dx = m.x - b.x, dz = m.z - b.z, d2 = dx * dx + dz * dz; if (d2 < m.r * m.r && d2 > 0.04) { const pw = magnetState(m, tt).power; if (pw <= 0) continue; const d = Math.sqrt(d2), f = 1 - d / m.r, k = (m.pull * pw * f * (0.4 + 0.6 * f) * h) / d; b.vx += dx * k; b.vz += dz * k; } }        // (a magnet pulls the ball in (or, with a negative pull, pushes it away))
@@ -263,12 +296,14 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (ctx.drive) { b.vx += b.ax * h; b.vz += b.az * h; }
     let sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (ctx.homing && sp > 0.8) { const cx = hole.cup.x - b.x, cz = hole.cup.z - b.z, cd = Math.sqrt(cx * cx + cz * cz); if (cd > 0.05 && cd < 6 && (b.vx * cx + b.vz * cz) / (sp * cd) > 0.5) { const k = (9 * (1 - cd / 6) * h) / cd; b.vx += cx * k; b.vz += cz * k; } }
-    let f = b.air ? 0 : fric; if (!b.air && inSand(hole, b)) f *= 3.2; if (pt) f *= pt.fric;
+    let f = b.air || (b.cm && b.cy < BALL_R - 0.02) ? 0 : fric; if (!b.air && inSand(hole, b)) f *= 3.2; if (pt) f *= pt.fric;
     sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (sp > 0 && f > 0) { const ns = Math.max(0, sp - f * h), k = ns / sp; b.vx *= k; b.vz *= k; sp = ns; }
     if (sp > maxV) { const k = maxV / sp; b.vx *= k; b.vz *= k; }
     b.x += b.vx * h; b.z += b.vz * h;
-    { // up and down: on the ground the ball follows the surface; if the surface falls away faster than the ball's own path it takes off, then gravity brings it down again
+    const cupOn = !ctx.capV && !ghost && hole.cup && (b.cm || (!b.air || b.y - hillH(hole, hole.cup.x, hole.cup.z) < 0.15) && dist2(b, hole.cup.x, hole.cup.z) < (ctx.cupR + BALL_R) * (ctx.cupR + BALL_R));
+    if (cupOn && cupStep(b, hole, ctx.cupR, h, hillH(hole, hole.cup.x, hole.cup.z), ev)) { if (b.holed) return; }
+    else { // up and down: on the ground the ball follows the surface; if the surface falls away faster than the ball's own path it takes off, then gravity brings it down again
       const H1 = hillH(hole, b.x, b.z);
       if (!b.air) {
         const yb = b.y + b.vy * h - 0.5 * GA * h * h;
@@ -357,10 +392,6 @@ export function stepBall(b, hole, ctx, dt, ev) {
     if (ctx.capV) {
       if (cd < cr && sp2 < ctx.capV * Math.sqrt(big)) { b.capX = b.x; b.capZ = b.z; b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
       if (cd < 1.15 * big && sp2 < 4.5 * big) { const k = 7 * (1 - cd / (1.15 * big)) * h / (cd || 1); b.vx += cx * k; b.vz += cz * k; }
-    } else if (cd < cr) {
-      const f = cd / cr, vcap = 4.0 * Math.pow(Math.max(0, 1 - f * f), 1.2) * Math.sqrt(big);
-      if (sp2 < vcap || sp2 < 0.25) { b.capX = b.x; b.capZ = b.z; b.holed = true; ev.holed = true; b.x = hole.cup.x; b.z = hole.cup.z; b.vx = b.vz = 0; return; }
-      const pull = (7 * f * h) / (cd || 1); b.vx += cx * pull; b.vz += cz * pull;
     }
   }
   const s = Math.sqrt(b.vx * b.vx + b.vz * b.vz), gg = hillGrad(hole, b.x, b.z), slope = G * Math.sqrt(gg.x * gg.x + gg.z * gg.z);

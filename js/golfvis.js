@@ -1,12 +1,12 @@
 // What the mini-golf looks like: one hole's meshes (fairway, rails, cup and flag, water, the hero obstacle, power-up orbs) and the hamster ball. All of it is built from a
 // handful of shared materials and boxes, in one group per hole that is thrown away when the hole is done. Coordinates are the hole's own (the same as golfphys.js).
 import * as THREE from 'three';
-import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030201253';
-import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030201253';
-import { golfMaterials, boxGeo } from './golfmat.js?v=20261030201253';
-import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030201253';
-import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030201253';
-import { isLow } from './golfquality.js?v=20261030201253';
+import { BALL_R, CUP_R, hillH, hillGrad, triggerBar, magnetState, inPoly } from './golfphys.js?v=20261030203557';
+import { gateBlocked, bridgeUp, mulberry32 } from './golfhero.js?v=20261030203557';
+import { golfMaterials, boxGeo } from './golfmat.js?v=20261030203557';
+import { themeOf, BRICKS, ROCKS, WOODS } from './golfthemes.js?v=20261030203557';
+import { waterMaterial, pondGeometry, riverGeometry } from './golfwater.js?v=20261030203557';
+import { isLow } from './golfquality.js?v=20261030203557';
 
 /** Round off a flat outline [x0, z0, ...] (corner cutting, each round keeps it inside the original), so sand pits and surface patches read as soft, natural shapes rather than polygons. */
 function softPoly(poly, rounds = 2) {
@@ -209,6 +209,14 @@ export function buildHoleVisual(h, { lowEnd = false, look, fx } = {}) {
     }
     p.needsUpdate = true; flGeo.computeVertexNormals();
   });
+  { let fy = 0, fv = 0;                                        // the flag pulls up out of the cup as a ball comes near, and is gone; when the ball moves away again it comes back and drops into the hole
+    updaters.push((heroT, t, dt, st) => {
+      const near = !!(st && st.flagNear), top = 3.4;
+      if (near) { fv = 0; fy += (top - fy) * Math.min(1, dt * 7) + dt * 0.8; if (fy > top) fy = top; }
+      else if (fy > 0) { fv -= 11 * dt; fy += fv * dt; if (fy <= 0) { fy = 0; fv = fv < -2 ? -fv * 0.18 : 0; } }
+      else if (fv > 0) { fv -= 11 * dt; fy += fv * dt; if (fy < 0) { fy = 0; fv = 0; } }
+      flag.position.y = fy; flag.rotation.z = Math.min(1, fy / top) * 0.14; flag.visible = fy < top - 0.02;
+    }); }
   // posts, bumpers, sand
   const overlay = (src, geo, key) => { const o = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#fff0b0', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); o.visible = false; o.renderOrder = 6; g.add(o); disposables.push(o.material); hitFlash.set(key, { o, src, k: 0 }); };      // (a lit copy of a post or bumper, exactly its own shape, shown only while it flashes)
   for (const p of h.posts) { const pm = cyl(M.post, p.r, 1.0, p.x, 0.45, p.z); g.add(pm); overlay(pm, G.cyl, `${p.x},${p.z}`); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.72, p.z)); g.add(cyl(paint('#ffd23f'), p.r * 1.04, 0.14, p.x, 0.2, p.z));
