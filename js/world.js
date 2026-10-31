@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031112142';
-import { auroraColour } from './aurora.js?v=20261031112142';
+import { PAL } from './palette.js?v=20261031112336';
+import { auroraColour } from './aurora.js?v=20261031112336';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031112142';
+} from './houses.js?v=20261031112336';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1874,11 +1874,11 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   // the same one the roofs use, so it comes and goes with the weather.
   /** Snow settles on a material's upward-facing faces (`k`: how readily: above 1 it settles on steeper faces too). */
   const TREE_SNOW = { value: 0 };
-  const TREE_AUTUMN = { value: 0 };
+  const TREE_AUTUMN = { value: 0 }, TREE_BLOOM = { value: 0 };
   const snowTop = (m, k = 1, au = 0) => {         // `au`: 1 = autumn colours for the foliage, 2 = dried grass
     m.customProgramCacheKey = () => 'snowTop' + k + 'a' + au;
     m.onBeforeCompile = (sh) => {
-      sh.uniforms.uSnow = TREE_SNOW; sh.uniforms.uAutumn = TREE_AUTUMN;
+      sh.uniforms.uSnow = TREE_SNOW; sh.uniforms.uAutumn = TREE_AUTUMN; sh.uniforms.uBloom = TREE_BLOOM;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSnowW;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           #ifdef USE_INSTANCING
@@ -1886,9 +1886,13 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
           #else
             vSnowW = (modelMatrix * vec4(transformed, 1.0)).xyz;
           #endif`);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow, uAutumn; varying vec3 vSnowW;\nfloat snH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\nfloat snN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(snH(i), snH(i + vec3(1,0,0)), f.x), mix(snH(i + vec3(0,1,0)), snH(i + vec3(1,1,0)), f.x), f.y), mix(mix(snH(i + vec3(0,0,1)), snH(i + vec3(1,0,1)), f.x), mix(snH(i + vec3(0,1,1)), snH(i + vec3(1,1,1)), f.x), f.y), f.z); }')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow, uAutumn, uBloom; varying vec3 vSnowW;\nfloat snH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\nfloat snN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(snH(i), snH(i + vec3(1,0,0)), f.x), mix(snH(i + vec3(0,1,0)), snH(i + vec3(1,1,0)), f.x), f.y), mix(mix(snH(i + vec3(0,0,1)), snH(i + vec3(1,0,1)), f.x), mix(snH(i + vec3(0,1,1)), snH(i + vec3(1,1,1)), f.x), f.y), f.z); }')
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-          ${au === 1 ? `if (uAutumn > 0.001) {
+          ${au === 1 ? `if (uBloom > 0.001) {                                                                      // (spring: some of the trees break into pink and white blossom)
+            float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), h = snH(floor(vSnowW / 5.5) + 7.0), lum = dot(diffuseColor.rgb, vec3(0.33));
+            if (h < 0.42) { vec3 bl = mix(vec3(1.0, 0.7, 0.82), vec3(1.0, 0.93, 0.95), snH(floor(vSnowW / 1.6))) * (0.75 + 0.55 * lum); diffuseColor.rgb = mix(diffuseColor.rgb, bl, m * uBloom * 0.92); }
+          }
+          if (uAutumn > 0.001) {
             float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), h = snH(floor(vSnowW / 5.5)), lum = dot(diffuseColor.rgb, vec3(0.33));
             vec3 col = h < 0.28 ? vec3(0.95, 0.72, 0.18) : h < 0.52 ? vec3(0.92, 0.42, 0.1) : h < 0.7 ? vec3(0.74, 0.16, 0.1) : vec3(0.82, 0.58, 0.16);
             vec3 au = h < 0.84 ? col * (0.5 + 1.1 * lum) : vec3(0.62, 0.66, 0.2) * (0.5 + lum);                    // (most trees turn gold, orange or red; a few only yellow)
@@ -2930,6 +2934,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     setSongDim(v) { for (const b of boards) b.songDim?.(v); cloudLook.vis = 1 - v; songK = v; },
     /** How far into autumn the land is (0..1): the grass dries out and the trees turn. */
     setAutumn(k) { terrainWx.uAutumn.value = k; TREE_AUTUMN.value = k; },
+    /** How far into blossom time the trees are (0..1): some break into pink and white. */
+    setBloom(k) { TREE_BLOOM.value = k; },
     setAurora(colour, strength) { if (colour) auroraU.value.set(colour.r, colour.g, colour.b).multiplyScalar(strength * 0.9); else auroraU.value.set(0, 0, 0); },
     /** The sign under the pointer (its id) lights up; null for none. */
     setHover(id, flick = null) {

@@ -44,9 +44,9 @@ export function seasonAt(date = new Date()) {
 export function createSeasons() {
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('season') : null;
   let mode = q && (q === 'none' || SEASONS.some((s) => s.id === q)) ? q : 'auto', list = [], t = 0; const subs = new Set();
-  const AUTUMNAL = ['harvest', 'halloween'];                                  // (every autumn holiday brings the autumn land with it: dry grass, turning trees, blowing leaves)
-  const withAutumn = (l) => { const a = l.filter((x) => AUTUMNAL.includes(x.id)); return a.length && !l.some((x) => x.id === 'autumn') ? [...l, { id: 'autumn', k: Math.max(...a.map((x) => x.k)), peak: Math.max(...a.map((x) => x.peak)) }] : l; };
-  const compute = () => { list = mode === 'none' ? [] : withAutumn(mode === 'auto' ? seasonAt(new Date()) : [{ id: mode, k: 1, peak: 0.7 }]); };
+  const DERIVED = [['autumn', ['harvest', 'halloween']], ['bloom', ['spring', 'easter', 'stpatrick']]];     // (a layer that every season of its family brings with it: the autumn land, the spring flowers and blossom)
+  const withDerived = (l) => { let out = l; for (const [id, from] of DERIVED) { const a = l.filter((x) => from.includes(x.id)); if (a.length) out = [...out, { id, k: Math.max(...a.map((x) => x.k)), peak: Math.max(...a.map((x) => x.peak)) }]; } return out; };
+  const compute = () => { list = mode === 'none' ? [] : withDerived(mode === 'auto' ? seasonAt(new Date()) : [{ id: mode, k: 1, peak: 0.7 }]); };
   compute();
   return {
     get mode() { return mode; }, get active() { return list; },

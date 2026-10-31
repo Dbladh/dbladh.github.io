@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031112142';
+import { heightAt, POND, pathX } from './world.js?v=20261031112336';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -916,17 +916,36 @@ function bunnyRig(color, bellyColor = '#f6f0e8') {
   };
   rig.pose(BPOSE.rest); return rig;
 }
+function eggTexture(i) {                                    // a painted egg: bands, zigzags, waves, dots and diamonds in pastel colours (each of the eight a different design)
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  const P = [['#f7a0b8', '#a8dcf0', '#fbe38a', '#7fcca3'], ['#7fcca3', '#fbe38a', '#a8dcf0', '#f7a0b8'], ['#fbe38a', '#a8dcf0', '#7fcca3', '#f7a0b8'], ['#fbe38a', '#7fcca3', '#a8dcf0', '#f7a0b8'], ['#f7a0b8', '#a8dcf0', '#fbe38a', '#7fcca3'], ['#a8dcf0', '#fbe38a', '#f7a0b8', '#7fcca3'], ['#c9b3f0', '#fbe38a', '#7fcca3', '#f7a0b8'], ['#ffb98a', '#a8dcf0', '#fff3b0', '#7fcca3']][i % 8], [A, B, C, D] = P;
+  const band = (y0, y1, col) => { g.fillStyle = col; g.fillRect(0, y0, S, y1 - y0); };
+  const zig = (y, amp, per, col, th, flip = 1) => { g.fillStyle = col; g.beginPath(); g.moveTo(0, y); for (let x = 0; x <= S; x += per) { g.lineTo(x + per / 2, y + amp * flip); g.lineTo(x + per, y); } g.lineTo(S, y + th * flip); for (let x = S; x >= 0; x -= per) { g.lineTo(x - per / 2, y + amp * flip + th * flip); g.lineTo(x - per, y + th * flip); } g.closePath(); g.fill(); };
+  const solidZig = (y, amp, per, col, down) => { g.fillStyle = col; g.beginPath(); g.moveTo(0, y); for (let x = 0; x <= S; x += per) { g.lineTo(x + per / 2, y + amp * (down ? 1 : -1)); g.lineTo(x + per, y); } g.lineTo(S, y + (down ? -S : S)); g.lineTo(0, y + (down ? -S : S)); g.closePath(); g.fill(); };
+  const wave = (y, amp, per, col, th) => { g.strokeStyle = col; g.lineWidth = th; g.lineCap = 'round'; g.beginPath(); for (let x = 0; x <= S; x += 4) { const yy = y + Math.sin((x / per) * 6.2832) * amp; x ? g.lineTo(x, yy) : g.moveTo(x, yy); } g.stroke(); };
+  const dots = (y, gap, rad, col, off = 0) => { g.fillStyle = col; for (let x = off; x < S; x += gap) { g.beginPath(); g.arc(x, y, rad, 0, 6.3); g.fill(); } };
+  const diamonds = (y0, y1, per, col, hole) => { for (let x = 0; x < S; x += per) { g.fillStyle = col; g.beginPath(); g.moveTo(x, (y0 + y1) / 2); g.lineTo(x + per / 2, y0); g.lineTo(x + per, (y0 + y1) / 2); g.lineTo(x + per / 2, y1); g.closePath(); g.fill(); g.fillStyle = hole; g.beginPath(); g.arc(x + per / 2, (y0 + y1) / 2, per * 0.12, 0, 6.3); g.fill(); } };
+  switch (i % 8) {
+    case 0: band(0, S, A); band(52, 76, B); band(180, 204, B); dots(128, 64, 15, C, 20); dots(128, 64, 15, C, 20 - 256); break;
+    case 1: band(0, S, A); band(30, 50, B); solidZig(70, 22, 32, C, true); band(100, 116, B); dots(150, 64, 9, D, 24); band(176, 190, B); solidZig(196, 24, 32, C, false); band(224, 256, A); break;
+    case 2: band(0, S, A); band(34, 44, C); wave(98, 14, 64, B, 22); dots(98, 64, 8, D, 32); band(150, 168, C); band(200, 210, C); break;
+    case 3: band(0, S, A); band(0, 56, C); solidZig(56, 20, 32, A, true); diamonds(80, 176, 64, B, C); diamonds(80, 176, 64, B, C); band(200, 256, C); solidZig(200, 22, 32, A, false); for (let x = 32; x < S; x += 64) { g.fillStyle = D; g.beginPath(); g.arc(x, 128, 8, 0, 6.3); g.fill(); } break;
+    case 4: band(0, S, A); wave(78, 10, 64, B, 18); wave(176, 10, 64, B, 18); dots(78, 64, 7, C, 32); dots(176, 64, 7, C, 32); dots(128, 32, 6, C, 16); break;
+    case 5: band(0, S, A); for (let k = 0; k < 4; k++) { g.fillStyle = B; const y = 30 + k * 60; g.beginPath(); g.moveTo(0, y); g.lineTo(S * 0.55, y); g.lineTo(S * 0.5, y + 12); g.lineTo(S, y + 12); g.lineTo(S, y + 28); g.lineTo(S * 0.45, y + 28); g.lineTo(S * 0.5, y + 16); g.lineTo(0, y + 16); g.closePath(); g.fill(); } break;
+    case 6: band(0, S, A); band(60, 84, B); band(172, 196, B); for (let x = 16; x < S; x += 32) { for (let k = 0; k < 5; k++) { g.fillStyle = C; g.beginPath(); g.arc(x + Math.cos(k * 1.2566) * 7, 128 + Math.sin(k * 1.2566) * 7, 4.5, 0, 6.3); g.fill(); } g.fillStyle = D; g.beginPath(); g.arc(x, 128, 4, 0, 6.3); g.fill(); } break;
+    default: band(0, S, A); zig(70, 16, 32, B, 12); zig(120, 16, 32, C, 12); zig(170, 16, 32, B, 12); dots(48, 32, 5, D, 16); dots(216, 32, 5, D, 16); break;
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+}
 function makeEasterHunt(ctx) {
   const root = new THREE.Group(), r = rng(808), EGGS = 8; ctx.scene.add(root);
   const eg = eggGeo(1), eggs = [], used = [], ox = [];
-  const bands = (c1, c2) => { const g = eg.clone(), p = g.attributes.position, col = new Float32Array(p.count * 3); const a = new THREE.Color(c1), b = new THREE.Color(c2); for (let i = 0; i < p.count; i++) { const y = p.getY(i), k = Math.sin(y * 14) > 0.35 ? 1 : 0, c = k ? b : a; col.set([c.r, c.g, c.b], i * 3); } g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g; };
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true }), houses = ctx.world.houseList(), spots = [];
+  const mats = [], houses = ctx.world.houseList(), spots = [];
   for (let tries = 0; tries < 400 && spots.length < EGGS; tries++) {
     const x = (r() - 0.5) * 66, z = -4 - r() * 44; if (Math.abs(x - pathX(z)) < 1.8 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 2 || houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 1.2) || spots.some((q) => Math.hypot(q[0] - x, q[1] - z) < 9)) continue;
     if (Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) > 0.8) continue; spots.push([x, z]);
   }
-  const pairs = [['#ff7eb6', '#fff2a8'], ['#7ec8ff', '#ffffff'], ['#9be37a', '#ffe08a'], ['#c49bff', '#ffb3d9'], ['#ffb347', '#ffffff'], ['#ff6f6f', '#ffe0a8'], ['#5fd6c4', '#fff2a8'], ['#f7e26b', '#ff9ac0']];
-  spots.forEach(([x, z], i) => { const m = new THREE.Mesh(bands(...pairs[i % pairs.length]), mat); const s = 1.04; m.scale.setScalar(s); m.position.set(x, heightAt(x, z) + 0.3 * s * 0.9, z); m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5); m.castShadow = true; root.add(m); eggs.push({ m, x, y: m.position.y, z, found: false, t: 0 }); });
+  spots.forEach(([x, z], i) => { const em = new THREE.MeshLambertMaterial({ map: eggTexture(i) }); mats.push(em); const m = new THREE.Mesh(eg, em); const s = 1.04; m.scale.setScalar(s); m.position.set(x, heightAt(x, z) + 0.3 * s * 0.9, z); m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5); m.castShadow = true; root.add(m); eggs.push({ m, x, y: m.position.y, z, found: false, t: 0 }); });
   const glint = bulbs(spots.map(([x, z]) => [x, heightAt(x, z) + 0.9, z]), PASTELS, 0.5); root.add(glint);                       // (a faint twinkle over each, so they can be found)
   // the chip: "Eggs found 2 of 8"
   const chip = document.createElement('div'); chip.className = 'egg-chip'; chip.setAttribute('aria-live', 'polite'); document.body.appendChild(chip); let found = 0, chipT = 0;
@@ -966,13 +985,49 @@ function makeEasterHunt(ctx) {
         let dy = Math.atan2(k.dx, k.dz) - k.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); k.yaw += dy * Math.min(1, dt * (k.hop >= 0 ? 10 : 3)); k.b.rotation.y = k.yaw;
       }
     },
-    dispose() { ctx.canvas?.removeEventListener('click', click); chip.remove(); ctx.scene.remove(root); eg.dispose(); mat.dispose(); glint.geometry.dispose(); },
+    dispose() { ctx.canvas?.removeEventListener('click', click); chip.remove(); ctx.scene.remove(root); eg.dispose(); for (const em of mats) { em.map.dispose(); em.dispose(); } glint.geometry.dispose(); },
     go(name) { if (name === 'eggs') say(`Eggs found: ${found} of ${total()}`, 4); },
   };
 }
 
+// ---------------------------------------------------------------- spring: flowers all over, blossom on the trees, and petals on the breeze
+const BLOOMU = { uT: { value: 0 }, uW: { value: 1 } };
+const FLOWER_COLS = ['#ff6fa8', '#ffd84a', '#ffffff', '#b48aff', '#ff8a4a', '#6ab8ff', '#ff5a5a', '#ffb3d9', '#fff2a8'].map((c) => new THREE.Color(c));
+const swayFlower = (m) => { m.onBeforeCompile = (sh) => { sh.uniforms.uT = BLOOMU.uT; sh.uniforms.uW = BLOOMU.uW; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uT, uW;').replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef USE_INSTANCING\n transformed.x += sin(uT * 1.7 + instanceMatrix[3].x * 0.7 + instanceMatrix[3].z * 0.5) * 0.07 * max(0.0, transformed.y) * uW; transformed.z += cos(uT * 1.3 + instanceMatrix[3].z * 0.6) * 0.05 * max(0.0, transformed.y) * uW;\n#endif'); }; m.customProgramCacheKey = () => 'flower'; return m; };
+function makeBloom(ctx) {
+  const root = new THREE.Group(), r = rng(2024); ctx.scene.add(root);
+  const houses = ctx.world.houseList(), spots = [];
+  const ok = (x, z) => Math.abs(x - pathX(z)) > 1.1 && Math.hypot(x - POND.x, z - POND.z) > POND.r + 1.2 && !houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 0.6) && Math.abs(heightAt(x + 0.8, z) - heightAt(x - 0.8, z)) < 1.2;
+  const patches = ctx.low ? 22 : 52;
+  for (let p = 0; p < patches; p++) {
+    const cx = (r() - 0.5) * 120, cz = -2 - r() * 70, rad = 2.2 + r() * 3.6, n = ctx.low ? 14 : 30, cols = [Math.floor(r() * FLOWER_COLS.length), Math.floor(r() * FLOWER_COLS.length)];
+    for (let i = 0; i < n; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * rad, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; if (ok(x, z)) spots.push([x, z, FLOWER_COLS[cols[r() < 0.7 ? 0 : 1]], 0.8 + r() * 0.8]); }
+  }
+  for (let i = 0; i < (ctx.low ? 120 : 360); i++) { const x = (r() - 0.5) * 120, z = -2 - r() * 70; if (ok(x, z)) spots.push([x, z, FLOWER_COLS[Math.floor(r() * FLOWER_COLS.length)], 0.7 + r() * 0.7]); }
+  const N = spots.length, stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.014, 0.02, 0.62, 4).translate(0, 0.31, 0), swayFlower(new THREE.MeshLambertMaterial({ color: '#4f9a3f' })), N);
+  const pet = new THREE.SphereGeometry(0.09, 6, 4); pet.scale(1, 0.35, 1.5); const parts = []; for (let k = 0; k < 5; k++) { const g = pet.clone(); g.translate(0, 0, 0.1); g.rotateY((k / 5) * 6.2832); parts.push(g); }
+  const heads = new THREE.InstancedMesh(mergeGeos(parts).translate(0, 0.64, 0), swayFlower(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide })), N), cores = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 6, 5).translate(0, 0.66, 0), swayFlower(new THREE.MeshLambertMaterial({ color: '#f4c430', emissive: '#4a3a00' })), N);
+  const dm = new THREE.Object3D(), cc = new THREE.Color(); let built = -1;
+  spots.forEach((p, i) => heads.setColorAt(i, cc.copy(p[2]).lerp(new THREE.Color('#ffffff'), r() * 0.15)));
+  function layout(k) {
+    spots.forEach(([x, z, , sz], i) => { dm.position.set(x, heightAt(x, z) - 0.02, z); dm.rotation.set((r() - 0.5) * 0.12, (i * 2.399) % 6.28, (r() - 0.5) * 0.12); dm.scale.set(sz * k * 1.7, sz * (0.8 + 0.4 * ((i * 7) % 5) / 5) * k * 1.7, sz * k * 1.7); dm.updateMatrix(); stems.setMatrixAt(i, dm.matrix); heads.setMatrixAt(i, dm.matrix); cores.setMatrixAt(i, dm.matrix); });
+    for (const m of [stems, heads, cores]) m.instanceMatrix.needsUpdate = true; if (heads.instanceColor) heads.instanceColor.needsUpdate = true;
+  }
+  root.add(stems, heads, cores); let kSm = 0, clock = 0;
+  return {
+    update(dt, s) {
+      const h = s.active.find((a) => a.id === 'bloom'), k = h ? h.k : 0; kSm += (k - kSm) * (1 - Math.exp(-dt * 1.2)); clock += dt; root.visible = !s.hide;
+      const kb = Math.round(kSm * 10) / 10; if (kb !== built) { built = kb; layout(Math.max(0.001, kb)); }
+      BLOOMU.uT.value = clock; BLOOMU.uW.value = (ctx.reduceMotion ? 0 : 1) * (0.5 + 2 * (s.weather ? s.weather.wind : 0.12)); ctx.world.setBloom(kSm * (s.hide ? 0 : 1));
+    },
+    dispose() { ctx.world.setBloom(0); ctx.scene.remove(root); stems.geometry.dispose(); heads.geometry.dispose(); cores.geometry.dispose(); stems.material.dispose(); heads.material.dispose(); cores.material.dispose(); stems.dispose(); heads.dispose(); cores.dispose(); },
+    root,
+  };
+}
+const makeBloomDrift = driftModule({ shape: 2, cols: ['#ffc9dd', '#ffffff', '#ffb3d0', '#ffe3ee'].map((c) => new THREE.Color(c)), n: 120, size: 0.45 });
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], valentine: [makeValHouses, makeValDrift, makeValBoards], stpatrick: [makeStpHouses, makeStpDrift, makeStpLand, makeStpBoards], easter: [makeEasterHouses, makeEasterDrift, makeEasterBoards, makeEasterHunt], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], bloom: [makeBloom, makeBloomDrift], valentine: [makeValHouses, makeValDrift, makeValBoards], stpatrick: [makeStpHouses, makeStpDrift, makeStpLand, makeStpBoards], easter: [makeEasterHouses, makeEasterBoards, makeEasterHunt], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
 export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
   const ctx = { scene, skyScene, world, audio, sky, camera, canvas, onLightning, low, reduceMotion };
