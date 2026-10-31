@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031002730';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031002730';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261031003010';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261031003010';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261031002730';
-import { createWeather } from './weather.js?v=20261031002730';
-import { PAL } from './palette.js?v=20261031002730';
-import { buildWorld } from './world.js?v=20261031002730';
-import { createSky } from './sky.js?v=20261031002730';
-import { createDOF } from './dof.js?v=20261031002730';
-import { createRide } from './ride.js?v=20261031002730';
-import { createGame } from './bikegame.js?v=20261031002730';
-import { createAurora, setWarm } from './aurora.js?v=20261031002730';
-import { createAudio, pickFlicker } from './audio.js?v=20261031002730';
+import { createPrecip } from './precip.js?v=20261031003010';
+import { createWeather } from './weather.js?v=20261031003010';
+import { PAL } from './palette.js?v=20261031003010';
+import { buildWorld } from './world.js?v=20261031003010';
+import { createSky } from './sky.js?v=20261031003010';
+import { createDOF } from './dof.js?v=20261031003010';
+import { createRide } from './ride.js?v=20261031003010';
+import { createGame } from './bikegame.js?v=20261031003010';
+import { createAurora, setWarm } from './aurora.js?v=20261031003010';
+import { createAudio, pickFlicker } from './audio.js?v=20261031003010';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -610,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261031002730');
+        const mod = await import('./golf.js?v=20261031003010');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -942,6 +942,16 @@ function start() {
     try { await dof.compileAsync(scene, camera); world.lightsSleep(true); await dof.compileAsync(scene, camera); } catch (e) { lightsWarm = false; }
   };
   window.__prewarmLights = prewarmLights;
+  // The weather's shaders (rain, snow, leaves, mist, the rainbow, the overcast lid) are compiled in the background too: a shader that is first drawn when the weather changes would stall the scene for a moment while it compiles.
+  let weatherWarm = false;
+  const prewarmWeather = async () => {
+    if (weatherWarm) return; weatherWarm = true;
+    precip.warm(true); world.warmMist(true); sky.warm(true);
+    try { await (dof?.compileAsync ? dof.compileAsync(scene, camera) : renderer.compileAsync?.(scene, camera)); await skyRenderer.compileAsync?.(skyScene, camera); } catch (e) { /* it compiles on first use instead */ }
+    finally { precip.warm(false); world.warmMist(false); sky.warm(false); }
+  };
+  window.__prewarmWeather = prewarmWeather;
+  setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => prewarmWeather(), { timeout: 6000 }) : prewarmWeather()), 5200);
   if (game) setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => { dof?.warm(); game.warmUp(); idleReady = true; prewarmLights(); }, { timeout: 4000 }) : (dof?.warm(), game.warmUp(), idleReady = true, prewarmLights())), 3500);
 
   // ---- Render loop ----

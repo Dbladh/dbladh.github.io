@@ -56,6 +56,8 @@ export function createPrecip({ low = false } = {}) {
   let t = 0;
   return {
     group,
+    /** Show everything for a moment so the renderer compiles every shader ahead of time (the weather's first rain or snow then does not stall a frame). */
+    warm(on) { group.visible = on; rain.visible = snow.visible = leaves.visible = on; },
     /** Move the box to the camera and set how much of each is falling. `hide` switches both off (the games, simple view). */
     update(dt, camera, wx, hide, pxH, calm = false, scale = 1) {
       const r = hide ? 0 : wx.rain * scale, s = hide ? 0 : wx.snow * scale, lf = hide ? 0 : Math.max(0, (wx.wind - 0.3) / 0.7) * (1 - 0.6 * Math.max(r, s)) * scale; group.visible = r > 0.01 || s > 0.01 || lf > 0.01; if (!group.visible) return;

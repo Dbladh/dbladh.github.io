@@ -374,5 +374,7 @@ export function createSky(scene, skyScene, renderer, { classic = false } = {}) {
   const setRes = (n) => { if (sunLight.shadow.mapSize.x === n) return; sunLight.shadow.mapSize.set(n, n); sunLight.shadow.map?.dispose(); sunLight.shadow.map = null; };           // (a new size needs a new shadow map)
   const shadowBox = (x, y, z, half, res = 2048) => { setRes(res); sunLight.target.position.set(x, y, z); sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.updateProjectionMatrix(); sunLight.shadow.normalBias = 0.025; };
   const shadowReset = () => { setRes(2048); sunLight.target.position.set(0, 0, -38); sc.left = -100; sc.right = 100; sc.top = 100; sc.bottom = -100; sc.updateProjectionMatrix(); sunLight.shadow.normalBias = 0.06; };
-  return { set, get fogK() { return fogK; }, setHint, setHover, setOrbitAlpha, setView, orbitPoint, shadowBox, shadowReset, setLampKey, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
+  /** Show the rainbow and the overcast lid for a moment (at zero strength) so their shaders are compiled ahead of time. */
+  const warm = (on) => { bow.visible = on; deck.visible = on; };
+  return { set, warm, get fogK() { return fogK; }, setHint, setHover, setOrbitAlpha, setView, orbitPoint, shadowBox, shadowReset, setLampKey, bodies: { sun: sunMesh, moon: moonMesh }, lights: { hemi, moon: moonLight, rim: rimLight, fog } };
 }
