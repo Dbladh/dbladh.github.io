@@ -1,7 +1,7 @@
 // The trail a rolling ball leaves on the ground: a ribbon along its path that fades away. On snow it is a groove that stays (a dark blue-grey line pressed into the snow with pale heaped edges); on sand a
 // shallow furrow; on grass a faint flattened streak that is gone in a couple of seconds. One ribbon per hole, a few hundred points; the points sit on the ground (golfphys.js hillH).
 import * as THREE from 'three';
-import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261030222355';
+import { hillH, patchAt, inSand, inPoly, onTrigger, CUP_R } from './golfphys.js?v=20261030222613';
 
 const MAXP = 700;
 /** How the ball marks each kind of ground (`ground` in golfthemes.js): groove colour, edge colour, strength, width, how long it lasts (s). */
@@ -62,8 +62,8 @@ export function createTrail() {
       for (let i = 0; i < n; i++) rs[i] = i === 0 || pts[i].brk ? i : rs[i - 1];
       for (let i = n - 1; i >= 0; i--) re[i] = i === n - 1 || pts[i + 1].brk ? i : re[i + 1];
       for (let i = 0; i < n; i++) {
-        const p = pts[i], fade = Math.max(0, 1 - p.age / style.life), tk = Math.min(i - rs[i], re[i] - i) / 9, taper = tk <= 0 ? 0 : tk >= 1 ? 1 : tk * tk * (3 - 2 * tk), sf = Math.min(1, p.sp / 2.5), am = style.a * Math.pow(fade, 0.7) * (0.35 + 0.65 * sf) * (style.life > 100 ? 1 : 1), ae = style.ea * Math.pow(fade, 0.7) * (0.35 + 0.65 * sf);
-        const w = style.w * (0.55 + 0.45 * sf) * (style.life > 100 ? 1 : 0.9 + 0.1 * fade);
+        const p = pts[i], fade = Math.max(0, 1 - p.age / style.life), tk = Math.min(i - rs[i], re[i] - i) / 9, taper = tk <= 0 ? 0 : tk >= 1 ? 1 : tk * tk * (3 - 2 * tk), sf = Math.min(1, p.sp / 9), am = style.a * Math.pow(fade, 0.7) * (0.3 + 1.0 * sf), ae = style.ea * Math.pow(fade, 0.7) * (0.3 + 1.0 * sf);          // (a slow ball leaves a faint mark, a fast one a strong one)
+        const w = style.w * (0.7 + 0.6 * sf) * (style.life > 100 ? 1 : 0.9 + 0.1 * fade);
         const y = hillH(hole, p.x, p.z) + style.lift;
         for (let c = 0; c < 3; c++) {
           const off = c === 1 ? 0 : (c === 0 ? 1 : -1) * (w * 0.5 + (style.ea ? w * 0.35 : 0)), k = i * 3 + c, o = k * 3, q = k * 4;
