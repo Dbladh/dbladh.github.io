@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261031111247';
-import { auroraColour } from './aurora.js?v=20261031111247';
+import { PAL } from './palette.js?v=20261031111646';
+import { auroraColour } from './aurora.js?v=20261031111646';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261031111247';
+} from './houses.js?v=20261031111646';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -735,6 +735,10 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     float lm2 = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)), pv = csF(vCWPos.xz * 0.09 + 3.0);
     vec3 dry = lm2 * mix(vec3(1.55, 1.15, 0.55), vec3(1.3, 0.92, 0.5), pv) + vec3(0.03, 0.02, 0.0);
     diffuseColor.rgb = mix(diffuseColor.rgb, dry, grassy * uAutumn * (0.6 + 0.32 * pv));
+  }
+  if (uAutumn < -0.001) {                                                                                          // (a negative amount: the grass turns a deep, rich green instead (St Patrick's))
+    float lm3 = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15));
+    diffuseColor.rgb = mix(diffuseColor.rgb, lm3 * vec3(0.55, 1.45, 0.62), grassy * -uAutumn * 0.75);
   }
   diffuseColor.rgb *= 1.0 - 0.24 * uWet;                                                                       // (rain: the ground darkens)
   { float lm = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lm) * 0.96, 0.4 * uDull); }          // (an overcast day: the colours of the land go flatter and greyer)
@@ -1889,7 +1893,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
             vec3 col = h < 0.28 ? vec3(0.95, 0.72, 0.18) : h < 0.52 ? vec3(0.92, 0.42, 0.1) : h < 0.7 ? vec3(0.74, 0.16, 0.1) : vec3(0.82, 0.58, 0.16);
             vec3 au = h < 0.84 ? col * (0.5 + 1.1 * lum) : vec3(0.62, 0.66, 0.2) * (0.5 + lum);                    // (most trees turn gold, orange or red; a few only yellow)
             diffuseColor.rgb = mix(diffuseColor.rgb, au, m * uAutumn);
-          }` : au === 2 ? `if (uAutumn > 0.001) { float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), lum = dot(diffuseColor.rgb, vec3(0.33)); diffuseColor.rgb = mix(diffuseColor.rgb, lum * vec3(1.7, 1.2, 0.55), m * uAutumn * 0.85); }` : ''}
+          }` : au === 2 ? `if (uAutumn > 0.001) { float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), lum = dot(diffuseColor.rgb, vec3(0.33)); diffuseColor.rgb = mix(diffuseColor.rgb, lum * vec3(1.7, 1.2, 0.55), m * uAutumn * 0.85); } if (uAutumn < -0.001) { float m = smoothstep(0.0, 0.07, diffuseColor.g - max(diffuseColor.r, diffuseColor.b)), lum = dot(diffuseColor.rgb, vec3(0.33)); diffuseColor.rgb = mix(diffuseColor.rgb, lum * vec3(0.6, 1.45, 0.65), m * -uAutumn * 0.75); }` : ''}
           if (uSnow > 0.01) {
             float upT = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)), sn = snN(vSnowW * 1.3) * 0.65 + snN(vSnowW * 3.7) * 0.35;
             float thr = mix(0.95, 0.22, uSnow) - ${(k - 1).toFixed(2)} * 0.3 * uSnow, cv = smoothstep(thr, thr + 0.14, upT + (sn - 0.5) * 0.32);

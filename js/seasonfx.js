@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031111247';
+import { heightAt, POND, pathX } from './world.js?v=20261031111646';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -24,32 +24,34 @@ const lam = (hex, extra = {}) => new THREE.MeshLambertMaterial({ color: hex, ...
 const disposeTree = (o) => o.traverse((c) => { if (c.geometry) c.geometry.dispose(); });
 const swag = (x0, x1, y, z, dip, n) => { const out = []; for (let i = 0; i <= n; i++) { const u = i / n; out.push([x0 + (x1 - x0) * u, y - dip * Math.sin(Math.PI * u), z]); } return out; };
 
+// the edges of a roof as polylines (the eaves, the sloping edges of each gable end, the hips of a hip roof) and evenly spaced points along one
+const polylines = (r) => {
+  const c = Math.cos(r.yaw), sn = Math.sin(r.yaw), T = (x, y, z) => [r.cx + x * c + z * sn, r.base + y, r.cz - x * sn + z * c], out = [];
+  if (r.type === 'gable') {
+    const e = r.ends || [r.ov, r.ov], L = r.len + e[0] + e[1], sh = (e[1] - e[0]) / 2, half = r.span / 2 + r.ov, x0 = sh - L / 2 - 0.05, x1 = sh + L / 2 + 0.05, yE = 0.1, yR = r.rh + 0.14;
+    out.push([T(x0, yE, half + 0.04), T(x1, yE, half + 0.04)], [T(x0, yE, -half - 0.04), T(x1, yE, -half - 0.04)]);
+    for (const x of [x0, x1]) out.push([T(x, yE, half + 0.04), T(x, yR, 0), T(x, yE, -half - 0.04)]);
+  } else {
+    const ex = r.len / 2 + r.ov + 0.04, ez = r.span / 2 + r.ov + 0.04, rx = Math.max(0.05, r.len / 2 - r.span / 2), yE = 0.08, yR = r.rh + 0.1;
+    const A = T(-ex, yE, -ez), B = T(ex, yE, -ez), C = T(ex, yE, ez), D = T(-ex, yE, ez), R1 = T(-rx, yR, 0), R2 = T(rx, yR, 0);
+    out.push([A, B, C, D, A], [A, R1], [D, R1], [B, R2], [C, R2]);
+  }
+  return out;
+};
+const along = (line, gap) => {                                  // bulbs spaced evenly along a polyline
+  const pts = []; let carry = 0;
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = line[i], b = line[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); let d = i === 0 ? 0 : carry;
+    for (; d <= l + 1e-6; d += gap) { const u = l ? d / l : 0; pts.push([a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u]); }
+    carry = d - l;
+  }
+  return pts;
+};
+
 // ---------------------------------------------------------------- Christmas
 function makeChristmas(ctx) {
   const root = new THREE.Group(), houseStrings = [], boardSets = new Map(); ctx.scene.add(root);
   // lights along the edges of every roof, following its pitch: the eaves, the sloping edges of each gable end, and the hips of a hip roof
-  const polylines = (r) => {
-    const c = Math.cos(r.yaw), sn = Math.sin(r.yaw), T = (x, y, z) => [r.cx + x * c + z * sn, r.base + y, r.cz - x * sn + z * c], out = [];
-    if (r.type === 'gable') {
-      const e = r.ends || [r.ov, r.ov], L = r.len + e[0] + e[1], sh = (e[1] - e[0]) / 2, half = r.span / 2 + r.ov, x0 = sh - L / 2 - 0.05, x1 = sh + L / 2 + 0.05, yE = 0.1, yR = r.rh + 0.14;
-      out.push([T(x0, yE, half + 0.04), T(x1, yE, half + 0.04)], [T(x0, yE, -half - 0.04), T(x1, yE, -half - 0.04)]);
-      for (const x of [x0, x1]) out.push([T(x, yE, half + 0.04), T(x, yR, 0), T(x, yE, -half - 0.04)]);
-    } else {
-      const ex = r.len / 2 + r.ov + 0.04, ez = r.span / 2 + r.ov + 0.04, rx = Math.max(0.05, r.len / 2 - r.span / 2), yE = 0.08, yR = r.rh + 0.1;
-      const A = T(-ex, yE, -ez), B = T(ex, yE, -ez), C = T(ex, yE, ez), D = T(-ex, yE, ez), R1 = T(-rx, yR, 0), R2 = T(rx, yR, 0);
-      out.push([A, B, C, D, A], [A, R1], [D, R1], [B, R2], [C, R2]);
-    }
-    return out;
-  };
-  const along = (line, gap) => {                                  // bulbs spaced evenly along a polyline
-    const pts = []; let carry = 0;
-    for (let i = 0; i < line.length - 1; i++) {
-      const a = line[i], b = line[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); let d = i === 0 ? 0 : carry;
-      for (; d <= l + 1e-6; d += gap) { const u = l ? d / l : 0; pts.push([a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u]); }
-      carry = d - l;
-    }
-    return pts;
-  };
   for (const h of ctx.world.houseList()) {
     if (!h.group || !h.roofs || !h.roofs.length) continue;
     const pts = []; for (const r of h.roofs) { if (r.len < 1.8) continue; for (const line of polylines(r)) pts.push(...along(line, ctx.low ? 0.8 : 0.45)); }
@@ -738,11 +740,166 @@ function makeGeese(ctx) {
   };
 }
 
+// ---------------------------------------------------------------- shared bits for the spring holidays
+const heartShape = () => { const sh = new THREE.Shape(); sh.moveTo(0, 0.35); sh.bezierCurveTo(0, 0.55, -0.35, 0.6, -0.5, 0.4); sh.bezierCurveTo(-0.7, 0.1, -0.4, -0.3, 0, -0.6); sh.bezierCurveTo(0.4, -0.3, 0.7, 0.1, 0.5, 0.4); sh.bezierCurveTo(0.35, 0.6, 0, 0.55, 0, 0.35); return sh; };
+const heartGeo = (depth = 0.12) => { const g = new THREE.ExtrudeGeometry(heartShape(), { depth, bevelEnabled: false }); g.translate(0, 0, -depth / 2); return g; };
+function mergeGeos(list) {                                                // (a few simple pieces joined into one geometry)
+  const pos = []; for (const g of list) { const n = g.index ? g.toNonIndexed() : g; pos.push(...n.attributes.position.array); }
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.computeVertexNormals(); return out;
+}
+const shamrockGeo = () => { const parts = []; for (const [x, y] of [[0, 0.32], [-0.3, -0.1], [0.3, -0.1]]) { const c = new THREE.CircleGeometry(0.34, 10); c.translate(x, y, 0); parts.push(c); } const st = new THREE.PlaneGeometry(0.07, 0.8); st.rotateZ(-0.15); st.translate(0.05, -0.55, 0); parts.push(st); return mergeGeos(parts); };
+const eggGeo = (s = 1) => { const g = new THREE.SphereGeometry(0.5 * s, 10, 8); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setY(i, y * 1.28); const k = 1 - 0.18 * Math.max(0, y / (0.5 * s)); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); } g.computeVertexNormals(); return g; };
+const PINKS = ['#ff6fa8', '#ff3b6b', '#ffd1e1', '#ff9ac0', '#e83a62'].map((c) => new THREE.Color(c)), GREENS_ = ['#3fdc6a', '#ffd84a', '#ffffff', '#2fb85a'].map((c) => new THREE.Color(c)), PASTELS = ['#ffb3d9', '#b3e0ff', '#fff2a8', '#c9f2b8', '#e0c4ff', '#ffc9a8'].map((c) => new THREE.Color(c));
+// a string of lights along every roof (Christmas does the same, in its own colours)
+function houseLights(ctx, palette, size = 0.26) {
+  const strings = [];
+  for (const h of ctx.world.houseList()) {
+    if (!h.group || !h.roofs || !h.roofs.length) continue; const pts = [];
+    for (const r of h.roofs) { if (r.len < 1.8) continue; for (const line of polylines(r)) pts.push(...along(line, ctx.low ? 0.8 : 0.5)); }
+    if (!pts.length) continue; const o = bulbs(pts, palette, size); h.group.add(o); strings.push([h.group, o]);
+  }
+  return { dispose() { for (const [g, o] of strings) { g.remove(o); o.geometry.dispose(); } } };
+}
+// small shapes drifting in the air through the camera's box: hearts floating up, shamrocks and petals tumbling down
+function drift(ctx, { shape, cols, n = 150, rise = 0, size = 0.5, wind = 1 }) {
+  const root = new THREE.Group(), N = ctx.low ? Math.round(n * 0.4) : n, seeds = new Float32Array(N * 4), cc = new Float32Array(N * 3), r = rng(shape * 31 + 5); ctx.scene.add(root);
+  for (let i = 0; i < N; i++) { seeds.set([r(), r(), r(), r()], i * 4); const c = cols[Math.floor(r() * cols.length)]; cc.set([c.r, c.g, c.b], i * 3); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3)); geo.setAttribute('aS', new THREE.BufferAttribute(seeds, 4)); geo.setAttribute('aC', new THREE.BufferAttribute(cc, 3));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, uniforms: { uCam: { value: new THREE.Vector3() }, uT: { value: 0 }, uShift: { value: new THREE.Vector2() }, uAmt: { value: 1 }, uLight: { value: 1 }, uPx: BU.uPx, uRise: { value: rise }, uSize: { value: size }, uShape: { value: shape } },
+    vertexShader: `uniform vec3 uCam; uniform float uT, uAmt, uPx, uRise, uSize; uniform vec2 uShift; attribute vec4 aS; attribute vec3 aC; varying vec3 vC; varying float vA, vRot, vTum;
+      void main() { float k = aS.w; vec2 box = vec2(64.0);
+        vec2 xz = mod(aS.xz * box + uShift * (0.5 + 0.5 * k) - uCam.xz + box * 0.5, box) - box * 0.5;
+        float H = 14.0, vy = uRise > 0.0 ? uRise * (0.35 + 0.5 * k) : -(0.45 + 0.4 * k), y = 0.3 + mod(aS.y * H + uT * vy, H), ph = k * 60.0;
+        xz += vec2(sin(uT * (0.9 + k) + ph), cos(uT * (0.8 + k) + ph * 1.3)) * 0.9; y += sin(uT * (1.6 + k) + ph) * 0.2;
+        vec3 w = vec3(uCam.x + xz.x, y, uCam.z + xz.y); vec4 mv = viewMatrix * vec4(w, 1.0); gl_Position = projectionMatrix * mv;
+        vA = (1.0 - smoothstep(0.5, 1.0, length(xz) / 32.0)) * smoothstep(0.0, 1.5, y) * (1.0 - smoothstep(H - 3.0, H, y)) * step(k, uAmt);
+        vC = aC; vRot = uRise > 0.0 ? sin(uT * 0.8 + ph) * 0.4 : ph + uT * (0.6 + k * 1.6); vTum = uRise > 0.0 ? 1.0 : 0.35 + 0.65 * abs(cos(uT * (0.8 + k * 1.2) + ph));
+        gl_PointSize = clamp(uSize * (0.6 + 0.8 * k) * uPx / max(1.0, -mv.z), 3.0, 36.0); }`,
+    fragmentShader: `uniform float uLight, uShape; varying vec3 vC; varying float vA, vRot, vTum;
+      void main() { vec2 c = gl_PointCoord - 0.5; float cs = cos(vRot), sn = sin(vRot); vec2 q = vec2(cs * c.x - sn * c.y, sn * c.x + cs * c.y) * 2.0; q.x /= vTum; float body = 0.0;
+        if (uShape < 0.5) { float x = q.x * 1.25, y = -q.y * 1.15 + 0.1; float f = pow(x * x + y * y - 1.0, 3.0) - x * x * y * y * y; body = smoothstep(0.1, -0.02, f); }                      // a heart
+        else if (uShape < 1.5) { float a = 0.0; for (int i = 0; i < 3; i++) { vec2 o = i == 0 ? vec2(0.0, 0.32) : i == 1 ? vec2(-0.3, -0.08) : vec2(0.3, -0.08); a = max(a, smoothstep(0.36, 0.26, length(q - o))); } a = max(a, smoothstep(0.07, 0.03, abs(q.x - 0.1 - (q.y + 0.1) * -0.18)) * step(-0.9, q.y) * step(q.y, -0.1)); body = a; }   // a shamrock
+        else { body = smoothstep(1.0, 0.7, length(vec2(q.x * 1.5, q.y * 0.9))); }                                                                                                                                     // a petal
+        gl_FragColor = vec4(vC * uLight, body * vA); }`,
+  });
+  const pts = new THREE.Points(geo, m); pts.frustumCulled = false; pts.renderOrder = 5; root.add(pts);
+  let kSm = 0, shift = new THREE.Vector2(), clock = 0;
+  return {
+    update(dt, s, k = 1) {
+      kSm += (k - kSm) * (1 - Math.exp(-dt * 1.5)); clock += dt; const wnd = s.weather ? s.weather.wind : 0.12, wet = s.weather ? Math.max(s.weather.rain, s.weather.snow) : 0;
+      shift.x += (0.4 + 3 * wnd) * wind * dt; const U = m.uniforms; U.uT.value = clock; U.uShift.value.copy(shift); if (ctx.camera) U.uCam.value.copy(ctx.camera.position);
+      U.uAmt.value = Math.max(0, kSm * (1 - 0.9 * wet) * (ctx.reduceMotion ? 0.3 : 1)); U.uLight.value = 0.55 + 0.45 * (1 - s.night); root.visible = !s.hide;
+    },
+    dispose() { ctx.scene.remove(root); geo.dispose(); m.dispose(); },
+  };
+}
+const lightsModule = (palette) => (ctx) => { const L = houseLights(ctx, palette); return { dispose() { L.dispose(); } }; };
+const driftModule = (cfg) => (ctx) => { const d = drift(ctx, cfg); return { update(dt, s) { d.update(dt, s); }, dispose() { d.dispose(); } }; };
+const boardsModule = (build) => (ctx) => { const b = makeBoardSets(ctx, (bd) => build(ctx, bd)); return { update(dt, s) { b.sync(s.hide); }, dispose() { b.dispose(); } }; };
+const frameBulbs = (ctx, F, palette, size = 0.5) => {                  // lights round a sign's frame
+  const { lw, x, top, bot, T } = F, pts = [], zf = 0.62, x0 = x - lw / 2 - T - 0.12, x1 = x + lw / 2 + T + 0.12, y0 = bot - T - 0.12, y1 = top + T + 0.12, step = ctx.low ? 1.1 : 0.75;
+  for (let xx = x0; xx <= x1; xx += step) pts.push([xx, y1, zf], [xx, y0, zf]); for (let yy = y0 + step; yy < y1; yy += step) pts.push([x0, yy, zf], [x1, yy, zf]);
+  return bulbs(pts, palette, size);
+};
+const instAlongTop = (ctx, F, geo, scale, colors, gap, lift = 0.3, z = 0.2) => {   // a row of small shapes along the top of a sign
+  const { lw, x, top, T } = F, n = Math.max(2, Math.round((lw + 2 * T) / gap)), mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), n), dm = new THREE.Object3D(), cc = new THREE.Color(), r = rng(n * 7);
+  for (let i = 0; i < n; i++) { const u = i / (n - 1); dm.position.set(x - lw / 2 - T + (lw + 2 * T) * u, top + T + lift + 0.12 * Math.sin(u * Math.PI * 6), z); dm.rotation.set(0, 0, (r() - 0.5) * 0.5); dm.scale.setScalar(scale * (0.85 + r() * 0.3)); dm.updateMatrix(); mesh.setMatrixAt(i, dm.matrix); mesh.setColorAt(i, cc.copy(colors[i % colors.length])); }
+  mesh.castShadow = false; return mesh;
+};
+// ---------------------------------------------------------------- Valentine's Day
+const makeValHouses = lightsModule(PINKS), makeValDrift = driftModule({ shape: 0, cols: PINKS, n: 130, rise: 1.2, size: 0.55 });
+const makeValBoards = boardsModule((ctx, b) => {
+  const F = b.frame, g = new THREE.Group(), { x, lw, T, cwY, cwW } = F, hg = heartGeo();
+  g.add(frameBulbs(ctx, F, PINKS)); g.add(instAlongTop(ctx, F, hg, 0.42, PINKS, 0.75));
+  const rail = new THREE.InstancedMesh(hg, new THREE.MeshLambertMaterial(), 9), dm = new THREE.Object3D(), cc = new THREE.Color();
+  for (let i = 0; i < 9; i++) { const u = i / 8; dm.position.set(x - cwW / 2 + cwW * u, cwY + 1.0 - 0.1 * Math.sin(u * Math.PI * 4), 1.2); dm.rotation.set(0, 0, 0); dm.scale.setScalar(0.34); dm.updateMatrix(); rail.setMatrixAt(i, dm.matrix); rail.setColorAt(i, cc.copy(PINKS[i % PINKS.length])); } g.add(rail);
+  for (const sx of [-1, 1]) { const h = new THREE.Mesh(hg, lam('#e83a62', { emissive: '#5a0a1a' })); h.position.set(sx * 5.8, 1.5, 0.35); h.scale.setScalar(1.1); h.rotation.z = sx * 0.12; g.add(h); }
+  return g;
+});
+// ---------------------------------------------------------------- St Patrick's Day
+const makeStpHouses = lightsModule(GREENS_), makeStpDrift = driftModule({ shape: 1, cols: ['#2fb85a', '#3fdc6a', '#1f9a4a', '#7be08a'].map((c) => new THREE.Color(c)), n: 130, size: 0.6 });
+const makeStpLand = (ctx) => ({ update(dt, s) { const h = s.active.find((a) => a.id === 'stpatrick'); this.k = (this.k || 0) + ((h ? h.k : 0) - (this.k || 0)) * (1 - Math.exp(-dt * 1.5)); ctx.world.setAutumn(-this.k * (s.hide ? 0 : 1)); }, dispose() { ctx.world.setAutumn(0); } });
+const makeStpBoards = boardsModule((ctx, b) => {
+  const F = b.frame, g = new THREE.Group(), { x, cwY, cwW } = F, sg = shamrockGeo();
+  g.add(frameBulbs(ctx, F, GREENS_)); g.add(instAlongTop(ctx, F, sg, 0.55, ['#1f9a4a', '#2fb85a', '#3fdc6a'].map((c) => new THREE.Color(c)), 0.8));
+  const pot = new THREE.Group(); pot.position.set(x + cwW * 0.3, cwY + 0.07, 0.8); g.add(pot);       // a pot of gold at the end of a tiny rainbow
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 9), lam('#1c1a1e')); body.scale.set(1, 0.78, 1); body.position.y = 0.34; pot.add(body);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.06, 6, 14), lam('#2a2830')); rim.rotation.x = Math.PI / 2; rim.position.y = 0.62; pot.add(rim);
+  const gold = lam('#f4c430', { emissive: '#6a4a00' }); for (let i = 0; i < 9; i++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.03, 8), gold); c.position.set(Math.cos(i * 2.4) * 0.22 * (i % 3 ? 1 : 0.4), 0.66 + (i % 3) * 0.04, Math.sin(i * 2.4) * 0.22 * (i % 3 ? 1 : 0.4)); c.rotation.set(Math.sin(i) * 0.5, 0, Math.cos(i) * 0.5); pot.add(c); }
+  for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.03, 8), gold); c.position.set(0.5 + i * 0.16, 0.03, (i % 2 - 0.5) * 0.3); pot.add(c); }
+  ['#e33b3b', '#f08a2a', '#f4d03a', '#3fb55a', '#3a8ee0', '#6a4ac8'].forEach((c, i) => { const a = new THREE.Mesh(new THREE.TorusGeometry(0.9 + i * 0.07, 0.035, 5, 20, Math.PI), new THREE.MeshBasicMaterial({ color: c })); a.position.set(-1.0, 0.05, 0); a.rotation.z = 0; pot.add(a); });
+  return g;
+});
+// ---------------------------------------------------------------- Easter: a hunt for eggs hidden in the grass, bunnies, and decorated signs
+const makeEasterHouses = lightsModule(PASTELS), makeEasterDrift = driftModule({ shape: 2, cols: ['#ffd1e1', '#ffffff', '#ffe0ec'].map((c) => new THREE.Color(c)), n: 90, size: 0.4 });
+const makeEasterBoards = boardsModule((ctx, b) => {
+  const F = b.frame, g = new THREE.Group(), { x, cwY, cwW, T, top } = F, eg = eggGeo(1);
+  g.add(frameBulbs(ctx, F, PASTELS)); g.add(instAlongTop(ctx, F, eg, 0.42, PASTELS, 0.62, 0.3));
+  const flag = new THREE.Shape(); flag.moveTo(-0.22, 0); flag.lineTo(0.22, 0); flag.lineTo(0, -0.45); flag.closePath(); const fg = new THREE.ShapeGeometry(flag), n = 14, bunt = new THREE.InstancedMesh(fg, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), n), dm = new THREE.Object3D(), cc = new THREE.Color();
+  for (let i = 0; i < n; i++) { const u = i / (n - 1); dm.position.set(x - cwW / 2 + cwW * u, cwY + 1.05 - 0.22 * Math.sin(u * Math.PI * 3.5) * 0 - 0.18 * Math.abs(Math.sin(u * Math.PI * 3)), 1.2); dm.rotation.set(0, 0, 0); dm.scale.setScalar(1); dm.updateMatrix(); bunt.setMatrixAt(i, dm.matrix); bunt.setColorAt(i, cc.copy(PASTELS[i % PASTELS.length])); } g.add(bunt);
+  const bun = bunnyMesh('#f2ede6'); bun.position.set(x + cwW * 0.44, cwY + 0.35, 0.3); bun.scale.setScalar(0.9); g.add(bun);      // a bunny peeking over the rail at the end of the catwalk
+  return g;
+});
+function bunnyMesh(color) {
+  const g = new THREE.Group(), m = lam(color), pink = lam('#f0a8b8');
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), m); body.scale.set(0.8, 0.7, 1.05); body.position.y = 0.32; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), m); head.position.set(0, 0.62, 0.34); g.add(head);
+  for (const sx of [-1, 1]) { const ear = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.4, 3, 6), m); ear.position.set(sx * 0.1, 1.0, 0.3); ear.rotation.z = sx * 0.12; g.add(ear); const inner = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.3, 3, 5), pink); inner.position.set(sx * 0.1, 1.0, 0.34); inner.rotation.z = sx * 0.12; g.add(inner);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 5, 4), lam('#1a1a1a')); eye.position.set(sx * 0.1, 0.68, 0.58); g.add(eye); }
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.035, 5, 4), pink); nose.position.set(0, 0.6, 0.6); g.add(nose);
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), lam('#ffffff')); tail.position.set(0, 0.36, -0.42); g.add(tail);
+  for (const sx of [-1, 1]) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), m); f.scale.set(0.8, 0.6, 1.4); f.position.set(sx * 0.2, 0.08, 0.3); g.add(f); }
+  return g;
+}
+function makeEasterHunt(ctx) {
+  const root = new THREE.Group(), r = rng(808), EGGS = 8; ctx.scene.add(root);
+  const eg = eggGeo(1), eggs = [], used = [], ox = [];
+  const bands = (c1, c2) => { const g = eg.clone(), p = g.attributes.position, col = new Float32Array(p.count * 3); const a = new THREE.Color(c1), b = new THREE.Color(c2); for (let i = 0; i < p.count; i++) { const y = p.getY(i), k = Math.sin(y * 14) > 0.35 ? 1 : 0, c = k ? b : a; col.set([c.r, c.g, c.b], i * 3); } g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g; };
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true }), houses = ctx.world.houseList(), spots = [];
+  for (let tries = 0; tries < 400 && spots.length < EGGS; tries++) {
+    const x = (r() - 0.5) * 66, z = -4 - r() * 44; if (Math.abs(x - pathX(z)) < 1.8 || Math.hypot(x - POND.x, z - POND.z) < POND.r + 2 || houses.some((h) => Math.hypot(x - h.x, z - h.z) < (h.r || 3) + 1.2) || spots.some((q) => Math.hypot(q[0] - x, q[1] - z) < 9)) continue;
+    if (Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) > 0.8) continue; spots.push([x, z]);
+  }
+  const pairs = [['#ff7eb6', '#fff2a8'], ['#7ec8ff', '#ffffff'], ['#9be37a', '#ffe08a'], ['#c49bff', '#ffb3d9'], ['#ffb347', '#ffffff'], ['#ff6f6f', '#ffe0a8'], ['#5fd6c4', '#fff2a8'], ['#f7e26b', '#ff9ac0']];
+  spots.forEach(([x, z], i) => { const m = new THREE.Mesh(bands(...pairs[i % pairs.length]), mat); const s = 0.52; m.scale.setScalar(s); m.position.set(x, heightAt(x, z) + 0.3 * s * 0.9, z); m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5); m.castShadow = true; root.add(m); eggs.push({ m, x, y: m.position.y, z, found: false, t: 0 }); });
+  const glint = bulbs(spots.map(([x, z]) => [x, heightAt(x, z) + 0.45, z]), PASTELS, 0.38); root.add(glint);                       // (a faint twinkle over each, so they can be found)
+  // the chip: "Eggs found 2 of 8"
+  const chip = document.createElement('div'); chip.className = 'egg-chip'; chip.setAttribute('aria-live', 'polite'); document.body.appendChild(chip); let found = 0, chipT = 0;
+  const say = (t, hold = 4) => { chip.textContent = t; chip.classList.add('on'); chipT = hold; };
+  const total = () => eggs.length;
+  function click(e) {
+    if (!ctx.camera || !ctx.canvas || eggs.every((q) => q.found) || root.visible === false) return;
+    const rc = ctx.canvas.getBoundingClientRect(), v = new THREE.Vector3(); let best = null, bd = 34;
+    for (const q of eggs) { if (q.found) continue; v.set(q.x, q.y, q.z).project(ctx.camera); if (v.z > 1 || v.z < -1) continue; const px = (v.x * 0.5 + 0.5) * rc.width + rc.left, py = (-v.y * 0.5 + 0.5) * rc.height + rc.top, d = Math.hypot(px - e.clientX, py - e.clientY); if (d < bd) { bd = d; best = q; } }
+    if (best) { best.found = true; best.t = 0; found++; ctx.audio?.eggFind?.(found); say(found >= total() ? 'You found every egg!' : `Eggs found: ${found} of ${total()}`, found >= total() ? 7 : 4); if (found >= total()) ctx.audio?.eggFind?.(9); }
+  }
+  ctx.canvas?.addEventListener('click', click);
+  let hint = 25;
+  // bunnies hopping about
+  const bun = [], bcol = ['#f2ede6', '#c9a27a', '#b8b4b0'], home = ctx.freeSpot(5, 17) || { x: 12, z: -20 };
+  for (let i = 0; i < (ctx.low ? 2 : 3); i++) { const b = bunnyMesh(bcol[i % 3]); b.scale.setScalar(0.8); const x = home.x + (r() - 0.5) * 6, z = home.z + (r() - 0.5) * 6; b.position.set(x, heightAt(x, z), z); root.add(b); bun.push({ b, tx: x, tz: z, x, z, t: r() * 2, hop: -1, from: [x, z] }); }
+  return {
+    update(dt, s) {
+      root.visible = !s.hide; chip.style.display = s.hide ? 'none' : '';
+      for (const q of eggs) { if (!q.found) continue; q.t += dt; const u = Math.min(1, q.t / 0.7); q.m.scale.setScalar(0.52 * (1 + 1.2 * Math.sin(u * Math.PI) * (1 - u)) * (1 - u * u)); q.m.position.y = q.y + u * 0.9; q.m.rotation.y += dt * 8; q.m.visible = u < 1; }
+      if (chipT > 0) { chipT -= dt; if (chipT <= 0) chip.classList.remove('on'); } else if (found === 0 && !s.hide && (hint -= dt) <= 0) { say(`Eggs are hidden in the grass: find ${total()}`, 6); hint = 1e9; }
+      const bunnyGlint = glint.geometry.attributes.position; void bunnyGlint;
+      for (const k of bun) {
+        if (k.hop >= 0) { k.hop += dt / 0.42; const u = Math.min(1, k.hop), x = k.from[0] + (k.tx - k.from[0]) * u, z = k.from[1] + (k.tz - k.from[1]) * u; k.x = x; k.z = z; k.b.position.set(x, heightAt(x, z) + Math.sin(u * Math.PI) * 0.55, z); k.b.rotation.x = -Math.cos(u * Math.PI) * 0.35; if (u >= 1) { k.hop = -1; k.t = r() < 0.4 ? 0.1 : 0.8 + r() * 2.5; k.b.rotation.x = 0; k.n = (k.n || 0) - 1; } }
+        else { k.t -= dt; if (k.t <= 0) { if (!(k.n > 0)) { k.n = 2 + Math.floor(r() * 3); const a = r() * 6.28, d = 2 + r() * 3.5; k.dx = Math.cos(a); k.dz = Math.sin(a); k.dd = d; } let nx = k.x + k.dx * 1.2, nz = k.z + k.dz * 1.2; if (Math.hypot(nx - home.x, nz - home.z) > 8 || Math.abs(nx - pathX(nz)) < 1.4 || Math.hypot(nx - POND.x, nz - POND.z) < POND.r + 1) { k.dx = home.x - k.x; const l = Math.hypot(k.dx, home.z - k.z) || 1; k.dx /= l; k.dz = (home.z - k.z) / l; nx = k.x + k.dx * 1.2; nz = k.z + k.dz * 1.2; } k.from = [k.x, k.z]; k.tx = nx; k.tz = nz; k.hop = 0; k.b.rotation.y = Math.atan2(k.dx, k.dz); } }
+      }
+    },
+    dispose() { ctx.canvas?.removeEventListener('click', click); chip.remove(); ctx.scene.remove(root); eg.dispose(); mat.dispose(); glint.geometry.dispose(); },
+    go(name) { if (name === 'eggs') say(`Eggs found: ${found} of ${total()}`, 4); },
+  };
+}
+
 // ---------------------------------------------------------------- the manager
-const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
-export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, onLightning, low = false, reduceMotion = false }) {
+const BUILDERS = { christmas: [makeChristmas, makeSanta], halloween: [makeHalloween, makeHauntings], autumn: [makeAutumn], valentine: [makeValHouses, makeValDrift, makeValBoards], stpatrick: [makeStpHouses, makeStpDrift, makeStpLand, makeStpBoards], easter: [makeEasterHouses, makeEasterDrift, makeEasterBoards, makeEasterHunt], harvest: [makeHarvest, makeGeese], newyear: [makeFireworks], july4: [makeFireworks] };
+export function createSeasonFx({ scene, skyScene, world, audio, sky, camera, canvas, onLightning, low = false, reduceMotion = false }) {
   const live = new Map();           // season id -> [modules]
-  const ctx = { scene, skyScene, world, audio, sky, camera, onLightning, low, reduceMotion };
+  const ctx = { scene, skyScene, world, audio, sky, camera, canvas, onLightning, low, reduceMotion };
   const used = [];
   ctx.freeSpot = (clear = 5, bx = 0) => {                      // a flat bit of ground in view that is clear of houses, the path and the pond
     const hs = world.houseList(), cands = [];

@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031111247';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031111646';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -325,6 +325,13 @@ export function createAudio({ base = 'audio/' } = {}) {
         const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = t0 + dt; o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.2); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 2.2;
         g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.045 * v, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24); o.connect(f); f.connect(g); g.connect(dest); o.start(t); o.stop(t + 0.28);
       }
+    },
+    /** An Easter egg found: a bright little chime that climbs with each one (`n`: how many so far; 9 = all of them: a short fanfare). */
+    eggFind(n = 1) {
+      if (!ctx || !on || !scn || !gate('egg', 0.12)) return; const t0 = ctx.currentTime + 0.02, out = scn.out;
+      const note = (f, dt, d, pk) => { const o = ctx.createOscillator(), g = ctx.createGain(), t = t0 + dt; o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(pk, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(out); o.start(t); o.stop(t + d + 0.05); };
+      if (n >= 9) { [523, 659, 784, 1047, 1319].forEach((f, i) => note(f, i * 0.09, 0.5, 0.07)); return; }
+      const sc = [523, 587, 659, 784, 880, 988, 1047, 1175][Math.min(7, n - 1)]; note(sc, 0, 0.45, 0.08); note(sc * 1.5, 0.07, 0.4, 0.05); note(sc * 2, 0.14, 0.35, 0.03);
     },
     /** Sleigh bells: a handful of bright little pings that shake across the sky from one side to the other (`dir` 1 left to right, -1 the other way). */
     sleigh(dir = 1) {
