@@ -54,6 +54,7 @@ export function createWeather({ calm = false } = {}) {
     state,
     get name() { return name; },
     busy: false,
+    quiet: false,                       // (in the games: no lightning flashes)
     get mode() { return mode; },
     get temp() { return temp; },
     /** The icon name for what the weather is heading for (the target, so the icon changes the moment it is chosen). */
@@ -108,7 +109,7 @@ export function createWeather({ calm = false } = {}) {
       state.cover += ((state.snow > 0.15 ? 1 : 0) - state.cover) * (1 - Math.exp(-dt * (state.snow > 0.15 ? 0.02 : 0.006)));
       state.flash = Math.max(0, state.flash - dt * 3.2);
       api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004 || Math.abs(vel[k]) > 0.002);
-      if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm) state.flash = 1; onFlash?.(); } } else hold = null;
+      if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm && !api.quiet) state.flash = 1; onFlash?.(); } } else hold = null;
     },
   };
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('weather') : null, saved = store.get('wx.mode');

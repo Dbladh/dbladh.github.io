@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030231927';
-import { auroraColour } from './aurora.js?v=20261030231927';
+import { PAL } from './palette.js?v=20261030232537';
+import { auroraColour } from './aurora.js?v=20261030232537';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030231927';
+} from './houses.js?v=20261030232537';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -1800,6 +1800,31 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       foliageMat = flat(); foliageMatDS = flat({ side: THREE.DoubleSide }); barkMat = flat(); logMat = white();
     }
   }
+  // Snow on the trees: the faces of the foliage that look up turn white, in patches that join up as the snow builds (a few of the highest tufts first, then whole tops of the canopy). One shared amount (SNOW),
+  // the same one the roofs use, so it comes and goes with the weather.
+  /** Snow settles on a material's upward-facing faces (`k`: how readily: above 1 it settles on steeper faces too). */
+  const snowTop = (m, k = 1) => {
+    m.customProgramCacheKey = () => 'snowTop' + k;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uSnow = SNOW;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSnowW;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vSnowW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+          #else
+            vSnowW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+          #endif`);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow; varying vec3 vSnowW;\nfloat snH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\nfloat snN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(snH(i), snH(i + vec3(1,0,0)), f.x), mix(snH(i + vec3(0,1,0)), snH(i + vec3(1,1,0)), f.x), f.y), mix(mix(snH(i + vec3(0,0,1)), snH(i + vec3(1,0,1)), f.x), mix(snH(i + vec3(0,1,1)), snH(i + vec3(1,1,1)), f.x), f.y), f.z); }')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          if (uSnow > 0.01) {
+            float upT = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)), sn = snN(vSnowW * 1.3) * 0.65 + snN(vSnowW * 3.7) * 0.35;
+            float thr = mix(0.95, 0.22, uSnow) - ${(k - 1).toFixed(2)} * 0.3 * uSnow, cv = smoothstep(thr, thr + 0.14, upT + (sn - 0.5) * 0.32);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.96, 1.0) * (0.9 + 0.1 * sn), cv * 0.95);
+          }`);
+    };
+    return m;
+  };
+  snowTop(foliageMat); snowTop(foliageMatDS); snowTop(logMat, 1.1);
   /** Planar UVs for geometry that has none (the pine tiers): continuous, no seams. */
   const addPlanarUV = (geo, k = 0.5) => {
     const p = geo.attributes.position, uv = new Float32Array(p.count * 2);
@@ -1825,7 +1850,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     log: new THREE.CylinderGeometry(0.5, 0.5, 1, 8), reed: new THREE.CylinderGeometry(0.04, 0.05, 1, 5), reedTop: new THREE.CylinderGeometry(0.06, 0.06, 0.28, 6),
     lily: new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12), post: new THREE.BoxGeometry(0.12, 0.9, 0.12), rail: new THREE.BoxGeometry(1, 0.08, 0.06),
   };
-  const MAT = { flatWhite: white({ flatShading: true }), grass: flat({ side: THREE.DoubleSide }), plain: white() };
+  const MAT = { flatWhite: white({ flatShading: true }), rock: snowTop(white({ flatShading: true }), 1.25), fence: snowTop(white(), 1.2), grass: snowTop(flat({ side: THREE.DoubleSide }), 0.9), plain: white() };
   // Flower heads that can light up (music mode): the screen is split into three zones, left / middle / right, and the left hand's notes light the flowers of their zone.
   // Done in the shader from where each flower is on screen, so it costs no per-flower data.
   const flowerGlow = { value: new THREE.Vector3() }, flowerMix = { value: new THREE.Vector2() };
@@ -1850,7 +1875,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     instanced(GEO.pine, foliageMatDS, src.pine, o({ farGeometry: GEO.pineFar }));
     instanced(GEO.bush, foliageMat, src.bush, o({ farGeometry: GEO.bushFar }));
     instanced(GEO.berry, MAT.flatWhite, src.berry, o({ shadow: false }));
-    instanced(GEO.rock, MAT.flatWhite, src.rock, o());
+    instanced(GEO.rock, MAT.rock, src.rock, o());
     instanced(GEO.grass, MAT.grass, src.grass, o({ shadow: false }));
     instanced(GEO.stem, MAT.plain, src.stem, o({ shadow: false }));
     instanced(GEO.head, flowerMat, src.head, o({ shadow: false }));
@@ -1863,8 +1888,8 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     instanced(GEO.reed, MAT.plain, src.reed, o({ shadow: false }));
     instanced(GEO.reedTop, MAT.plain, src.reedTop, o({ shadow: false }));
     instanced(GEO.lily, MAT.plain, src.lily, o({ shadow: false }));
-    instanced(GEO.post, MAT.plain, src.post, o());
-    instanced(GEO.rail, MAT.plain, src.rail, o());
+    instanced(GEO.post, MAT.fence, src.post, o());
+    instanced(GEO.rail, MAT.fence, src.rail, o());
   }
   buildAll(items, scene);
 

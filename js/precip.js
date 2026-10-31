@@ -57,8 +57,8 @@ export function createPrecip({ low = false } = {}) {
   return {
     group,
     /** Move the box to the camera and set how much of each is falling. `hide` switches both off (the games, simple view). */
-    update(dt, camera, wx, hide, pxH, calm = false) {
-      const r = hide ? 0 : wx.rain, s = hide ? 0 : wx.snow, lf = hide ? 0 : Math.max(0, (wx.wind - 0.3) / 0.7) * (1 - 0.6 * Math.max(r, s)); group.visible = r > 0.01 || s > 0.01 || lf > 0.01; if (!group.visible) return;
+    update(dt, camera, wx, hide, pxH, calm = false, scale = 1) {
+      const r = hide ? 0 : wx.rain * scale, s = hide ? 0 : wx.snow * scale, lf = hide ? 0 : Math.max(0, (wx.wind - 0.3) / 0.7) * (1 - 0.6 * Math.max(r, s)) * scale; group.visible = r > 0.01 || s > 0.01 || lf > 0.01; if (!group.visible) return;
       t += dt * (calm ? 0.5 : 1);
       rain.visible = r > 0.01; snow.visible = s > 0.01; leaves.visible = lf > 0.01;
       const cp = camera.position, wind = wx.wind;
