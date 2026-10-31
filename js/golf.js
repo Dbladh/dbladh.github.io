@@ -5,22 +5,22 @@
 // Orbs lying off the best line give power-ups for a few seconds (see applyPower).
 // This module is loaded the first time the windmill is clicked. The shell here (camera, input, HUD, scoring) follows the dirt-bike game's (bikegame.js).
 import * as THREE from 'three';
-import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030234303';
-import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030234303';
-import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030234303';
-import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030234303';
-import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030234303';
-import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030234303';
-import { themeOrder, themeOf } from './golfthemes.js?v=20261030234303';
-import { createTrail } from './golftrail.js?v=20261030234303';
-import { createNeon } from './golfneon.js?v=20261030234303';
-import { createFx } from './golffx.js?v=20261030234303';
-import { lampSpots, buildLamps } from './golflamps.js?v=20261030234303';
-import { buildDecor } from './golfdecor.js?v=20261030234303';
-import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030234303';
-import { isLow } from './golfquality.js?v=20261030234303';
-import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030234303';
-import { createTable } from './pinball.js?v=20261030234303';
+import { courseSeed, holeSeed, makeHole, plainHole, heroOrder, shapeOrder, SHAPES_BAKED, MORE_BAKED, HOLES } from './golfgen.js?v=20261030235343';
+import { planCourse, toWorld, YAWS, MARGIN, BLEND } from './golfsites.js?v=20261030235343';
+import { newBall, newCtx, shoot, stepBall, ejectBall, inSand, hillH, BALL_R, CUP_R } from './golfphys.js?v=20261030235343';
+import { golfCourse, monthLabel, monthKey, MONTH_NAMES } from './monthseed.js?v=20261030235343';
+import { makeChallenge, newChalState, chalStatus, holePoints, speedBonus, starsFor, tableBonus, CHAL_POINTS } from './golfchal.js?v=20261030235343';
+import { buildScenery, THEME_NAMES } from './golfscenery.js?v=20261030235343';
+import { themeOrder, themeOf } from './golfthemes.js?v=20261030235343';
+import { createTrail } from './golftrail.js?v=20261030235343';
+import { createNeon } from './golfneon.js?v=20261030235343';
+import { createFx } from './golffx.js?v=20261030235343';
+import { lampSpots, buildLamps } from './golflamps.js?v=20261030235343';
+import { buildDecor } from './golfdecor.js?v=20261030235343';
+import { M, G, NAMES, EMOJI, COLOURS, buildHoleVisual, buildHamster } from './golfvis.js?v=20261030235343';
+import { isLow } from './golfquality.js?v=20261030235343';
+import { prepareTable, LAYOUTS } from './pbtable.js?v=20261030235343';
+import { createTable } from './pinball.js?v=20261030235343';
 
 const ENTER = 2.6, EXIT = 1.5, RISE_AT = 0.7, RISE_GAP = 0.3, RISE_T = 1.0, TRAVEL = 2.7, OVERVIEW_HOLD = 1.5, SWEEP = 2.3;     // seconds
 const MONTHS = MONTH_NAMES;
@@ -67,7 +67,12 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   const boardRoots = [];                                   // the three billboards: tucked away while golfing
   function setBoards(show) {
     if (!boardRoots.length) for (const b of world.boards) { let o = b.face; while (o && o.parent && o.parent !== scene) o = o.parent; if (o && !boardRoots.includes(o)) boardRoots.push(o); }
-    for (const o of boardRoots) o.visible = show;
+    for (const o of boardRoots) { o.visible = show; if (o.userData.s0) o.scale.copy(o.userData.s0); }
+  }
+  /** The billboards grow back up from the ground as the camera flies home (k 0 to 1), instead of appearing all at once at the end. */
+  function growBoards(k) {
+    if (!boardRoots.length) setBoards(false);
+    for (const o of boardRoots) { if (!o.userData.s0) o.userData.s0 = o.scale.clone(); const s0 = o.userData.s0; o.visible = k > 0.02; o.scale.set(s0.x, s0.y * (0.03 + 0.97 * k), s0.z); }
   }
   const hideExtraBalls = () => { for (let i = 1; i < ballMeshes.length; i++) { ballMeshes[i].visible = false; ballShadows[i].visible = false; } };
 
@@ -511,6 +516,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
   // ---------- the API ----------
   const api = {
     get active() { return st.mode !== 'off'; },
+    get leaving() { return st.mode === 'exit'; },
     get focusDistance() { return st.mode === 'enter' || st.mode === 'exit' || st.mode === 'finale' || st.mode === 'card' ? trip.dist : cam.phase === 'overview' || st.mode === 'travel' ? frame.dist : onTable() && cam.phase === 'follow' ? table.focusDistance : 12; },
     onQuit: null,
     /** Debug: hold the camera at `pos` looking at `look` (both [x, y, z]), or let go with no arguments. */
@@ -528,7 +534,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       return new Promise((resolve) => {
         let w; const got = [], done = () => { try { w && w.terminate(); } catch (err) { /* (ignore) */ } resolve(); };
         try {
-          w = new Worker(new URL('./golfworker.js?v=20261030234303', import.meta.url), { type: 'module' });
+          w = new Worker(new URL('./golfworker.js?v=20261030235343', import.meta.url), { type: 'module' });
           w.onmessage = (e) => { const d = e.data; if (d.error) { done(); return; } if (d.done) { prebuilt = { key: seed + ':' + (fx ? 1 : 0), holes: got }; done(); return; } got[d.i] = d.h; progress?.(d.i + 1, TABLE_HOLE); };
           w.onerror = () => done();
           w.postMessage({ seed, order, shapes, themes, fx, more, n: TABLE_HOLE });
@@ -563,6 +569,7 @@ export function createGolf(scene, camera, renderer, world, { audio = null, reduc
       if (st.mode === 'exit') {
         const k = reduceMotion ? 1 : ease(clamp01(st.t / EXIT));
         fly(k); for (let i = 0; i < vises.length; i++) setRise(i, 1 - k);
+        world.carve.regrow(ease(clamp01((k - 0.15) / 0.85))); growBoards(ease(clamp01((k - 0.3) / 0.7)));            // (the village, plants and billboards come back as the camera flies home)
         if (k >= 1) {
           disposeCourse(); world.carve.end(); setBoards(true); camera.up.copy(up0); document.body.classList.remove('game-mode'); hud.hidden = true; hud.classList.remove('leaving');
           listen(false); window.removeEventListener('touchmove', noScroll); window.removeEventListener('touchstart', noScroll); st.mode = 'off'; this.onQuit?.();

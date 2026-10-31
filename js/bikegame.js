@@ -2,18 +2,18 @@
 // the lane is sliced away, and the ground then carries on to the right as the camera follows the rider (see track.js).
 // This module is the shell (enter/exit, camera, HUD, input plumbing); physics and scoring plug into it.
 import * as THREE from 'three';
-import { buildBike, poseRider, BIKE } from './bike.js?v=20261030234303';
-import { courseMonth, monthLabel, monthKey, monthSeed } from './monthseed.js?v=20261030234303';
-import { createTrack, XT } from './track.js?v=20261030234303';
-import { createRagdoll } from './ragdoll.js?v=20261030234303';
-import { createFx } from './fx.js?v=20261030234303';
-import { createAudio } from './audio.js?v=20261030234303';
-import { createPuffs } from './puffs.js?v=20261030234303';
-import { createTracks } from './tracks.js?v=20261030234303';
-import { createDirt } from './dirt.js?v=20261030234303';
-import { createMudCoat } from './mudcoat.js?v=20261030234303';
-import { createCoins } from './coins.js?v=20261030234303';
-import { createFuel } from './fuel.js?v=20261030234303';
+import { buildBike, poseRider, BIKE } from './bike.js?v=20261030235343';
+import { courseMonth, monthLabel, monthKey, monthSeed } from './monthseed.js?v=20261030235343';
+import { createTrack, XT } from './track.js?v=20261030235343';
+import { createRagdoll } from './ragdoll.js?v=20261030235343';
+import { createFx } from './fx.js?v=20261030235343';
+import { createAudio } from './audio.js?v=20261030235343';
+import { createPuffs } from './puffs.js?v=20261030235343';
+import { createTracks } from './tracks.js?v=20261030235343';
+import { createDirt } from './dirt.js?v=20261030235343';
+import { createMudCoat } from './mudcoat.js?v=20261030235343';
+import { createCoins } from './coins.js?v=20261030235343';
+import { createFuel } from './fuel.js?v=20261030235343';
 
 const ENTER_SECONDS = 1.3;
 const SCALE = 1.15;                  // the bike's size in the world (it was 1.8: too big next to the houses)
@@ -642,6 +642,7 @@ export function createGame(scene, camera, renderer, world, { reduceMotion = fals
   $('go-quit')?.addEventListener('click', () => { audio.ui('back'); api.stop(); });
   const api = {
     get active() { return st.mode !== 'off'; },
+    get leaving() { return st.mode === 'out'; },
     /** Debug / test access. */
     get state() { return { lift: st.lift, trick: st.trick && (st.trick.def.id), jumpVy: st.jumpVy, impact: st.impact, buf: !!st.buf, charge: st.charge, charging: st.charging, om: st.om, boost: st.boost, x: st.x, y: st.y, vx: st.vx, vy: st.vy, th: st.th, grounded: st.grounded, mode: st.mode, flips: st.flips, airT: st.airT }; },
     events,

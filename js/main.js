@@ -1,18 +1,18 @@
 // Wires everything together: renderer, camera stops, navigation, time-of-day,
 // simple-view toggle. The page works as plain HTML if anything here fails.
-import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030234303';
-import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030234303';
+import { initQuality, isLow, saveQuality } from './golfquality.js?v=20261030235343';
+import { courseMonth, monthLabel, setRandomCourse, randomCourseCode, newRandomCode } from './monthseed.js?v=20261030235343';
 import * as THREE from 'three';
-import { createPrecip } from './precip.js?v=20261030234303';
-import { createWeather } from './weather.js?v=20261030234303';
-import { PAL } from './palette.js?v=20261030234303';
-import { buildWorld } from './world.js?v=20261030234303';
-import { createSky } from './sky.js?v=20261030234303';
-import { createDOF } from './dof.js?v=20261030234303';
-import { createRide } from './ride.js?v=20261030234303';
-import { createGame } from './bikegame.js?v=20261030234303';
-import { createAurora, setWarm } from './aurora.js?v=20261030234303';
-import { createAudio, pickFlicker } from './audio.js?v=20261030234303';
+import { createPrecip } from './precip.js?v=20261030235343';
+import { createWeather } from './weather.js?v=20261030235343';
+import { PAL } from './palette.js?v=20261030235343';
+import { buildWorld } from './world.js?v=20261030235343';
+import { createSky } from './sky.js?v=20261030235343';
+import { createDOF } from './dof.js?v=20261030235343';
+import { createRide } from './ride.js?v=20261030235343';
+import { createGame } from './bikegame.js?v=20261030235343';
+import { createAurora, setWarm } from './aurora.js?v=20261030235343';
+import { createAudio, pickFlicker } from './audio.js?v=20261030235343';
 
 const body = document.body;
 const canvas = document.getElementById('scene');
@@ -186,6 +186,8 @@ function start() {
   camera.layers.enable(1); // billboards live on layer 1 (see dof.js)
   const classic = new URLSearchParams(location.search).get('look') === 'classic'; // A/B: the original look
   const sky = createSky(scene, skyScene, renderer, { classic });
+  let wxK = 1, wxMoving = false;                                                  // how much of the weather shows: it fades out as a game starts and back in as one ends
+  const wxEff = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, roof: 0, tree: 0, bow: 0, mist: 0, flash: 0 };
   const weather = createWeather({ calm: matchMedia('(prefers-reduced-motion: reduce)').matches });
   const precip = createPrecip({ low: lowEnd }); scene.add(precip.group);
   // ?seed=NN pins the village's look; otherwise every visit gets a new one.
@@ -608,7 +610,7 @@ function start() {
     golfLoading = true;
     try {
       if (!golf) {
-        const mod = await import('./golf.js?v=20261030234303');
+        const mod = await import('./golf.js?v=20261030235343');
         golf = mod.createGolf(scene, camera, renderer, world, { audio, reduceMotion, sky, lowEnd });
         golf.onQuit = () => { ride?.reset(); riseName(); };
       }
@@ -780,11 +782,11 @@ function start() {
   let nightK = 0; const sndV = new THREE.Vector3(), sndB = new THREE.Vector3();
   function setTime(h) {
     hour = ((h % 24) + 24) % 24;
-    const { night, horizon } = sky.set(songHour(hour), songDim(), songWarm, game?.active || golf?.active ? null : weather.state); nightK = night;
+    const { night, horizon } = sky.set(songHour(hour), songDim(), songWarm, wxK < 0.004 ? null : wxEff); nightK = night;
     if (!lightsWarm && idleReady && night < 0.02) prewarmLights?.();                       // (it was night at start-up: do it at the first daylight)
     world.setNight(night);
-    world.setClouds(night, horizon, game?.active || golf?.active ? null : weather.state);
-    world.setWeather(game?.active || golf?.active ? null : { wet: weather.state.wet, cover: weather.state.cover, roof: weather.state.roof, tree: weather.state.tree, rain: weather.state.rain, fogK: sky.fogK, mist: weather.state.mist, mistColor: scene.fog.color });
+    world.setClouds(night, horizon, wxK < 0.004 ? null : wxEff);
+    world.setWeather(wxK < 0.004 ? null : { wet: wxEff.wet, cover: wxEff.cover, roof: wxEff.roof, tree: wxEff.tree, rain: wxEff.rain, fogK: sky.fogK, mist: wxEff.mist, mistColor: scene.fog.color });
     dof?.setLook(horizon, lowEnd || quality.scale < 1 || game?.active ? 0 : 1);
     const minute = Math.floor(hour * 60);
     if (minute !== shownMinute) {                       // touch the DOM only when the shown minute changes
@@ -955,7 +957,7 @@ function start() {
       dof.setBlur(golf?.active ? 0.5 : 1);
       focus += (want - focus) * Math.min(1, dt * 4);
       dof.setHazeNear(game?.active ? Math.max(55, game.focusDistance * 1.3 + 12) : 55);
-      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = game?.active || golf?.active ? Math.min(0.3, sky.fogK) : sky.fogK; scene.fog.near = fn * (1 - 0.65 * wk); scene.fog.far = fn + 167 - (fn + 167 - 40) * 0.6 * wk; }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself
+      if (scene.fog) { const fn = game?.active ? Math.max(48, game.focusDistance * 1.15) : 48, wk = sky.fogK; scene.fog.near = fn * (1 - 0.65 * wk); scene.fog.far = fn + 167 - (fn + 167 - 40) * 0.6 * wk; }          // (the weather pulls the fog in)   // the game's camera sits further back: start the fog beyond the ride itself
       world.setView({ ...dof.params, focus });
       dof.render(scene, camera, focus, world.signMats);
     } else {
@@ -985,7 +987,9 @@ function start() {
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.1);
     prof.ft[prof.n++ % prof.ft.length] = rawDt * 1000;
 
-    weather.tick(dt); weather.update(dt, () => { if (weather.quiet) audio.thunder(2 + Math.random() * 4, 0.35); else if (!reduceMotion) audio.thunder(1 + Math.random() * 4, 0.7 + Math.random() * 0.4); else audio.thunder(2 + Math.random() * 4, 0.6); }); { const inGame = !!(game?.active || golf?.active); weather.quiet = inGame; precip.update(dt, camera, weather.state, inGame && lowEnd, canvas.height, reduceMotion, inGame ? 0.5 : 1); }          // (in the games: half the rain and snow, and none at all on a weak machine) if ((reduceMotion || dragging) && weather.busy) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
+    { const inGame = !!(game?.active || golf?.active) && !(game?.leaving || golf?.leaving), tk = inGame ? 0 : 1; wxMoving = Math.abs(wxK - tk) > 0.002; wxK += (tk - wxK) * (1 - Math.exp(-dt * (inGame ? 2.4 : 1.15))); if (!wxMoving) wxK = tk;
+      for (const k in wxEff) wxEff[k] = weather.state[k] * wxK; wxEff.wind = 0.12 + (weather.state.wind - 0.12) * wxK; }
+    weather.tick(dt); weather.update(dt, () => { if (weather.quiet) audio.thunder(2 + Math.random() * 4, 0.35); else if (!reduceMotion) audio.thunder(1 + Math.random() * 4, 0.7 + Math.random() * 0.4); else audio.thunder(2 + Math.random() * 4, 0.6); }); { const inGame = !!(game?.active || golf?.active); weather.quiet = inGame; precip.update(dt, camera, weather.state, false, canvas.height, reduceMotion, lowEnd ? wxK : 0.5 + 0.5 * wxK); }          // (in the games: half the rain and snow, and none at all on a weak machine) if ((reduceMotion || dragging) && (weather.busy || wxMoving)) setTime(hour);                    // (the weather eases; with the day held still it still needs the sky redrawn)
     // Let the day run: 24 hours in DAY_SECONDS. (Held still for reduced motion, and while the slider is being used.)
     if (!reduceMotion && !dragging) {
       const sT = performance.now(); setTime(hour + (dt * 24) / DAY_SECONDS); secT('time', sT);

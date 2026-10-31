@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030234303';
-import { auroraColour } from './aurora.js?v=20261030234303';
+import { PAL } from './palette.js?v=20261030235343';
+import { auroraColour } from './aurora.js?v=20261030235343';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030234303';
+} from './houses.js?v=20261030235343';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -910,15 +910,25 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
         const bs = m.boundingSphere; if (!bs) continue;
         let near = false; for (let si = 0; si < sites.length && !near; si++) { const S = carveS.sites[si]; near = Math.hypot(bs.center.x - S.cx, bs.center.z - S.cz) < bs.radius + S.rad + blend + 1.5; }
         if (!near) continue;
-        const a = m.instanceMatrix.array, orig = a.slice(); let hid = 0;
+        const a = m.instanceMatrix.array, orig = a.slice(), idx = []; let hid = 0;
         for (let j = 0; j < m.count; j++) {
           const o = j * 16, x = orig[o + 12], z = orig[o + 14];
-          for (let si = 0; si < sites.length; si++) if (hit(si, x, z, 1.5)) { for (let q = 0; q < 16; q++) a[o + q] = 0; a[o + 15] = 1; hid++; break; }
+          for (let si = 0; si < sites.length; si++) if (hit(si, x, z, 1.5)) { for (let q = 0; q < 16; q++) a[o + q] = 0; a[o + 15] = 1; hid++; idx.push(j); break; }
         }
-        if (hid) { m.instanceMatrix.needsUpdate = true; carveS.cells.push({ m, orig }); }
+        if (hid) { m.instanceMatrix.needsUpdate = true; carveS.cells.push({ m, orig, idx }); }
       }
-      for (const h of houses) if (h.group && h.group.visible) for (let si = 0; si < sites.length; si++) if (hit(si, h.x, h.z, 1.5 + h.r)) { h.group.visible = false; carveS.houses.push(h.group); break; }
+      for (const h of houses) if (h.group && h.group.visible) for (let si = 0; si < sites.length; si++) if (hit(si, h.x, h.z, 1.5 + h.r)) { h.group.visible = false; if (!h.group.userData.carveS0) h.group.userData.carveS0 = h.group.scale.clone(); carveS.houses.push(h.group); break; }
       return H.slice();
+    },
+    /** Bring back what the carving hid, growing it up from the ground: `k` 0 (still hidden) to 1 (all back). Called as the camera flies home, so nothing pops in at the end. */
+    regrow(k) {
+      if (!carveS.on) return; const sc = 0.02 + 0.98 * k;
+      for (const c of carveS.cells) {
+        const a = c.m.instanceMatrix.array, o0 = c.orig;
+        for (const j of c.idx) { const o = j * 16; for (const q of [0, 1, 2, 4, 5, 6, 8, 9, 10]) a[o + q] = o0[o + q] * sc; a[o + 12] = o0[o + 12]; a[o + 13] = o0[o + 13]; a[o + 14] = o0[o + 14]; a[o + 15] = 1; }
+        c.m.instanceMatrix.needsUpdate = true;
+      }
+      for (const g of carveS.houses) { const s0 = g.userData.carveS0; g.visible = k > 0.02; if (s0) g.scale.copy(s0).multiplyScalar(sc); }
     },
     /** How far a site has been levelled: 0 (the hillside as it was) to 1 (the lawn). Without `site`, all of them. */
     set(k, site) {
@@ -967,7 +977,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
       carveS.paint.clear(); geo.attributes.color.needsUpdate = true;
       carve.set(0);
       for (const c of carveS.cells) { c.m.instanceMatrix.array.set(c.orig); c.m.instanceMatrix.needsUpdate = true; }
-      for (const g of carveS.houses) g.visible = true;
+      for (const g of carveS.houses) { g.visible = true; if (g.userData.carveS0) g.scale.copy(g.userData.carveS0); }
       for (const hv of terrainHoles.value) hv.set(0, 0, 0);
       carveS.cells = []; carveS.houses = []; carveS.verts = []; carveS.sites = []; carveS.on = false;
     },
