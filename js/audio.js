@@ -7,7 +7,7 @@
 //
 // Browsers only allow sound after a tap, so `unlock()` is called from the game's start and first press. A speaker button
 // mutes it and remembers the choice. The file names and cuts come from audio/tools/make_audio.py.
-import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031102519';
+import { SONG_RH, SONG_LH, SONG_CL, SONG_ST, SONG_CHORDS } from './notes.js?v=20261031102653';
 const ENGINE_GAIN = 0.7;                // the engine's overall level (the one-shots sit on top of it)
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -274,14 +274,21 @@ export function createAudio({ base = 'audio/' } = {}) {
       else if (kind === 'peep') { const f = 2200 + Math.random() * 700, n = 3 + ((Math.random() * 3) | 0); for (let k = 0; k < n; k++) voice('sine', f, f * 1.18, t0 + k * 0.1, 0.05, 0.03); }
       else { voice('sine', 1300 + Math.random() * 400, 650, t0, 0.07, 0.04); }
     },
-    /** A firework: 'launch' (a short rising whistle), or 'boom' `delay` seconds from now (a low thump with crackle after it). `power` 0..1+, `pan` -1..1. */
+    /** A firework: 'launch' (a dull mortar thump and a rising whistle), or 'boom' `delay` seconds from now (a distant thud, a rolling echo and crackle after it). `power` 0..2, `pan` -1..1. */
     firework(kind, delay = 0, power = 1, pan = 0) {
-      if (!ctx || !on || !scn || !gate('fw' + kind, kind === 'boom' ? 0.08 : 0.15)) return;
-      const t0 = ctx.currentTime + delay + 0.02, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(scn.out); } const dest = p || scn.out;
-      if (kind === 'launch') { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(600, t0); o.frequency.exponentialRampToValueAtTime(2200, t0 + 0.8); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.012 * power, t0 + 0.1); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.85); o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + 0.9); return; }
-      const nb = noise(), b = ctx.createOscillator(), bg = ctx.createGain(); b.type = 'sine'; b.frequency.setValueAtTime(110, t0); b.frequency.exponentialRampToValueAtTime(38, t0 + 0.5); bg.gain.setValueAtTime(0.0001, t0); bg.gain.linearRampToValueAtTime(0.16 * power, t0 + 0.02); bg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7); b.connect(bg); bg.connect(dest); b.start(t0); b.stop(t0 + 0.8);
-      const th = ctx.createBufferSource(), tf = ctx.createBiquadFilter(), tg = ctx.createGain(); th.buffer = nb; tf.type = 'lowpass'; tf.frequency.value = 500; tg.gain.setValueAtTime(0.0001, t0); tg.gain.linearRampToValueAtTime(0.1 * power, t0 + 0.02); tg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6); th.connect(tf); tf.connect(tg); tg.connect(dest); th.start(t0, Math.random()); th.stop(t0 + 0.7);
-      for (let i = 0; i < 14; i++) { const tt = t0 + 0.12 + Math.random() * 1.1, c = ctx.createBufferSource(), hf = ctx.createBiquadFilter(), cg = ctx.createGain(); c.buffer = nb; hf.type = 'highpass'; hf.frequency.value = 3000 + Math.random() * 2500; cg.gain.setValueAtTime(0.0001, tt); cg.gain.linearRampToValueAtTime(0.03 * power * Math.random(), tt + 0.004); cg.gain.exponentialRampToValueAtTime(0.0001, tt + 0.05); c.connect(hf); hf.connect(cg); cg.connect(dest); c.start(tt, Math.random()); c.stop(tt + 0.08); }
+      if (!ctx || !on || !scn || !gate('fw' + kind, kind === 'boom' ? 0.05 : 0.12)) return;
+      const t0 = ctx.currentTime + delay + 0.02, p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(scn.out); } const dest = p || scn.out, nb = noise();
+      const burst = (type, f, q, t, peak, dur, att = 0.01) => { const c = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain(); c.buffer = nb; fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); c.connect(fl); fl.connect(g); g.connect(dest); c.start(t, Math.random() * 2); c.stop(t + dur + 0.05); };
+      if (kind === 'launch') {
+        burst('lowpass', 420, 0.7, t0, 0.07 * power, 0.25, 0.005);
+        const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(700, t0); o.frequency.exponentialRampToValueAtTime(2600, t0 + 0.8); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.02 * power, t0 + 0.1); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.85); o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + 0.9); return;
+      }
+      const big = Math.min(1.6, power);
+      const b = ctx.createOscillator(), bg = ctx.createGain(); b.type = 'sine'; b.frequency.setValueAtTime(95, t0); b.frequency.exponentialRampToValueAtTime(32, t0 + 0.7); bg.gain.setValueAtTime(0.0001, t0); bg.gain.linearRampToValueAtTime(0.5 * big, t0 + 0.015); bg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.9 + 0.5 * big); b.connect(bg); bg.connect(dest); b.start(t0); b.stop(t0 + 1.6);
+      burst('lowpass', 900, 0.7, t0, 0.55 * big, 0.5, 0.008);                    // the thud
+      burst('lowpass', 260, 0.5, t0 + 0.15, 0.32 * big, 1.4 + 1.2 * big, 0.12);  // the echo rolling off the hills
+      burst('lowpass', 420, 0.5, t0 + 0.6 + 0.3 * big, 0.14 * big, 1.6, 0.2);    // and a second, fainter one
+      const n = 10 + Math.round(10 * big); for (let i = 0; i < n; i++) burst('highpass', 2500 + Math.random() * 3000, 0.7, t0 + 0.15 + Math.random() * (0.9 + 0.7 * big), 0.05 * big * (0.3 + Math.random()), 0.05, 0.003);   // the crackle
     },
     /** Sleigh bells: a handful of bright little pings that shake across the sky from one side to the other (`dir` 1 left to right, -1 the other way). */
     sleigh(dir = 1) {

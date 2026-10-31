@@ -1,7 +1,7 @@
 // The seasonal and holiday touches of the landscape (see seasons.js for which are on). Each season is a small module with build / update / dispose, built the first time the season is on and taken away when it has ended, so a
 // quiet part of the year costs nothing. All the little lights are one kind of thing: glowing points (a single shader, a twinkle and a colour each), put as children of the house or the sign they decorate so they follow it.
 import * as THREE from 'three';
-import { heightAt, POND, pathX } from './world.js?v=20261031102519';
+import { heightAt, POND, pathX } from './world.js?v=20261031102653';
 
 const BU = { uTime: { value: 0 }, uA: { value: 0 }, uPx: { value: 800 } };       // shared by every string of lights
 const bulbMat = new THREE.ShaderMaterial({
@@ -212,8 +212,8 @@ function makeFireworks(ctx) {
   let queue = [], wait = 6 + rnd() * 10, glow = 0; const glowCol = new THREE.Color();
   const launch = (delay, big) => {
     const b = bursts.find((q) => !q.busy); if (!b) return false;
-    b.busy = true; b.phase = delay > 0 ? -1 : 0; b.delay = delay; b.t = 0; b.x1 = (rnd() * 2 - 1) * 62; b.x0 = b.x1 + (rnd() - 0.5) * 18; b.y1 = 34 + rnd() * 36; b.power = big ? 1.25 : 0.8 + rnd() * 0.5; b.pan = b.x1 / 70;
-    const p = FW_COLS[(rnd() * FW_COLS.length) | 0]; b.mat.uniforms.uC1.value.copy(p[0]); b.mat.uniforms.uC2.value.copy(p[1]); b.mat.uniforms.uSpd.value = 26 * b.power; b.mat.uniforms.uSize.value = ctx.low ? 1.5 : 1.2; b.mat.uniforms.uLife.value = 2.0 + rnd() * 0.8; return true;
+    b.busy = true; b.phase = delay > 0 ? -1 : 0; b.delay = delay; b.t = 0; b.x1 = (rnd() * 2 - 1) * 62; b.x0 = b.x1 + (rnd() - 0.5) * 18; b.y1 = 34 + rnd() * 36; if (b.power > 2) b.y1 = 48 + rnd() * 24; b.power = big ? 1.4 : rnd() < 0.22 ? 2.1 + rnd() * 0.5 : 0.8 + rnd() * 0.5; b.pan = b.x1 / 70;
+    const p = FW_COLS[(rnd() * FW_COLS.length) | 0]; b.mat.uniforms.uC1.value.copy(p[0]); b.mat.uniforms.uC2.value.copy(p[1]); b.mat.uniforms.uSpd.value = 26 * b.power * (b.power > 2 ? 1.25 : 1); b.mat.uniforms.uSize.value = ctx.low ? 1.5 : 1.2; b.mat.uniforms.uLife.value = (2.0 + rnd() * 0.8) * (b.power > 2 ? 1.5 : 1); b.mat.uniforms.uSize.value *= b.power > 2 ? 1.5 : 1; return true;
   };
   const show = (peak) => { const n = 3 + Math.floor(rnd() * 4 + peak * 8); let t = 0; for (let i = 0; i < n; i++) { t += 0.35 + rnd() * 1.0; queue.push({ at: t, big: false }); } if (peak > 0.5) { for (let i = 0; i < 5; i++) queue.push({ at: t + 1.2 + i * 0.18, big: true }); } };   // (a finale of bigger bursts together on the day itself)
   let clock = 0;
@@ -231,7 +231,7 @@ function makeFireworks(ctx) {
           for (let i = 0; i < 10; i++) { const w = Math.max(0, u - i * 0.018), e = 1 - Math.pow(1 - w, 2); b.rp[i * 3] = b.x0 + (b.x1 - b.x0) * e; b.rp[i * 3 + 1] = -8 + (b.y1 + 8) * e; b.rp[i * 3 + 2] = -105; }
           b.rg.attributes.position.needsUpdate = true; b.rocket.visible = true; b.rocket.material.opacity = 0.9;
           if (b.t === dt) ctx.audio?.firework?.('launch', 0, 0.6, b.pan);
-          if (u >= 1) { b.phase = 1; b.t = 0; b.rocket.visible = false; b.pts.visible = true; b.mat.uniforms.uO.value.set(b.x1, b.y1, -105); glow = Math.max(glow, 0.9 * b.power); glowCol.copy(b.mat.uniforms.uC1.value); ctx.audio?.firework?.('boom', 0.35 + Math.random() * 0.5, b.power, b.pan); }
+          if (u >= 1) { b.phase = 1; b.t = 0; b.rocket.visible = false; b.pts.visible = true; b.mat.uniforms.uO.value.set(b.x1, b.y1, -105); glow = Math.max(glow, 0.9 * Math.min(1.6, b.power)); glowCol.copy(b.mat.uniforms.uC1.value); ctx.audio?.firework?.('boom', 0.45 + Math.random() * 0.7, b.power, b.pan); }
         } else {
           b.mat.uniforms.uT.value = b.t; if (b.t > b.mat.uniforms.uLife.value + 0.2) { b.busy = false; b.pts.visible = false; }
         }
