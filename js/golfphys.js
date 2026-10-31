@@ -1,6 +1,6 @@
 // The ball's physics for the mini-golf: pure maths, no THREE. The ball rolls on the hole's gentle hills, slows with friction (sand slows it more), is carried by rivers, bounces
 // off the walls, posts and bumpers, drops into ponds, and meets the hole's hero obstacle (golfhero.js). A power-up changes how all of this works through `ctx`.
-import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030220955';
+import { gateBlocked, bridgeUp } from './golfhero.js?v=20261030221309';
 
 export const BALL_R = 0.32, CUP_R = 0.6, MAX_V = 15;
 const GA = 9.0, G = 5.0, FRICTION = 2.4, WALL_E = 0.72, POST_E = 0.92, BUMPER_E = 1.3, STEP = 1 / 120;
@@ -138,10 +138,11 @@ export function triggerBar(hole, o) {
   const sh = hole.shape || []; let bi = -1, bd = 1e9; sh.forEach((p, i) => { const d = (p[0] - o.x) ** 2 + (p[1] - o.z) ** 2; if (d < bd) { bd = d; bi = i; } });
   let ux = 1, uz = 0, hw = 1.6; if (bi >= 0) { const a = sh[Math.max(0, bi - 1)], c = sh[Math.min(sh.length - 1, bi + 1)], l = Math.hypot(c[0] - a[0], c[1] - a[1]); if (l > 1e-6) { ux = (c[0] - a[0]) / l; uz = (c[1] - a[1]) / l; } hw = sh[bi][2]; }
   let half = Math.max(o.r, hw * 0.7), len = Math.max(1.0, o.r * 1.4); const O = hole.outline && (hole._outFlat ||= hole.outline.flat());
-  if (O && O.length) {                                     // (the bar is clipped to the course: both ends and the corners of its footprint must lie inside the outline, so it never runs under a wall or out onto the grass)
-    const inside = (hf) => { for (const sx of [-1, 1]) for (const sl of [-1, 1]) { const x = o.x - uz * sx * (hf + 0.12) + ux * sl * len / 2, z = o.z + ux * sx * (hf + 0.12) + uz * sl * len / 2; if (!inPoly(O, x, z)) return false; } return true; };
-    while (half > Math.max(0.35, o.r * 0.6) && !inside(half)) half -= 0.1;
-  }
+  // the bar is clipped to plain green: the corners and the middle of each side of its footprint must lie inside the outline and clear of rough, ice and other patches, sand and water, so it never runs under a wall, out onto the grass or over something that is drawn at another height
+  const polys = [...(hole.patches || []), ...(hole.sands || []), ...(hole.ponds || [])];
+  const clear = (x, z) => { if (O && O.length && !inPoly(O, x, z)) return false; for (const p of polys) if (dist2({ x, z }, p.x, p.z) < p.r * p.r * 1.45 && inPoly(p.poly, x, z)) return false; return true; };
+  const inside = (hf) => { for (const sx of [-1, 1]) for (const sl of [-1, -0.5, 0, 0.5, 1]) { const x = o.x - uz * sx * (hf + 0.15) + ux * sl * len / 2, z = o.z + ux * sx * (hf + 0.15) + uz * sl * len / 2; if (!clear(x, z)) return false; } return true; };
+  while (half > Math.max(0.35, o.r * 0.6) && !inside(half)) half -= 0.1;
   return (o.bar = { ux, uz, half, len });
 }
 export function onTrigger(hole, o, b) { const bar = triggerBar(hole, o), rx = b.x - o.x, rz = b.z - o.z; return Math.abs(rx * bar.ux + rz * bar.uz) < bar.len / 2 && Math.abs(-rx * bar.uz + rz * bar.ux) < bar.half; }
