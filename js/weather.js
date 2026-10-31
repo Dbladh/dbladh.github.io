@@ -2,6 +2,7 @@
 //   cloud (how overcast), rain, snow, fog, wind, storm (thunder and lightning), plus wet and cover (what rain and snow leave on the ground: they build up and dry or melt slowly).
 // The target comes from a preset: `?weather=rain` in the address, or `weather.set('rain')` (and, in later steps, from the month, the time of day and the local weather).
 const KEYS = ['cloud', 'rain', 'snow', 'fog', 'wind', 'storm'];
+const OMEGA = { cloud: 0.7, rain: 0.75, snow: 0.6, fog: 0.42, wind: 0.5, storm: 0.6 };      // how quickly each follows its target (per second): fog is the slowest
 export const PRESETS = {
   clear: { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0 },
   cloudy: { cloud: 0.78, rain: 0, snow: 0, fog: 0.05, wind: 0.35, storm: 0 },
@@ -42,7 +43,7 @@ export function fromReading({ code = 0, cloud = 0, wind = 0 }) {
 export const kindOf = (t, night = false) => (t.storm > 0.5 ? 'storm' : t.snow > 0.3 ? 'snow' : t.rain > 0.25 ? 'rain' : t.fog > 0.5 ? 'fog' : t.cloud > 0.55 ? 'cloud' : t.cloud > 0.25 ? 'partly' : night ? 'moon' : 'sun');
 
 export function createWeather({ calm = false } = {}) {
-  const state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, flash: 0 }, target = { ...PRESETS.clear };
+  const vel = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0, storm: 0 }, state = { cloud: 0.06, rain: 0, snow: 0, fog: 0, wind: 0.12, storm: 0, wet: 0, cover: 0, flash: 0 }, target = { ...PRESETS.clear };
   let name = 'clear', hold = null, rate = 0.16, mode = 'auto', temp = null, place = null;
   const subs = new Set(), store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
   const changed = () => { for (const f of subs) f(api); };
@@ -92,17 +93,21 @@ export function createWeather({ calm = false } = {}) {
     set(preset, instant = false) {
       const p = typeof preset === 'string' ? PRESETS[preset] : preset; if (!p) return false;
       name = typeof preset === 'string' ? preset : 'custom'; for (const k of KEYS) target[k] = p[k] ?? 0;
-      if (instant) { for (const k of KEYS) state[k] = target[k]; state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.snow > 0.3 ? 1 : 0; }
+      if (instant) { for (const k of KEYS) { state[k] = target[k]; vel[k] = 0; } state.wet = state.rain > 0.3 ? 1 : 0; state.cover = state.snow > 0.3 ? 1 : 0; }
       return true;
     },
     /** One step: the numbers ease towards the target, the ground gets wet or snowy (and dries or melts more slowly), a lightning flash dies away. */
     update(dt, onFlash) {
-      const e = 1 - Math.exp(-dt * rate);
-      for (const k of KEYS) state[k] += (target[k] - state[k]) * e;
+      // Each number follows its target on a critically damped spring (a smooth start and a smooth stop, no overshoot, about 8 s to settle). Rain and snow only build once the clouds have: they follow the sky, not the other way round.
+      const step = Math.min(dt, 0.1);
+      for (const k of KEYS) {
+        let tg = target[k]; if (k === 'rain' || k === 'snow') tg *= Math.min(1, Math.max(0, (state.cloud - 0.4) / 0.35)); else if (k === 'storm') tg *= Math.min(1, Math.max(0, (state.rain - 0.2) / 0.5));
+        const w = OMEGA[k]; vel[k] += ((tg - state[k]) * w * w - 2 * w * vel[k]) * step; state[k] += vel[k] * step;
+      }
       state.wet += ((state.rain > 0.15 ? 1 : 0) - state.wet) * (1 - Math.exp(-dt * (state.rain > 0.15 ? 0.12 : 0.012)));
       state.cover += ((state.snow > 0.15 ? 1 : 0) - state.cover) * (1 - Math.exp(-dt * (state.snow > 0.15 ? 0.02 : 0.006)));
       state.flash = Math.max(0, state.flash - dt * 3.2);
-      api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004);
+      api.busy = state.flash > 0.01 || KEYS.some((k) => Math.abs(target[k] - state[k]) > 0.004 || Math.abs(vel[k]) > 0.002);
       if (state.storm > 0.3) { hold = hold === null ? 4 + Math.random() * 8 : hold - dt; if (hold <= 0) { hold = 8 + Math.random() * 17; if (!calm) state.flash = 1; onFlash?.(); } } else hold = null;
     },
   };

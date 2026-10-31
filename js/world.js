@@ -3,12 +3,12 @@
 // for cottage windows and fireflies at night. Everything is procedural (no model files)
 // and seeded, so the layout is the same every visit.
 import * as THREE from 'three';
-import { PAL } from './palette.js?v=20261030231649';
-import { auroraColour } from './aurora.js?v=20261030231649';
+import { PAL } from './palette.js?v=20261030231927';
+import { auroraColour } from './aurora.js?v=20261030231927';
 import {
   mat, box, UNIT_BOX, wallBox, roofMaterial, addGable, blobTexture,
   SNOW, buildHouse, normalMapFrom, pickTheme, THEMES, glowMats, setLanterns, lanternMat, mergeByMaterial, rngFrom,
-} from './houses.js?v=20261030231649';
+} from './houses.js?v=20261030231927';
 
 // Where each billboard sits. Each sign stands on a big hill set well back. On wide screens it sits on the
 // hill's outer flank (`desk`); on narrower screens it slides inward along the hill (never past the crest,
@@ -2209,7 +2209,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
   scene.add(boardGroup);
   const startCam = new THREE.Vector3(0, 7, 22);
   const signMats = [];                 // every sign material (the depth-of-field pass ghosts these)
-  let signNoFog = false, windClock = 0;
+  let windClock = 0;
   const faces = [];                    // closed-sign faces, painted together so every title shares one size
   // Each closed sign carries a picture of real work beside its title (painted by paintBoard once it has loaded):
   // About = a photo, Creativity = a DCity illustration, AI = the two app icons (the same pictures head their opened pages).
@@ -2251,6 +2251,7 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     const beamMat = new THREE.MeshBasicMaterial({ color: 0xffc476, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     const haloMat = new THREE.SpriteMaterial({ map: blobTexture(), color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
     const mine = [metal, lipMat, lampMat, faceMat, barMat, blobMat, washMat, beamMat, haloMat];
+    for (const m of mine) m.fog = false;                // (the billboards are never swallowed by fog or the weather's haze, and switching fog on a material would rebuild its shader mid-transition)
     signMats.push(...mine);
 
     const solids = [];                 // { m, order } meshes whose draw order is fixed while open
@@ -2928,7 +2929,6 @@ for (int hk = 0; hk < 9; hk++) { if (uHoles[hk].z > 0.0 && distance(vCWPos.xz, u
     /** What the weather leaves on the ground and the water (wet, snow cover, the rain falling now), and whether the fog may hide the billboards: they stay readable in any weather. */
     setWeather(wx) {
       const w = wx || { wet: 0, cover: 0, rain: 0, fogK: 0 }; terrainWx.uWet.value = w.wet; terrainWx.uSnow.value = w.cover; SNOW.value = w.cover; pondU.uRain.value = w.rain;
-      const noFog = (w.fogK || 0) > 0.04; if (noFog !== signNoFog) { signNoFog = noFog; for (const m of signMats) { m.fog = !noFog; m.needsUpdate = true; } }
     },
     setClouds(night, horizon, wx = null) {
       cloudLook.night = night; cloudLook.cover = wx ? wx.cloud : 0; cloudLook.wind = wx ? wx.wind : 0; cloudLook.storm = wx ? wx.storm : 0;

@@ -16,7 +16,7 @@ const COMMON = `
   uniform vec3 uCam; uniform float uTime, uAmount, uBox; uniform vec2 uWind; attribute float aEnd, aRnd; varying float vA;
   vec3 wrapped(vec3 seedPos, vec3 vel, out float fade) {
     vec3 box = vec3(uBox, uBox * 0.7, uBox), p = mod(seedPos * box + vel * uTime - uCam + box * 0.5, box) - box * 0.5;
-    fade = (1.0 - smoothstep(0.5, 1.0, length(p.xz) / (uBox * 0.5))) * (1.0 - smoothstep(0.55, 1.0, abs(p.y) / (uBox * 0.35))) * step(aRnd, uAmount);
+    fade = (1.0 - smoothstep(0.5, 1.0, length(p.xz) / (uBox * 0.5))) * (1.0 - smoothstep(0.55, 1.0, abs(p.y) / (uBox * 0.35))) * smoothstep(aRnd, aRnd + 0.12, uAmount);
     return uCam + p;
   }`;
 

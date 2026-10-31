@@ -1,7 +1,7 @@
 // The pinball table (shared by the game, pinball.js, and the tester, tools/golf/pbsim.mjs): a compact playfield with a round top. At the bottom two flippers, a drain and two slingshots; above them
 // the tee (the skill shot is a golf putt), pop bumpers, a spinner, drop targets and two lock saucers; a straight ramp and two winding ramps climb to a raised deck with the cup, which stays covered
 // until the table's three lamps are lit. Everything is in the hole's own x, z (x runs up the table, z across; the player sees it from the bottom).
-import { mulberry32 } from './golfhero.js?v=20261030231649';
+import { mulberry32 } from './golfhero.js?v=20261030231927';
 export const TILT = 3.4, FLIP_LEN = 1.25, FLIP_RAD = 0.17, FLIP_SPEED = 17, SLING_KICK = 3.5, PLAT_H = 1.1, SPIN_NEED = 8, SAVE_TIME = 8;
 
 export const TABLE = { x0: -10, x1: 10, W: 5.5, arcX: 4.5, tee: { x: -4.6, z: 0 }, cup: { x: 7.4, z: 0 }, pivX: -7.4, pivZ: 1.78, pocketX: -9.8 };
